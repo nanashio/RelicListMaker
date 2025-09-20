@@ -60,6 +60,8 @@ def ocr_and_match(img_path, dictionary, scale=1.0):
         return ["Error"] * 3
 
 def process_images(image_dir="crops", output_csv="results.csv", scale=1.0):
+    print("Tesseract Ver: " + pytesseract.get_tesseract_version())
+
     dictionary = load_dictionary(DICTIONARY_FILE, COLUMN_NAME_IN_CSV)
     if not dictionary:
         print("辞書の読み込み失敗")
