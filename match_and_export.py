@@ -17,6 +17,7 @@ BASE_CROP_BOXES = [
 
 OCR_CONFIG = "--oem 3 --psm 6 -c preserve_interword_spaces=1"
 DEFAULT_UPSAMPLE = 1.5
+CORRECTION_SCORE = 100.0
 
 def scale_crop_boxes(boxes, scale=1.0):
     """拡大倍率に応じてcrop座標をスケーリング"""
@@ -41,6 +42,28 @@ def load_dictionary(file_path, column_name):
         print(f"Error loading dictionary: {e}")
         return []
 
+def load_corrections(corrections_csv):
+    if not corrections_csv or not os.path.exists(corrections_csv):
+        return {}
+
+    try:
+        df = pd.read_csv(corrections_csv)
+    except Exception as err:
+        print(f"[WARN] フィードバックの読み込みに失敗しました: {err}")
+        return {}
+
+    corrections = {}
+    for _, row in df.iterrows():
+        raw_text = str(row.get("RawText", "")).strip()
+        corrected = str(row.get("Corrected", "")).strip()
+        if raw_text and corrected:
+            corrections[raw_text] = corrected
+
+    if corrections:
+        print(f"[INFO] フィードバック {len(corrections)} 件を適用します")
+
+    return corrections
+
 def clean_ocr_text(text):
     """Tesseractの改行や改ページコードを整形"""
     if not text:
@@ -50,7 +73,7 @@ def clean_ocr_text(text):
     return " ".join(lines)
 
 
-def ocr_and_match(img_path, dictionary, scale=1.0, upsample=DEFAULT_UPSAMPLE, preprocess=True):
+def ocr_and_match(img_path, dictionary, corrections_map=None, scale=1.0, upsample=DEFAULT_UPSAMPLE, preprocess=True):
     try:
         img_cv = cv2.imread(img_path)
         results = []
@@ -72,16 +95,31 @@ def ocr_and_match(img_path, dictionary, scale=1.0, upsample=DEFAULT_UPSAMPLE, pr
 
             raw_text = pytesseract.image_to_string(ocr_input, lang='jpn', config=OCR_CONFIG)
             text = clean_ocr_text(raw_text)
-            match = process.extractOne(text, dictionary, scorer=fuzz.WRatio)
-            best_match = match[0] if match else "No match"
-            results.append(best_match)
+            if corrections_map and text in corrections_map:
+                best_match = corrections_map[text]
+                score = CORRECTION_SCORE
+                source = "feedback"
+            else:
+                match = process.extractOne(text, dictionary, scorer=fuzz.WRatio)
+                if match:
+                    best_match, score, _ = match
+                else:
+                    best_match, score = "No match", 0.0
+                source = "dictionary"
+
+            results.append({
+                "match": best_match,
+                "score": float(score) if score is not None else 0.0,
+                "raw": text,
+                "source": source
+            })
 
         return results
     except Exception as e:
         print(f"OCR error: {e}")
-        return ["Error"] * 3
+        return [{"match": "Error", "score": 0.0, "raw": "", "source": "error"}] * len(BASE_CROP_BOXES)
 
-def process_images(image_dir="crops", output_csv="results.csv", scale=1.0, upsample=DEFAULT_UPSAMPLE, preprocess=True):
+def process_images(image_dir="crops", output_csv="results.csv", scale=1.0, upsample=DEFAULT_UPSAMPLE, preprocess=True, corrections_csv=None):
     version = pytesseract.get_tesseract_version()
     print(f"Tesseract Ver: {version}")
 
@@ -90,14 +128,27 @@ def process_images(image_dir="crops", output_csv="results.csv", scale=1.0, upsam
         print("辞書の読み込み失敗")
         return
 
+    corrections_map = load_corrections(corrections_csv)
+    if corrections_map:
+        # 辞書候補にフィードバック語を加えてマッチ精度を向上
+        dictionary = list(dict.fromkeys(dictionary + list(corrections_map.values())))
+
     data = []
     for fname in sorted(os.listdir(image_dir)):
         if not fname.endswith(".png"):
             continue
         img_path = os.path.join(image_dir, fname)
-        matches = ocr_and_match(img_path, dictionary, scale=scale, upsample=upsample, preprocess=preprocess)
-        data.append([fname] + matches)
+        matches = ocr_and_match(img_path, dictionary, corrections_map=corrections_map, scale=scale, upsample=upsample, preprocess=preprocess)
 
-    df = pd.DataFrame(data, columns=["Image", "Effect1", "Effect2", "Effect3"])
+        row = {"Image": fname}
+        for idx, match in enumerate(matches, start=1):
+            row[f"RawText{idx}"] = match.get("raw", "")
+            row[f"Effect{idx}"] = match.get("match", "")
+            row[f"Effect{idx}Score"] = match.get("score", 0.0)
+            row[f"Effect{idx}Source"] = match.get("source", "dictionary")
+
+        data.append(row)
+
+    df = pd.DataFrame(data)
     df.to_csv(output_csv, index=False, encoding="utf-8-sig")
     print(f"[✓] CSV出力完了: {output_csv}")

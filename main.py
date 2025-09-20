@@ -33,7 +33,15 @@ def main(video_dir="videos", result_dir=DEFAULT_RESULT_DIR, ocr_upsample=OCR_UPS
 
         # OCR＋マッチング結果を個別CSVに出力
         csv_path = os.path.join(video_output_dir, f"{base_name}.csv")
-        process_images(image_dir=crops_dir, output_csv=csv_path, scale=1.0, upsample=ocr_upsample, preprocess=True)
+        corrections_csv = os.path.join(video_output_dir, "corrections.csv")
+        process_images(
+            image_dir=crops_dir,
+            output_csv=csv_path,
+            scale=1.0,
+            upsample=ocr_upsample,
+            preprocess=True,
+            corrections_csv=corrections_csv,
+        )
         print(f"[✓] {crops_dir} の結果を {csv_path} に出力しました")
 
         # 3. HTMLギャラリー生成
