@@ -2,22 +2,49 @@ import cv2
 import os
 import argparse
 
-def upscale_image(img, scale=2):
-    """画像を拡大（デフォルト2倍）"""
+DEFAULT_RESIZE_SCALE = 1.5
+GAUSSIAN_KERNEL_SIZE = (3, 3)
+MEDIAN_KERNEL_SIZE = 3
+
+
+def upscale_image(img, scale=2.0):
+    """画像を拡大（スケールはfloat対応）"""
     return cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
 
-def preprocess_for_ocr(img_path, out_dir="preprocessed", scale=2, save=True):
+
+def prepare_crop_for_ocr(crop, resize_scale=DEFAULT_RESIZE_SCALE, apply_threshold=True, denoise=True):
+    """OCR向けにクロップ画像を前処理して返す"""
+    if crop is None or crop.size == 0:
+        return crop
+
+    processed = crop
+    if resize_scale and resize_scale != 1.0:
+        processed = upscale_image(processed, scale=resize_scale)
+
+    gray = cv2.cvtColor(processed, cv2.COLOR_BGR2GRAY) if processed.ndim == 3 else processed
+    blurred = cv2.GaussianBlur(gray, GAUSSIAN_KERNEL_SIZE, 0)
+
+    if apply_threshold:
+        _, blurred = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    if denoise:
+        blurred = cv2.medianBlur(blurred, MEDIAN_KERNEL_SIZE)
+
+    return blurred
+
+
+def preprocess_for_ocr(img_path, out_dir="preprocessed", scale=DEFAULT_RESIZE_SCALE, save=True):
     """
     OCR前処理:
       - 拡大
-      - グレースケール化
-      - 二値化（Otsu）
-      - ノイズ除去（median blur）
-    
+      - グレースケール + ガウシアンブラー
+      - Otsu 二値化
+      - メディアンブラーでノイズ除去
+
     Args:
         img_path (str): 入力画像ファイル
         out_dir (str): 保存先ディレクトリ
-        scale (int): 拡大倍率
+        scale (float): 拡大倍率
         save (bool): Trueなら保存, Falseならndarrayを返すのみ
     """
     if not os.path.exists(img_path):
@@ -30,18 +57,7 @@ def preprocess_for_ocr(img_path, out_dir="preprocessed", scale=2, save=True):
         print(f"[ERROR] 画像を開けませんでした: {img_path}")
         return None
 
-    # 拡大
-    img = upscale_image(img, scale=scale)
-
-    # グレースケール
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    # # 二値化（Otsu）
-    # _, th = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-    # # ノイズ除去
-    # th = cv2.medianBlur(th, 3)
-    th = gray
+    th = prepare_crop_for_ocr(img, resize_scale=scale)
 
     if save:
         os.makedirs(out_dir, exist_ok=True)

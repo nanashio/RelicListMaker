@@ -4,13 +4,12 @@ import time
 from extract_frames import extract_and_crop
 from match_and_export import process_images
 from generate_gallery import generate_html
-# 前処理（必要ならインポート）
-from preprocess import preprocess_for_ocr  
 
 VIDEO_DIR = "videos"
 DEFAULT_RESULT_DIR = "results"
+OCR_UPSAMPLE = 1.5
 
-def main(video_dir="videos", result_dir=DEFAULT_RESULT_DIR):
+def main(video_dir="videos", result_dir=DEFAULT_RESULT_DIR, ocr_upsample=OCR_UPSAMPLE):
     start_time = time.time()
     print("[INFO] 動画ごとの処理開始...")
 
@@ -32,14 +31,9 @@ def main(video_dir="videos", result_dir=DEFAULT_RESULT_DIR):
         # 1. フレーム抽出 & crop
         extract_and_crop(video_path, frame_dir=frames_dir, crop_dir=crops_dir)
 
-        # # === OCR前処理を有効化する場合 ===
-        # for img_file in os.listdir(crops_dir):
-        #     img_path = os.path.join(crops_dir, img_file)
-        #     preprocess_for_ocr(img_path, out_dir=crops_dir, scale=2, save=True)
-
         # OCR＋マッチング結果を個別CSVに出力
         csv_path = os.path.join(video_output_dir, f"{base_name}.csv")
-        process_images(image_dir=crops_dir, output_csv=csv_path, scale=1.0)
+        process_images(image_dir=crops_dir, output_csv=csv_path, scale=1.0, upsample=ocr_upsample, preprocess=True)
         print(f"[✓] {crops_dir} の結果を {csv_path} に出力しました")
 
         # 3. HTMLギャラリー生成
