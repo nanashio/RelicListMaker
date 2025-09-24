@@ -1,8 +1,11 @@
-import pytesseract
-import pandas as pd
-from rapidfuzz import process, fuzz
+import json
 import os
+
 import cv2
+import pandas as pd
+import pytesseract
+from rapidfuzz import process, fuzz
+
 from preprocess import prepare_crop_for_ocr
 
 DICTIONARY_FILE = 'master_relics.csv'
@@ -119,7 +122,14 @@ def ocr_and_match(img_path, dictionary, corrections_map=None, scale=1.0, upsampl
         print(f"OCR error: {e}")
         return [{"match": "Error", "score": 0.0, "raw": "", "source": "error"}] * len(BASE_CROP_BOXES)
 
-def process_images(image_dir="crops", output_csv="results.csv", scale=1.0, upsample=DEFAULT_UPSAMPLE, preprocess=True, corrections_csv=None):
+def process_images(
+    image_dir="crops",
+    output_path="results.json",
+    scale=1.0,
+    upsample=DEFAULT_UPSAMPLE,
+    preprocess=True,
+    corrections_csv=None,
+):
     version = pytesseract.get_tesseract_version()
     print(f"Tesseract Ver: {version}")
 
@@ -138,7 +148,14 @@ def process_images(image_dir="crops", output_csv="results.csv", scale=1.0, upsam
         if not fname.endswith(".png"):
             continue
         img_path = os.path.join(image_dir, fname)
-        matches = ocr_and_match(img_path, dictionary, corrections_map=corrections_map, scale=scale, upsample=upsample, preprocess=preprocess)
+        matches = ocr_and_match(
+            img_path,
+            dictionary,
+            corrections_map=corrections_map,
+            scale=scale,
+            upsample=upsample,
+            preprocess=preprocess,
+        )
 
         row = {"Image": fname}
         for idx, match in enumerate(matches, start=1):
@@ -146,9 +163,10 @@ def process_images(image_dir="crops", output_csv="results.csv", scale=1.0, upsam
             row[f"Effect{idx}"] = match.get("match", "")
             row[f"Effect{idx}Score"] = match.get("score", 0.0)
             row[f"Effect{idx}Source"] = match.get("source", "dictionary")
+            row[f"Effect{idx}Status"] = "pending"
 
         data.append(row)
 
-    df = pd.DataFrame(data)
-    df.to_csv(output_csv, index=False, encoding="utf-8-sig")
-    print(f"[✓] CSV出力完了: {output_csv}")
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    print(f"[✓] JSON出力完了: {output_path}")

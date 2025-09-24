@@ -1,9 +1,10 @@
 # main.py
 import os
 import time
+
 from extract_frames import extract_and_crop
-from match_and_export import process_images
 from generate_gallery import generate_html
+from match_and_export import process_images
 
 VIDEO_DIR = "videos"
 DEFAULT_RESULT_DIR = "results"
@@ -31,23 +32,23 @@ def main(video_dir="videos", result_dir=DEFAULT_RESULT_DIR, ocr_upsample=OCR_UPS
         # 1. フレーム抽出 & crop
         extract_and_crop(video_path, frame_dir=frames_dir, crop_dir=crops_dir)
 
-        # OCR＋マッチング結果を個別CSVに出力
-        csv_path = os.path.join(video_output_dir, f"{base_name}.csv")
+        # 2. OCR＋マッチング結果をJSONに出力
+        json_path = os.path.join(video_output_dir, f"{base_name}.json")
         corrections_csv = os.path.join(video_output_dir, "corrections.csv")
         process_images(
             image_dir=crops_dir,
-            output_csv=csv_path,
+            output_path=json_path,
             scale=1.0,
             upsample=ocr_upsample,
             preprocess=True,
             corrections_csv=corrections_csv,
         )
-        print(f"[✓] {crops_dir} の結果を {csv_path} に出力しました")
+        print(f"[✓] {crops_dir} の結果を {json_path} に出力しました")
 
         # 3. HTMLギャラリー生成
         html_path = os.path.join(video_output_dir, f"{base_name}_viewer.html")
         img_rel_dir = os.path.relpath(crops_dir, video_output_dir)
-        generate_html(csv_path, img_rel_dir, html_path)
+        generate_html(json_path, img_rel_dir, html_path)
 
     elapsed = time.time() - start_time
     print(f"[✓] 全処理完了！処理時間: {elapsed:.2f}秒")

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>OCR結果ギャラリー</title>
+    <link rel="stylesheet" href="__CSS_FILE__">
+</head>
+<body data-results-json="__RESULTS_JSON__" data-img-dir="__IMAGE_DIR__" data-label-symbols="__LABEL_SYMBOLS__">
+    <h1>OCR結果ギャラリー</h1>
+    <div class="toolbar">
+        <input type="search" id="search-input" placeholder="ファイル名・推定テキスト">
+        <select id="filter-status">
+            <option value="all">すべて</option>
+            <option value="pending">未レビューのみ</option>
+            <option value="pass">○のみ</option>
+            <option value="fail">×のみ</option>
+        </select>
+    </div>
+    <div class="storage-controls">
+        <button id="pick-json" type="button">JSONを選択</button>
+        <button id="download-json" type="button" hidden>JSONをダウンロード</button>
+        <span id="storage-status" class="storage-status" role="status" aria-live="polite"></span>
+    </div>
+    <p id="gallery-status" class="gallery-status" role="status"></p>
+    <div id="gallery" class="gallery"></div>
+
+    <div id="lightbox" class="lightbox" aria-hidden="true">
+        <button id="lightbox-close" type="button" aria-label="閉じる">&times;</button>
+        <img src="" alt="">
+    </div>
+
+    <script src="__JS_FILE__" defer></script>
+</body>
+</html>
