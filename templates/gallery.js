@@ -1,60 +1,68 @@
-
-(function () {
+(() => {
     'use strict';
 
-    var body = document.body;
-    var resultsPath = body.getAttribute('data-results-json');
-    var imageDir = body.getAttribute('data-img-dir') || '.';
-    var labelSymbols = [];
-    var recordsData = [];
-    var items = [];
-    var saveTimer = null;
+    const body = document.body;
+    const {
+        resultsJson: initialJsonPath = '',
+        imgDir: imageDir = '.',
+        labelSymbols: labelSymbolsJson = '[]'
+    } = body.dataset || {};
 
-    var gallery = document.getElementById('gallery');
-    var galleryStatus = document.getElementById('gallery-status');
-    var searchInput = document.getElementById('search-input');
-    var filterSelect = document.getElementById('filter-status');
-    var lightbox = document.getElementById('lightbox');
-    var lightboxImg = lightbox ? lightbox.querySelector('img') : null;
-    var closeBtn = document.getElementById('lightbox-close');
-    var importButton = document.getElementById('pick-json');
-    var exportButton = document.getElementById('download-json');
-    var storageStatus = document.getElementById('storage-status');
-
-    var opfsState = {
-        supported: Boolean(navigator.storage && navigator.storage.getDirectory),
-        directoryPromise: null,
-        fileHandle: null,
-        fileName: '',
-        writeInFlight: false,
-        requeue: false
+    const dom = {
+        gallery: document.getElementById('gallery'),
+        galleryStatus: document.getElementById('gallery-status'),
+        searchInput: document.getElementById('search-input'),
+        filterSelect: document.getElementById('filter-status'),
+        lightbox: document.getElementById('lightbox'),
+        lightboxImg: document.querySelector('#lightbox img'),
+        lightboxClose: document.getElementById('lightbox-close'),
+        importButton: document.getElementById('pick-json'),
+        exportButton: document.getElementById('download-json'),
+        storageStatus: document.getElementById('storage-status')
     };
 
-    try {
-        var rawSymbols = body.getAttribute('data-label-symbols') || '[]';
-        var parsed = JSON.parse(rawSymbols);
-        if (Array.isArray(parsed)) {
-            labelSymbols = parsed;
-        }
-    } catch (error) {
-        console.warn('Failed to parse label symbols:', error);
+    if (!dom.gallery) {
+        return;
     }
 
-    labelSymbols = labelSymbols
-        .map(function (symbol) { return symbol == null ? '' : String(symbol); })
-        .filter(function (symbol) { return symbol !== ''; });
+    const state = {
+        records: [],
+        items: [],
+        labelSymbols: parseLabelSymbols(labelSymbolsJson),
+        imageDir: imageDir || '.',
+        jsonPath: initialJsonPath
+    };
 
-    if (!labelSymbols.length) {
-        labelSymbols = ['①', '②', '③'];
+    const storage = createOpfsManager(() => state.records);
+    if (!storage.supported) {
+        setStorageStatus('OPFS非対応ブラウザのため、自動保存は無効です。', true);
+    }
+
+    attachEventHandlers();
+    loadInitialData();
+
+    function parseLabelSymbols(jsonText) {
+        try {
+            const parsed = JSON.parse(jsonText || '[]');
+            if (Array.isArray(parsed) && parsed.length) {
+                return parsed
+                    .map((symbol) => (symbol == null ? '' : String(symbol)))
+                    .filter((symbol) => symbol !== '')
+                    .slice();
+            }
+        } catch (error) {
+            console.warn('label symbolsの解析に失敗しました:', error);
+        }
+        return ['①', '②', '③'];
     }
 
     function showStatus(message, isError) {
-        if (!galleryStatus) {
+        if (!dom.galleryStatus) {
             return;
         }
-        galleryStatus.textContent = message || '';
-        galleryStatus.classList.toggle('error', Boolean(isError));
-        galleryStatus.style.display = message ? 'block' : 'none';
+        dom.galleryStatus.textContent = message || '';
+        dom.galleryStatus.classList.toggle('error', Boolean(isError));
+        dom.galleryStatus.style.display = message ? 'block' : 'none';
     }
 
     function clearStatus() {
@@ -62,132 +70,29 @@
     }
 
     function setStorageStatus(message, isError) {
-        if (!storageStatus) {
+        if (!dom.storageStatus) {
             return;
         }
-        storageStatus.textContent = message || '';
-        storageStatus.classList.toggle('error', Boolean(isError));
-        storageStatus.style.display = message ? 'inline' : 'none';
-    }
-
-    if (!opfsState.supported) {
-        setStorageStatus('OPFS非対応ブラウザのため、自動保存は無効です。', true);
+        dom.storageStatus.textContent = message || '';
+        dom.storageStatus.classList.toggle('error', Boolean(isError));
+        dom.storageStatus.style.display = message ? 'inline' : 'none';
     }
 
     function toggleExportVisibility(visible) {
-        if (!exportButton) {
-            return;
+        if (dom.exportButton) {
+            dom.exportButton.hidden = !visible;
         }
-        exportButton.hidden = !visible;
     }
 
-    function getFileNameFromPath(path) {
-        if (!path) {
-            return '';
+    function createElement(tag, className, text) {
+        const element = document.createElement(tag);
+        if (className) {
+            element.className = className;
         }
-        var parts = path.split(/[\\/]/);
-        var name = parts[parts.length - 1] || '';
-        return name;
-    }
-
-    function ensureOpfsDirectory() {
-        if (!opfsState.supported) {
-            return Promise.reject(new Error('OPFS is not supported.'));
+        if (text != null) {
+            element.textContent = text;
         }
-        if (!opfsState.directoryPromise) {
-            opfsState.directoryPromise = navigator.storage.getDirectory();
-        }
-        return opfsState.directoryPromise;
-    }
-
-    function ensureOpfsFileHandle(name, create) {
-        if (!name) {
-            return Promise.reject(new Error('ファイル名が指定されていません。'));
-        }
-        return ensureOpfsDirectory().then(function (directory) {
-            return directory.getFileHandle(name, { create: Boolean(create) });
-        });
-    }
-
-    function readFromHandle(handle) {
-        return handle.getFile().then(function (file) {
-            return file.text();
-        });
-    }
-
-    function writeToHandle(handle, text) {
-        var writable;
-        return handle.createWritable()
-            .then(function (stream) {
-                writable = stream;
-                return stream.write(text);
-            })
-            .then(function () {
-                return writable.close();
-            })
-            .catch(function (error) {
-                if (writable && typeof writable.abort === 'function') {
-                    try {
-                        writable.abort();
-                    } catch (abortError) {
-                        console.warn('Failed to abort writable stream:', abortError);
-                    }
-                }
-                throw error;
-            });
-    }
-
-    function scheduleSave() {
-        if (!opfsState.supported || !opfsState.fileHandle) {
-            return;
-        }
-        if (saveTimer) {
-            clearTimeout(saveTimer);
-        }
-        saveTimer = setTimeout(function () {
-            saveTimer = null;
-            flushToOpfs();
-        }, 400);
-    }
-
-    function flushToOpfs() {
-        if (!opfsState.supported || !opfsState.fileHandle) {
-            return;
-        }
-        if (opfsState.writeInFlight) {
-            opfsState.requeue = true;
-            return;
-        }
-        var text;
-        try {
-            text = JSON.stringify(recordsData, null, 2);
-        } catch (error) {
-            console.error('JSON生成に失敗しました:', error);
-            setStorageStatus('保存失敗: JSON生成に失敗しました。', true);
-            return;
-        }
-
-        opfsState.writeInFlight = true;
-        opfsState.requeue = false;
-        setStorageStatus('保存中...', false);
-        writeToHandle(opfsState.fileHandle, text)
-            .then(function () {
-                setStorageStatus('保存済み ' + new Date().toLocaleTimeString(), false);
-                finalize();
-            })
-            .catch(function (error) {
-                console.error('OPFS書き込みに失敗しました:', error);
-                setStorageStatus('保存失敗: ' + (error && error.message ? error.message : error), true);
-                finalize();
-            });
-
-        function finalize() {
-            opfsState.writeInFlight = false;
-            if (opfsState.requeue) {
-                opfsState.requeue = false;
-                scheduleSave();
-            }
-        }
+        return element;
     }
 
     function joinPath(base, leaf) {
@@ -197,21 +102,15 @@
         if (!base) {
             return leaf;
         }
-        var trimmedBase = base.replace(/\+$/, '');
-        var trimmedLeaf = leaf.replace(/^\+/, '');
-        return trimmedBase + '/' + trimmedLeaf;
+        const cleanBase = base.replace(/[\/]+$/, '');
+        const cleanLeaf = leaf.replace(/^[\/]+/, '');
+        return `${cleanBase}/${cleanLeaf}`;
     }
 
     function normalizeStatus(value) {
-        if (value === 'pass' || value === 'fail' || value === 'pending') {
-            return value;
-        }
-        var text = (value || '').toString().toLowerCase();
-        if (text === 'pass') {
-            return 'pass';
-        }
-        if (text === 'fail') {
-            return 'fail';
+        const text = (value || '').toString().toLowerCase();
+        if (text === 'pass' || text === 'fail') {
+            return text;
         }
         return 'pending';
     }
@@ -226,366 +125,411 @@
         return '未レビュー';
     }
 
-    function updateEffectStatus(effect, status) {
-        var normalized = normalizeStatus(status);
-        effect.setAttribute('data-status', normalized);
-        var indicator = effect.querySelector('.status-indicator');
-        if (indicator) {
-            indicator.textContent = statusLabel(normalized);
-        }
-        var buttons = effect.querySelectorAll('.review-button');
-        for (var i = 0; i < buttons.length; i += 1) {
-            var button = buttons[i];
-            var value = button.getAttribute('data-value');
-            button.classList.toggle('selected', value === normalized);
-        }
-    }
-
-    function recordStatusChange(effect, status) {
-        if (!effect) {
-            return;
-        }
-        var recordIndex = parseInt(effect.getAttribute('data-record-index'), 10);
-        var slotIndex = parseInt(effect.getAttribute('data-slot'), 10);
-        if (isNaN(recordIndex) || isNaN(slotIndex)) {
-            return;
-        }
-        if (recordIndex < 0 || recordIndex >= recordsData.length) {
-            return;
-        }
-        var record = recordsData[recordIndex];
-        if (!record) {
-            return;
-        }
-        var key = 'Effect' + slotIndex + 'Status';
-        if (record[key] !== status) {
-            record[key] = status;
-            scheduleSave();
-        }
-    }
-
     function ensureLabelCoverage(records) {
-        var maxSlot = labelSymbols.length;
-        for (var i = 0; i < records.length; i += 1) {
-            var record = records[i];
+        let maxSlot = state.labelSymbols.length;
+        records.forEach((record) => {
             if (!record || typeof record !== 'object') {
-                continue;
+                return;
             }
-            for (var key in record) {
-                if (!Object.prototype.hasOwnProperty.call(record, key)) {
-                    continue;
-                }
-                var match = key.match(/^Effect(\d+)$/);
+            Object.keys(record).forEach((key) => {
+                const match = /^Effect(\d+)$/.exec(key);
                 if (match) {
-                    var index = parseInt(match[1], 10);
-                    if (!isNaN(index) && index > maxSlot) {
-                        maxSlot = index;
+                    const slot = parseInt(match[1], 10);
+                    if (!Number.isNaN(slot) && slot > maxSlot) {
+                        maxSlot = slot;
                     }
                 }
-            }
-        }
-        for (var slot = labelSymbols.length + 1; slot <= maxSlot; slot += 1) {
-            labelSymbols.push('Slot ' + slot);
+            });
+        });
+        for (let slot = state.labelSymbols.length + 1; slot <= maxSlot; slot += 1) {
+            state.labelSymbols.push(`Slot ${slot}`);
         }
     }
 
-    function createEffect(record, slotIndex, symbol, imageName, recordIndex) {
-        var predictionValue = record['Effect' + slotIndex];
-        var rawValue = record['RawText' + slotIndex];
-        var scoreValue = record['Effect' + slotIndex + 'Score'];
-        var statusValue = normalizeStatus(record['Effect' + slotIndex + 'Status']);
+    function buildGallery() {
+        dom.gallery.textContent = '';
+        state.items = [];
 
-        var predictionText = predictionValue == null ? '' : String(predictionValue);
-        var rawText = rawValue == null ? '' : String(rawValue);
-        var hasContent = predictionText !== '' || rawText !== '' || (scoreValue !== null && scoreValue !== undefined);
+        state.records.forEach((record, index) => {
+            const item = createItem(record, index);
+            if (item) {
+                dom.gallery.appendChild(item);
+                state.items.push(item);
+            }
+        });
 
+        if (!state.items.length) {
+            showStatus('表示できる結果がありません。', false);
+            return;
+        }
+        clearStatus();
+        applyFilters();
+    }
+
+    function createItem(record, recordIndex) {
+        if (!record || typeof record !== 'object') {
+            return null;
+        }
+        const imageName = record.Image == null ? '' : String(record.Image);
+        const item = document.createElement('div');
+        item.className = 'item';
+        item.dataset.image = imageName.toLowerCase();
+
+        const imagePath = joinPath(state.imageDir, imageName);
+        const img = createElement('img');
+        img.src = imagePath;
+        img.alt = imageName;
+        img.dataset.full = imagePath;
+        img.tabIndex = 0;
+        item.appendChild(img);
+
+        const filename = createElement('div', 'filename', imageName);
+        item.appendChild(filename);
+        bindImage(img);
+
+        let hasEffect = false;
+        state.labelSymbols.forEach((symbol, index) => {
+            const effect = createEffect(record, index + 1, symbol || `Slot ${index + 1}`, imageName, recordIndex);
+            if (effect) {
+                item.appendChild(effect);
+                hasEffect = true;
+            }
+        });
+
+        if (!hasEffect) {
+            const placeholder = document.createElement('p');
+            placeholder.className = 'no-effect';
+            placeholder.textContent = '効果情報がありません。';
+            item.appendChild(placeholder);
+        }
+
+        return item;
+    }
+
+    function createEffect(record, slot, symbol, imageName, recordIndex) {
+        const prediction = record[`Effect${slot}`];
+        const raw = record[`RawText${slot}`];
+        const score = record[`Effect${slot}Score`];
+        const statusValue = normalizeStatus(record[`Effect${slot}Status`]);
+
+        const predictionText = prediction == null ? '' : String(prediction);
+        const rawText = raw == null ? '' : String(raw);
+        const hasContent = predictionText || rawText || (!Number.isNaN(Number(score)) && score != null);
         if (!hasContent) {
             return null;
         }
 
-        var effect = document.createElement('div');
-        effect.className = 'effect';
-        effect.setAttribute('data-slot', String(slotIndex));
-        effect.setAttribute('data-image', (imageName || '').toLowerCase());
-        effect.setAttribute('data-pred', predictionText.toLowerCase());
-        effect.setAttribute('data-raw', rawText.toLowerCase());
-        effect.setAttribute('data-record-index', String(recordIndex));
+        const effect = createElement('div', 'effect');
+        effect.dataset.slot = String(slot);
+        effect.dataset.image = (imageName || '').toLowerCase();
+        effect.dataset.pred = predictionText.toLowerCase();
+        effect.dataset.raw = rawText.toLowerCase();
+        effect.dataset.recordIndex = String(recordIndex);
 
-        var header = document.createElement('div');
-        header.className = 'effect-header';
+        const numericScore = Number(score);
+        const scoreText = Number.isFinite(numericScore) ? `一致度 ${numericScore.toFixed(1)}%` : '一致度 --';
 
-        var labelSpan = document.createElement('span');
-        labelSpan.className = 'effect-label';
-        labelSpan.textContent = symbol;
+        const header = createElement('div', 'effect-header');
+        header.appendChild(createElement('span', 'effect-label', symbol));
+        header.appendChild(createElement('span', 'effect-score', scoreText));
 
-        var scoreSpan = document.createElement('span');
-        scoreSpan.className = 'effect-score';
-        var numericScore = Number(scoreValue);
-        if (!isNaN(numericScore)) {
-            scoreSpan.textContent = '一致度 ' + numericScore.toFixed(1) + '%';
-        } else {
-            scoreSpan.textContent = '一致度 --';
-        }
+        const predictionLine = createElement('div', 'prediction', `推定: ${predictionText}`);
+        const rawLine = createElement('div', 'raw', `OCR: ${rawText}`);
 
-        header.appendChild(labelSpan);
-        header.appendChild(scoreSpan);
-
-        var predictionDiv = document.createElement('div');
-        predictionDiv.className = 'prediction';
-        predictionDiv.textContent = '推定: ' + predictionText;
-
-        var rawDiv = document.createElement('div');
-        rawDiv.className = 'raw';
-        rawDiv.textContent = 'OCR: ' + rawText;
-
-        var decision = document.createElement('div');
-        decision.className = 'decision';
-
-        var passButton = document.createElement('button');
+        const decision = createElement('div', 'decision');
+        const passButton = createElement('button', 'review-button pass', '○ 合致');
         passButton.type = 'button';
-        passButton.className = 'review-button pass';
-        passButton.setAttribute('data-value', 'pass');
-        passButton.textContent = '○ 合致';
-
-        var failButton = document.createElement('button');
+        passButton.dataset.value = 'pass';
+        const failButton = createElement('button', 'review-button fail', '× 不一致');
         failButton.type = 'button';
-        failButton.className = 'review-button fail';
-        failButton.setAttribute('data-value', 'fail');
-        failButton.textContent = '× 不一致';
-
-        var indicator = document.createElement('span');
-        indicator.className = 'status-indicator';
+        failButton.dataset.value = 'fail';
+        const indicator = createElement('span', 'status-indicator');
 
         decision.appendChild(passButton);
         decision.appendChild(failButton);
         decision.appendChild(indicator);
 
         effect.appendChild(header);
-        effect.appendChild(predictionDiv);
-        effect.appendChild(rawDiv);
+        effect.appendChild(predictionLine);
+        effect.appendChild(rawLine);
         effect.appendChild(decision);
 
         updateEffectStatus(effect, statusValue);
         return effect;
     }
 
-    function buildGallery() {
-        if (!gallery) {
+    function updateEffectStatus(effect, status) {
+        const normalized = normalizeStatus(status);
+        effect.dataset.status = normalized;
+
+        const indicator = effect.querySelector('.status-indicator');
+        if (indicator) {
+            indicator.textContent = statusLabel(normalized);
+        }
+
+        effect.querySelectorAll('.review-button').forEach((button) => {
+            button.classList.toggle('selected', button.dataset.value === normalized);
+        });
+    }
+
+    function recordStatusChange(effect, status) {
+        const recordIndex = Number(effect.dataset.recordIndex);
+        const slotIndex = Number(effect.dataset.slot);
+
+        if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
             return;
         }
-        gallery.innerHTML = '';
-        items = [];
-
-        for (var i = 0; i < recordsData.length; i += 1) {
-            var record = recordsData[i];
-            if (!record || typeof record !== 'object') {
-                continue;
-            }
-
-            var imageName = record.Image == null ? '' : String(record.Image);
-            var item = document.createElement('div');
-            item.className = 'item';
-            item.setAttribute('data-image', imageName.toLowerCase());
-
-            var img = document.createElement('img');
-            var imagePath = joinPath(imageDir, imageName);
-            img.src = imagePath;
-            img.alt = imageName;
-            img.setAttribute('data-full', imagePath);
-            img.setAttribute('tabindex', '0');
-
-            var filename = document.createElement('div');
-            filename.className = 'filename';
-            filename.textContent = imageName;
-
-            item.appendChild(img);
-            item.appendChild(filename);
-
-            var hasEffect = false;
-            for (var slot = 0; slot < labelSymbols.length; slot += 1) {
-                var effectElement = createEffect(record, slot + 1, labelSymbols[slot], imageName, i);
-                if (effectElement) {
-                    item.appendChild(effectElement);
-                    hasEffect = true;
-                }
-            }
-
-            if (!hasEffect) {
-                var placeholder = document.createElement('p');
-                placeholder.className = 'no-effect';
-                placeholder.textContent = '効果情報がありません。';
-                item.appendChild(placeholder);
-            }
-
-            gallery.appendChild(item);
-            items.push(item);
-            bindImage(img);
+        const record = state.records[recordIndex];
+        if (!record) {
+            return;
         }
 
-        if (!items.length) {
-            showStatus('表示できる結果がありません。', false);
-        } else {
-            clearStatus();
-            applyFilters();
+        const key = `Effect${slotIndex}Status`;
+        if (record[key] !== status) {
+            record[key] = status;
+            storage.scheduleSave();
         }
     }
 
     function applyFilters() {
-        var term = (searchInput && searchInput.value ? searchInput.value : '').trim().toLowerCase();
-        var filterValue = filterSelect ? filterSelect.value : 'all';
+        const term = (dom.searchInput && dom.searchInput.value ? dom.searchInput.value : '').trim().toLowerCase();
+        const filter = dom.filterSelect ? dom.filterSelect.value : 'all';
 
-        for (var i = 0; i < items.length; i += 1) {
-            var item = items[i];
-            var imageName = item.getAttribute('data-image') || '';
-            var matchesSearch = term === '' || imageName.indexOf(term) !== -1;
-            var matchesFilter = filterValue === 'all';
+        state.items.forEach((item) => {
+            const imageMatch = item.dataset.image && item.dataset.image.includes(term);
+            let matchesSearch = !term || imageMatch;
+            let matchesFilter = filter === 'all';
 
-            var effects = item.querySelectorAll('.effect');
-            for (var j = 0; j < effects.length; j += 1) {
-                var effect = effects[j];
+            item.querySelectorAll('.effect').forEach((effect) => {
                 if (!matchesSearch && term) {
-                    var pred = effect.getAttribute('data-pred') || '';
-                    var raw = effect.getAttribute('data-raw') || '';
-                    if (pred.indexOf(term) !== -1 || raw.indexOf(term) !== -1) {
-                        matchesSearch = true;
-                    }
+                    matchesSearch = effect.dataset.pred.includes(term) || effect.dataset.raw.includes(term);
                 }
-                if (!matchesFilter && effect.getAttribute('data-status') === filterValue) {
+                if (!matchesFilter && effect.dataset.status === filter) {
                     matchesFilter = true;
                 }
-            }
+            });
 
-            var visible = matchesSearch && matchesFilter;
-            item.style.display = visible ? '' : 'none';
-        }
-    }
-
-    function openLightbox(img) {
-        if (!img || !lightbox || !lightboxImg) {
-            return;
-        }
-        lightboxImg.src = img.getAttribute('data-full');
-        lightboxImg.alt = img.alt || '';
-        lightbox.classList.add('show');
-        lightbox.setAttribute('aria-hidden', 'false');
-        if (closeBtn) {
-            closeBtn.focus();
-        }
-    }
-
-    function closeLightbox() {
-        if (!lightbox || !lightboxImg) {
-            return;
-        }
-        lightbox.classList.remove('show');
-        lightbox.setAttribute('aria-hidden', 'true');
-        lightboxImg.src = '';
-        lightboxImg.alt = '';
+            item.style.display = matchesSearch && matchesFilter ? '' : 'none';
+        });
     }
 
     function bindImage(img) {
         if (!img) {
             return;
         }
-        img.addEventListener('click', function () {
-            openLightbox(img);
-        });
-        img.addEventListener('keydown', function (event) {
-            var key = event.key || event.keyCode;
-            if (key === 'Enter' || key === ' ' || key === 13 || key === 32) {
+        img.addEventListener('click', () => openLightbox(img));
+        img.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ' || event.keyCode === 13 || event.keyCode === 32) {
                 event.preventDefault();
                 openLightbox(img);
             }
         });
     }
 
-    function tryLoadFromOpfs(defaultName) {
-        if (!opfsState.supported) {
-            return Promise.resolve(false);
-        }
-        var targetName = opfsState.fileName || defaultName;
-        if (!targetName) {
-            return Promise.resolve(false);
-        }
-        return ensureOpfsFileHandle(targetName, false)
-            .then(function (handle) {
-                return readFromHandle(handle).then(function (text) {
-                    var data;
-                    try {
-                        data = JSON.parse(text);
-                    } catch (error) {
-                        console.warn('OPFSのJSON解析に失敗しました:', error);
-                        return false;
-                    }
-                    opfsState.fileHandle = handle;
-                    opfsState.fileName = targetName;
-                    loadRecordsArray(data);
-                    toggleExportVisibility(true);
-                    clearStatus();
-                    setStorageStatus('OPFSから読み込みました。', false);
-                    return true;
-                });
-            })
-            .catch(function (error) {
-                if (error && (error.name === 'NotFoundError' || error.code === 8)) {
-                    return false;
-                }
-                console.warn('OPFS読み込みに失敗しました:', error);
-                return false;
-            });
-    }
-
-    function prepareOpfsWithData(fileName) {
-        if (!opfsState.supported) {
+    function openLightbox(img) {
+        if (!img || !dom.lightbox || !dom.lightboxImg) {
             return;
         }
-        var targetName = fileName || opfsState.fileName || getFileNameFromPath(resultsPath) || 'results.json';
-        ensureOpfsFileHandle(targetName, true)
-            .then(function (handle) {
-                opfsState.fileHandle = handle;
-                opfsState.fileName = targetName;
-                toggleExportVisibility(true);
-                flushToOpfs();
-            })
-            .catch(function (error) {
-                console.warn('OPFS初期化に失敗しました:', error);
-                setStorageStatus('OPFS初期化に失敗しました: ' + (error && error.message ? error.message : error), true);
-            });
+        dom.lightboxImg.src = img.dataset.full || img.src;
+        dom.lightboxImg.alt = img.alt || '';
+        dom.lightbox.classList.add('show');
+        dom.lightbox.setAttribute('aria-hidden', 'false');
+        if (dom.lightboxClose) {
+            dom.lightboxClose.focus();
+        }
     }
 
-    function chooseJsonFile() {
-        if (window.showOpenFilePicker) {
-            return window.showOpenFilePicker({
-                multiple: false,
-                types: [
-                    {
-                        description: 'JSON Files',
-                        accept: { 'application/json': ['.json'] }
-                    }
-                ]
-            }).then(function (handles) {
-                if (handles && handles.length) {
-                    return handles[0];
-                }
-                throw new DOMException('ファイルが選択されませんでした', 'AbortError');
-            });
+    function closeLightbox() {
+        if (!dom.lightbox || !dom.lightboxImg) {
+            return;
+        }
+        dom.lightbox.classList.remove('show');
+        dom.lightbox.setAttribute('aria-hidden', 'true');
+        dom.lightboxImg.src = '';
+        dom.lightboxImg.alt = '';
+    }
+
+    async function loadInitialData() {
+        const preferredName = getFileName(state.jsonPath) || 'results.json';
+
+        try {
+            const text = await storage.tryLoad(preferredName);
+            if (text) {
+                loadRecordsArray(JSON.parse(text));
+                toggleExportVisibility(true);
+                clearStatus();
+                setStorageStatus('OPFSから読み込みました。', false);
+                return;
+            }
+        } catch (error) {
+            console.warn('OPFSからの読み込みに失敗しました:', error);
         }
 
-        return new Promise(function (resolve, reject) {
-            var input = document.createElement('input');
+        if (!state.jsonPath) {
+            showStatus('JSONファイルを選択してください。', false);
+            return;
+        }
+
+        try {
+            showStatus('読み込み中...', false);
+            const response = await fetch(state.jsonPath, { cache: 'no-cache' });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            loadRecordsArray(data);
+            toggleExportVisibility(true);
+            clearStatus();
+            if (storage.supported) {
+                await storage.prepare(preferredName);
+                await storage.flushNow();
+            }
+        } catch (error) {
+            console.error('JSONのロードに失敗しました:', error);
+            showStatus(`データの読み込みに失敗しました: ${error.message || error}. 下の「JSONを選択」を使用してください。`, true);
+        }
+    }
+
+    function loadRecordsArray(data) {
+        const records = Array.isArray(data) ? data.slice() : data && typeof data === 'object' ? [data] : [];
+        ensureLabelCoverage(records);
+        state.records = records;
+        buildGallery();
+    }
+
+    async function handleImport() {
+        try {
+            const source = await chooseJsonFile();
+            const payload = await toFilePayload(source);
+            const text = await payload.file.text();
+            const data = JSON.parse(text);
+
+            loadRecordsArray(data);
+            toggleExportVisibility(true);
+            clearStatus();
+            setStorageStatus('JSONを読み込みました。', false);
+
+            if (storage.supported) {
+                const name = payload.file.name || getFileName(state.jsonPath) || 'results.json';
+                await storage.prepare(name);
+                await storage.flushNow();
+            }
+        } catch (error) {
+            if (error && (error.name === 'AbortError' || error.message === 'The user aborted a request.')) {
+                setStorageStatus('ファイル選択をキャンセルしました。', false);
+                return;
+            }
+            console.error('JSONの取り込みに失敗しました:', error);
+            setStorageStatus(`読み込み失敗: ${error.message || error}`, true);
+        }
+    }
+
+    function handleExport() {
+        if (!state.records.length) {
+            setStorageStatus('エクスポート可能なデータがありません。', true);
+            return;
+        }
+        let text;
+        try {
+            text = JSON.stringify(state.records, null, 2);
+        } catch (error) {
+            console.error('JSON生成に失敗しました:', error);
+            setStorageStatus('エクスポート失敗: JSON生成に失敗しました。', true);
+            return;
+        }
+        const blob = new Blob([text], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = storage.fileName || getFileName(state.jsonPath) || 'results.json';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        setStorageStatus('JSONをダウンロードしました。', false);
+    }
+
+    function attachEventHandlers() {
+        dom.gallery.addEventListener('click', (event) => {
+            const button = event.target.closest('.review-button');
+            if (!button) {
+                return;
+            }
+            const effect = button.closest('.effect');
+            if (!effect) {
+                return;
+            }
+            const current = effect.dataset.status || 'pending';
+            const next = current === button.dataset.value ? 'pending' : button.dataset.value;
+            updateEffectStatus(effect, next);
+            recordStatusChange(effect, next);
+            applyFilters();
+        });
+
+        if (dom.searchInput) {
+            dom.searchInput.addEventListener('input', applyFilters);
+        }
+        if (dom.filterSelect) {
+            dom.filterSelect.addEventListener('change', applyFilters);
+        }
+        if (dom.importButton) {
+            dom.importButton.addEventListener('click', handleImport);
+        }
+        if (dom.exportButton) {
+            dom.exportButton.addEventListener('click', handleExport);
+        }
+        if (dom.lightboxClose) {
+            dom.lightboxClose.addEventListener('click', closeLightbox);
+        }
+        if (dom.lightbox) {
+            dom.lightbox.addEventListener('click', (event) => {
+                if (event.target === dom.lightbox) {
+                    closeLightbox();
+                }
+            });
+        }
+        document.addEventListener('keydown', (event) => {
+            if ((event.key === 'Escape' || event.keyCode === 27) && dom.lightbox && dom.lightbox.classList.contains('show')) {
+                closeLightbox();
+            }
+        });
+    }
+
+    function getFileName(path) {
+        if (!path) {
+            return '';
+        }
+        const parts = path.split(/[\\/]/);
+        return parts[parts.length - 1] || '';
+    }
+
+    async function chooseJsonFile() {
+        if (window.showOpenFilePicker) {
+            const [handle] = await window.showOpenFilePicker({
+                multiple: false,
+                types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }]
+            });
+            if (!handle) {
+                throw new DOMException('ファイルが選択されませんでした', 'AbortError');
+            }
+            return handle;
+        }
+
+        return new Promise((resolve, reject) => {
+            const input = document.createElement('input');
             input.type = 'file';
             input.accept = '.json,application/json';
             input.style.display = 'none';
 
-            var cleanup = function () {
+            const cleanup = () => {
                 window.removeEventListener('focus', onFocus, true);
                 if (input.parentNode) {
                     input.parentNode.removeChild(input);
                 }
             };
 
-            var onFocus = function () {
-                setTimeout(function () {
+            const onFocus = () => {
+                setTimeout(() => {
                     if (!input.files || !input.files.length) {
                         cleanup();
                         reject(new DOMException('ユーザーがキャンセルしました', 'AbortError'));
@@ -593,9 +537,9 @@
                 }, 0);
             };
 
-            input.addEventListener('change', function () {
+            input.addEventListener('change', () => {
                 if (input.files && input.files[0]) {
-                    var file = input.files[0];
+                    const file = input.files[0];
                     cleanup();
                     resolve(file);
                 } else {
@@ -615,9 +559,7 @@
             return Promise.reject(new DOMException('ファイルが選択されませんでした', 'AbortError'));
         }
         if (typeof source.getFile === 'function') {
-            return source.getFile().then(function (file) {
-                return { file: file, handle: source };
-            });
+            return source.getFile().then((file) => ({ file, handle: source }));
         }
         if (source instanceof File) {
             return Promise.resolve({ file: source, handle: null });
@@ -625,177 +567,149 @@
         return Promise.reject(new Error('未知のファイルソースです'));
     }
 
-    function handleImport() {
-        chooseJsonFile()
-            .then(function (source) {
-                return toFilePayload(source);
-            })
-            .then(function (payload) {
-                return payload.file.text().then(function (text) {
-                    return {
-                        text: text,
-                        fileName: payload.file.name || getFileNameFromPath(resultsPath) || 'results.json',
-                        handle: payload.handle
-                    };
-                });
-            })
-            .then(function (dataPayload) {
-                var parsed;
+    function createOpfsManager(getData) {
+        const supported = Boolean(navigator.storage && navigator.storage.getDirectory);
+        const state = {
+            directoryPromise: null,
+            fileHandle: null,
+            fileName: '',
+            saving: false,
+            requeue: false,
+            timer: null
+        };
+
+        async function ensureDirectory() {
+            if (!supported) {
+                throw new Error('OPFSはサポートされていません。');
+            }
+            if (!state.directoryPromise) {
+                state.directoryPromise = navigator.storage.getDirectory();
+            }
+            return state.directoryPromise;
+        }
+
+        async function ensureHandle(name, create) {
+            if (!name) {
+                throw new Error('ファイル名が指定されていません。');
+            }
+            const directory = await ensureDirectory();
+            return directory.getFileHandle(name, { create: Boolean(create) });
+        }
+
+        async function tryLoad(defaultName) {
+            if (!supported) {
+                return null;
+            }
+            const targetName = state.fileName || defaultName;
+            if (!targetName) {
+                return null;
+            }
+            try {
+                const handle = await ensureHandle(targetName, false);
+                const file = await handle.getFile();
+                const text = await file.text();
+                state.fileHandle = handle;
+                state.fileName = targetName;
+                return text;
+            } catch (error) {
+                if (error && (error.name === 'NotFoundError' || error.code === 8)) {
+                    return null;
+                }
+                throw error;
+            }
+        }
+
+        async function prepare(name) {
+            if (!supported) {
+                return;
+            }
+            const handle = await ensureHandle(name, true);
+            state.fileHandle = handle;
+            state.fileName = name;
+            toggleExportVisibility(true);
+        }
+
+        async function writeOnce() {
+            if (!supported || !state.fileHandle) {
+                return;
+            }
+            let text;
+            try {
+                text = JSON.stringify(getData(), null, 2);
+            } catch (error) {
+                console.error('JSON生成に失敗しました:', error);
+                setStorageStatus('保存失敗: JSON生成に失敗しました。', true);
+                return;
+            }
+
+            if (state.saving) {
+                state.requeue = true;
+                return;
+            }
+
+            state.saving = true;
+            state.requeue = false;
+            setStorageStatus('保存中...', false);
+
+            try {
+                const writable = await state.fileHandle.createWritable();
+                await writable.write(text);
+                await writable.close();
+                setStorageStatus(`保存済み ${new Date().toLocaleTimeString()}`, false);
+            } catch (error) {
+                console.error('OPFS書き込みに失敗しました:', error);
+                setStorageStatus(`保存失敗: ${error.message || error}`, true);
+            } finally {
+                state.saving = false;
+                if (state.requeue) {
+                    state.requeue = false;
+                    writeOnce();
+                }
+            }
+        }
+
+        function scheduleSave() {
+            if (!supported || !state.fileHandle) {
+                return;
+            }
+            if (state.timer) {
+                clearTimeout(state.timer);
+            }
+            state.timer = setTimeout(() => {
+                state.timer = null;
+                void writeOnce();
+            }, 400);
+        }
+
+        return {
+            supported,
+            get fileName() {
+                return state.fileName;
+            },
+            async tryLoad(name) {
                 try {
-                    parsed = JSON.parse(dataPayload.text);
+                    return await tryLoad(name);
                 } catch (error) {
-                    throw new Error('JSONの解析に失敗しました: ' + error.message);
+                    console.warn('OPFS読み込みに失敗しました:', error);
+                    setStorageStatus(`OPFS読み込み失敗: ${error.message || error}`, true);
+                    return null;
                 }
-
-                loadRecordsArray(parsed);
-                toggleExportVisibility(true);
-                clearStatus();
-                setStorageStatus('JSONを読み込みました。', false);
-
-                if (!opfsState.supported) {
-                    setStorageStatus('OPFS非対応ブラウザのため、自動保存は無効です。', true);
+            },
+            async prepare(name) {
+                try {
+                    await prepare(name);
+                } catch (error) {
+                    console.warn('OPFS初期化に失敗しました:', error);
+                    setStorageStatus(`OPFS初期化に失敗しました: ${error.message || error}`, true);
+                }
+            },
+            scheduleSave,
+            async flushNow() {
+                if (!supported || !state.fileHandle) {
                     return;
                 }
-
-                var name = dataPayload.fileName || 'results.json';
-                ensureOpfsFileHandle(name, true)
-                    .then(function (handle) {
-                        opfsState.fileHandle = handle;
-                        opfsState.fileName = name;
-                        flushToOpfs();
-                    })
-                    .catch(function (error) {
-                        console.error('OPFS初期化に失敗しました:', error);
-                        setStorageStatus('OPFS初期化に失敗しました: ' + (error && error.message ? error.message : error), true);
-                    });
-            })
-            .catch(function (error) {
-                if (error && (error.name === 'AbortError' || error.message === 'The user aborted a request.')) {
-                    setStorageStatus('ファイル選択をキャンセルしました。', false);
-                    return;
-                }
-                console.error('JSON取り込みに失敗しました:', error);
-                setStorageStatus('読み込み失敗: ' + (error && error.message ? error.message : error), true);
-            });
-    }
-
-    function handleExport() {
-        if (!recordsData.length) {
-            setStorageStatus('エクスポート可能なデータがありません。', true);
-            return;
-        }
-        var text;
-        try {
-            text = JSON.stringify(recordsData, null, 2);
-        } catch (error) {
-            console.error('JSONの生成に失敗しました:', error);
-            setStorageStatus('エクスポート失敗: JSON生成に失敗しました。', true);
-            return;
-        }
-        var blob = new Blob([text], { type: 'application/json' });
-        var url = URL.createObjectURL(blob);
-        var link = document.createElement('a');
-        link.href = url;
-        link.download = opfsState.fileName || getFileNameFromPath(resultsPath) || 'results.json';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        setStorageStatus('JSONをダウンロードしました。', false);
-    }
-
-    function loadRecordsArray(data) {
-        var records = [];
-        if (Array.isArray(data)) {
-            records = data;
-        } else if (data && typeof data === 'object') {
-            records = [data];
-        }
-        ensureLabelCoverage(records);
-        recordsData = records;
-        buildGallery();
-    }
-
-    function initialize() {
-        var preferredName = getFileNameFromPath(resultsPath) || 'results.json';
-        tryLoadFromOpfs(preferredName).then(function (loadedFromOpfs) {
-            if (loadedFromOpfs) {
-                return;
+                await writeOnce();
             }
-            if (!resultsPath) {
-                showStatus('JSONファイルを選択してください。', false);
-                return;
-            }
-            showStatus('読み込み中...', false);
-            fetch(resultsPath, { cache: 'no-cache' })
-                .then(function (response) {
-                    if (!response.ok) {
-                        throw new Error('HTTP ' + response.status);
-                    }
-                    return response.json();
-                })
-                .then(function (data) {
-                    loadRecordsArray(data);
-                    clearStatus();
-                    toggleExportVisibility(true);
-                    if (opfsState.supported) {
-                        prepareOpfsWithData(preferredName);
-                    }
-                })
-                .catch(function (error) {
-                    console.error('Failed to load JSON:', error);
-                    showStatus('データの読み込みに失敗しました: ' + (error && error.message ? error.message : error) + '下の「JSONを選択」を使用してください。', true);
-                });
-        });
+        };
     }
-
-    if (gallery) {
-        gallery.addEventListener('click', function (event) {
-            var target = event.target;
-            if (target.classList.contains('review-button')) {
-                var effect = target.closest('.effect');
-                if (!effect) {
-                    return;
-                }
-                var value = target.getAttribute('data-value');
-                var current = effect.getAttribute('data-status') || 'pending';
-                var next = current === value ? 'pending' : value;
-                var normalized = normalizeStatus(next);
-                updateEffectStatus(effect, normalized);
-                recordStatusChange(effect, normalized);
-                applyFilters();
-            }
-        });
-    }
-
-    if (closeBtn) {
-        closeBtn.addEventListener('click', closeLightbox);
-    }
-    if (lightbox) {
-        lightbox.addEventListener('click', function (event) {
-            if (event.target === lightbox) {
-                closeLightbox();
-            }
-        });
-    }
-    document.addEventListener('keydown', function (event) {
-        if ((event.key === 'Escape' || event.keyCode === 27) && lightbox && lightbox.classList.contains('show')) {
-            closeLightbox();
-        }
-    });
-
-    if (searchInput) {
-        searchInput.addEventListener('input', applyFilters);
-    }
-    if (filterSelect) {
-        filterSelect.addEventListener('change', applyFilters);
-    }
-    if (importButton) {
-        importButton.addEventListener('click', handleImport);
-    }
-    if (exportButton) {
-        exportButton.addEventListener('click', handleExport);
-    }
-
-    initialize();
 })();
