@@ -16,8 +16,6 @@
         lightbox: document.getElementById('lightbox'),
         lightboxImg: document.querySelector('#lightbox img'),
         lightboxClose: document.getElementById('lightbox-close'),
-        importButton: document.getElementById('pick-json'),
-        exportButton: document.getElementById('download-json'),
         storageStatus: document.getElementById('storage-status')
     };
 
@@ -76,12 +74,6 @@
         dom.storageStatus.textContent = message || '';
         dom.storageStatus.classList.toggle('error', Boolean(isError));
         dom.storageStatus.style.display = message ? 'inline' : 'none';
-    }
-
-    function toggleExportVisibility(visible) {
-        if (dom.exportButton) {
-            dom.exportButton.hidden = !visible;
-        }
     }
 
     function createElement(tag, className, text) {
@@ -356,7 +348,6 @@
             const text = await storage.tryLoad(preferredName);
             if (text) {
                 loadRecordsArray(JSON.parse(text));
-                toggleExportVisibility(true);
                 clearStatus();
                 setStorageStatus('OPFSから読み込みました。', false);
                 return;
@@ -366,7 +357,7 @@
         }
 
         if (!state.jsonPath) {
-            showStatus('JSONファイルを選択してください。', false);
+            showStatus('JSONファイルのパスが指定されていません。', true);
             return;
         }
 
@@ -378,7 +369,6 @@
             }
             const data = await response.json();
             loadRecordsArray(data);
-            toggleExportVisibility(true);
             clearStatus();
             if (storage.supported) {
                 await storage.prepare(preferredName);
@@ -386,7 +376,7 @@
             }
         } catch (error) {
             console.error('JSONのロードに失敗しました:', error);
-            showStatus(`データの読み込みに失敗しました: ${error.message || error}. 下の「JSONを選択」を使用してください。`, true);
+            showStatus(`データの読み込みに失敗しました: ${error.message || error}. JSON出力の配置を確認してください。`, true);
         }
     }
 
@@ -395,58 +385,6 @@
         ensureLabelCoverage(records);
         state.records = records;
         buildGallery();
-    }
-
-    async function handleImport() {
-        try {
-            const source = await chooseJsonFile();
-            const payload = await toFilePayload(source);
-            const text = await payload.file.text();
-            const data = JSON.parse(text);
-
-            loadRecordsArray(data);
-            toggleExportVisibility(true);
-            clearStatus();
-            setStorageStatus('JSONを読み込みました。', false);
-
-            if (storage.supported) {
-                const name = payload.file.name || getFileName(state.jsonPath) || 'results.json';
-                await storage.prepare(name);
-                await storage.flushNow();
-            }
-        } catch (error) {
-            if (error && (error.name === 'AbortError' || error.message === 'The user aborted a request.')) {
-                setStorageStatus('ファイル選択をキャンセルしました。', false);
-                return;
-            }
-            console.error('JSONの取り込みに失敗しました:', error);
-            setStorageStatus(`読み込み失敗: ${error.message || error}`, true);
-        }
-    }
-
-    function handleExport() {
-        if (!state.records.length) {
-            setStorageStatus('エクスポート可能なデータがありません。', true);
-            return;
-        }
-        let text;
-        try {
-            text = JSON.stringify(state.records, null, 2);
-        } catch (error) {
-            console.error('JSON生成に失敗しました:', error);
-            setStorageStatus('エクスポート失敗: JSON生成に失敗しました。', true);
-            return;
-        }
-        const blob = new Blob([text], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = storage.fileName || getFileName(state.jsonPath) || 'results.json';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        setStorageStatus('JSONをダウンロードしました。', false);
     }
 
     function attachEventHandlers() {
@@ -472,12 +410,6 @@
         if (dom.filterSelect) {
             dom.filterSelect.addEventListener('change', applyFilters);
         }
-        if (dom.importButton) {
-            dom.importButton.addEventListener('click', handleImport);
-        }
-        if (dom.exportButton) {
-            dom.exportButton.addEventListener('click', handleExport);
-        }
         if (dom.lightboxClose) {
             dom.lightboxClose.addEventListener('click', closeLightbox);
         }
@@ -501,70 +433,6 @@
         }
         const parts = path.split(/[\\/]/);
         return parts[parts.length - 1] || '';
-    }
-
-    async function chooseJsonFile() {
-        if (window.showOpenFilePicker) {
-            const [handle] = await window.showOpenFilePicker({
-                multiple: false,
-                types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }]
-            });
-            if (!handle) {
-                throw new DOMException('ファイルが選択されませんでした', 'AbortError');
-            }
-            return handle;
-        }
-
-        return new Promise((resolve, reject) => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.json,application/json';
-            input.style.display = 'none';
-
-            const cleanup = () => {
-                window.removeEventListener('focus', onFocus, true);
-                if (input.parentNode) {
-                    input.parentNode.removeChild(input);
-                }
-            };
-
-            const onFocus = () => {
-                setTimeout(() => {
-                    if (!input.files || !input.files.length) {
-                        cleanup();
-                        reject(new DOMException('ユーザーがキャンセルしました', 'AbortError'));
-                    }
-                }, 0);
-            };
-
-            input.addEventListener('change', () => {
-                if (input.files && input.files[0]) {
-                    const file = input.files[0];
-                    cleanup();
-                    resolve(file);
-                } else {
-                    cleanup();
-                    reject(new DOMException('ファイルが選択されませんでした', 'AbortError'));
-                }
-            });
-
-            window.addEventListener('focus', onFocus, true);
-            document.body.appendChild(input);
-            input.click();
-        });
-    }
-
-    function toFilePayload(source) {
-        if (!source) {
-            return Promise.reject(new DOMException('ファイルが選択されませんでした', 'AbortError'));
-        }
-        if (typeof source.getFile === 'function') {
-            return source.getFile().then((file) => ({ file, handle: source }));
-        }
-        if (source instanceof File) {
-            return Promise.resolve({ file: source, handle: null });
-        }
-        return Promise.reject(new Error('未知のファイルソースです'));
     }
 
     function createOpfsManager(getData) {
@@ -626,7 +494,6 @@
             const handle = await ensureHandle(name, true);
             state.fileHandle = handle;
             state.fileName = name;
-            toggleExportVisibility(true);
         }
 
         async function writeOnce() {
