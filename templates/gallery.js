@@ -16,6 +16,7 @@
         lightbox: document.getElementById('lightbox'),
         lightboxImg: document.querySelector('#lightbox img'),
         lightboxClose: document.getElementById('lightbox-close'),
+        downloadCsvButton: document.getElementById('download-csv'),
         storageStatus: document.getElementById('storage-status')
     };
 
@@ -85,6 +86,12 @@
             element.textContent = text;
         }
         return element;
+    }
+
+    function csvFileName() {
+        const baseName = storage.fileName || getFileName(state.jsonPath) || 'results.json';
+        const converted = baseName.replace(/\.json$/i, '_review.csv');
+        return converted === baseName ? `${baseName}.csv` : converted;
     }
 
     function joinPath(base, leaf) {
@@ -341,6 +348,58 @@
         dom.lightboxImg.alt = '';
     }
 
+    function collectCsvHeaders(records) {
+        const seen = new Set();
+        records.forEach((record) => {
+            if (record && typeof record === 'object') {
+                Object.keys(record).forEach((key) => {
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                    }
+                });
+            }
+        });
+
+        if (!seen.size) {
+            return [];
+        }
+
+        const headers = [];
+        if (seen.delete('Image')) {
+            headers.push('Image');
+        }
+        headers.push(...Array.from(seen).sort());
+        return headers;
+    }
+
+    function csvEscape(value) {
+        const text = value == null ? '' : String(value);
+        return '"' + text.replace(/"/g, '""') + '"';
+    }
+
+    function generateCsv(records) {
+        const headers = collectCsvHeaders(records);
+        if (!headers.length) {
+            return '';
+        }
+
+        const lines = [];
+        lines.push(headers.map(csvEscape).join(','));
+
+        records.forEach((record) => {
+            const row = headers.map((key) => {
+                if (!record || typeof record !== 'object') {
+                    return csvEscape('');
+                }
+                const value = Object.prototype.hasOwnProperty.call(record, key) ? record[key] : '';
+                return csvEscape(value);
+            });
+            lines.push(row.join(','));
+        });
+
+        return lines.join('\n');
+    }
+
     async function loadInitialData() {
         const preferredName = getFileName(state.jsonPath) || 'results.json';
 
@@ -410,6 +469,9 @@
         if (dom.filterSelect) {
             dom.filterSelect.addEventListener('change', applyFilters);
         }
+        if (dom.downloadCsvButton) {
+            dom.downloadCsvButton.addEventListener('click', handleCsvExport);
+        }
         if (dom.lightboxClose) {
             dom.lightboxClose.addEventListener('click', closeLightbox);
         }
@@ -433,6 +495,30 @@
         }
         const parts = path.split(/[\\/]/);
         return parts[parts.length - 1] || '';
+    }
+
+    function handleCsvExport() {
+        if (!state.records.length) {
+            setStorageStatus('エクスポート可能なデータがありません。', true);
+            return;
+        }
+
+        const csvText = generateCsv(state.records);
+        if (!csvText) {
+            setStorageStatus('エクスポート失敗: CSVを生成できませんでした。', true);
+            return;
+        }
+
+        const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = csvFileName();
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        setStorageStatus('CSVをダウンロードしました。', false);
     }
 
     function createOpfsManager(getData) {
