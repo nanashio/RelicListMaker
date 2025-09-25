@@ -1,4 +1,5 @@
 import os
+import csv
 import html
 import json
 import shutil
@@ -8,6 +9,8 @@ RESULTS_JSON_PATH = "results_input_video.json"
 IMG_DIR = "crops/input_video"
 OUTPUT_HTML = "viewer.html"
 LABEL_SYMBOLS = ["①", "②", "③"]
+DEFAULT_MASTER_CSV = "master_relics.csv"
+DEFAULT_MASTER_JSON = "master_relics.json"
 TEMPLATE_HTML_PATH = os.path.join(os.path.dirname(__file__), "templates", "gallery.html")
 TEMPLATE_CSS_PATH = os.path.join(os.path.dirname(__file__), "templates", "gallery.css")
 TEMPLATE_JS_PATH = os.path.join(os.path.dirname(__file__), "templates", "gallery.js")
@@ -67,11 +70,62 @@ def _copy_static_asset(
     return relative_path.replace(os.sep, "/")
 
 
+def _extract_master_options_from_csv(master_abs_path: Optional[str], column_name: str = "EffectBase"):
+    if not master_abs_path or not os.path.exists(master_abs_path):
+        return []
+
+    options = []
+    seen = set()
+    try:
+        with open(master_abs_path, "r", encoding="utf-8") as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                value = (row.get(column_name) or "").strip()
+                if value and value != "-" and value not in seen:
+                    seen.add(value)
+                    options.append(value)
+    except Exception as exc:
+        print(f"[!] マスターデータの読み込みに失敗しました: {exc}")
+    return options
+
+
+def _extract_master_options_from_json(master_abs_path: Optional[str]):
+    if not master_abs_path or not os.path.exists(master_abs_path):
+        return []
+
+    try:
+        with open(master_abs_path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except Exception as exc:
+        print(f"[!] マスターデータ(JSON)の読み込みに失敗しました: {exc}")
+        return []
+
+    if not isinstance(data, list):
+        return []
+
+    options = []
+    seen = set()
+    for entry in data:
+        value = ""
+        if isinstance(entry, str):
+            value = entry.strip()
+        elif isinstance(entry, dict):
+            raw = entry.get("EffectBase") or entry.get("effect") or entry.get("name")
+            if isinstance(raw, str):
+                value = raw.strip()
+        if value and value != "-" and value not in seen:
+            seen.add(value)
+            options.append(value)
+    return options
+
+
 def generate_html(
     results_path,
     img_dir,
     output_html,
     label_symbols=None,
+    master_csv_path: Optional[str] = None,
+    master_json_path: Optional[str] = None,
     template_path: Optional[str] = None,
     css_template_path: Optional[str] = None,
     js_template_path: Optional[str] = None,
@@ -103,6 +157,32 @@ def generate_html(
     else:
         img_rel_dir = "."
 
+    master_options = []
+    master_csv_rel_path = ""
+    master_json_rel_path = ""
+
+    if master_json_path:
+        if os.path.isabs(master_json_path):
+            master_json_abs = master_json_path
+        else:
+            master_json_abs = os.path.abspath(os.path.join(output_dir, master_json_path))
+        if os.path.exists(master_json_abs):
+            master_json_rel_path = os.path.relpath(master_json_abs, output_dir)
+            master_options = _extract_master_options_from_json(master_json_abs)
+        else:
+            print(f"[!] マスターデータ(JSON)が見つかりません: {master_json_abs}")
+
+    if not master_options and master_csv_path:
+        if os.path.isabs(master_csv_path):
+            master_csv_abs = master_csv_path
+        else:
+            master_csv_abs = os.path.abspath(os.path.join(output_dir, master_csv_path))
+        if os.path.exists(master_csv_abs):
+            master_csv_rel_path = os.path.relpath(master_csv_abs, output_dir)
+            master_options = _extract_master_options_from_csv(master_csv_abs)
+        else:
+            print(f"[!] マスターデータ(CSV)が見つかりません: {master_csv_abs}")
+
     html_template = _load_text_asset(TEMPLATE_HTML_PATH, template_path)
     css_relative = _copy_static_asset(
         TEMPLATE_CSS_PATH,
@@ -118,9 +198,14 @@ def generate_html(
     )
 
     html_output = html_template
+    embed_options = master_options if not master_json_rel_path else []
+
     html_output = html_output.replace("__RESULTS_JSON__", _escape_attr(json_rel_path))
     html_output = html_output.replace("__IMAGE_DIR__", _escape_attr(img_rel_dir))
     html_output = html_output.replace("__LABEL_SYMBOLS__", _escape_attr(json.dumps(label_symbols, ensure_ascii=False)))
+    html_output = html_output.replace("__MASTER_CSV__", _escape_attr(master_csv_rel_path))
+    html_output = html_output.replace("__MASTER_JSON__", _escape_attr(master_json_rel_path))
+    html_output = html_output.replace("__MASTER_OPTIONS__", _escape_attr(json.dumps(embed_options, ensure_ascii=False)))
     html_output = html_output.replace("__CSS_FILE__", _escape_attr(css_relative))
     html_output = html_output.replace("__JS_FILE__", _escape_attr(js_relative))
 
@@ -131,4 +216,11 @@ def generate_html(
 
 
 if __name__ == "__main__":
-    generate_html(RESULTS_JSON_PATH, IMG_DIR, OUTPUT_HTML, LABEL_SYMBOLS)
+    generate_html(
+        RESULTS_JSON_PATH,
+        IMG_DIR,
+        OUTPUT_HTML,
+        LABEL_SYMBOLS,
+        master_csv_path=DEFAULT_MASTER_CSV,
+        master_json_path=DEFAULT_MASTER_JSON,
+    )

@@ -5,7 +5,7 @@
     <title>OCR結果ギャラリー</title>
     <link rel="stylesheet" href="__CSS_FILE__">
 </head>
-<body data-results-json="__RESULTS_JSON__" data-img-dir="__IMAGE_DIR__" data-label-symbols="__LABEL_SYMBOLS__">
+<body data-results-json="__RESULTS_JSON__" data-img-dir="__IMAGE_DIR__" data-label-symbols="__LABEL_SYMBOLS__" data-master-csv="__MASTER_CSV__" data-master-json="__MASTER_JSON__" data-master-options="__MASTER_OPTIONS__">
     <h1>OCR結果ギャラリー</h1>
     <div class="toolbar">
         <input type="search" id="search-input" placeholder="ファイル名・推定テキスト">
@@ -13,7 +13,7 @@
             <option value="all">すべて</option>
             <option value="pending">未レビューのみ</option>
             <option value="pass">○のみ</option>
-            <option value="fail">×のみ</option>
+            <option value="corrected">修正済みのみ</option>
         </select>
     </div>
     <div class="storage-controls">

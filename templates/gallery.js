@@ -1,11 +1,16 @@
 (() => {
     'use strict';
 
+    const MASTER_DATALIST_ID = 'master-relic-options';
+
     const body = document.body;
     const {
         resultsJson: initialJsonPath = '',
         imgDir: imageDir = '.',
-        labelSymbols: labelSymbolsJson = '[]'
+        labelSymbols: labelSymbolsJson = '[]',
+        masterCsv: masterCsvPath = '',
+        masterJson: masterJsonPath = '',
+        masterOptions: masterOptionsJson = '[]'
     } = body.dataset || {};
 
     const dom = {
@@ -29,16 +34,17 @@
         items: [],
         labelSymbols: parseLabelSymbols(labelSymbolsJson),
         imageDir: imageDir || '.',
-        jsonPath: initialJsonPath
+        jsonPath: initialJsonPath,
+        masterCsvPath: masterCsvPath || '',
+        masterJsonPath: masterJsonPath || '',
+        masterOptions: parseMasterOptions(masterOptionsJson),
+        masterDatalistPrepared: false
     };
 
     const storage = createOpfsManager(() => state.records);
     if (!storage.supported) {
         setStorageStatus('OPFS非対応ブラウザのため、自動保存は無効です。', true);
     }
-
-    attachEventHandlers();
-    loadInitialData();
 
     function parseLabelSymbols(jsonText) {
         try {
@@ -88,6 +94,85 @@
         return element;
     }
 
+    function parseMasterOptions(source) {
+        let list = source;
+        if (typeof source === 'string') {
+            if (!source) {
+                return [];
+            }
+            try {
+                list = JSON.parse(source);
+            } catch (error) {
+                console.warn('master optionsの解析に失敗しました:', error);
+                return [];
+            }
+        }
+
+        if (!Array.isArray(list)) {
+            return [];
+        }
+
+        return list
+            .map((value) => (value == null ? '' : String(value).trim()))
+            .filter((value) => value !== '');
+    }
+
+    function setupMasterOptions() {
+        state.masterDatalistPrepared = false;
+    }
+
+    function ensureMasterDatalist() {
+        if (state.masterDatalistPrepared) {
+            return;
+        }
+        let datalist = document.getElementById(MASTER_DATALIST_ID);
+        if (!datalist) {
+            datalist = document.createElement('datalist');
+            datalist.id = MASTER_DATALIST_ID;
+            document.body.appendChild(datalist);
+        } else {
+            datalist.textContent = '';
+        }
+
+        state.masterOptions.forEach((value) => {
+            const option = document.createElement('option');
+            option.value = value;
+            datalist.appendChild(option);
+        });
+
+        state.masterDatalistPrepared = true;
+    }
+
+    async function ensureMasterOptions() {
+        if (state.masterOptions.length) {
+            setupMasterOptions();
+            ensureMasterDatalist();
+            return;
+        }
+
+        if (!state.masterJsonPath) {
+            setupMasterOptions();
+            ensureMasterDatalist();
+            return;
+        }
+
+        try {
+            const response = await fetch(state.masterJsonPath, { cache: 'no-cache' });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            state.masterOptions = parseMasterOptions(data);
+        } catch (error) {
+            console.error('マスターデータの読み込みに失敗しました:', error);
+            setStorageStatus(`マスターデータの読み込みに失敗しました: ${error.message || error}`, true);
+            state.masterOptions = [];
+        }
+
+        setupMasterOptions();
+        ensureMasterDatalist();
+    }
+
     function csvFileName() {
         const baseName = storage.fileName || getFileName(state.jsonPath) || 'results.json';
         const converted = baseName.replace(/\.json$/i, '_review.csv');
@@ -108,8 +193,14 @@
 
     function normalizeStatus(value) {
         const text = (value || '').toString().toLowerCase();
-        if (text === 'pass' || text === 'fail') {
-            return text;
+        if (text === 'pass') {
+            return 'pass';
+        }
+        if (text === 'corrected') {
+            return 'corrected';
+        }
+        if (text === 'fail') {
+            return 'pending';
         }
         return 'pending';
     }
@@ -118,8 +209,8 @@
         if (status === 'pass') {
             return '○ 確認済み';
         }
-        if (status === 'fail') {
-            return '× 要確認';
+        if (status === 'corrected') {
+            return '修正済み';
         }
         return '未レビュー';
     }
@@ -209,7 +300,7 @@
         const prediction = record[`Effect${slot}`];
         const raw = record[`RawText${slot}`];
         const score = record[`Effect${slot}Score`];
-        const statusValue = normalizeStatus(record[`Effect${slot}Status`]);
+        let statusValue = normalizeStatus(record[`Effect${slot}Status`]);
 
         const predictionText = prediction == null ? '' : String(prediction);
         const rawText = raw == null ? '' : String(raw);
@@ -226,27 +317,43 @@
         effect.dataset.recordIndex = String(recordIndex);
 
         const numericScore = Number(score);
-        const scoreText = Number.isFinite(numericScore) ? `一致度 ${numericScore.toFixed(1)}%` : '一致度 --';
+        const hasFiniteScore = Number.isFinite(numericScore);
+        const scoreText = hasFiniteScore ? `一致度 ${numericScore.toFixed(1)}%` : '一致度 --';
 
         const header = createElement('div', 'effect-header');
-        header.appendChild(createElement('span', 'effect-label', symbol));
+        const labelWrap = createElement('div', 'effect-label-wrap');
+        labelWrap.appendChild(createElement('span', 'effect-label', symbol));
+        const indicator = createElement('span', 'status-indicator');
+        labelWrap.appendChild(indicator);
+        header.appendChild(labelWrap);
         header.appendChild(createElement('span', 'effect-score', scoreText));
 
         const predictionLine = createElement('div', 'prediction', `推定: ${predictionText}`);
         const rawLine = createElement('div', 'raw', `OCR: ${rawText}`);
 
+        const correctionKey = `Effect${slot}Correction`;
+        const correctionValue = record[correctionKey] == null ? '' : String(record[correctionKey]);
+        if (correctionValue && statusValue !== 'pass') {
+            statusValue = 'corrected';
+        }
+
+        effect.dataset.correction = correctionValue.toLowerCase();
+        if (hasFiniteScore && numericScore < 60) {
+            effect.classList.add('low-confidence');
+            effect.dataset.lowConfidence = 'true';
+        }
+
         const decision = createElement('div', 'decision');
-        const passButton = createElement('button', 'review-button pass', '○ 合致');
+        const decisionRow = createElement('div', 'decision-row');
+        const passButton = createElement('button', 'review-button pass', '合致');
         passButton.type = 'button';
         passButton.dataset.value = 'pass';
-        const failButton = createElement('button', 'review-button fail', '× 不一致');
-        failButton.type = 'button';
-        failButton.dataset.value = 'fail';
-        const indicator = createElement('span', 'status-indicator');
 
-        decision.appendChild(passButton);
-        decision.appendChild(failButton);
-        decision.appendChild(indicator);
+        const correctionInput = createCorrectionInput(correctionValue);
+
+        decisionRow.appendChild(passButton);
+        decisionRow.appendChild(correctionInput);
+        decision.appendChild(decisionRow);
 
         effect.appendChild(header);
         effect.appendChild(predictionLine);
@@ -254,12 +361,16 @@
         effect.appendChild(decision);
 
         updateEffectStatus(effect, statusValue);
+
+        correctionInput.addEventListener('change', correctionChangeHandler(effect, correctionInput));
+
         return effect;
     }
 
     function updateEffectStatus(effect, status) {
         const normalized = normalizeStatus(status);
         effect.dataset.status = normalized;
+        effect.classList.toggle('pending', normalized === 'pending');
 
         const indicator = effect.querySelector('.status-indicator');
         if (indicator) {
@@ -271,23 +382,88 @@
         });
     }
 
-    function recordStatusChange(effect, status) {
+    function createCorrectionInput(selectedValue) {
+        const input = document.createElement('input');
+        input.type = 'search';
+        input.className = 'correction-input';
+        if (state.masterOptions.length) {
+            input.setAttribute('list', MASTER_DATALIST_ID);
+            input.placeholder = 'master_relicsから選択';
+        } else {
+            input.placeholder = 'マスターデータ未設定';
+            input.disabled = true;
+        }
+        input.value = selectedValue || '';
+        return input;
+    }
+
+    function correctionChangeHandler(effect, input) {
+        return () => {
+            const selected = input.value.trim();
+            const indexes = getEffectIndexes(effect);
+            if (!indexes) {
+                return;
+            }
+            const nextStatus = selected ? 'corrected' : 'pending';
+            const statusChanged = recordStatusChange(effect, nextStatus);
+            const correctionChanged = updateRecordCorrection(indexes.recordIndex, indexes.slotIndex, selected);
+            effect.dataset.correction = selected ? selected.toLowerCase() : '';
+            updateEffectStatus(effect, nextStatus);
+            if (!statusChanged && correctionChanged) {
+                storage.scheduleSave();
+            }
+            applyFilters();
+        };
+    }
+
+    function getEffectIndexes(effect) {
         const recordIndex = Number(effect.dataset.recordIndex);
         const slotIndex = Number(effect.dataset.slot);
-
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
-            return;
+            return null;
+        }
+        return { recordIndex, slotIndex };
+    }
+
+    function updateRecordCorrection(recordIndex, slotIndex, value) {
+        if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
+            return false;
         }
         const record = state.records[recordIndex];
         if (!record) {
-            return;
+            return false;
         }
+        const key = `Effect${slotIndex}Correction`;
+        if (value) {
+            if (record[key] === value) {
+                return false;
+            }
+            record[key] = value;
+            return true;
+        }
+        if (Object.prototype.hasOwnProperty.call(record, key)) {
+            delete record[key];
+            return true;
+        }
+        return false;
+    }
 
-        const key = `Effect${slotIndex}Status`;
+    function recordStatusChange(effect, status) {
+        const indexes = getEffectIndexes(effect);
+        if (!indexes) {
+            return false;
+        }
+        const record = state.records[indexes.recordIndex];
+        if (!record) {
+            return false;
+        }
+        const key = `Effect${indexes.slotIndex}Status`;
         if (record[key] !== status) {
             record[key] = status;
             storage.scheduleSave();
+            return true;
         }
+        return false;
     }
 
     function applyFilters() {
@@ -301,7 +477,8 @@
 
             item.querySelectorAll('.effect').forEach((effect) => {
                 if (!matchesSearch && term) {
-                    matchesSearch = effect.dataset.pred.includes(term) || effect.dataset.raw.includes(term);
+                    const correctionText = effect.dataset.correction || '';
+                    matchesSearch = effect.dataset.pred.includes(term) || effect.dataset.raw.includes(term) || correctionText.includes(term);
                 }
                 if (!matchesFilter && effect.dataset.status === filter) {
                     matchesFilter = true;
@@ -457,9 +634,26 @@
                 return;
             }
             const current = effect.dataset.status || 'pending';
-            const next = current === button.dataset.value ? 'pending' : button.dataset.value;
+            const targetValue = button.dataset.value || 'pass';
+            const next = current === targetValue ? 'pending' : targetValue;
             updateEffectStatus(effect, next);
-            recordStatusChange(effect, next);
+            const statusChanged = recordStatusChange(effect, next);
+            if (next === 'pass') {
+                const indexes = getEffectIndexes(effect);
+                if (indexes) {
+                    const correctionChanged = updateRecordCorrection(indexes.recordIndex, indexes.slotIndex, '');
+                    effect.dataset.correction = '';
+                    const input = effect.querySelector('.correction-input');
+                    if (input) {
+                        const replacement = createCorrectionInput('');
+                        input.replaceWith(replacement);
+                        replacement.addEventListener('change', correctionChangeHandler(effect, replacement));
+                    }
+                    if (!statusChanged && correctionChanged) {
+                        storage.scheduleSave();
+                    }
+                }
+            }
             applyFilters();
         });
 
@@ -665,4 +859,12 @@
             }
         };
     }
+
+    async function initialize() {
+        attachEventHandlers();
+        await ensureMasterOptions();
+        await loadInitialData();
+    }
+
+    void initialize();
 })();

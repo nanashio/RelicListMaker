@@ -1,5 +1,9 @@
 # Repository Guidelines
 
+## 言語設定 (Language Configuration)
+このプロジェクトは日本語環境での動作を前提とする。
+基本的な受け答えは、全て日本語で行うこと。
+
 ## プロジェクト構成とモジュール配置
 リポジトリ 直下 に 主要 スクリプト が あり `main.py` が パイプライン を 統括 します。`extract_frames.py` は フレーム 抽出、`match_and_export.py` は OCR と 辞書 照合、`generate_gallery.py` は HTML 出力、`preprocess.py` は 任意 前処理 を 担当 します。素材 動画 は `videos/` へ 配置 し、処理 生成 物 は `results/<video名>/` 配下 に `frames/` `crops/` `*.csv` `*_viewer.html` として まとまり、サムネイル を クリック すると 拡大 でき、フィルター で 対象 を 絞れます。各 エフェクト 行 に 推定・一致 度・OCR 文字列 が 表示 され、○/× で レビュー できます。辞書 `master_relics.csv` は ルート に 置き 相対 パス を 守って ください。
 
