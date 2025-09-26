@@ -293,7 +293,9 @@
         img.alt = imageName;
         img.dataset.full = imagePath;
         img.tabIndex = 0;
-        item.appendChild(img);
+        const imagePreview = createElement('div', 'image-preview');
+        imagePreview.appendChild(img);
+        item.appendChild(imagePreview);
 
         const controls = createElement('div', 'item-controls');
         const duplicateButton = createElement('button', 'duplicate-toggle');

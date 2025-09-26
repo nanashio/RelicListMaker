@@ -1,3 +1,4 @@
+:root { --preview-width: 680px; --preview-height: 262px; }
 body { font-family: sans-serif; background: #f4f4f4; margin: 0; padding: 24px; }
 h1 { text-align: center; margin-bottom: 16px; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-bottom: 16px; }
@@ -15,8 +16,10 @@ h1 { text-align: center; margin-bottom: 16px; }
 .gallery-status.error { color: #b83232; }
 .gallery { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); max-width: calc(360px * 3 + 8px * 2); margin: 0 auto 12px; align-items: start; }
 .item { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px; width: 100%; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); box-sizing: border-box; }
-.item img { width: 100%; border-radius: 6px; cursor: zoom-in; }
+.item img { display: block; width: auto; height: auto; max-width: none; max-height: none; cursor: zoom-in; }
 .item img:focus { outline: 2px solid #4c9aff; outline-offset: 2px; }
+
+.image-preview { width: var(--preview-width); height: var(--preview-height); overflow: hidden; border-radius: 6px; border: 1px solid #ddd; background: #000; display: inline-block; }
 
 .item-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .duplicate-toggle { border: 1px solid #4a90e2; background: #eaf2ff; color: #1c5db6; border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; transition: background 0.2s ease, color 0.2s ease, border 0.2s ease; }
