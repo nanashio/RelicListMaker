@@ -157,7 +157,7 @@ def process_images(
             preprocess=preprocess,
         )
 
-        row = {"Image": fname}
+        row = {"Image": fname, "Duplicate": False}
         for idx, match in enumerate(matches, start=1):
             row[f"RawText{idx}"] = match.get("raw", "")
             row[f"Effect{idx}"] = match.get("match", "")
