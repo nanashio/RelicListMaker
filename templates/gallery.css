@@ -28,8 +28,13 @@ h1 { text-align: center; margin-bottom: 16px; }
 .item-controls { display: flex; align-items: center; justify-content: flex-start; gap: 8px; flex-wrap: wrap; }
 .duplicate-toggle { border: 1px solid #4a90e2; background: #eaf2ff; color: #1c5db6; border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; transition: background 0.2s ease, color 0.2s ease, border 0.2s ease; }
 .duplicate-toggle:hover, .duplicate-toggle:focus { background: #d3e4ff; border-color: #1c5db6; color: #0f3f8c; outline: none; }
+.favorite-toggle { border: 1px solid #f59f00; background: #fff4e6; color: #b35c00; border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; transition: background 0.2s ease, color 0.2s ease, border 0.2s ease; }
+.favorite-toggle:hover, .favorite-toggle:focus { background: #ffe8c2; border-color: #f08c00; color: #8f4b00; outline: none; }
+.favorite-toggle.is-active { font-weight: 600; }
 .item.is-duplicate { border-style: dashed; border-color: #f5b5bb; opacity: 0.5; }
 .item.is-duplicate .duplicate-toggle { border-color: #e7b8bb; background: #fff4f4; color: #a94442; }
+.item.is-favorite { border-color: #f59f00; box-shadow: 0 0 0 3px rgba(245, 159, 0, 0.1); }
+.item.is-favorite .favorite-toggle { border-color: #f08c00; background: #ffe8c2; color: #8f4b00; }
 
 .item-meta { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: #555; line-height: 1.3; }
 .item-position { font-weight: 600; }
@@ -71,4 +76,3 @@ h1 { text-align: center; margin-bottom: 16px; }
 .lightbox button { position: absolute; top: 24px; right: 32px; font-size: 28px; color: #fff; background: transparent; border: none; cursor: pointer; }
 .lightbox button:focus { outline: 2px solid #fff; }
 .no-effect { font-size: 12px; color: #777; text-align: left; }
-

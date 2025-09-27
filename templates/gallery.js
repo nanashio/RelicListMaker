@@ -3,6 +3,7 @@
 
     const MASTER_DATALIST_ID = 'master-relic-options';
     const DUPLICATE_KEY = 'Duplicate';
+    const FAVORITE_KEY = 'Favorite';
 
     const body = document.body;
     const {
@@ -402,7 +403,6 @@
 
         updateSummary();
         setOcrVisibility(ocrToggleState());
-        setOcrVisibility(ocrToggleState());
 
         if (!state.items.length) {
             showStatus('表示できる結果がありません。', false);
@@ -444,6 +444,12 @@
         duplicateButton.setAttribute('aria-pressed', 'false');
         controls.appendChild(duplicateButton);
 
+        const favoriteButton = createElement('button', 'favorite-toggle', 'お気に入り');
+        favoriteButton.type = 'button';
+        favoriteButton.dataset.image = imageName;
+        favoriteButton.dataset.action = 'toggle-favorite';
+        favoriteButton.setAttribute('aria-pressed', 'false');
+        controls.appendChild(favoriteButton);
 
         const metaInfo = createElement('div', 'item-meta');
         if (visibleTotal > 0) {
@@ -483,6 +489,7 @@
         }
 
         syncDuplicateState(item);
+        syncFavoriteState(item);
         refreshItemCaches(item);
         return item;
     }
@@ -531,6 +538,77 @@
             return true;
         }
         return false;
+    }
+
+    function normalizeFavoriteFlag(value) {
+        if (value === true) {
+            return true;
+        }
+        if (value === false || value == null) {
+            return false;
+        }
+        if (typeof value === 'number') {
+            return value === 1;
+        }
+        if (typeof value === 'string') {
+            const text = value.trim().toLowerCase();
+            return text === 'true' || text === '1' || text === 'yes' || text === 'favorite';
+        }
+        return false;
+    }
+
+    function isRecordFavorite(record) {
+        if (!record || typeof record !== 'object') {
+            return false;
+        }
+        return normalizeFavoriteFlag(record[FAVORITE_KEY]);
+    }
+
+    function setRecordFavorite(recordIndex, isFavorite) {
+        if (Number.isNaN(recordIndex)) {
+            return false;
+        }
+        const record = state.records[recordIndex];
+        if (!record || typeof record !== 'object') {
+            return false;
+        }
+        if (isFavorite) {
+            if (normalizeFavoriteFlag(record[FAVORITE_KEY])) {
+                return false;
+            }
+            record[FAVORITE_KEY] = true;
+            return true;
+        }
+        if (Object.prototype.hasOwnProperty.call(record, FAVORITE_KEY)) {
+            delete record[FAVORITE_KEY];
+            return true;
+        }
+        return false;
+    }
+
+    function updateFavoriteVisuals(item, isFavorite) {
+        if (!item) {
+            return;
+        }
+        const button = item.querySelector('.favorite-toggle');
+        const active = Boolean(isFavorite);
+        item.dataset.favorite = active ? 'true' : 'false';
+        item.classList.toggle('is-favorite', active);
+        if (button) {
+            button.textContent = active ? '★ お気に入り' : '☆ お気に入り';
+            button.classList.toggle('is-active', active);
+            button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        }
+    }
+
+    function syncFavoriteState(item) {
+        if (!item) {
+            return;
+        }
+        const recordIndex = Number(item.dataset.recordIndex);
+        const record = Number.isNaN(recordIndex) ? null : state.records[recordIndex];
+        const isFavorite = isRecordFavorite(record);
+        updateFavoriteVisuals(item, isFavorite);
     }
 
     function updateDuplicateVisuals(item, isDuplicate) {
@@ -779,6 +857,7 @@
         const filter = dom.filterSelect ? dom.filterSelect.value : 'all';
         const includePending = filter === 'with-pending';
         const resolvedOnly = filter === 'resolved';
+        const favoriteOnly = filter === 'favorite';
         const showDuplicates = includeDuplicatesNow();
 
         state.items.forEach((item) => {
@@ -806,6 +885,8 @@
                     });
                 } else if (includePending) {
                     matchesFilter = statuses.includes('|pending|');
+                } else if (favoriteOnly) {
+                    matchesFilter = item.dataset.favorite === 'true';
                 }
             }
 
@@ -837,6 +918,25 @@
             storage.scheduleSave();
         }
         buildGallery();
+    }
+
+    function handleFavoriteToggle(button) {
+        if (!button) {
+            return;
+        }
+        const item = button.closest('.item');
+        if (!item) {
+            return;
+        }
+        const recordIndex = Number(item.dataset.recordIndex);
+        const record = Number.isNaN(recordIndex) ? null : state.records[recordIndex];
+        const nextState = !isRecordFavorite(record);
+        const recordChanged = setRecordFavorite(recordIndex, nextState);
+        updateFavoriteVisuals(item, nextState);
+        if (recordChanged) {
+            storage.scheduleSave();
+        }
+        applyFilters();
     }
 
     function bindImage(img) {
@@ -980,6 +1080,13 @@
             if (duplicateButton) {
                 event.preventDefault();
                 handleDuplicateToggle(duplicateButton);
+                return;
+            }
+
+            const favoriteButton = event.target.closest('.favorite-toggle');
+            if (favoriteButton) {
+                event.preventDefault();
+                handleFavoriteToggle(favoriteButton);
                 return;
             }
 
