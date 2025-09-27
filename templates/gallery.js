@@ -4,6 +4,12 @@
     const MASTER_DATALIST_ID = 'master-relic-options';
     const DUPLICATE_KEY = 'Duplicate';
     const FAVORITE_KEY = 'Favorite';
+    const ITEM_COLOR_OPTIONS = [
+        { key: 'red', label: '赤', className: 'item-color-red' },
+        { key: 'yellow', label: '黄', className: 'item-color-yellow' },
+        { key: 'green', label: '緑', className: 'item-color-green' },
+        { key: 'blue', label: '青', className: 'item-color-blue' }
+    ];
 
     const body = document.body;
     const {
@@ -20,6 +26,7 @@
         galleryStatus: document.getElementById('gallery-status'),
         searchInput: document.getElementById('search-input'),
         filterSelect: document.getElementById('filter-status'),
+        colorFilter: document.getElementById('filter-color'),
         showDuplicatesToggle: document.getElementById('show-duplicates'),
         showOcrToggle: document.getElementById('show-ocr'),
         lightbox: document.getElementById('lightbox'),
@@ -222,7 +229,17 @@
         }
 
         return list
-            .map((value) => (value == null ? '' : String(value).trim()))
+            .map((entry) => {
+                if (entry == null) {
+                    return '';
+                }
+                if (typeof entry === 'object') {
+                    const raw =
+                        entry.EffectBase || entry.effect || entry.name || entry.value || '';
+                    return typeof raw === 'string' ? raw.trim() : '';
+                }
+                return String(entry).trim();
+            })
             .filter((value) => value !== '');
     }
 
@@ -451,6 +468,27 @@
         favoriteButton.setAttribute('aria-pressed', 'false');
         controls.appendChild(favoriteButton);
 
+        const colorControls = createElement('div', 'item-color-controls');
+        const colorLabel = createElement('label', 'item-color-label', '色');
+        colorLabel.setAttribute('for', `item-color-${recordIndex}`);
+        const colorSelect = createElement('select', 'item-color-select');
+        colorSelect.id = `item-color-${recordIndex}`;
+        colorSelect.dataset.action = 'set-item-color';
+        colorSelect.dataset.recordIndex = String(recordIndex);
+        const emptyOption = createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = 'なし';
+        colorSelect.appendChild(emptyOption);
+        ITEM_COLOR_OPTIONS.forEach((option) => {
+            const colorOption = createElement('option');
+            colorOption.value = option.key;
+            colorOption.textContent = option.label;
+            colorSelect.appendChild(colorOption);
+        });
+        colorControls.appendChild(colorLabel);
+        colorControls.appendChild(colorSelect);
+        controls.appendChild(colorControls);
+
         const metaInfo = createElement('div', 'item-meta');
         if (visibleTotal > 0) {
             let displayIndex = visibleIndex;
@@ -490,6 +528,7 @@
 
         syncDuplicateState(item);
         syncFavoriteState(item);
+        syncItemColorState(item);
         refreshItemCaches(item);
         return item;
     }
@@ -584,6 +623,71 @@
             return true;
         }
         return false;
+    }
+
+    function normalizeItemColor(value) {
+        const text = (value || '').toString().trim().toLowerCase();
+        const option = ITEM_COLOR_OPTIONS.find((entry) => entry.key === text);
+        return option ? option.key : '';
+    }
+
+    function setRecordItemColor(recordIndex, colorKey) {
+        if (Number.isNaN(recordIndex)) {
+            return false;
+        }
+        const record = state.records[recordIndex];
+        if (!record || typeof record !== 'object') {
+            return false;
+        }
+        const normalized = normalizeItemColor(colorKey);
+        if (normalized) {
+            if (record.ItemColor === normalized) {
+                return false;
+            }
+            record.ItemColor = normalized;
+            return true;
+        }
+        if (Object.prototype.hasOwnProperty.call(record, 'ItemColor')) {
+            delete record.ItemColor;
+            return true;
+        }
+        return false;
+    }
+
+    function applyItemColor(item, colorKey) {
+        if (!item) {
+            return;
+        }
+        const normalized = normalizeItemColor(colorKey);
+        ITEM_COLOR_OPTIONS.forEach((entry) => {
+            item.classList.remove(entry.className);
+        });
+        if (normalized) {
+            const option = ITEM_COLOR_OPTIONS.find((entry) => entry.key === normalized);
+            if (option) {
+                item.classList.add(option.className);
+            }
+            item.dataset.itemColor = normalized;
+        } else {
+            delete item.dataset.itemColor;
+        }
+        const select = item.querySelector('.item-color-select');
+        if (select) {
+            const value = normalized || '';
+            select.value = value;
+            select.classList.remove('option-red', 'option-yellow', 'option-green', 'option-blue', 'option-none');
+            select.classList.add(value ? `option-${value}` : 'option-none');
+        }
+    }
+
+    function syncItemColorState(item) {
+        if (!item) {
+            return;
+        }
+        const recordIndex = Number(item.dataset.recordIndex);
+        const record = Number.isNaN(recordIndex) ? null : state.records[recordIndex];
+        const colorKey = record && typeof record === 'object' ? record.ItemColor : '';
+        applyItemColor(item, colorKey);
     }
 
     function updateFavoriteVisuals(item, isFavorite) {
@@ -855,6 +959,7 @@
     function applyFilters() {
         const term = (dom.searchInput && dom.searchInput.value ? dom.searchInput.value : '').trim().toLowerCase();
         const filter = dom.filterSelect ? dom.filterSelect.value : 'all';
+        const colorFilter = dom.colorFilter ? dom.colorFilter.value : 'all';
         const includePending = filter === 'with-pending';
         const resolvedOnly = filter === 'resolved';
         const favoriteOnly = filter === 'favorite';
@@ -873,24 +978,34 @@
             const matchesSearch = !term || (cache && cache.includes(term));
 
             let matchesFilter = true;
-            if (filter !== 'all') {
-                const statuses = item.dataset.statusCache || '';
-                if (resolvedOnly) {
-                    const effectStates = (item.dataset.effectStates || '').split(',').filter(Boolean);
-                    matchesFilter = effectStates.length >= 3 && effectStates.every((stateValue, idx) => {
-                        if (idx < 3) {
-                            return stateValue === 'pass' || stateValue === 'corrected';
-                        }
-                        return true;
-                    });
-                } else if (includePending) {
-                    matchesFilter = statuses.includes('|pending|');
-                } else if (favoriteOnly) {
-                    matchesFilter = item.dataset.favorite === 'true';
-                }
-            }
 
-            item.style.display = matchesSearch && matchesFilter ? '' : 'none';
+if (filter !== 'all') {
+    const statuses = item.dataset.statusCache || '';
+    if (resolvedOnly) {
+        const effectStates = (item.dataset.effectStates || '').split(',').filter(Boolean);
+        matchesFilter = effectStates.length >= 3 && effectStates.every((stateValue, idx) => {
+            if (idx < 3) {
+                return stateValue === 'pass' || stateValue === 'corrected';
+            }
+            return true;
+        });
+    } else if (includePending) {
+        matchesFilter = statuses.includes('|pending|');
+    } else if (favoriteOnly) {
+        matchesFilter = item.dataset.favorite === 'true';
+    }
+}
+
+if (matchesFilter && colorFilter !== 'all') {
+    const itemColor = normalizeItemColor(item.dataset.itemColor || '');
+    if (colorFilter === 'none') {
+        matchesFilter = itemColor === '';
+    } else {
+        matchesFilter = itemColor === colorFilter;
+    }
+}
+
+item.style.display = matchesSearch && matchesFilter ? '' : 'none';
         });
         updateSummary();
     }
@@ -936,6 +1051,27 @@
         if (recordChanged) {
             storage.scheduleSave();
         }
+        applyFilters();
+    }
+
+    function handleItemColorToggle(button) {
+        if (!button) {
+            return;
+        }
+        const item = button.closest('.item');
+        if (!item) {
+            return;
+        }
+        const recordIndex = Number(item.dataset.recordIndex);
+        const record = Number.isNaN(recordIndex) ? null : state.records[recordIndex];
+        const targetColor = (button.value || '').trim().toLowerCase();
+        const currentColor = record && typeof record === 'object' ? normalizeItemColor(record.ItemColor) : '';
+        const nextColor = currentColor === targetColor ? '' : targetColor;
+        const recordChanged = setRecordItemColor(recordIndex, nextColor);
+        if (recordChanged) {
+            storage.scheduleSave();
+        }
+        applyItemColor(item, nextColor);
         applyFilters();
     }
 
@@ -1090,6 +1226,13 @@
                 return;
             }
 
+            const colorSelect = event.target.closest('.item-color-select');
+            if (colorSelect) {
+                event.preventDefault();
+                handleItemColorToggle(colorSelect);
+                return;
+            }
+
             const button = event.target.closest('.review-button');
             if (!button) {
                 return;
@@ -1129,6 +1272,9 @@
         }
         if (dom.filterSelect) {
             dom.filterSelect.addEventListener('change', applyFilters);
+        }
+        if (dom.colorFilter) {
+            dom.colorFilter.addEventListener('change', applyFilters);
         }
         if (dom.showDuplicatesToggle) {
             dom.showDuplicatesToggle.addEventListener('change', () => {
