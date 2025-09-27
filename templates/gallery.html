@@ -12,19 +12,23 @@
         <input type="search" id="search-input" placeholder="ファイル名・推定テキスト">
         <select id="filter-status">
             <option value="all">すべて</option>
-            <option value="pending">未レビューのみ</option>
-            <option value="pass">○のみ</option>
-            <option value="corrected">修正済みのみ</option>
+            <option value="with-pending">未レビューを含む</option>
+            <option value="resolved">確認済み / 修正済みのみ</option>
         </select>
         <label class="toggle-duplicates">
             <input type="checkbox" id="show-duplicates">
             重複を表示
+        </label>
+        <label class="toggle-ocr">
+            <input type="checkbox" id="show-ocr">
+            OCRを表示
         </label>
     </div>
     <div class="storage-controls">
         <button id="download-csv" type="button">CSVをダウンロード</button>
         <span id="storage-status" class="storage-status" role="status" aria-live="polite"></span>
     </div>
+    <p id="gallery-summary" class="gallery-summary" role="status" aria-live="polite"></p>
     <p id="gallery-status" class="gallery-status" role="status"></p>
     <div id="gallery" class="gallery"></div>
 

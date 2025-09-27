@@ -20,11 +20,13 @@
         searchInput: document.getElementById('search-input'),
         filterSelect: document.getElementById('filter-status'),
         showDuplicatesToggle: document.getElementById('show-duplicates'),
+        showOcrToggle: document.getElementById('show-ocr'),
         lightbox: document.getElementById('lightbox'),
         lightboxImg: document.querySelector('#lightbox img'),
         lightboxClose: document.getElementById('lightbox-close'),
         downloadCsvButton: document.getElementById('download-csv'),
-        storageStatus: document.getElementById('storage-status')
+        storageStatus: document.getElementById('storage-status'),
+        summary: document.getElementById('gallery-summary')
     };
 
     if (!dom.gallery) {
@@ -40,12 +42,58 @@
         masterCsvPath: masterCsvPath || '',
         masterJsonPath: masterJsonPath || '',
         masterOptions: parseMasterOptions(masterOptionsJson),
-        masterDatalistPrepared: false
+        masterDatalistPrepared: false,
+        showOcr: false
     };
 
     const duplicates = createDuplicateManager(() => state.jsonPath);
 
     const storage = createOpfsManager(() => state.records);
+    const SUMMARY_INLINE_STYLE = {
+        textAlign: 'center',
+        color: '#333',
+        fontSize: '14px',
+        margin: '0 auto 12px'
+    };
+
+    function ensureSummaryElement() {
+        let summary = dom.summary;
+
+        if (!summary || !summary.isConnected) {
+            const existing = document.getElementById('gallery-summary');
+            if (existing && existing !== dom.summary) {
+                summary = existing;
+            } else if (!summary || !summary.isConnected) {
+                summary = document.createElement('p');
+            }
+        }
+
+        if (!summary) {
+            summary = document.createElement('p');
+        }
+
+        summary.id = summary.id || 'gallery-summary';
+        summary.classList.add('gallery-summary');
+
+        summary.style.textAlign = SUMMARY_INLINE_STYLE.textAlign;
+        summary.style.color = SUMMARY_INLINE_STYLE.color;
+        summary.style.fontSize = SUMMARY_INLINE_STYLE.fontSize;
+        summary.style.margin = SUMMARY_INLINE_STYLE.margin;
+        summary.style.width = '100%';
+
+        if (!summary.parentNode) {
+            const reference = dom.galleryStatus && dom.galleryStatus.parentNode ? dom.galleryStatus : dom.gallery;
+            if (reference && reference.parentNode) {
+                reference.parentNode.insertBefore(summary, reference);
+            } else {
+                document.body.insertBefore(summary, document.body.firstChild || null);
+            }
+        }
+
+        dom.summary = summary;
+        return summary;
+    }
+
     if (!storage.supported) {
         setStorageStatus('自動保存に対応していないブラウザです。CSV ダウンロードでバックアップしてください。', true);
     } else if (!storage.usesOpfs && storage.usesLocalBackup) {
@@ -87,6 +135,60 @@
         dom.storageStatus.textContent = message || '';
         dom.storageStatus.classList.toggle('error', Boolean(isError));
         dom.storageStatus.style.display = message ? 'inline' : 'none';
+    }
+
+    function updateSummary() {
+        const summary = ensureSummaryElement();
+        if (!summary) {
+            return;
+        }
+        const items = state.items || [];
+        const totalCount = items.length;
+        let fullyConfirmedCount = 0;
+        let pendingCount = 0;
+
+        items.forEach((item) => {
+            if (!item) {
+                return;
+            }
+            const effects = Array.from(item.querySelectorAll('.effect'));
+            if (!effects.length) {
+                pendingCount += 1;
+                return;
+            }
+            const slotStatuses = new Map();
+            let hasPending = false;
+            effects.forEach((effect) => {
+                const status = normalizeStatus(effect.dataset.status);
+                if (status === 'pending') {
+                    hasPending = true;
+                }
+                const slot = Number(effect.dataset.slot);
+                if (!Number.isNaN(slot)) {
+                    slotStatuses.set(slot, status);
+                }
+            });
+            if (hasPending) {
+                pendingCount += 1;
+            }
+            const targetSlots = [1, 2, 3];
+            const allSlotsPresent = targetSlots.every((slot) => slotStatuses.has(slot));
+            if (allSlotsPresent) {
+                const allReviewed = targetSlots.every((slot) => {
+                    const status = slotStatuses.get(slot);
+                    return status && status !== 'pending';
+                });
+                if (allReviewed) {
+                    fullyConfirmedCount += 1;
+                }
+            }
+        });
+
+        const summaryText = `全体 ${totalCount} 件 / 確認済み ${fullyConfirmedCount} 件 / 未レビュー ${pendingCount} 件`;
+        summary.textContent = summaryText;
+        summary.style.display = 'flex';
+        summary.style.justifyContent = 'center';
+        summary.style.textAlign = 'center';
     }
 
     function createElement(tag, className, text) {
@@ -213,7 +315,7 @@
 
     function statusLabel(status) {
         if (status === 'pass') {
-            return '○ 確認済み';
+            return '確認済み';
         }
         if (status === 'corrected') {
             return '修正済み';
@@ -246,6 +348,23 @@
         return Boolean(dom.showDuplicatesToggle && dom.showDuplicatesToggle.checked);
     }
 
+    function ocrToggleState() {
+        return Boolean(dom.showOcrToggle && dom.showOcrToggle.checked);
+    }
+
+    function setOcrVisibility(show) {
+        state.showOcr = Boolean(show);
+        if (dom.showOcrToggle) {
+            dom.showOcrToggle.checked = state.showOcr;
+        }
+        if (!dom.gallery) {
+            return;
+        }
+        dom.gallery.querySelectorAll('.raw').forEach((element) => {
+            element.style.display = state.showOcr ? '' : 'none';
+        });
+    }
+
     function buildGallery() {
         const includeDuplicates = includeDuplicatesNow();
         dom.gallery.textContent = '';
@@ -253,11 +372,24 @@
 
         const fragment = document.createDocumentFragment();
 
+        const visibleTotal = state.records.reduce((count, currentRecord) => {
+            if (!currentRecord || typeof currentRecord !== 'object') {
+                return count;
+            }
+            return isRecordDuplicate(currentRecord) ? count : count + 1;
+        }, 0);
+        let visibleCounter = 0;
+
         state.records.forEach((record, index) => {
-            if (isRecordDuplicate(record) && !includeDuplicates) {
+            const duplicateRecord = isRecordDuplicate(record);
+            if (!duplicateRecord) {
+                visibleCounter += 1;
+            }
+            if (duplicateRecord && !includeDuplicates) {
                 return;
             }
-            const item = createItem(record, index);
+            const effectiveIndex = duplicateRecord ? (visibleCounter > 0 ? visibleCounter : 0) : visibleCounter;
+            const item = createItem(record, index, effectiveIndex, visibleTotal);
             if (item) {
                 fragment.appendChild(item);
                 state.items.push(item);
@@ -268,6 +400,10 @@
             dom.gallery.appendChild(fragment);
         }
 
+        updateSummary();
+        setOcrVisibility(ocrToggleState());
+        setOcrVisibility(ocrToggleState());
+
         if (!state.items.length) {
             showStatus('表示できる結果がありません。', false);
             return;
@@ -276,7 +412,7 @@
         applyFilters();
     }
 
-    function createItem(record, recordIndex) {
+    function createItem(record, recordIndex, visibleIndex, visibleTotal) {
         if (!record || typeof record !== 'object') {
             return null;
         }
@@ -287,13 +423,18 @@
         item.dataset.imageName = imageName;
         item.dataset.recordIndex = String(recordIndex);
 
+        const leftColumn = createElement('div', 'item-left');
+        const rightColumn = createElement('div', 'item-right');
+        item.appendChild(leftColumn);
+        item.appendChild(rightColumn);
+
         const imagePath = joinPath(state.imageDir, imageName);
         const img = createElement('img');
         img.src = imagePath;
         img.alt = imageName;
         img.dataset.full = imagePath;
         img.tabIndex = 0;
-        item.appendChild(img);
+        leftColumn.appendChild(img);
 
         const controls = createElement('div', 'item-controls');
         const duplicateButton = createElement('button', 'duplicate-toggle');
@@ -303,18 +444,33 @@
         duplicateButton.setAttribute('aria-pressed', 'false');
         controls.appendChild(duplicateButton);
 
+
+        const metaInfo = createElement('div', 'item-meta');
+        if (visibleTotal > 0) {
+            let displayIndex = visibleIndex;
+            if (displayIndex <= 0) {
+                displayIndex = 1;
+            } else if (displayIndex > visibleTotal) {
+                displayIndex = visibleTotal;
+            }
+            metaInfo.appendChild(createElement('span', 'item-position', `${displayIndex} / ${visibleTotal}`));
+        } else {
+            metaInfo.appendChild(createElement('span', 'item-position', '- / 0'));
+        }
+
         const filename = createElement('span', 'filename', imageName);
         filename.setAttribute('title', imageName);
-        controls.appendChild(filename);
+        metaInfo.appendChild(filename);
 
-        item.appendChild(controls);
+        controls.appendChild(metaInfo);
+        leftColumn.appendChild(controls);
         bindImage(img);
 
         let hasEffect = false;
         state.labelSymbols.forEach((symbol, index) => {
             const effect = createEffect(record, index + 1, symbol || `Slot ${index + 1}`, imageName, recordIndex);
             if (effect) {
-                item.appendChild(effect);
+                rightColumn.appendChild(effect);
                 hasEffect = true;
             }
         });
@@ -323,7 +479,7 @@
             const placeholder = document.createElement('p');
             placeholder.className = 'no-effect';
             placeholder.textContent = '効果情報がありません。';
-            item.appendChild(placeholder);
+            rightColumn.appendChild(placeholder);
         }
 
         syncDuplicateState(item);
@@ -445,6 +601,12 @@
 
         const statusValues = statuses.size ? Array.from(statuses) : ['pending'];
         item.dataset.statusCache = `|${statusValues.join('|')}|`;
+        const effectStates = [];
+        item.querySelectorAll('.effect').forEach((effect) => {
+            const status = effect.dataset.status || 'pending';
+            effectStates.push(status);
+        });
+        item.dataset.effectStates = effectStates.join(',');
     }
 
     function createEffect(record, slot, symbol, imageName, recordIndex) {
@@ -469,18 +631,11 @@
 
         const numericScore = Number(score);
         const hasFiniteScore = Number.isFinite(numericScore);
-        const scoreText = hasFiniteScore ? `一致度 ${numericScore.toFixed(1)}%` : '一致度 --';
-
-        const header = createElement('div', 'effect-header');
-        const labelWrap = createElement('div', 'effect-label-wrap');
-        labelWrap.appendChild(createElement('span', 'effect-label', symbol));
-        const indicator = createElement('span', 'status-indicator');
-        labelWrap.appendChild(indicator);
-        header.appendChild(labelWrap);
-        header.appendChild(createElement('span', 'effect-score', scoreText));
+        const scoreDisplay = hasFiniteScore ? `${numericScore.toFixed(1)}%` : '--';
+        const ocrDisplay = rawText || '--';
 
         const predictionLine = createElement('div', 'prediction', `推定: ${predictionText}`);
-        const rawLine = createElement('div', 'raw', `OCR: ${rawText}`);
+        const rawLine = createElement('div', 'raw', `OCR: ${ocrDisplay} / 一致度 ${scoreDisplay}`);
 
         const correctionKey = `Effect${slot}Correction`;
         const correctionValue = record[correctionKey] == null ? '' : String(record[correctionKey]);
@@ -500,13 +655,14 @@
         passButton.type = 'button';
         passButton.dataset.value = 'pass';
 
+        const statusIndicator = createElement('span', 'status-indicator');
         const correctionInput = createCorrectionInput(correctionValue);
 
         decisionRow.appendChild(passButton);
+        decisionRow.appendChild(statusIndicator);
         decisionRow.appendChild(correctionInput);
         decision.appendChild(decisionRow);
 
-        effect.appendChild(header);
         effect.appendChild(predictionLine);
         effect.appendChild(rawLine);
         effect.appendChild(decision);
@@ -621,6 +777,8 @@
     function applyFilters() {
         const term = (dom.searchInput && dom.searchInput.value ? dom.searchInput.value : '').trim().toLowerCase();
         const filter = dom.filterSelect ? dom.filterSelect.value : 'all';
+        const includePending = filter === 'with-pending';
+        const resolvedOnly = filter === 'resolved';
         const showDuplicates = includeDuplicatesNow();
 
         state.items.forEach((item) => {
@@ -635,14 +793,25 @@
             const cache = item.dataset.searchCache || '';
             const matchesSearch = !term || (cache && cache.includes(term));
 
-            let matchesFilter = filter === 'all';
-            if (!matchesFilter) {
+            let matchesFilter = true;
+            if (filter !== 'all') {
                 const statuses = item.dataset.statusCache || '';
-                matchesFilter = statuses.includes(`|${filter}|`);
+                if (resolvedOnly) {
+                    const effectStates = (item.dataset.effectStates || '').split(',').filter(Boolean);
+                    matchesFilter = effectStates.length >= 3 && effectStates.every((stateValue, idx) => {
+                        if (idx < 3) {
+                            return stateValue === 'pass' || stateValue === 'corrected';
+                        }
+                        return true;
+                    });
+                } else if (includePending) {
+                    matchesFilter = statuses.includes('|pending|');
+                }
             }
 
             item.style.display = matchesSearch && matchesFilter ? '' : 'none';
         });
+        updateSummary();
     }
 
     function handleDuplicateToggle(button) {
@@ -766,11 +935,11 @@
             if (text) {
                 loadRecordsArray(JSON.parse(text));
                 clearStatus();
-                setStorageStatus('OPFSから読み込みました。', false);
+                setStorageStatus('ブラウザから読み込みました。', false);
                 return;
             }
         } catch (error) {
-            console.warn('OPFSからの読み込みに失敗しました:', error);
+            console.warn('ブラウザからの読み込みに失敗しました:', error);
         }
 
         if (!state.jsonPath) {
@@ -857,6 +1026,11 @@
         if (dom.showDuplicatesToggle) {
             dom.showDuplicatesToggle.addEventListener('change', () => {
                 buildGallery();
+            });
+        }
+        if (dom.showOcrToggle) {
+            dom.showOcrToggle.addEventListener('change', () => {
+                setOcrVisibility(ocrToggleState());
             });
         }
         if (dom.downloadCsvButton) {
@@ -1201,9 +1375,9 @@
                     const writable = await state.fileHandle.createWritable();
                     await writable.write(text);
                     await writable.close();
-                    setStorageStatus(`保存済み ${new Date().toLocaleTimeString()}`, false);
+                    setStorageStatus(`ブラウザに保存済み ${new Date().toLocaleTimeString()}`, false);
                 } catch (error) {
-                    console.error('OPFS書き込みに失敗しました:', error);
+                    console.error('ブラウザへの書き込みに失敗しました:', error);
                     setStorageStatus(`保存失敗: ${error.message || error}`, true);
                 } finally {
                     state.saving = false;
