@@ -33,6 +33,8 @@
         lightboxImg: document.querySelector('#lightbox img'),
         lightboxClose: document.getElementById('lightbox-close'),
         downloadCsvButton: document.getElementById('download-csv'),
+        uploadCsvButton: document.getElementById('upload-csv'),
+        uploadCsvInput: document.getElementById('upload-csv-input'),
         storageStatus: document.getElementById('storage-status'),
         summary: document.getElementById('gallery-summary')
     };
@@ -1267,6 +1269,50 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
         return records;
     }
 
+    async function handleCsvImportFile(file) {
+        if (!file) {
+            return;
+        }
+        const loadingMessage = 'CSVを読み込み中...';
+        showStatus(loadingMessage, false);
+
+        try {
+            const text = typeof file.text === 'function' ? await file.text() : await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result || '');
+                reader.onerror = () => reject(reader.error || new Error('読み込みに失敗しました'));
+                reader.readAsText(file, 'utf-8');
+            });
+
+            const records = parseCsvRecords(text);
+            if (!records.length) {
+                showStatus('CSVに有効なデータがありません。', true);
+                return;
+            }
+
+            const nextName = (file.name && file.name.trim()) || 'import.csv';
+            state.csvPath = nextName;
+            loadRecordsArray(records);
+
+            if (storage.supported) {
+                await storage.prepare(nextName);
+                await storage.flushNow();
+                setStorageStatus(`CSVをインポートしブラウザに保存しました (${new Date().toLocaleTimeString()})`, false);
+            } else {
+                setStorageStatus('ブラウザ保存に対応していません。必要に応じてCSVをダウンロードしてください。', true);
+            }
+
+            clearStatus();
+        } catch (error) {
+            console.error('CSVのインポートに失敗しました:', error);
+            showStatus(`CSVのインポートに失敗しました: ${error.message || error}`, true);
+        } finally {
+            if (dom.uploadCsvInput) {
+                dom.uploadCsvInput.value = '';
+            }
+        }
+    }
+
     async function loadInitialData() {
         const preferredName = getFileName(state.csvPath) || 'results.csv';
 
@@ -1393,6 +1439,19 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
         }
         if (dom.downloadCsvButton) {
             dom.downloadCsvButton.addEventListener('click', handleCsvExport);
+        }
+        if (dom.uploadCsvButton && dom.uploadCsvInput) {
+            dom.uploadCsvButton.addEventListener('click', () => {
+                dom.uploadCsvInput.value = '';
+                dom.uploadCsvInput.click();
+            });
+            dom.uploadCsvInput.addEventListener('change', () => {
+                const files = dom.uploadCsvInput.files || [];
+                const file = files.length ? files[0] : null;
+                if (file) {
+                    void handleCsvImportFile(file);
+                }
+            });
         }
         if (dom.lightboxClose) {
             dom.lightboxClose.addEventListener('click', closeLightbox);
