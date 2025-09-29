@@ -3,6 +3,7 @@ import os
 import csv
 import shutil
 import time
+from typing import Optional
 
 from extract_frames import extract_and_crop
 from generate_gallery import generate_html
@@ -12,6 +13,36 @@ VIDEO_DIR = "videos"
 DEFAULT_RESULT_DIR = "results"
 OCR_UPSAMPLE = 1.5
 
+
+
+
+COLOR_KEYWORDS = {
+    'red': 'red',
+    'green': 'green',
+    'blue': 'blue',
+    'yellow': 'yellow',
+    '赤': 'red',
+    '緑': 'green',
+    '青': 'blue',
+    '黄': 'yellow',
+}
+
+
+def detect_item_color(name: str) -> Optional[str]:
+    if not name:
+        return None
+
+    lowered = name.lower()
+    for word, color in COLOR_KEYWORDS.items():
+        if word in lowered:
+            return color
+
+    # 日本語キーワードは lower() で変換できないので別途チェック
+    for word in ('赤', '緑', '青', '黄'):
+        if word in name:
+            return COLOR_KEYWORDS[word]
+
+    return None
 
 def prepare_master_csv(src_csv: str, dest_csv: str) -> list:
     options = []
@@ -66,6 +97,8 @@ def main(video_dir="videos", result_dir=DEFAULT_RESULT_DIR, ocr_upsample=OCR_UPS
         # 2. OCR＋マッチング結果をCSVに出力
         csv_path = os.path.join(video_output_dir, f"{base_name}.csv")
         corrections_csv = os.path.join(video_output_dir, "corrections.csv")
+        item_color = detect_item_color(base_name)
+
         process_images(
             image_dir=crops_dir,
             output_path=csv_path,
@@ -73,6 +106,7 @@ def main(video_dir="videos", result_dir=DEFAULT_RESULT_DIR, ocr_upsample=OCR_UPS
             upsample=ocr_upsample,
             preprocess=True,
             corrections_csv=corrections_csv,
+            item_color=item_color,
         )
         print(f"[✓] {crops_dir} の結果を {csv_path} に出力しました")
 

@@ -129,6 +129,7 @@ def process_images(
     upsample=DEFAULT_UPSAMPLE,
     preprocess=True,
     corrections_csv=None,
+    item_color=None,
 ):
     version = pytesseract.get_tesseract_version()
     print(f"Tesseract Ver: {version}")
@@ -158,6 +159,8 @@ def process_images(
         )
 
         row = {"Image": fname, "Duplicate": False}
+        if item_color:
+            row["ItemColor"] = item_color
         for idx, match in enumerate(matches, start=1):
             row[f"RawText{idx}"] = match.get("raw", "")
             row[f"Effect{idx}"] = match.get("match", "")
