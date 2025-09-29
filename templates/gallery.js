@@ -13,7 +13,7 @@
 
     const body = document.body;
     const {
-        resultsJson: initialJsonPath = '',
+        resultsCsv: initialCsvPath = '',
         imgDir: imageDir = '.',
         labelSymbols: labelSymbolsJson = '[]',
         masterCsv: masterCsvPath = '',
@@ -46,7 +46,7 @@
         items: [],
         labelSymbols: parseLabelSymbols(labelSymbolsJson),
         imageDir: imageDir || '.',
-        jsonPath: initialJsonPath,
+        csvPath: initialCsvPath,
         masterCsvPath: masterCsvPath || '',
         masterJsonPath: masterJsonPath || '',
         masterOptions: parseMasterOptions(masterOptionsJson),
@@ -54,7 +54,7 @@
         showOcr: false
     };
 
-    const duplicates = createDuplicateManager(() => state.jsonPath);
+    const duplicates = createDuplicateManager(() => state.csvPath);
 
     const storage = createOpfsManager(() => state.records);
     const SUMMARY_INLINE_STYLE = {
@@ -300,9 +300,15 @@
     }
 
     function csvFileName() {
-        const baseName = storage.fileName || getFileName(state.jsonPath) || 'results.json';
-        const converted = baseName.replace(/\.json$/i, '_review.csv');
-        return converted === baseName ? `${baseName}.csv` : converted;
+        const baseName = storage.fileName || getFileName(state.csvPath) || 'results.csv';
+        const converted = baseName.replace(/\.csv$/i, '_review.csv');
+        if (converted !== baseName) {
+            return converted;
+        }
+        if (!baseName) {
+            return 'results_review.csv';
+        }
+        return `${baseName.replace(/\.csv$/i, '')}_review.csv`;
     }
 
     function joinPath(base, leaf) {
@@ -1163,8 +1169,106 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
         return lines.join('\n');
     }
 
+    function parseCsvRows(text) {
+        const rows = [];
+        if (!text) {
+            return rows;
+        }
+        const sanitized = String(text).replace(/^\uFEFF/, '');
+        const normalized = sanitized.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        let field = '';
+        let row = [];
+        let inQuotes = false;
+
+        for (let index = 0; index < normalized.length; index += 1) {
+            const char = normalized[index];
+            if (inQuotes) {
+                if (char === '"') {
+                    const nextChar = normalized[index + 1];
+                    if (nextChar === '"') {
+                        field += '"';
+                        index += 1;
+                    } else {
+                        inQuotes = false;
+                    }
+                } else {
+                    field += char;
+                }
+                continue;
+            }
+
+            if (char === '"') {
+                inQuotes = true;
+                continue;
+            }
+
+            if (char === ',') {
+                row.push(field);
+                field = '';
+                continue;
+            }
+
+            if (char === '\n') {
+                row.push(field);
+                rows.push(row);
+                row = [];
+                field = '';
+                continue;
+            }
+
+            field += char;
+        }
+
+        if (inQuotes) {
+            row.push(field);
+            rows.push(row);
+        } else if (field !== '' || row.length) {
+            row.push(field);
+            rows.push(row);
+        }
+
+        return rows;
+    }
+
+    function parseCsvRecords(text) {
+        const rows = parseCsvRows(text);
+        if (!rows.length) {
+            return [];
+        }
+
+        const headers = rows[0].map((header) => {
+            if (header == null) {
+                return '';
+            }
+            return String(header).trim();
+        });
+
+        const records = [];
+        for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
+            const cells = rows[rowIndex];
+            if (!cells || cells.every((cell) => {
+                const value = cell == null ? '' : String(cell).trim();
+                return value === '';
+            })) {
+                continue;
+            }
+
+            const record = {};
+            headers.forEach((header, columnIndex) => {
+                if (!header) {
+                    return;
+                }
+                const value = columnIndex < cells.length ? cells[columnIndex] : '';
+                record[header] = value == null ? '' : value;
+            });
+            records.push(record);
+        }
+
+        return records;
+    }
+
     async function loadInitialData() {
-        const preferredName = getFileName(state.jsonPath) || 'results.json';
+        const preferredName = getFileName(state.csvPath) || 'results.csv';
 
         try {
             const text = await storage.tryLoad(preferredName);
@@ -1178,27 +1282,28 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
             console.warn('ブラウザからの読み込みに失敗しました:', error);
         }
 
-        if (!state.jsonPath) {
-            showStatus('JSONファイルのパスが指定されていません。', true);
+        if (!state.csvPath) {
+            showStatus('CSVファイルのパスが指定されていません。', true);
             return;
         }
 
         try {
             showStatus('読み込み中...', false);
-            const response = await fetch(state.jsonPath, { cache: 'no-cache' });
+            const response = await fetch(state.csvPath, { cache: 'no-cache' });
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
-            const data = await response.json();
-            loadRecordsArray(data);
+            const csvText = await response.text();
+            const records = parseCsvRecords(csvText);
+            loadRecordsArray(records);
             clearStatus();
             if (storage.supported) {
                 await storage.prepare(preferredName);
                 await storage.flushNow();
             }
         } catch (error) {
-            console.error('JSONのロードに失敗しました:', error);
-            showStatus(`データの読み込みに失敗しました: ${error.message || error}. JSON出力の配置を確認してください。`, true);
+            console.error('CSVのロードに失敗しました:', error);
+            showStatus(`データの読み込みに失敗しました: ${error.message || error}. CSV出力の配置を確認してください。`, true);
         }
     }
 
@@ -1338,7 +1443,7 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
         setStorageStatus('CSVをダウンロードしました。', false);
     }
 
-    function createDuplicateManager(getJsonPath) {
+    function createDuplicateManager(getResultsPath) {
         const storagePrefix = 'relic-gallery-duplicates:';
         let cache = new Map();
         let loadedKey = '';
@@ -1349,14 +1454,14 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
         }
 
         function deriveBaseName() {
-            const source = typeof getJsonPath === 'function' ? getJsonPath() : '';
+            const source = typeof getResultsPath === 'function' ? getResultsPath() : '';
             const text = source == null ? '' : String(source);
             if (!text) {
-                return 'results.json';
+                return 'results.csv';
             }
             const parts = text.split(/[\\/]/).filter(Boolean);
             if (!parts.length) {
-                return text || 'results.json';
+                return text || 'results.csv';
             }
             return parts[parts.length - 1];
         }
@@ -1544,7 +1649,7 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
         }
 
         function localStorageKey(name) {
-            const target = name || state.fileName || 'results.json';
+            const target = name || state.fileName || 'results.csv';
             state.fileName = target;
             return `${LOCAL_STATE_PREFIX}${target}`;
         }
@@ -1591,7 +1696,7 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
             if (!supported) {
                 return;
             }
-            const targetName = name || state.fileName || 'results.json';
+            const targetName = name || state.fileName || 'results.csv';
             state.fileName = targetName;
 
             if (opfsAvailable) {
@@ -1609,8 +1714,8 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
             try {
                 text = JSON.stringify(getData(), null, 2);
             } catch (error) {
-                console.error('JSON生成に失敗しました:', error);
-                setStorageStatus('保存失敗: JSON生成に失敗しました。', true);
+                console.error('データのシリアライズに失敗しました:', error);
+                setStorageStatus('保存失敗: データのシリアライズに失敗しました。', true);
                 return;
             }
 

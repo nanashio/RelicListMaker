@@ -5,11 +5,11 @@ import json
 import shutil
 from typing import Optional
 
-RESULTS_JSON_PATH = "results_input_video.json"
+RESULTS_CSV_PATH = "results_input_video.csv"
 IMG_DIR = "crops/input_video"
 OUTPUT_HTML = "viewer.html"
 LABEL_SYMBOLS = ["①", "②", "③"]
-DEFAULT_MASTER_CSV = "master_relics.csv"
+DEFAULT_MASTER_CSV = os.path.join(os.path.dirname(__file__), "templates", "master_relics.csv")
 DEFAULT_MASTER_JSON = "master_relics.json"
 TEMPLATE_HTML_PATH = os.path.join(os.path.dirname(__file__), "templates", "gallery.html")
 TEMPLATE_CSS_PATH = os.path.join(os.path.dirname(__file__), "templates", "gallery.css")
@@ -139,10 +139,10 @@ def generate_html(
     output_dir = os.path.dirname(os.path.abspath(output_html)) or "."
     os.makedirs(output_dir, exist_ok=True)
 
-    json_abs_path = os.path.abspath(results_path)
-    json_rel_path = os.path.relpath(json_abs_path, output_dir)
+    results_abs_path = os.path.abspath(results_path)
+    results_rel_path = os.path.relpath(results_abs_path, output_dir)
 
-    if not os.path.exists(json_abs_path):
+    if not os.path.exists(results_abs_path):
         print(f"[!] 結果ファイルが見つかりません: {results_path}")
 
     if img_dir:
@@ -200,7 +200,7 @@ def generate_html(
     html_output = html_template
     embed_options = master_options if not master_json_rel_path else []
 
-    html_output = html_output.replace("__RESULTS_JSON__", _escape_attr(json_rel_path))
+    html_output = html_output.replace("__RESULTS_CSV__", _escape_attr(results_rel_path))
     html_output = html_output.replace("__IMAGE_DIR__", _escape_attr(img_rel_dir))
     html_output = html_output.replace("__LABEL_SYMBOLS__", _escape_attr(json.dumps(label_symbols, ensure_ascii=False)))
     html_output = html_output.replace("__MASTER_CSV__", _escape_attr(master_csv_rel_path))
@@ -217,7 +217,7 @@ def generate_html(
 
 if __name__ == "__main__":
     generate_html(
-        RESULTS_JSON_PATH,
+        RESULTS_CSV_PATH,
         IMG_DIR,
         OUTPUT_HTML,
         LABEL_SYMBOLS,

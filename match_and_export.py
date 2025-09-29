@@ -1,5 +1,5 @@
-import json
 import os
+import csv
 
 import cv2
 import pandas as pd
@@ -8,7 +8,7 @@ from rapidfuzz import process, fuzz
 
 from preprocess import prepare_crop_for_ocr
 
-DICTIONARY_FILE = 'master_relics.csv'
+DICTIONARY_FILE = os.path.join(os.path.dirname(__file__), 'templates', 'master_relics.csv')
 COLUMN_NAME_IN_CSV = 'EffectBase'
 
 # 元サイズ (1920x1080前提)
@@ -124,7 +124,7 @@ def ocr_and_match(img_path, dictionary, corrections_map=None, scale=1.0, upsampl
 
 def process_images(
     image_dir="crops",
-    output_path="results.json",
+    output_path="results.csv",
     scale=1.0,
     upsample=DEFAULT_UPSAMPLE,
     preprocess=True,
@@ -167,6 +167,31 @@ def process_images(
 
         data.append(row)
 
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    print(f"[✓] JSON出力完了: {output_path}")
+    if not data:
+        print("[!] 出力対象となるOCR結果がありませんでした")
+        return
+
+    fieldnames = []
+
+    def register_field(field_name):
+        if field_name not in fieldnames:
+            fieldnames.append(field_name)
+
+    for mandatory in ("Image", "Duplicate"):
+        register_field(mandatory)
+
+    for row in data:
+        for key in row.keys():
+            register_field(key)
+
+    try:
+        with open(output_path, "w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in data:
+                writer.writerow(row)
+    except OSError as err:
+        print(f"[!] CSVの書き込みに失敗しました: {err}")
+        return
+
+    print(f"[✓] CSV出力完了: {output_path}")
