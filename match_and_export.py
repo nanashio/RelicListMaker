@@ -13,9 +13,9 @@ COLUMN_NAME_IN_CSV = 'EffectBase'
 
 # 元サイズ (1920x1080前提)
 BASE_CROP_BOXES = [
-    (188, 78,  768, 105),
-    (188, 138, 768, 165),
-    (188, 198, 768, 225)
+    (188, 78,  768, 128),
+    (188, 138, 768, 188),
+    (188, 198, 768, 248)
 ]
 
 OCR_CONFIG = "--oem 3 --psm 6 -c preserve_interword_spaces=1"
