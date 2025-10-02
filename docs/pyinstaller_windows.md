@@ -40,6 +40,7 @@ PS> pyinstaller --clean --noconfirm pyinstaller.spec
 - `dist/nightreign-relic/` を配布単位として扱う。
 - 実行時には以下の構成を想定している。
   - `nightreign-relic.exe`
+  - `nightreign-relic-viewer.exe` : 結果ビューワ用ローカルサーバー
   - `templates/` (PyInstaller が展開)
   - `videos/` : ビルド時に空フォルダを自動生成。入力動画を配置する（手動でコピー）
   - `results/` : 実行時に自動生成される
@@ -49,6 +50,10 @@ PS> pyinstaller --clean --noconfirm pyinstaller.spec
 ```powershell
 PS> cd dist/nightreign-relic
 PS> .\nightreign-relic.exe
+# ビューワをローカルサーバーで閲覧したい場合
+PS> .\nightreign-relic-viewer.exe --open-browser
+# 特定の動画結果を開く
+PS> .\nightreign-relic-viewer.exe --video sample_run
 ```
 
 - 進捗ログはコンソールに表示される。処理完了後、`results/<video名>/` に CSV / HTML / 画像が出力される。
