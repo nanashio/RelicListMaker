@@ -57,3 +57,8 @@ PS> .\nightreign-relic.exe
 - **DLL が見つからない / OpenCV エラー**: Visual C++ 再頒布可能パッケージをインストールする。
 - **Tesseract の日本語データが見つからない**: `tesseract/.../tessdata` に `jpn.traineddata` が含まれているか確認する。外部環境のデータを利用する場合は `TESSDATA_PREFIX` を明示的に指定する。
 - **実行フォルダから動画を認識しない**: `videos/` ディレクトリが exe と同じ階層に存在するか確認する。
+
+## ライセンス注意
+- Tesseract OCR は Apache License 2.0 です。同梱する際は upstream の `LICENSE` と `NOTICE` を配布物に含めてください。
+- 詳細や追加のサードパーティー情報は `docs/THIRD_PARTY_LICENSES.md` を参照してください。
+
