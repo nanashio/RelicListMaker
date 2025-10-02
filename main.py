@@ -8,6 +8,7 @@ from typing import Optional
 from extract_frames import extract_and_crop
 from generate_gallery import generate_html
 from match_and_export import process_images
+from resource_paths import templates_path
 
 VIDEO_DIR = "videos"
 DEFAULT_RESULT_DIR = "results"
@@ -113,7 +114,7 @@ def main(video_dir="videos", result_dir=DEFAULT_RESULT_DIR, ocr_upsample=OCR_UPS
         # 3. HTMLギャラリー生成
         html_path = os.path.join(video_output_dir, f"{base_name}_viewer.html")
         img_rel_dir = os.path.relpath(crops_dir, video_output_dir)
-        master_src = os.path.join(os.path.dirname(__file__), "templates", "master_relics.csv")
+        master_src = str(templates_path("master_relics.csv"))
         master_csv_dest = os.path.join(video_output_dir, "master_relics.csv")
         prepare_master_csv(master_src, master_csv_dest)
         master_csv_rel = (

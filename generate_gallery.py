@@ -4,16 +4,17 @@ import html
 import json
 import shutil
 from typing import Optional
+from resource_paths import templates_path
 
 RESULTS_CSV_PATH = "results_input_video.csv"
 IMG_DIR = "crops/input_video"
 OUTPUT_HTML = "viewer.html"
 LABEL_SYMBOLS = ["①", "②", "③"]
-DEFAULT_MASTER_CSV = os.path.join(os.path.dirname(__file__), "templates", "master_relics.csv")
+DEFAULT_MASTER_CSV = str(templates_path("master_relics.csv"))
 DEFAULT_MASTER_JSON = "master_relics.json"
-TEMPLATE_HTML_PATH = os.path.join(os.path.dirname(__file__), "templates", "gallery.html")
-TEMPLATE_CSS_PATH = os.path.join(os.path.dirname(__file__), "templates", "gallery.css")
-TEMPLATE_JS_PATH = os.path.join(os.path.dirname(__file__), "templates", "gallery.js")
+TEMPLATE_HTML_PATH = str(templates_path("gallery.html"))
+TEMPLATE_CSS_PATH = str(templates_path("gallery.css"))
+TEMPLATE_JS_PATH = str(templates_path("gallery.js"))
 
 
 def _escape_attr(value: str) -> str:

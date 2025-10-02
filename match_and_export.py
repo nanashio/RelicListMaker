@@ -7,8 +7,13 @@ import pytesseract
 from rapidfuzz import process, fuzz
 
 from preprocess import prepare_crop_for_ocr
+from resource_paths import templates_path
+from tesseract_bundle import configure_pytesseract
 
-DICTIONARY_FILE = os.path.join(os.path.dirname(__file__), 'templates', 'master_relics.csv')
+BUNDLED_TESSERACT = configure_pytesseract()
+_TESSERACT_NOTICE_SHOWN = False
+
+DICTIONARY_FILE = str(templates_path('master_relics.csv'))
 COLUMN_NAME_IN_CSV = 'EffectBase'
 
 # 元サイズ (1920x1080前提)
@@ -131,6 +136,15 @@ def process_images(
     corrections_csv=None,
     item_color=None,
 ):
+    global _TESSERACT_NOTICE_SHOWN
+    if not _TESSERACT_NOTICE_SHOWN:
+        if BUNDLED_TESSERACT:
+            print(f"[INFO] バンドル済みTesseractを使用します: {BUNDLED_TESSERACT.cmd}")
+            if BUNDLED_TESSERACT.tessdata_prefix:
+                print(f"[INFO] tessdata パス: {BUNDLED_TESSERACT.tessdata_prefix}")
+        else:
+            print("[INFO] システムにインストール済みの Tesseract を利用します")
+        _TESSERACT_NOTICE_SHOWN = True
     version = pytesseract.get_tesseract_version()
     print(f"Tesseract Ver: {version}")
 
