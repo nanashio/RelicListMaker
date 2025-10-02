@@ -65,10 +65,8 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='nightreign-relic',
     debug=False,
     bootloader_ignore_signals=False,
@@ -84,8 +82,22 @@ exe = EXE(
     entitlements_file=None,
 )
 
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='nightreign-relic',
+)
+
 # dist 出力に videos ディレクトリを確保
 dist_root = project_dir / 'dist' / 'nightreign-relic'
 if dist_root.exists() and dist_root.is_file():
     dist_root.unlink()
+legacy_exe = project_dir / 'dist' / 'nightreign-relic.exe'
+if legacy_exe.exists():
+    legacy_exe.unlink()
 (dist_root / 'videos').mkdir(parents=True, exist_ok=True)

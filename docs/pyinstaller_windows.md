@@ -13,7 +13,8 @@
 # 任意の作業ディレクトリで
 PS> git clone <このリポジトリURL>
 PS> cd nightreign-relic
-PS> python -m venv .venv
+# `python` エイリアスが未設定な環境があるため `py` を使用する
+PS> py -m venv .venv
 PS> .\.venv\Scripts\Activate.ps1
 PS> pip install --upgrade pip
 PS> pip install -r requirements-build.txt
