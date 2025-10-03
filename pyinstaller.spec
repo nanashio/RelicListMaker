@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import shutil
 from pathlib import Path
 
 block_cipher = None
@@ -26,6 +27,7 @@ def collect_datas(source: Path, prefix: str):
         entries.append((str(file_path), str(target_dir)))
     return entries
 
+
 datas = []
 datas.extend(collect_datas(templates_dir, "templates"))
 datas.extend(collect_datas(tesseract_dir, "tesseract"))
@@ -37,6 +39,14 @@ if not videos_placeholder.exists():
     videos_placeholder.write_text("", encoding="utf-8")
 datas.append((str(videos_placeholder), "videos/.placeholder"))
 
+dist_root = project_dir / 'dist' / 'nightreign-relic'
+legacy_videos_dir = dist_root / 'videos'
+backup_videos_dir = placeholder_root / "videos_backup"
+if backup_videos_dir.exists():
+    shutil.rmtree(backup_videos_dir)
+if legacy_videos_dir.exists():
+    shutil.copytree(legacy_videos_dir, backup_videos_dir)
+
 hiddenimports = [
     "cv2",
     "rapidfuzz.process",
@@ -46,7 +56,7 @@ hiddenimports = [
 
 
 a = Analysis(
-    ['main.py'],
+    ["gui_app.py"],
     pathex=[str(project_dir)],
     binaries=[],
     datas=datas,
@@ -74,44 +84,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-)
-
-viewer_analysis = Analysis(
-    ['viewer_server.py'],
-    pathex=[str(project_dir)],
-    binaries=[],
-    datas=[],
-    hiddenimports=[],
-    hookspath=[],
-    hooksconfig={},
-    runtime_hooks=[],
-    excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
-    noarchive=False,
-)
-viewer_pyz = PYZ(viewer_analysis.pure, viewer_analysis.zipped_data, cipher=block_cipher)
-
-viewer_exe = EXE(
-    viewer_pyz,
-    viewer_analysis.scripts,
-    [],
-    exclude_binaries=True,
-    name='nightreign-relic-viewer',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=True,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -121,13 +94,9 @@ viewer_exe = EXE(
 
 coll = COLLECT(
     exe,
-    viewer_exe,
     a.binaries,
     a.zipfiles,
     a.datas,
-    viewer_analysis.binaries,
-    viewer_analysis.zipfiles,
-    viewer_analysis.datas,
     strip=False,
     upx=True,
     upx_exclude=[],
@@ -135,10 +104,18 @@ coll = COLLECT(
 )
 
 # dist 出力に videos ディレクトリを確保
-dist_root = project_dir / 'dist' / 'nightreign-relic'
 if dist_root.exists() and dist_root.is_file():
     dist_root.unlink()
 legacy_exe = project_dir / 'dist' / 'nightreign-relic.exe'
 if legacy_exe.exists():
     legacy_exe.unlink()
-(dist_root / 'videos').mkdir(parents=True, exist_ok=True)
+legacy_viewer_exe = project_dir / 'dist' / 'nightreign-relic-viewer.exe'
+if legacy_viewer_exe.exists():
+    legacy_viewer_exe.unlink()
+videos_target_dir = dist_root / 'videos'
+if backup_videos_dir.exists():
+    if videos_target_dir.exists():
+        shutil.rmtree(videos_target_dir)
+    shutil.copytree(backup_videos_dir, videos_target_dir)
+else:
+    videos_target_dir.mkdir(parents=True, exist_ok=True)
