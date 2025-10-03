@@ -71,11 +71,9 @@ class RelicGuiApp:
         self.root = root
         self.root.title("NightReign Relic ツール")
 
-        project_root = _default_base_dir()
-        default_videos = (project_root / "videos").resolve()
-        default_results = (project_root / "results").resolve()
-        self.video_dir_var = tk.StringVar(value=str(default_videos))
-        self.results_dir_var = tk.StringVar(value=str(default_results))
+        self.base_dir = _default_base_dir()
+        self.video_dir_var = tk.StringVar(value="videos")
+        self.results_dir_var = tk.StringVar(value="results")
         self.ocr_upsample_var = tk.StringVar(value=str(pipeline_main.OCR_UPSAMPLE))
         self.server_host_var = tk.StringVar(value="127.0.0.1")
         self.server_port_var = tk.StringVar(value="0")
@@ -87,10 +85,13 @@ class RelicGuiApp:
         self.server_context: Optional[ServerContext] = None
         self.server_thread: Optional[threading.Thread] = None
         self.log_queue: "queue.Queue[str]" = queue.Queue()
+        self.viewer_choice_var = tk.StringVar()
+        self.viewer_entries: list[tuple[str, Path, Optional[str]]] = []
 
         self._build_layout()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.after(self.POLL_INTERVAL_MS, self._process_log_queue)
+        self._refresh_viewer_list()
 
     def _build_layout(self) -> None:
         main_frame = ttk.Frame(self.root, padding=12)
@@ -147,9 +148,24 @@ class RelicGuiApp:
 
         ttk.Label(actions_frame, textvariable=self.server_status_var).grid(row=1, column=0, columnspan=3, sticky="w", padx=4, pady=(4, 0))
 
+        viewer_frame = ttk.LabelFrame(main_frame, text="結果ビューワ一覧", padding=12)
+        viewer_frame.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        viewer_frame.columnconfigure(0, weight=1)
+        ttk.Label(viewer_frame, text="*_viewer.html").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        self.viewer_combo = ttk.Combobox(
+            viewer_frame,
+            textvariable=self.viewer_choice_var,
+            state="readonly",
+            values=[],
+        )
+        self.viewer_combo.grid(row=0, column=1, sticky="ew")
+        self.viewer_combo.bind("<<ComboboxSelected>>", self._on_viewer_selected)
+        ttk.Button(viewer_frame, text="一覧更新", command=self._refresh_viewer_list).grid(row=0, column=2, padx=(8, 0))
+        ttk.Button(viewer_frame, text="ブラウザで開く", command=self.on_open_selected_viewer).grid(row=0, column=3, padx=(8, 0))
+
         log_frame = ttk.LabelFrame(main_frame, text="ログ", padding=12)
-        log_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
-        main_frame.rowconfigure(2, weight=1)
+        log_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+        main_frame.rowconfigure(3, weight=1)
 
         self.log_text = tk.Text(log_frame, height=20, state="disabled", wrap="word")
         self.log_text.grid(row=0, column=0, sticky="nsew")
@@ -159,15 +175,103 @@ class RelicGuiApp:
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
 
+    def _resolve_input_path(self, value: str) -> Path:
+        raw = Path(value.strip()) if value else Path()
+        if raw.is_absolute():
+            return raw.resolve()
+        return (self.base_dir / raw).resolve()
+
+    def _to_user_value(self, path: Path) -> str:
+        resolved = path.resolve()
+        try:
+            return str(resolved.relative_to(self.base_dir))
+        except ValueError:
+            return str(resolved)
+
+    def _refresh_viewer_list(self) -> None:
+        results_dir = self._resolve_input_path(self.results_dir_var.get())
+        entries: list[tuple[str, Path, Optional[str]]] = []
+        if results_dir.exists():
+            for candidate in sorted(results_dir.rglob("*_viewer.html")):
+                try:
+                    display = candidate.relative_to(results_dir).as_posix()
+                except ValueError:
+                    display = candidate.name
+                video_name: Optional[str] = None
+                stem = candidate.stem
+                if stem.endswith("_viewer"):
+                    video_name = stem[:-len("_viewer")]
+                if not video_name:
+                    parent = candidate.parent
+                    if parent != results_dir:
+                        video_name = parent.name
+                entries.append((display, candidate, video_name))
+
+        self.viewer_entries = entries
+        values = [item[0] for item in entries]
+        self.viewer_combo.configure(values=values)
+
+        if entries:
+            current = self.viewer_choice_var.get()
+            if current not in values:
+                self.viewer_choice_var.set(values[0])
+                self._on_viewer_selected()
+        else:
+            self.viewer_choice_var.set("")
+            self.server_video_var.set("")
+
+    def _find_viewer_entry(self) -> Optional[tuple[str, Path, Optional[str]]]:
+        selection = self.viewer_choice_var.get()
+        for entry in self.viewer_entries:
+            if entry[0] == selection:
+                return entry
+        return None
+
+    def _on_viewer_selected(self, event: Optional[tk.Event] = None) -> None:  # type: ignore[override]
+        entry = self._find_viewer_entry()
+        if entry is None:
+            return
+        _, _, video_name = entry
+        if video_name:
+            self.server_video_var.set(video_name)
+
+    def on_open_selected_viewer(self) -> None:
+        entry = self._find_viewer_entry()
+        if entry is None:
+            messagebox.showinfo("ビューワ未選択", "対象のビューワを選択してください。")
+            return
+        _, path, _ = entry
+        if self.server_context is None:
+            should_start = messagebox.askyesno(
+                "サーバー未起動",
+                "ビューワを開くにはサーバーを起動する必要があります。\n現在の設定で起動しますか？",
+            )
+            if not should_start:
+                return
+            self.on_start_server()
+            if self.server_context is None:
+                messagebox.showerror("サーバー起動失敗", "サーバーを起動できませんでした。設定を確認してください。")
+                return
+
+        context = self.server_context
+        try:
+            _open_browser(context.results_dir, path, context.host, context.port)
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror(
+                "ビューワを開けません",
+                f"サーバー経由で {path} を開けませんでした: {exc}",
+            )
+
     def _select_video_dir(self) -> None:
         selected = filedialog.askdirectory(title="動画フォルダを選択")
         if selected:
-            self.video_dir_var.set(selected)
+            self.video_dir_var.set(self._to_user_value(Path(selected)))
 
     def _select_results_dir(self) -> None:
         selected = filedialog.askdirectory(title="結果フォルダを選択")
         if selected:
-            self.results_dir_var.set(selected)
+            self.results_dir_var.set(self._to_user_value(Path(selected)))
+            self._refresh_viewer_list()
 
     def append_log(self, message: str) -> None:
         text = message if message.endswith("\n") else message + "\n"
@@ -197,8 +301,8 @@ class RelicGuiApp:
             messagebox.showerror("入力エラー", "OCRアップサンプルは数値で指定してください。")
             return
 
-        video_dir = self.video_dir_var.get()
-        results_dir = self.results_dir_var.get()
+        video_dir = str(self._resolve_input_path(self.video_dir_var.get()))
+        results_dir = str(self._resolve_input_path(self.results_dir_var.get()))
         self.run_button.configure(state="disabled")
         self.append_log(f"[GUI] 動画処理を開始します: {video_dir} -> {results_dir}")
 
@@ -213,6 +317,7 @@ class RelicGuiApp:
                 self.root.after(0, lambda: messagebox.showerror("処理失敗", f"動画処理でエラーが発生しました: {exc}"))
             finally:
                 self.root.after(0, self._on_pipeline_finished)
+                self.root.after(0, self._refresh_viewer_list)
 
         self.pipeline_thread = threading.Thread(target=worker, daemon=True)
         self.pipeline_thread.start()
@@ -238,7 +343,7 @@ class RelicGuiApp:
 
         try:
             context = create_server(
-                results_dir=self.results_dir_var.get(),
+                results_dir=str(self._resolve_input_path(self.results_dir_var.get())),
                 host=host,
                 port=port,
                 video=video_name,
