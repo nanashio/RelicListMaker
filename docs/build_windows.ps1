@@ -5,6 +5,7 @@ Param(
 )
 
 $ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
 
 function Write-Info([string]$Message) {
     if (-not $Quiet) {
@@ -17,51 +18,52 @@ $repoRoot = Resolve-Path (Join-Path $scriptDir '..')
 Push-Location $repoRoot
 
 try {
-    Write-Info "作業ディレクトリ: $repoRoot"
+    Write-Info "Working directory: $repoRoot"
 
     $venvPath = Join-Path $repoRoot '.venv'
     $activateScript = Join-Path $venvPath 'Scripts/Activate.ps1'
 
     if (-not $SkipVenv) {
         if (-not (Test-Path $venvPath)) {
-            Write-Info '仮想環境を作成します (.venv)'
+            Write-Info 'Creating virtual environment (.venv)'
             py -m venv $venvPath
         }
 
         if (-not (Test-Path $activateScript)) {
-            throw "仮想環境のアクティベートスクリプトが見つかりません: $activateScript"
+            throw "Activation script not found: $activateScript"
         }
 
-        Write-Info '仮想環境をアクティベートします'
+        Write-Info 'Activating virtual environment'
         . $activateScript
     }
     elseif (Test-Path $activateScript) {
-        Write-Info '仮想環境をアクティベートします (SkipVenv 指定)'
+        Write-Info 'Activating existing virtual environment (SkipVenv)'
         . $activateScript
     }
     else {
-        Write-Info '仮想環境をスキップします (.venv 未作成)'
+        Write-Info 'Skipping virtual environment setup (no .venv)'
     }
 
     if (-not $SkipRequirements) {
-        Write-Info 'pip を最新化します'
+        Write-Info 'Upgrading pip'
         python -m pip install --upgrade pip |
             ForEach-Object { if (-not $Quiet) { Write-Host $_ } }
 
-        Write-Info 'requirements-build.txt をインストールします'
+        Write-Info 'Installing requirements-build.txt'
         python -m pip install -r requirements-build.txt |
             ForEach-Object { if (-not $Quiet) { Write-Host $_ } }
     }
 
     $pyinstallerArgs = @('--clean', '--noconfirm', 'pyinstaller.spec')
-    Write-Info "PyInstaller を実行します: pyinstaller $($pyinstallerArgs -join ' ')"
+    Write-Info ("Running PyInstaller: pyinstaller {0}" -f ($pyinstallerArgs -join ' '))
     pyinstaller @pyinstallerArgs
 
     $distPath = Join-Path $repoRoot 'dist/nightreign-relic'
-    Write-Info "ビルドが完了しました: $distPath"
-    Write-Host "\n[RESULT] 配布フォルダ: $distPath" -ForegroundColor Green
-    Write-Host "  - 'nightreign-relic.exe' (GUI ランチャー)" -ForegroundColor Green
-    Write-Host "  - 'videos/' は既存内容を保持します" -ForegroundColor Green
+    Write-Info "Build completed: $distPath"
+    Write-Host "
+[RESULT] Distribution folder: $distPath" -ForegroundColor Green
+    Write-Host "  - nightreign-relic.exe (GUI launcher)" -ForegroundColor Green
+    Write-Host "  - videos/ keeps previous contents" -ForegroundColor Green
 }
 catch {
     Write-Host "[ERROR] $_" -ForegroundColor Red
