@@ -18,11 +18,18 @@
         labelSymbols: labelSymbolsJson = '[]',
         masterCsv: masterCsvPath = '',
         masterJson: masterJsonPath = '',
-        masterOptions: masterOptionsJson = '[]'
+        masterOptions: masterOptionsJson = '[]',
+        datasets: datasetsJson = '[]',
+        activeDataset: activeDatasetAttr = ''
     } = body.dataset || {};
+
+    const datasets = parseDatasets(datasetsJson);
+    const activeDatasetIndex = parseDatasetIndex(activeDatasetAttr, datasets.length);
 
     const dom = {
         gallery: document.getElementById('gallery'),
+        datasetSelector: document.getElementById('dataset-selector'),
+        datasetSelect: document.getElementById('dataset-select'),
         galleryStatus: document.getElementById('gallery-status'),
         searchInput: document.getElementById('search-input'),
         filterSelect: document.getElementById('filter-status'),
@@ -53,12 +60,137 @@
         masterJsonPath: masterJsonPath || '',
         masterOptions: parseMasterOptions(masterOptionsJson),
         masterDatalistPrepared: false,
-        showOcr: false
+        showOcr: false,
+        datasets,
+        activeDatasetIndex,
+        datasetLabel: '',
+        datasetFolder: ''
     };
 
     const duplicates = createDuplicateManager(() => state.csvPath);
 
     const storage = createOpfsManager(() => state.records);
+
+    function clampDatasetIndex(index) {
+        if (!state.datasets.length) {
+            return -1;
+        }
+        const parsed = Number.parseInt(index, 10);
+        if (Number.isNaN(parsed) || parsed < 0) {
+            return 0;
+        }
+        if (parsed >= state.datasets.length) {
+            return state.datasets.length - 1;
+        }
+        return parsed;
+    }
+
+    function getCurrentDataset() {
+        if (!state.datasets.length) {
+            return null;
+        }
+        const index = clampDatasetIndex(state.activeDatasetIndex);
+        if (index < 0) {
+            return null;
+        }
+        return state.datasets[index] || null;
+    }
+
+    function prepareInitialDataset() {
+        if (!state.datasets.length) {
+            return;
+        }
+        const dataset = getCurrentDataset();
+        if (!dataset) {
+            state.activeDatasetIndex = state.datasets.length ? 0 : -1;
+            return;
+        }
+        state.activeDatasetIndex = clampDatasetIndex(state.activeDatasetIndex);
+        state.datasetLabel = dataset.label || '';
+        state.datasetFolder = dataset.folder || '';
+        state.csvPath = dataset.csv || state.csvPath || '';
+        state.imageDir = dataset.imgDir || state.imageDir || '.';
+    }
+
+    function setupDatasetSelector() {
+        if (!dom.datasetSelector || !dom.datasetSelect) {
+            return;
+        }
+        if (!state.datasets.length) {
+            dom.datasetSelector.classList.add('hidden');
+            dom.datasetSelect.innerHTML = '';
+            return;
+        }
+
+        dom.datasetSelect.innerHTML = '';
+        state.datasets.forEach((dataset, index) => {
+            const option = document.createElement('option');
+            option.value = String(index);
+            option.textContent = datasetOptionLabel(dataset, index);
+            dom.datasetSelect.appendChild(option);
+        });
+        dom.datasetSelector.classList.remove('hidden');
+        const currentIndex = clampDatasetIndex(state.activeDatasetIndex);
+        dom.datasetSelect.value = String(currentIndex);
+        dom.datasetSelect.title = datasetOptionLabel(getCurrentDataset(), currentIndex);
+    }
+
+    function updateDatasetIndicator() {
+        if (!dom.datasetSelector || !dom.datasetSelect) {
+            return;
+        }
+        if (!state.datasets.length) {
+            dom.datasetSelector.classList.add('hidden');
+            return;
+        }
+        const currentIndex = clampDatasetIndex(state.activeDatasetIndex);
+        dom.datasetSelector.classList.remove('hidden');
+        dom.datasetSelect.value = String(currentIndex);
+        dom.datasetSelect.title = datasetOptionLabel(getCurrentDataset(), currentIndex);
+    }
+
+    async function switchDataset(index, options = {}) {
+        if (!state.datasets.length) {
+            return;
+        }
+        const nextIndex = clampDatasetIndex(index);
+        const dataset = state.datasets[nextIndex];
+        if (!dataset) {
+            return;
+        }
+
+        const nextCsv = dataset.csv || '';
+        const nextImgDir = dataset.imgDir || '';
+        const forceReload = Boolean(options.forceReload);
+        const shouldReload =
+            forceReload ||
+            state.activeDatasetIndex !== nextIndex ||
+            state.csvPath !== nextCsv ||
+            state.imageDir !== nextImgDir;
+
+        state.activeDatasetIndex = nextIndex;
+        state.datasetLabel = dataset.label || '';
+        state.datasetFolder = dataset.folder || '';
+        state.csvPath = nextCsv;
+        state.imageDir = nextImgDir || '.';
+
+        updateDatasetIndicator();
+
+        if (!shouldReload) {
+            return;
+        }
+
+        if (dom.gallery) {
+            dom.gallery.textContent = '';
+        }
+        state.records = [];
+        state.items = [];
+
+        const preferredName = getFileName(state.csvPath) || 'results.csv';
+        await storage.prepare(preferredName);
+        await loadInitialData();
+    }
+
     const SUMMARY_INLINE_STYLE = {
         textAlign: 'center',
         color: '#333',
@@ -123,6 +255,103 @@
             console.warn('label symbolsの解析に失敗しました:', error);
         }
         return ['①', '②', '③'];
+    }
+
+    function parseDatasetIndex(value, length) {
+        const total = Number.isFinite(length) ? Number(length) : 0;
+        if (!total) {
+            return -1;
+        }
+        const parsed = Number.parseInt(value, 10);
+        if (Number.isNaN(parsed)) {
+            return 0;
+        }
+        if (parsed < 0) {
+            return 0;
+        }
+        if (parsed >= total) {
+            return total - 1;
+        }
+        return parsed;
+    }
+
+    function normalizeDatasetEntry(entry, index) {
+        if (entry == null) {
+            return null;
+        }
+
+        let label = '';
+        let csv = '';
+        let imgDir = '';
+        let folder = '';
+
+        if (typeof entry === 'string') {
+            csv = entry;
+        } else if (Array.isArray(entry)) {
+            if (entry.length > 0) {
+                csv = entry[0];
+            }
+            if (entry.length > 1) {
+                imgDir = entry[1];
+            }
+            if (entry.length > 2) {
+                label = entry[2];
+            }
+        } else if (typeof entry === 'object') {
+            label = entry.label ?? entry.name ?? '';
+            csv = entry.csv ?? entry.results ?? entry.results_csv ?? entry.resultsCsv ?? '';
+            imgDir = entry.imgDir ?? entry.img_dir ?? entry.imageDir ?? entry.image_dir ?? entry.images ?? '';
+            folder = entry.folder ?? '';
+        } else {
+            csv = String(entry);
+        }
+
+        label = typeof label === 'string' ? label.trim() : '';
+        csv = typeof csv === 'string' ? csv.trim() : '';
+        imgDir = typeof imgDir === 'string' ? imgDir.trim() : '';
+        folder = typeof folder === 'string' ? folder.trim() : '';
+
+        if (!csv) {
+            return null;
+        }
+
+        return {
+            label,
+            csv,
+            imgDir,
+            folder,
+            index
+        };
+    }
+
+    function parseDatasets(jsonText) {
+        if (!jsonText) {
+            return [];
+        }
+        try {
+            const parsed = JSON.parse(jsonText);
+            if (!Array.isArray(parsed)) {
+                return [];
+            }
+            return parsed
+                .map((entry, index) => normalizeDatasetEntry(entry, index))
+                .filter((entry) => entry && entry.csv);
+        } catch (error) {
+            console.warn('dataset listの解析に失敗しました:', error);
+            return [];
+        }
+    }
+
+    function datasetOptionLabel(dataset, index) {
+        if (!dataset) {
+            return `データセット ${index + 1}`;
+        }
+        const baseLabel = dataset.label || `データセット ${index + 1}`;
+        const folder = dataset.folder || '';
+        if (folder && folder !== baseLabel) {
+            return `${baseLabel} (${folder})`;
+        }
+        return baseLabel;
     }
 
     function showStatus(message, isError) {
@@ -1362,6 +1591,16 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
     }
 
     function attachEventHandlers() {
+        if (dom.datasetSelect) {
+            dom.datasetSelect.addEventListener('change', (event) => {
+                const value = Number.parseInt(event.target.value, 10);
+                if (Number.isNaN(value)) {
+                    return;
+                }
+                void switchDataset(value);
+            });
+        }
+
         dom.gallery.addEventListener('click', (event) => {
             const duplicateButton = event.target.closest('.duplicate-toggle');
             if (duplicateButton) {
@@ -1876,8 +2115,14 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
 
     async function initialize() {
         attachEventHandlers();
+        prepareInitialDataset();
+        setupDatasetSelector();
         await ensureMasterOptions();
-        await loadInitialData();
+        if (state.datasets.length) {
+            await switchDataset(state.activeDatasetIndex, { forceReload: true });
+        } else {
+            await loadInitialData();
+        }
     }
 
     void initialize();

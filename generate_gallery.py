@@ -3,7 +3,7 @@ import csv
 import html
 import json
 import shutil
-from typing import Optional
+from typing import Optional, Sequence
 from resource_paths import templates_path
 
 RESULTS_CSV_PATH = "results_input_video.csv"
@@ -30,6 +30,99 @@ def _sanitize_symbols(symbols):
         if text:
             cleaned.append(text)
     return cleaned
+
+
+def _normalize_master_options(options: Optional[Sequence[str]]):
+    if not options:
+        return []
+
+    normalized = []
+    seen = set()
+    for entry in options:
+        if entry is None:
+            continue
+        text = str(entry).strip()
+        if text and text not in seen and text != "-":
+            seen.add(text)
+            normalized.append(text)
+    return normalized
+
+
+def _normalize_dataset_entries(datasets, output_dir: str):
+    if not datasets:
+        return []
+
+    normalized = []
+    for entry in datasets:
+        if not entry:
+            continue
+        label = ""
+        csv_path = None
+        img_dir = None
+        folder = ""
+
+        if isinstance(entry, dict):
+            raw_label = entry.get("label") or entry.get("name")
+            if raw_label is not None:
+                label = str(raw_label).strip()
+            csv_path = entry.get("csv") or entry.get("results_csv") or entry.get("results")
+            img_dir = entry.get("imgDir") or entry.get("img_dir") or entry.get("images") or entry.get("image_dir")
+            folder = str(entry.get("folder") or "").strip()
+        elif isinstance(entry, (list, tuple)):
+            if entry:
+                csv_path = entry[0]
+            if len(entry) > 1:
+                img_dir = entry[1]
+            if len(entry) > 2:
+                label = str(entry[2]).strip()
+        else:
+            csv_path = entry
+
+        if not csv_path:
+            continue
+
+        if os.path.isabs(csv_path):
+            csv_abs = csv_path
+        else:
+            csv_abs = os.path.abspath(os.path.join(output_dir, csv_path))
+        try:
+            csv_rel = os.path.relpath(csv_abs, output_dir)
+        except ValueError:
+            csv_rel = os.path.basename(csv_abs)
+
+        if not label:
+            base_dir = os.path.dirname(csv_rel)
+            if folder:
+                label = folder
+            elif base_dir:
+                label = os.path.basename(base_dir)
+            else:
+                label = os.path.splitext(os.path.basename(csv_rel))[0] or "Dataset"
+
+        if not folder:
+            folder = os.path.dirname(csv_rel)
+
+        img_rel = ""
+        if img_dir:
+            if os.path.isabs(img_dir):
+                img_abs = img_dir
+            else:
+                img_abs = os.path.abspath(os.path.join(output_dir, img_dir))
+            try:
+                img_rel = os.path.relpath(img_abs, output_dir)
+            except ValueError:
+                img_rel = img_dir
+
+        normalized.append(
+            {
+                "label": label,
+                "csv": csv_rel.replace(os.sep, "/"),
+                "imgDir": img_rel.replace(os.sep, "/") if img_rel else "",
+                "folder": folder.replace(os.sep, "/") if folder else "",
+            }
+        )
+
+    return normalized
 
 
 def _resolve_asset_path(default_path: str, override: Optional[str]) -> str:
@@ -132,6 +225,9 @@ def generate_html(
     js_template_path: Optional[str] = None,
     css_output_name: Optional[str] = None,
     js_output_name: Optional[str] = None,
+    master_options: Optional[Sequence[str]] = None,
+    datasets=None,
+    active_dataset_index: int = 0,
 ):
     label_symbols = _sanitize_symbols(label_symbols) or _sanitize_symbols(LABEL_SYMBOLS)
     if not label_symbols:
@@ -158,11 +254,11 @@ def generate_html(
     else:
         img_rel_dir = "."
 
-    master_options = []
+    master_options = _normalize_master_options(master_options)
     master_csv_rel_path = ""
     master_json_rel_path = ""
 
-    if master_json_path:
+    if not master_options and master_json_path:
         if os.path.isabs(master_json_path):
             master_json_abs = master_json_path
         else:
@@ -183,6 +279,27 @@ def generate_html(
             master_options = _extract_master_options_from_csv(master_csv_abs)
         else:
             print(f"[!] マスターデータ(CSV)が見つかりません: {master_csv_abs}")
+
+    dataset_entries = _normalize_dataset_entries(datasets, output_dir)
+    active_dataset_index = max(0, min(active_dataset_index, len(dataset_entries) - 1)) if dataset_entries else -1
+
+    if dataset_entries and active_dataset_index >= 0:
+        active_dataset = dataset_entries[active_dataset_index]
+        csv_entry = active_dataset.get("csv") or ""
+        img_entry = active_dataset.get("imgDir") or ""
+
+        if csv_entry:
+            active_csv_abs = os.path.abspath(os.path.join(output_dir, csv_entry))
+            results_abs_path = active_csv_abs
+            results_rel_path = csv_entry
+            if not os.path.exists(active_csv_abs):
+                print(f"[!] データセットCSVが見つかりません: {active_csv_abs}")
+
+        if img_entry:
+            img_rel_dir = img_entry
+            img_abs_dir = os.path.abspath(os.path.join(output_dir, img_entry))
+            if not os.path.exists(img_abs_dir):
+                print(f"[!] データセット画像ディレクトリが見つかりません: {img_abs_dir}")
 
     html_template = _load_text_asset(TEMPLATE_HTML_PATH, template_path)
     css_relative = _copy_static_asset(
@@ -209,6 +326,8 @@ def generate_html(
     html_output = html_output.replace("__MASTER_OPTIONS__", _escape_attr(json.dumps(embed_options, ensure_ascii=False)))
     html_output = html_output.replace("__CSS_FILE__", _escape_attr(css_relative))
     html_output = html_output.replace("__JS_FILE__", _escape_attr(js_relative))
+    html_output = html_output.replace("__DATASETS__", _escape_attr(json.dumps(dataset_entries, ensure_ascii=False)))
+    html_output = html_output.replace("__ACTIVE_DATASET__", _escape_attr(str(active_dataset_index)))
 
     with open(output_html, "w", encoding="utf-8") as handle:
         handle.write(html_output)

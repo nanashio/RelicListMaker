@@ -72,8 +72,19 @@ def find_bundled_tesseract() -> Optional[TesseractInfo]:
     if not base.exists():
         return None
 
+    system = platform.system().lower()
     for root in _iter_candidate_roots(base):
         for binary in _candidate_binaries(root):
+            suffix = binary.suffix.lower()
+            if system.startswith("win"):
+                if suffix != ".exe":
+                    continue
+            else:
+                # Linux / macOS では .exe をスキップ
+                if suffix == ".exe":
+                    continue
+            if not os.access(binary, os.X_OK):
+                continue
             tessdata = _guess_tessdata(binary, base)
             return TesseractInfo(cmd=binary, tessdata_prefix=tessdata)
     return None

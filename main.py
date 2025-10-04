@@ -1,7 +1,6 @@
 # main.py
 import os
 import csv
-import shutil
 import time
 from typing import Optional
 
@@ -45,7 +44,7 @@ def detect_item_color(name: str) -> Optional[str]:
 
     return None
 
-def prepare_master_csv(src_csv: str, dest_csv: str) -> list:
+def load_master_options(src_csv: str) -> list:
     options = []
     seen = set()
     try:
@@ -62,15 +61,6 @@ def prepare_master_csv(src_csv: str, dest_csv: str) -> list:
     except Exception as err:
         print(f"[!] マスターデータの読み込みに失敗しました: {err}")
         return []
-
-    try:
-        src_abs = os.path.abspath(src_csv)
-        dest_abs = os.path.abspath(dest_csv)
-        if src_abs != dest_abs:
-            os.makedirs(os.path.dirname(dest_abs), exist_ok=True)
-            shutil.copyfile(src_abs, dest_abs)
-    except OSError as err:
-        print(f"[!] マスターデータCSVのコピーに失敗しました: {err}")
     return options
 
 def main(video_dir="videos", result_dir=DEFAULT_RESULT_DIR, ocr_upsample=OCR_UPSAMPLE):
@@ -78,6 +68,10 @@ def main(video_dir="videos", result_dir=DEFAULT_RESULT_DIR, ocr_upsample=OCR_UPS
     print("[INFO] 動画ごとの処理開始...")
 
     os.makedirs(result_dir, exist_ok=True)
+
+    master_src = str(templates_path("master_relics.csv"))
+    master_options = load_master_options(master_src)
+    dataset_entries = []
 
     for video_file in os.listdir(video_dir):
         if not video_file.lower().endswith((".mp4", ".avi", ".mov", ".mkv")):
@@ -111,24 +105,33 @@ def main(video_dir="videos", result_dir=DEFAULT_RESULT_DIR, ocr_upsample=OCR_UPS
         )
         print(f"[✓] {crops_dir} の結果を {csv_path} に出力しました")
 
-        # 3. HTMLギャラリー生成
-        html_path = os.path.join(video_output_dir, f"{base_name}_viewer.html")
-        img_rel_dir = os.path.relpath(crops_dir, video_output_dir)
-        master_src = str(templates_path("master_relics.csv"))
-        master_csv_dest = os.path.join(video_output_dir, "master_relics.csv")
-        prepare_master_csv(master_src, master_csv_dest)
-        master_csv_rel = (
-            os.path.relpath(os.path.abspath(master_csv_dest), os.path.abspath(video_output_dir))
-            if os.path.exists(master_csv_dest)
-            else ""
+        dataset_entries.append(
+            {
+                "label": base_name,
+                "csv": os.path.relpath(csv_path, result_dir),
+                "img_dir": os.path.relpath(crops_dir, result_dir),
+                "folder": os.path.relpath(video_output_dir, result_dir),
+            }
         )
-        generate_html(
-            csv_path,
-            img_rel_dir,
-            html_path,
-            master_csv_path=master_csv_rel,
-            master_json_path="",
-        )
+
+    default_csv_path = (
+        os.path.abspath(os.path.join(result_dir, dataset_entries[0]["csv"]))
+        if dataset_entries
+        else os.path.join(result_dir, "results.csv")
+    )
+    default_img_dir = dataset_entries[0]["img_dir"] if dataset_entries else ""
+
+    viewer_path = os.path.join(result_dir, "viewer.html")
+    generate_html(
+        default_csv_path,
+        default_img_dir,
+        viewer_path,
+        master_csv_path=None,
+        master_json_path="",
+        master_options=master_options,
+        datasets=dataset_entries,
+        active_dataset_index=0,
+    )
 
     elapsed = time.time() - start_time
     print(f"[✓] 全処理完了！処理時間: {elapsed:.2f}秒")

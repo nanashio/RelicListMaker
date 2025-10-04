@@ -54,7 +54,11 @@ class GalleryRequestHandler(SimpleHTTPRequestHandler):
 
     def _iter_gallery_files(self) -> Iterable[Path]:
         pattern = "*_viewer.html"
-        return sorted(self.results_dir.rglob(pattern))
+        files = list(self.results_dir.rglob(pattern))
+        root_viewer = self.results_dir / "viewer.html"
+        if root_viewer.exists():
+            files.append(root_viewer)
+        return sorted({path.resolve() for path in files})
 
     def _build_index_html(self) -> str:
         entries = []
