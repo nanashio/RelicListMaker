@@ -446,8 +446,14 @@ class RelicGuiApp:
         if self.server_context is not None:
             try:
                 self.server_context.stop()
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 - 終了処理ではログのみ残す
+                self.append_log(f"[WARN] サーバー停止時に問題が発生しました: {exc}")
+            finally:
+                self.server_context = None
+                self.server_thread = None
+                self.server_start_button.configure(state="normal")
+                self.server_stop_button.configure(state="disabled")
+                self.server_status_var.set("サーバー停止中")
 
         if self.merge_thread and self.merge_thread.is_alive():
             try:

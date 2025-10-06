@@ -110,6 +110,7 @@ def test_merge_results_filters_duplicates_and_copies_images(sample_results: Path
     html_text = viewer.read_text(encoding="utf-8")
     assert "../gallery.css" in html_text
     assert "../gallery.js" in html_text
+    assert 'data-master-options="[]"' not in html_text
     assert not (merged_dir / "gallery.css").exists()
     assert not (merged_dir / "gallery.js").exists()
 

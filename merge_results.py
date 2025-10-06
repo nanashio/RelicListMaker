@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Iterable, Optional, Sequence
 
 from generate_gallery import generate_html
+from resource_paths import templates_path
 
 MERGED_DIR_NAME = "merged"
 MERGED_CSV_NAME = "merged.csv"
@@ -299,8 +300,8 @@ def merge_results(
         source_entries.append(
             {
                 "label": dataset.label,
-                "csv": dataset.csv_path.relative_to(merged_dir.parent).as_posix(),
-                "imgDir": dataset.images_dir.relative_to(merged_dir.parent).as_posix(),
+                "csv": Path(os.path.relpath(dataset.csv_path, merged_dir)).as_posix(),
+                "imgDir": Path(os.path.relpath(dataset.images_dir, merged_dir)).as_posix(),
                 "folder": dataset.folder.name,
             }
         )
@@ -339,7 +340,7 @@ def merge_results(
         str(merged_viewer_path),
         master_csv_path=None,
         master_json_path="",
-        master_options=None,
+        master_options=_load_master_options(),
         datasets=[
             {
                 "label": "統合結果",
@@ -355,3 +356,22 @@ def merge_results(
     print(f"[INFO] ビューワを生成しました: {merged_viewer_path}")
 
     return merged_dir
+def _load_master_options() -> list[str]:
+    master_csv = templates_path("master_relics.csv")
+    options: list[str] = []
+    seen: set[str] = set()
+    if not master_csv.exists():
+        print(f"[WARN] master_relics.csv が見つかりません: {master_csv}")
+        return options
+
+    try:
+        with master_csv.open("r", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                value = (row.get("EffectBase") or "").strip()
+                if value and value != "-" and value not in seen:
+                    seen.add(value)
+                    options.append(value)
+    except OSError as err:
+        print(f"[WARN] master_relics.csv の読み込みに失敗しました: {err}")
+    return options

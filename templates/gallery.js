@@ -64,7 +64,9 @@
         datasets,
         activeDatasetIndex,
         datasetLabel: '',
-        datasetFolder: ''
+        datasetFolder: '',
+        datasetKind: '',
+        datasetSources: []
     };
 
     const duplicates = createDuplicateManager(() => state.csvPath);
@@ -106,10 +108,8 @@
             return;
         }
         state.activeDatasetIndex = clampDatasetIndex(state.activeDatasetIndex);
-        state.datasetLabel = dataset.label || '';
-        state.datasetFolder = dataset.folder || '';
-        state.csvPath = dataset.csv || state.csvPath || '';
-        state.imageDir = dataset.imgDir || state.imageDir || '.';
+        const descriptor = resolveDatasetState(dataset, state.activeDatasetIndex);
+        applyDatasetState(descriptor);
     }
 
     function setupDatasetSelector() {
@@ -159,20 +159,19 @@
             return;
         }
 
-        const nextCsv = dataset.csv || '';
-        const nextImgDir = dataset.imgDir || '';
+        const descriptor = resolveDatasetState(dataset, nextIndex);
+        const expectedImageDir = descriptor.kind === 'merged' ? '' : descriptor.imageDir || '.';
         const forceReload = Boolean(options.forceReload);
         const shouldReload =
             forceReload ||
             state.activeDatasetIndex !== nextIndex ||
-            state.csvPath !== nextCsv ||
-            state.imageDir !== nextImgDir;
+            state.csvPath !== descriptor.csvPath ||
+            state.imageDir !== expectedImageDir ||
+            state.datasetKind !== descriptor.kind ||
+            !areSourcesEqual(state.datasetSources, descriptor.sources);
 
         state.activeDatasetIndex = nextIndex;
-        state.datasetLabel = dataset.label || '';
-        state.datasetFolder = dataset.folder || '';
-        state.csvPath = nextCsv;
-        state.imageDir = nextImgDir || '.';
+        applyDatasetState(descriptor);
 
         updateDatasetIndicator();
 
@@ -275,6 +274,34 @@
         return parsed;
     }
 
+    function normalizeDatasetSources(rawSources) {
+        if (!Array.isArray(rawSources)) {
+            return [];
+        }
+        const result = [];
+        rawSources.forEach((source, index) => {
+            if (!source || typeof source !== 'object') {
+                return;
+            }
+            const csv = typeof source.csv === 'string' ? source.csv.trim() : '';
+            if (!csv) {
+                return;
+            }
+            const imgDir = typeof source.imgDir === 'string' ? source.imgDir.trim() : '';
+            const label = typeof source.label === 'string' ? source.label.trim() : '';
+            const folder = typeof source.folder === 'string' ? source.folder.trim() : '';
+            const sourceIndex = Number.isFinite(source.index) ? Number(source.index) : index;
+            result.push({
+                label,
+                csv,
+                imgDir,
+                folder,
+                index: sourceIndex
+            });
+        });
+        return result;
+    }
+
     function normalizeDatasetEntry(entry, index) {
         if (entry == null) {
             return null;
@@ -284,6 +311,8 @@
         let csv = '';
         let imgDir = '';
         let folder = '';
+        let kind = '';
+        let sources = [];
 
         if (typeof entry === 'string') {
             csv = entry;
@@ -302,6 +331,12 @@
             csv = entry.csv ?? entry.results ?? entry.results_csv ?? entry.resultsCsv ?? '';
             imgDir = entry.imgDir ?? entry.img_dir ?? entry.imageDir ?? entry.image_dir ?? entry.images ?? '';
             folder = entry.folder ?? '';
+            kind = typeof entry.kind === 'string' ? entry.kind.trim() : typeof entry.type === 'string' ? entry.type.trim() : '';
+            if (!kind && entry.merged === true) {
+                kind = 'merged';
+            }
+            const rawSources = entry.sources ?? entry.merge ?? entry.mergeSources ?? entry.children ?? null;
+            sources = normalizeDatasetSources(rawSources);
         } else {
             csv = String(entry);
         }
@@ -310,8 +345,11 @@
         csv = typeof csv === 'string' ? csv.trim() : '';
         imgDir = typeof imgDir === 'string' ? imgDir.trim() : '';
         folder = typeof folder === 'string' ? folder.trim() : '';
+        kind = typeof kind === 'string' ? kind.trim().toLowerCase() : '';
 
-        if (!csv) {
+        const hasCsv = Boolean(csv);
+        const acceptsEmptyCsv = kind === 'merged' && sources.length > 0;
+        if (!hasCsv && !acceptsEmptyCsv) {
             return null;
         }
 
@@ -320,7 +358,9 @@
             csv,
             imgDir,
             folder,
-            index
+            index,
+            kind,
+            sources
         };
     }
 
@@ -335,10 +375,98 @@
             }
             return parsed
                 .map((entry, index) => normalizeDatasetEntry(entry, index))
-                .filter((entry) => entry && entry.csv);
+                .filter((entry) => {
+                    if (!entry) {
+                        return false;
+                    }
+                    if (entry.csv) {
+                        return true;
+                    }
+                    return entry.kind === 'merged' && Array.isArray(entry.sources) && entry.sources.length > 0;
+                });
         } catch (error) {
             console.warn('dataset listの解析に失敗しました:', error);
             return [];
+        }
+    }
+
+    function cloneDatasetSources(list) {
+        if (!Array.isArray(list)) {
+            return [];
+        }
+        return list.map((source) => ({
+            label: source && typeof source.label === 'string' ? source.label : '',
+            csv: source && typeof source.csv === 'string' ? source.csv : '',
+            imgDir: source && typeof source.imgDir === 'string' ? source.imgDir : '',
+            folder: source && typeof source.folder === 'string' ? source.folder : '',
+            index: source && Number.isFinite(source.index) ? Number(source.index) : 0
+        }));
+    }
+
+    function areSourcesEqual(left, right) {
+        const a = Array.isArray(left) ? left : [];
+        const b = Array.isArray(right) ? right : [];
+        if (a.length !== b.length) {
+            return false;
+        }
+        for (let i = 0; i < a.length; i += 1) {
+            const leftEntry = a[i] || {};
+            const rightEntry = b[i] || {};
+            if ((leftEntry.csv || '') !== (rightEntry.csv || '')) {
+                return false;
+            }
+            if ((leftEntry.imgDir || '') !== (rightEntry.imgDir || '')) {
+                return false;
+            }
+            if ((leftEntry.label || '') !== (rightEntry.label || '')) {
+                return false;
+            }
+            if ((leftEntry.folder || '') !== (rightEntry.folder || '')) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function resolveDatasetState(dataset, index) {
+        if (!dataset) {
+            return {
+                label: '',
+                folder: '',
+                kind: '',
+                csvPath: '',
+                imageDir: '',
+                sources: []
+            };
+        }
+        const label = dataset.label || '';
+        const folder = dataset.folder || '';
+        const kind = dataset.kind || '';
+        const sources = cloneDatasetSources(dataset.sources);
+        const isMerged = kind === 'merged' && sources.length > 0;
+        const csvPath = isMerged ? dataset.csv || 'merged-dataset.csv' : dataset.csv || '';
+        const imageDir = isMerged ? '' : dataset.imgDir || '';
+        return {
+            label,
+            folder,
+            kind,
+            csvPath,
+            imageDir,
+            sources
+        };
+    }
+
+    function applyDatasetState(descriptor) {
+        state.datasetLabel = descriptor.label || '';
+        state.datasetFolder = descriptor.folder || '';
+        state.datasetKind = descriptor.kind || '';
+        state.datasetSources = cloneDatasetSources(descriptor.sources);
+        if (state.datasetKind === 'merged') {
+            state.csvPath = descriptor.csvPath || 'merged-dataset.csv';
+            state.imageDir = '';
+        } else {
+            state.csvPath = descriptor.csvPath || '';
+            state.imageDir = descriptor.imageDir ? descriptor.imageDir : '.';
         }
     }
 
@@ -423,7 +551,9 @@
             }
         });
 
-        const summaryText = `全体 ${totalCount} 件 / 確認済み ${fullyConfirmedCount} 件 / 未レビュー ${pendingCount} 件`;
+        const datasetName = state.datasetLabel || '';
+        const prefix = datasetName ? `[${datasetName}] ` : '';
+        const summaryText = `${prefix}全体 ${totalCount} 件 / 確認済み ${fullyConfirmedCount} 件 / 未レビュー ${pendingCount} 件`;
         summary.textContent = summaryText;
         summary.style.display = 'flex';
         summary.style.justifyContent = 'center';
@@ -671,11 +801,21 @@
             return null;
         }
         const imageName = record.Image == null ? '' : String(record.Image);
+        const baseImageName = record.BaseImage == null ? '' : String(record.BaseImage);
+        const displayName = baseImageName || getFileName(imageName) || imageName;
+        const datasetName = state.datasetKind === 'merged' ? (record.Dataset == null ? '' : String(record.Dataset)) : '';
+        const datasetFolder = state.datasetKind === 'merged' ? (record.DatasetFolder == null ? '' : String(record.DatasetFolder)) : '';
         const item = document.createElement('div');
         item.className = 'item';
         item.dataset.image = imageName.toLowerCase();
         item.dataset.imageName = imageName;
         item.dataset.recordIndex = String(recordIndex);
+        if (baseImageName) {
+            item.dataset.baseImage = baseImageName.toLowerCase();
+        }
+        if (datasetName) {
+            item.dataset.datasetLabel = datasetName.toLowerCase();
+        }
 
         const leftColumn = createElement('div', 'item-left');
         const rightColumn = createElement('div', 'item-right');
@@ -685,7 +825,7 @@
         const imagePath = joinPath(state.imageDir, imageName);
         const img = createElement('img');
         img.src = imagePath;
-        img.alt = imageName;
+        img.alt = displayName || imageName;
         img.dataset.full = imagePath;
         img.tabIndex = 0;
         leftColumn.appendChild(img);
@@ -739,8 +879,15 @@
             metaInfo.appendChild(createElement('span', 'item-position', '- / 0'));
         }
 
-        const filename = createElement('span', 'filename', imageName);
-        filename.setAttribute('title', imageName);
+        if (state.datasetKind === 'merged' && datasetName) {
+            const datasetBadge = createElement('span', 'dataset-label', datasetName);
+            const badgeTitle = datasetFolder ? `${datasetName} (${datasetFolder})` : datasetName;
+            datasetBadge.setAttribute('title', badgeTitle);
+            metaInfo.appendChild(datasetBadge);
+        }
+
+        const filename = createElement('span', 'filename', displayName || imageName);
+        filename.setAttribute('title', imageName || displayName || '');
         metaInfo.appendChild(filename);
 
         controls.appendChild(metaInfo);
@@ -994,6 +1141,14 @@
         const imageToken = item.dataset.image;
         if (imageToken) {
             tokens.push(imageToken);
+        }
+        const baseImageToken = item.dataset.baseImage;
+        if (baseImageToken) {
+            tokens.push(baseImageToken);
+        }
+        const datasetToken = item.dataset.datasetLabel;
+        if (datasetToken) {
+            tokens.push(datasetToken);
         }
 
         item.querySelectorAll('.effect').forEach((effect) => {
@@ -1542,6 +1697,62 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
         }
     }
 
+    async function loadMergedRecords(sources) {
+        const combined = [];
+        const list = Array.isArray(sources) ? sources : [];
+        for (let index = 0; index < list.length; index += 1) {
+            const source = list[index];
+            if (!source || typeof source !== 'object') {
+                continue;
+            }
+            const csvPath = typeof source.csv === 'string' ? source.csv : '';
+            if (!csvPath) {
+                continue;
+            }
+            const datasetLabel = source.label || source.folder || `Dataset ${index + 1}`;
+            const datasetFolder = source.folder || '';
+            const imageDir = source.imgDir || '';
+            let csvText = '';
+            try {
+                const response = await fetch(csvPath, { cache: 'no-cache' });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                csvText = await response.text();
+            } catch (error) {
+                throw new Error(`${datasetLabel} のCSV取得に失敗しました: ${error.message || error}`);
+            }
+            const records = parseCsvRecords(csvText);
+            if (!records.length) {
+                continue;
+            }
+            records.forEach((record) => {
+                if (!record || typeof record !== 'object') {
+                    return;
+                }
+                const rawImage = record.Image == null ? '' : String(record.Image);
+                const hasPath = /[\/]/.test(rawImage);
+                const baseImage = rawImage ? rawImage.split(/[\/]/).pop() || rawImage : '';
+                const normalizedImage = rawImage
+                    ? hasPath
+                        ? rawImage
+                        : imageDir
+                            ? joinPath(imageDir, rawImage)
+                            : rawImage
+                    : '';
+                record.BaseImage = baseImage;
+                record.Image = normalizedImage;
+                record.Dataset = datasetLabel;
+                record.DatasetFolder = datasetFolder;
+                record.DatasetIndex = index;
+                record.SourceCsv = csvPath;
+                record.SourceImageDir = imageDir;
+            });
+            combined.push(...records);
+        }
+        return combined;
+    }
+
     async function loadInitialData() {
         const preferredName = getFileName(state.csvPath) || 'results.csv';
 
@@ -1555,6 +1766,24 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
             }
         } catch (error) {
             console.warn('ブラウザからの読み込みに失敗しました:', error);
+        }
+
+        const isMerged = state.datasetKind === 'merged' && Array.isArray(state.datasetSources) && state.datasetSources.length > 0;
+        if (isMerged) {
+            try {
+                showStatus('読み込み中...', false);
+                const mergedRecords = await loadMergedRecords(state.datasetSources);
+                loadRecordsArray(mergedRecords);
+                clearStatus();
+                if (storage.supported) {
+                    await storage.prepare(preferredName);
+                    await storage.flushNow();
+                }
+            } catch (error) {
+                console.error('結合データセットのロードに失敗しました:', error);
+                showStatus(`結合データセットの読み込みに失敗しました: ${error.message || error}`, true);
+            }
+            return;
         }
 
         if (!state.csvPath) {
