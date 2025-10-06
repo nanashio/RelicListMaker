@@ -13,6 +13,7 @@ from tkinter import filedialog, messagebox, ttk
 from typing import Optional
 
 import main as pipeline_main
+from merge_results import MergeResultsError, merge_results
 from viewer_server import ServerContext, create_server, _open_browser
 
 
@@ -80,6 +81,7 @@ class RelicGuiApp:
         self.server_video_var = tk.StringVar(value="")
         self.open_browser_var = tk.BooleanVar(value=True)
         self.server_status_var = tk.StringVar(value="サーバー停止中")
+        self.merge_only_reviewed_var = tk.BooleanVar(value=True)
 
         self.pipeline_thread: Optional[threading.Thread] = None
         self.server_context: Optional[ServerContext] = None
@@ -87,6 +89,7 @@ class RelicGuiApp:
         self.log_queue: "queue.Queue[str]" = queue.Queue()
         self.viewer_choice_var = tk.StringVar()
         self.viewer_entries: list[tuple[str, Path, Optional[str]]] = []
+        self.merge_thread: Optional[threading.Thread] = None
 
         self._build_layout()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -147,6 +150,14 @@ class RelicGuiApp:
         self.server_stop_button.grid(row=0, column=2, sticky="ew", padx=4, pady=4)
 
         ttk.Label(actions_frame, textvariable=self.server_status_var).grid(row=1, column=0, columnspan=3, sticky="w", padx=4, pady=(4, 0))
+
+        self.merge_button = ttk.Button(actions_frame, text="統合結果を生成", command=self.on_merge_results)
+        self.merge_button.grid(row=2, column=0, columnspan=3, sticky="ew", padx=4, pady=(8, 4))
+        ttk.Checkbutton(
+            actions_frame,
+            text="効果が全てレビュー済みの項目のみ統合",
+            variable=self.merge_only_reviewed_var,
+        ).grid(row=3, column=0, columnspan=3, sticky="w", padx=4, pady=(0, 4))
 
         viewer_frame = ttk.LabelFrame(main_frame, text="結果ビューワ一覧", padding=12)
         viewer_frame.grid(row=2, column=0, sticky="ew", pady=(12, 0))
@@ -326,6 +337,44 @@ class RelicGuiApp:
         self.run_button.configure(state="normal")
         self.pipeline_thread = None
 
+    def on_merge_results(self) -> None:
+        if self.merge_thread and self.merge_thread.is_alive():
+            messagebox.showinfo("統合処理中", "現在、統合処理が実行中です。完了をお待ちください。")
+            return
+
+        results_dir = str(self._resolve_input_path(self.results_dir_var.get()))
+        self.merge_button.configure(state="disabled")
+        self.append_log(
+            "[GUI] 統合処理を開始します: "
+            f"{results_dir} (レビュー済みのみ={self.merge_only_reviewed_var.get()})"
+        )
+
+        def worker() -> None:
+            try:
+                merged_path = merge_results(
+                    results_dir,
+                    only_reviewed=self.merge_only_reviewed_var.get(),
+                )
+                self.append_log(f"[GUI] 統合処理が完了しました: {merged_path}")
+            except MergeResultsError as err:
+                self.append_log("[ERROR] 統合処理に失敗しました")
+                self.append_log(str(err))
+                self.root.after(0, lambda: messagebox.showerror("統合処理失敗", f"統合処理に失敗しました: {err}"))
+            except Exception as exc:  # noqa: BLE001 - GUIログに出すため
+                self.append_log("[ERROR] 統合処理中に予期しないエラーが発生しました")
+                self.append_log(traceback.format_exc())
+                self.root.after(0, lambda: messagebox.showerror("統合処理失敗", f"統合処理でエラーが発生しました: {exc}"))
+            finally:
+                self.root.after(0, self._on_merge_finished)
+
+        self.merge_thread = threading.Thread(target=worker, daemon=True)
+        self.merge_thread.start()
+
+    def _on_merge_finished(self) -> None:
+        self.merge_button.configure(state="normal")
+        self.merge_thread = None
+        self._refresh_viewer_list()
+
     def on_start_server(self) -> None:
         if self.server_context is not None:
             messagebox.showinfo("サーバー稼働中", "サーバーは既に起動しています。")
@@ -397,6 +446,12 @@ class RelicGuiApp:
         if self.server_context is not None:
             try:
                 self.server_context.stop()
+            except Exception:
+                pass
+
+        if self.merge_thread and self.merge_thread.is_alive():
+            try:
+                self.merge_thread.join(timeout=1)
             except Exception:
                 pass
 

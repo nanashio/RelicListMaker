@@ -228,6 +228,8 @@ def generate_html(
     master_options: Optional[Sequence[str]] = None,
     datasets=None,
     active_dataset_index: int = 0,
+    css_relative_override: Optional[str] = None,
+    js_relative_override: Optional[str] = None,
 ):
     label_symbols = _sanitize_symbols(label_symbols) or _sanitize_symbols(LABEL_SYMBOLS)
     if not label_symbols:
@@ -281,6 +283,36 @@ def generate_html(
             print(f"[!] マスターデータ(CSV)が見つかりません: {master_csv_abs}")
 
     dataset_entries = _normalize_dataset_entries(datasets, output_dir)
+
+    merged_entry = None
+    if len(dataset_entries) > 1:
+        merged_sources = []
+        for entry in dataset_entries:
+            csv_rel = (entry.get("csv") or "").strip()
+            if not csv_rel:
+                continue
+            merged_sources.append(
+                {
+                    "label": entry.get("label", ""),
+                    "csv": csv_rel,
+                    "imgDir": entry.get("imgDir", ""),
+                    "folder": entry.get("folder", ""),
+                }
+            )
+
+        if merged_sources:
+            merged_entry = {
+                "label": "全データセット（統合）",
+                "csv": "",
+                "imgDir": "",
+                "folder": "",
+                "kind": "merged",
+                "sources": merged_sources,
+            }
+            dataset_entries = [merged_entry] + dataset_entries
+            if active_dataset_index >= 0:
+                active_dataset_index += 1
+
     active_dataset_index = max(0, min(active_dataset_index, len(dataset_entries) - 1)) if dataset_entries else -1
 
     if dataset_entries and active_dataset_index >= 0:
@@ -302,18 +334,24 @@ def generate_html(
                 print(f"[!] データセット画像ディレクトリが見つかりません: {img_abs_dir}")
 
     html_template = _load_text_asset(TEMPLATE_HTML_PATH, template_path)
-    css_relative = _copy_static_asset(
-        TEMPLATE_CSS_PATH,
-        output_dir,
-        override=css_template_path,
-        target_relative_path=css_output_name,
-    )
-    js_relative = _copy_static_asset(
-        TEMPLATE_JS_PATH,
-        output_dir,
-        override=js_template_path,
-        target_relative_path=js_output_name,
-    )
+    if css_relative_override is not None:
+        css_relative = css_relative_override.replace("\\", "/")
+    else:
+        css_relative = _copy_static_asset(
+            TEMPLATE_CSS_PATH,
+            output_dir,
+            override=css_template_path,
+            target_relative_path=css_output_name,
+        )
+    if js_relative_override is not None:
+        js_relative = js_relative_override.replace("\\", "/")
+    else:
+        js_relative = _copy_static_asset(
+            TEMPLATE_JS_PATH,
+            output_dir,
+            override=js_template_path,
+            target_relative_path=js_output_name,
+        )
 
     html_output = html_template
     embed_options = master_options if not master_json_rel_path else []
