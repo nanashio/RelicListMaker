@@ -46,6 +46,11 @@
         summary: document.getElementById('gallery-summary')
     };
 
+    if (dom.uploadCsvButton) {
+        dom.uploadCsvButton.disabled = true;
+        dom.uploadCsvButton.title = 'ローカルCSVのインポートは無効化されています';
+    }
+
     if (!dom.gallery) {
         return;
     }
@@ -68,6 +73,31 @@
         datasetKind: '',
         datasetSources: []
     };
+
+    function resolveCsvSavePath(csvPath) {
+        if (!csvPath) {
+            return '';
+        }
+        const trimmed = csvPath.trim();
+        if (!trimmed) {
+            return '';
+        }
+        try {
+            const resolved = new URL(trimmed, window.location.href);
+            const basePath = window.location.pathname.replace(/[^/]+$/, '');
+            let relative = decodeURIComponent(resolved.pathname || '');
+            if (basePath && relative.startsWith(basePath)) {
+                relative = relative.slice(basePath.length);
+            }
+            if (!relative) {
+                relative = trimmed;
+            }
+            return relative.replace(/^\/+/, '');
+        } catch (error) {
+            console.warn('CSVパスの解決に失敗しました:', error);
+            return trimmed.replace(/^\/+/, '');
+        }
+    }
 
     const duplicates = createDuplicateManager(() => state.csvPath);
 
@@ -185,8 +215,6 @@
         state.records = [];
         state.items = [];
 
-        const preferredName = getFileName(state.csvPath) || 'results.csv';
-        await storage.prepare(preferredName);
         await loadInitialData();
     }
 
@@ -233,12 +261,6 @@
 
         dom.summary = summary;
         return summary;
-    }
-
-    if (!storage.supported) {
-        setStorageStatus('自動保存に対応していないブラウザです。CSV ダウンロードでバックアップしてください。', true);
-    } else if (!storage.usesOpfs && storage.usesLocalBackup) {
-        setStorageStatus('OPFS非対応のため、ローカルストレージに保存します。', false);
     }
 
     function parseLabelSymbols(jsonText) {
@@ -468,6 +490,15 @@
             state.csvPath = descriptor.csvPath || '';
             state.imageDir = descriptor.imageDir ? descriptor.imageDir : '.';
         }
+        updateSaveAvailability();
+    }
+
+    function updateSaveAvailability() {
+        if (state.datasetKind === 'merged') {
+            setStorageStatus('統合ビューは読み取り専用です。個別データセットを選択してください。', true);
+        } else {
+            setStorageStatus('変更は即座にCSVへ保存されます。', false);
+        }
     }
 
     function datasetOptionLabel(dataset, index) {
@@ -477,7 +508,10 @@
         const baseLabel = dataset.label || `データセット ${index + 1}`;
         const folder = dataset.folder || '';
         if (folder && folder !== baseLabel) {
-            return `${baseLabel} (${folder})`;
+            const suffix = `(${folder})`;
+            if (!baseLabel.endsWith(suffix)) {
+                return `${baseLabel} ${suffix}`;
+            }
         }
         return baseLabel;
     }
@@ -1241,6 +1275,11 @@
         effect.appendChild(rawLine);
         effect.appendChild(decision);
 
+        if (state.datasetKind === 'merged') {
+            passButton.disabled = true;
+            correctionInput.disabled = true;
+        }
+
         updateEffectStatus(effect, statusValue);
 
         correctionInput.addEventListener('change', correctionChangeHandler(effect, correctionInput));
@@ -1657,43 +1696,10 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
         if (!file) {
             return;
         }
-        const loadingMessage = 'CSVを読み込み中...';
-        showStatus(loadingMessage, false);
-
-        try {
-            const text = typeof file.text === 'function' ? await file.text() : await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result || '');
-                reader.onerror = () => reject(reader.error || new Error('読み込みに失敗しました'));
-                reader.readAsText(file, 'utf-8');
-            });
-
-            const records = parseCsvRecords(text);
-            if (!records.length) {
-                showStatus('CSVに有効なデータがありません。', true);
-                return;
-            }
-
-            const nextName = (file.name && file.name.trim()) || 'import.csv';
-            state.csvPath = nextName;
-            loadRecordsArray(records);
-
-            if (storage.supported) {
-                await storage.prepare(nextName);
-                await storage.flushNow();
-                setStorageStatus(`CSVをインポートしブラウザに保存しました (${new Date().toLocaleTimeString()})`, false);
-            } else {
-                setStorageStatus('ブラウザ保存に対応していません。必要に応じてCSVをダウンロードしてください。', true);
-            }
-
-            clearStatus();
-        } catch (error) {
-            console.error('CSVのインポートに失敗しました:', error);
-            showStatus(`CSVのインポートに失敗しました: ${error.message || error}`, true);
-        } finally {
-            if (dom.uploadCsvInput) {
-                dom.uploadCsvInput.value = '';
-            }
+        setStorageStatus('ローカルファイルからのインポートは無効化されています。結果フォルダ内のCSVを直接編集してください。', true);
+        return;
+        if (dom.uploadCsvInput) {
+            dom.uploadCsvInput.value = '';
         }
     }
 
@@ -1775,15 +1781,11 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
                 const mergedRecords = await loadMergedRecords(state.datasetSources);
                 loadRecordsArray(mergedRecords);
                 clearStatus();
-                if (storage.supported) {
-                    await storage.prepare(preferredName);
-                    await storage.flushNow();
-                }
-            } catch (error) {
-                console.error('結合データセットのロードに失敗しました:', error);
-                showStatus(`結合データセットの読み込みに失敗しました: ${error.message || error}`, true);
-            }
-            return;
+        } catch (error) {
+            console.error('結合データセットのロードに失敗しました:', error);
+            showStatus(`結合データセットの読み込みに失敗しました: ${error.message || error}`, true);
+        }
+        return;
         }
 
         if (!state.csvPath) {
@@ -1801,10 +1803,6 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
             const records = parseCsvRecords(csvText);
             loadRecordsArray(records);
             clearStatus();
-            if (storage.supported) {
-                await storage.prepare(preferredName);
-                await storage.flushNow();
-            }
         } catch (error) {
             console.error('CSVのロードに失敗しました:', error);
             showStatus(`データの読み込みに失敗しました: ${error.message || error}. CSV出力の配置を確認してください。`, true);
@@ -2127,214 +2125,101 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
     }
 
     function createOpfsManager(getData) {
-        const opfsAvailable = Boolean(navigator.storage && navigator.storage.getDirectory);
-        const localStorageAvailable = (() => {
-            try {
-                if (typeof window === 'undefined' || !window.localStorage) {
-                    return false;
-                }
-                const testKey = '__relic_gallery_local_test__';
-                window.localStorage.setItem(testKey, '1');
-                window.localStorage.removeItem(testKey);
-                return true;
-            } catch (error) {
-                console.warn('localStorageテストに失敗しました:', error);
-                return false;
-            }
-        })();
-        const LOCAL_STATE_PREFIX = 'relic-gallery-state:';
-        const supported = opfsAvailable || localStorageAvailable;
-        const state = {
-            directoryPromise: null,
-            fileHandle: null,
-            fileName: '',
-            saving: false,
-            requeue: false,
+        const managerState = {
             timer: null,
-            mode: opfsAvailable ? 'opfs' : localStorageAvailable ? 'local' : 'none'
+            saving: false,
+            queued: false
         };
 
-        async function ensureDirectory() {
-            if (!opfsAvailable) {
-                throw new Error('OPFSはサポートされていません。');
-            }
-            if (!state.directoryPromise) {
-                state.directoryPromise = navigator.storage.getDirectory();
-            }
-            return state.directoryPromise;
+        function datasetEditable() {
+            return state.datasetKind !== 'merged';
         }
 
-        async function ensureHandle(name, create) {
-            if (!opfsAvailable) {
-                throw new Error('OPFSはサポートされていません。');
-            }
-            if (!name) {
-                throw new Error('ファイル名が指定されていません。');
-            }
-            const directory = await ensureDirectory();
-            return directory.getFileHandle(name, { create: Boolean(create) });
-        }
-
-        function localStorageKey(name) {
-            const target = name || state.fileName || 'results.csv';
-            state.fileName = target;
-            return `${LOCAL_STATE_PREFIX}${target}`;
-        }
-
-        async function tryLoad(defaultName) {
-            if (!supported) {
-                return null;
-            }
-            const targetName = state.fileName || defaultName;
-            if (!targetName) {
-                return null;
-            }
-
-            if (opfsAvailable) {
-                try {
-                    const handle = await ensureHandle(targetName, false);
-                    const file = await handle.getFile();
-                    const text = await file.text();
-                    state.fileHandle = handle;
-                    state.fileName = targetName;
-                    return text;
-                } catch (error) {
-                    if (!(error && (error.name === 'NotFoundError' || error.code === 8))) {
-                        throw error;
-                    }
-                }
-            }
-
-            if (localStorageAvailable) {
-                try {
-                    const raw = window.localStorage.getItem(localStorageKey(targetName));
-                    if (raw) {
-                        return raw;
-                    }
-                } catch (error) {
-                    console.warn('ローカル保存の読み込みに失敗しました:', error);
-                }
-            }
-
-            return null;
-        }
-
-        async function prepare(name) {
-            if (!supported) {
-                return;
-            }
-            const targetName = name || state.fileName || 'results.csv';
-            state.fileName = targetName;
-
-            if (opfsAvailable) {
-                const handle = await ensureHandle(targetName, true);
-                state.fileHandle = handle;
-            }
+        function collectRecords() {
+            const data = typeof getData === 'function' ? getData() : [];
+            return Array.isArray(data) ? data : [];
         }
 
         async function writeOnce() {
-            if (!supported) {
+            if (!datasetEditable()) {
+                return;
+            }
+            const csvPath = resolveCsvSavePath(state.csvPath);
+            if (!csvPath) {
+                setStorageStatus('保存先のCSVパスを解決できません。', true);
                 return;
             }
 
-            let text;
-            try {
-                text = JSON.stringify(getData(), null, 2);
-            } catch (error) {
-                console.error('データのシリアライズに失敗しました:', error);
-                setStorageStatus('保存失敗: データのシリアライズに失敗しました。', true);
-                return;
-            }
-
-            if (state.saving) {
-                state.requeue = true;
-                return;
-            }
-
-            state.saving = true;
-            state.requeue = false;
+            managerState.saving = true;
+            managerState.queued = false;
             setStorageStatus('保存中...', false);
 
-            if (opfsAvailable && state.fileHandle) {
-                try {
-                    const writable = await state.fileHandle.createWritable();
-                    await writable.write(text);
-                    await writable.close();
-                    setStorageStatus(`ブラウザに保存済み ${new Date().toLocaleTimeString()}`, false);
-                } catch (error) {
-                    console.error('ブラウザへの書き込みに失敗しました:', error);
-                    setStorageStatus(`保存失敗: ${error.message || error}`, true);
-                } finally {
-                    state.saving = false;
-                    if (state.requeue) {
-                        state.requeue = false;
-                        void writeOnce();
-                    }
-                }
-                return;
-            }
+            try {
+                const response = await fetch('/__viewer_api__/save', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        csvPath,
+                        records: collectRecords(),
+                        datasetLabel: state.datasetLabel || ''
+                    })
+                });
 
-            if (localStorageAvailable) {
-                try {
-                    const key = localStorageKey();
-                    window.localStorage.setItem(key, text);
-                    setStorageStatus(`ローカル保存 ${new Date().toLocaleTimeString()}`, false);
-                } catch (error) {
-                    console.error('ローカル保存に失敗しました:', error);
-                    setStorageStatus(`保存失敗: ${error.message || error}`, true);
-                } finally {
-                    state.saving = false;
-                    if (state.requeue) {
-                        state.requeue = false;
-                        void writeOnce();
-                    }
+                if (!response.ok) {
+                    const detail = await response.text();
+                    throw new Error(detail || `HTTP ${response.status}`);
                 }
-                return;
-            }
 
-            state.saving = false;
+                setStorageStatus(`保存しました ${new Date().toLocaleTimeString()}`, false);
+            } catch (error) {
+                console.error('CSV保存に失敗しました:', error);
+                setStorageStatus(`保存失敗: ${error.message || error}`, true);
+            } finally {
+                managerState.saving = false;
+                if (managerState.queued) {
+                    managerState.queued = false;
+                    void writeOnce();
+                }
+            }
         }
 
         function scheduleSave() {
-            if (!supported) {
+            if (!datasetEditable()) {
+                setStorageStatus('統合ビューでは保存できません。個別データセットを選択してください。', true);
                 return;
             }
-            if (state.timer) {
-                clearTimeout(state.timer);
+            if (managerState.saving) {
+                managerState.queued = true;
+                return;
             }
-            state.timer = setTimeout(() => {
-                state.timer = null;
+            if (managerState.timer) {
+                clearTimeout(managerState.timer);
+            }
+            managerState.timer = setTimeout(() => {
+                managerState.timer = null;
                 void writeOnce();
-            }, 400);
+            }, 250);
         }
 
         return {
-            supported,
-            usesOpfs: opfsAvailable,
-            usesLocalBackup: !opfsAvailable && localStorageAvailable,
+            supported: true,
+            usesOpfs: false,
+            usesLocalBackup: false,
             get fileName() {
-                return state.fileName;
+                return getFileName(state.csvPath);
             },
-            async tryLoad(name) {
-                try {
-                    return await tryLoad(name);
-                } catch (error) {
-                    console.warn('データ読み込みに失敗しました:', error);
-                    setStorageStatus(`読み込み失敗: ${error.message || error}`, true);
-                    return null;
-                }
+            async tryLoad() {
+                return null;
             },
-            async prepare(name) {
-                try {
-                    await prepare(name);
-                } catch (error) {
-                    console.warn('保存先初期化に失敗しました:', error);
-                    setStorageStatus(`保存先初期化に失敗しました: ${error.message || error}`, true);
-                }
+            async prepare() {
+                return;
             },
             scheduleSave,
             async flushNow() {
-                if (!supported) {
+                if (!datasetEditable()) {
                     return;
                 }
                 await writeOnce();

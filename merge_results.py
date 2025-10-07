@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import csv
-import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,7 +12,6 @@ from resource_paths import templates_path
 
 MERGED_DIR_NAME = "merged"
 MERGED_CSV_NAME = "merged.csv"
-MERGED_VIEWER_NAME = "merged_viewer.html"
 DEFAULT_IMAGE_DIR_NAME = "crops"
 EXTRA_FIELD_PREFIXES: Sequence[str] = ("Effect", "RawText")
 _REVIEWED_STATUSES = {"pass", "corrected"}
@@ -77,6 +75,63 @@ def _resolve_dataset(folder: Path) -> Optional[DatasetRecord]:
         return None
 
     return DatasetRecord(folder=folder, csv_path=csv_path, images_dir=images_dir)
+
+
+def _select_output_dir(root: Path, base_name: str) -> Path:
+    """既存ディレクトリを保持したまま、書き込み先ディレクトリを決定する."""
+
+    candidate = root / base_name
+    if not candidate.exists():
+        return candidate
+
+    index = 1
+    while True:
+        candidate = root / f"{base_name}_{index}"
+        if not candidate.exists():
+            return candidate
+        index += 1
+
+
+def _is_merged_dir_name(name: str, base_name: str) -> bool:
+    if name == base_name:
+        return True
+    if not name.startswith(f"{base_name}_"):
+        return False
+    suffix = name[len(base_name) + 1 :]
+    return suffix.isdigit()
+
+
+def _collect_existing_merged_entries(root: Path, base_name: str) -> list[dict[str, str]]:
+    """ビューワに掲載する既存統合結果のメタデータを収集する."""
+
+    collected: list[tuple[int, dict[str, str]]] = []
+    for folder in _iter_dataset_dirs(root):
+        if not _is_merged_dir_name(folder.name, base_name):
+            continue
+        csv_path = folder / MERGED_CSV_NAME
+        images_dir = folder / DEFAULT_IMAGE_DIR_NAME
+        if not csv_path.exists() or not images_dir.exists():
+            continue
+        if folder.name == base_name:
+            order = 0
+        else:
+            suffix_text = folder.name[len(base_name) + 1 :]
+            order = int(suffix_text) + 1 if suffix_text.isdigit() else 1
+        label = "統合結果" if folder.name == base_name else f"統合結果 ({folder.name})"
+        collected.append(
+            (
+                order,
+                {
+                    "label": label,
+                    "csv": csv_path.relative_to(root).as_posix(),
+                    "img_dir": images_dir.relative_to(root).as_posix(),
+                    "folder": folder.name,
+                    "kind": "merged_csv",
+                },
+            )
+        )
+    collected.sort(key=lambda item: item[0])
+    return [entry for _, entry in collected]
 
 
 def _is_duplicate(value: object) -> bool:
@@ -243,7 +298,7 @@ def merge_results(
 
     datasets: list[DatasetRecord] = []
     for folder in _iter_dataset_dirs(root):
-        if folder.name == target_name:
+        if _is_merged_dir_name(folder.name, target_name):
             continue
         dataset = _resolve_dataset(folder)
         if dataset:
@@ -252,11 +307,12 @@ def merge_results(
     if not datasets:
         raise MergeResultsError("統合対象のデータセットが見つかりませんでした")
 
-    merged_dir = root / target_name
-    if merged_dir.exists():
-        shutil.rmtree(merged_dir)
+    merged_dir = _select_output_dir(root, target_name)
+    if merged_dir.name != target_name:
+        print(f"[INFO] 既存の統合結果を保持するため {merged_dir.name} に書き出します")
+    merged_dir.mkdir(parents=True, exist_ok=False)
     crops_dir = merged_dir / DEFAULT_IMAGE_DIR_NAME
-    crops_dir.mkdir(parents=True, exist_ok=True)
+    crops_dir.mkdir(parents=True, exist_ok=False)
 
     merged_rows: list[dict[str, object]] = []
     source_entries: list[dict[str, str]] = []
@@ -300,8 +356,8 @@ def merge_results(
         source_entries.append(
             {
                 "label": dataset.label,
-                "csv": Path(os.path.relpath(dataset.csv_path, merged_dir)).as_posix(),
-                "imgDir": Path(os.path.relpath(dataset.images_dir, merged_dir)).as_posix(),
+                "csv": dataset.csv_path.relative_to(root).as_posix(),
+                "imgDir": dataset.images_dir.relative_to(root).as_posix(),
                 "folder": dataset.folder.name,
             }
         )
@@ -322,40 +378,28 @@ def merge_results(
 
     print(f"[INFO] 統合CSVを出力しました: {merged_csv_path}")
 
-    merged_viewer_path = merged_dir / MERGED_VIEWER_NAME
-    css_override: Optional[str] = None
-    js_override: Optional[str] = None
+    merged_entries = _collect_existing_merged_entries(root, target_name)
+    active_dataset_index = 0
+    for index, entry in enumerate(merged_entries):
+        if entry.get("folder") == merged_dir.name:
+            active_dataset_index = index
+            break
 
-    parent_css = root / "gallery.css"
-    parent_js = root / "gallery.js"
-
-    if parent_css.exists():
-        css_override = Path(os.path.relpath(parent_css, merged_dir)).as_posix()
-    if parent_js.exists():
-        js_override = Path(os.path.relpath(parent_js, merged_dir)).as_posix()
-
+    viewer_path = root / "viewer.html"
     generate_html(
         str(merged_csv_path),
-        str(crops_dir.relative_to(merged_dir)),
-        str(merged_viewer_path),
+        str(crops_dir.relative_to(root)),
+        str(viewer_path),
         master_csv_path=None,
         master_json_path="",
         master_options=_load_master_options(),
-        datasets=[
-            {
-                "label": "統合結果",
-                "csv": MERGED_CSV_NAME,
-                "img_dir": DEFAULT_IMAGE_DIR_NAME,
-                "folder": target_name,
-            }
-        ] + source_entries,
-        active_dataset_index=0,
-        css_relative_override=css_override,
-        js_relative_override=js_override,
+        datasets=merged_entries + source_entries,
+        active_dataset_index=active_dataset_index,
     )
-    print(f"[INFO] ビューワを生成しました: {merged_viewer_path}")
+    print(f"[INFO] ビューワを更新しました: {viewer_path}")
 
     return merged_dir
+
 def _load_master_options() -> list[str]:
     master_csv = templates_path("master_relics.csv")
     options: list[str] = []

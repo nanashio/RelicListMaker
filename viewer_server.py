@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import csv
 import html
+import json
 import socket
 import sys
 import threading
@@ -11,11 +14,26 @@ import webbrowser
 from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
+from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from string import Template
 from typing import Iterable, Optional
 from urllib.parse import quote
+
+API_SAVE_PATH = "/__viewer_api__/save"
+_RESERVED_FIELDS = [
+    "Image",
+    "BaseImage",
+    "Dataset",
+    "DatasetFolder",
+    "SourceCsv",
+    "SourceImage",
+    "Duplicate",
+    "ItemColor",
+]
+_EXTRA_FIELD_PREFIXES = ("Effect", "RawText")
+_SAVE_LOCK = threading.Lock()
 
 INDEX_TEMPLATE = Template(
     """<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>NightReign Relic Viewer Index</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:2rem;}h1{font-size:1.8rem;}ul{list-style:none;padding:0;}li{margin:.4rem 0;}a{text-decoration:none;color:#1e61d1;}a:hover{text-decoration:underline;}code{background:#f5f5f5;padding:.1rem .3rem;border-radius:4px;}</style></head><body><h1>結果ビューワ一覧</h1>$body</body></html>"""
@@ -83,6 +101,133 @@ class GalleryRequestHandler(SimpleHTTPRequestHandler):
             )
         return INDEX_TEMPLATE.substitute(body=body)
 
+    def _send_json(self, data: dict, status: int = HTTPStatus.OK) -> None:
+        payload = json.dumps(data).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def _collect_field_order(self, records: list[dict], existing_order: list[str]) -> list[str]:
+        order: list[str] = []
+        seen: set[str] = set()
+
+        def register(name: str) -> None:
+            if name and name not in seen:
+                seen.add(name)
+                order.append(name)
+
+        for field in existing_order:
+            register(field)
+
+        for field in _RESERVED_FIELDS:
+            register(field)
+
+        extra_fields: set[str] = set()
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            for key in record.keys():
+                if key in seen:
+                    continue
+                if any(key.startswith(prefix) for prefix in _EXTRA_FIELD_PREFIXES):
+                    extra_fields.add(key)
+                else:
+                    register(key)
+
+        for key in sorted(extra_fields, key=lambda value: (value.rstrip("0123456789"), value)):
+            register(key)
+
+        return order
+
+    def _resolve_csv_path(self, csv_path: str) -> Optional[Path]:
+        if not csv_path:
+            return None
+        normalized = csv_path.lstrip("/")
+        candidate = (self.results_dir / normalized).resolve()
+        try:
+            candidate.relative_to(self.results_dir)
+        except ValueError:
+            return None
+        return candidate
+
+    def _handle_save_request(self) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            self._send_json({"error": "invalid-content-length"}, HTTPStatus.BAD_REQUEST)
+            return
+
+        raw_body = self.rfile.read(length)
+        try:
+            payload = json.loads(raw_body.decode("utf-8"))
+        except json.JSONDecodeError:
+            self._send_json({"error": "invalid-json"}, HTTPStatus.BAD_REQUEST)
+            return
+
+        if not isinstance(payload, dict):
+            self._send_json({"error": "invalid-payload"}, HTTPStatus.BAD_REQUEST)
+            return
+
+        csv_path_text = payload.get("csvPath")
+        records = payload.get("records")
+        dataset_label = payload.get("datasetLabel", "")
+
+        if not isinstance(csv_path_text, str) or not csv_path_text:
+            self._send_json({"error": "invalid-csv-path"}, HTTPStatus.BAD_REQUEST)
+            return
+
+        if not isinstance(records, list):
+            self._send_json({"error": "invalid-records"}, HTTPStatus.BAD_REQUEST)
+            return
+
+        csv_abs_path = self._resolve_csv_path(csv_path_text)
+        if csv_abs_path is None:
+            self._send_json({"error": "csv-path-outside-root"}, HTTPStatus.BAD_REQUEST)
+            return
+
+        existing_fields: list[str] = []
+        if csv_abs_path.exists():
+            try:
+                with csv_abs_path.open("r", encoding="utf-8", newline="") as handle:
+                    reader = csv.DictReader(handle)
+                    existing_fields = list(reader.fieldnames or [])
+            except OSError as exc:
+                self._send_json({"error": f"read-failed: {exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
+                return
+
+        try:
+            field_order = self._collect_field_order(records, existing_fields)
+        except Exception as exc:  # noqa: BLE001 - field解析時の予期せぬエラーを捕捉
+            self._send_json({"error": f"field-order-failed: {exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+
+        csv_abs_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = csv_abs_path.with_suffix(csv_abs_path.suffix + ".tmp")
+
+        with _SAVE_LOCK:
+            try:
+                with tmp_path.open("w", encoding="utf-8", newline="") as handle:
+                    writer = csv.DictWriter(handle, fieldnames=field_order)
+                    writer.writeheader()
+                    for record in records:
+                        if not isinstance(record, dict):
+                            continue
+                        row = {field: record.get(field, "") for field in field_order}
+                        writer.writerow(row)
+                tmp_path.replace(csv_abs_path)
+            except OSError as exc:
+                if tmp_path.exists():
+                    with contextlib.suppress(OSError):
+                        tmp_path.unlink()
+                self._send_json({"error": f"write-failed: {exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
+                return
+
+        label = dataset_label if isinstance(dataset_label, str) and dataset_label else csv_abs_path.name
+        print(f"[INFO] CSVを更新しました: {csv_abs_path} ({label})")
+        self._send_json({"status": "ok"})
+
     def do_GET(self) -> None:  # noqa: N802 (標準ライブラリの命名に合わせる)
         try:
             if self.path in ("/", "/index.html"):
@@ -96,6 +241,12 @@ class GalleryRequestHandler(SimpleHTTPRequestHandler):
             super().do_GET()
         except Exception as exc:  # noqa: BLE001 - 500ページを返すため広く捕捉
             self._handle_exception(exc)
+
+    def do_POST(self) -> None:  # noqa: N802
+        if self.path == API_SAVE_PATH:
+            self._handle_save_request()
+            return
+        self.send_error(HTTPStatus.NOT_FOUND)
 
     def log_message(self, format: str, *args) -> None:  # noqa: A003 - 継承元のシグネチャ維持
         message = "[HTTP] " + format % args + "\n"

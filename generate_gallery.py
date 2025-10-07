@@ -113,14 +113,21 @@ def _normalize_dataset_entries(datasets, output_dir: str):
             except ValueError:
                 img_rel = img_dir
 
-        normalized.append(
-            {
-                "label": label,
-                "csv": csv_rel.replace(os.sep, "/"),
-                "imgDir": img_rel.replace(os.sep, "/") if img_rel else "",
-                "folder": folder.replace(os.sep, "/") if folder else "",
-            }
-        )
+        entry_data: dict[str, object] = {
+            "label": label,
+            "csv": csv_rel.replace(os.sep, "/"),
+            "imgDir": img_rel.replace(os.sep, "/") if img_rel else "",
+            "folder": folder.replace(os.sep, "/") if folder else "",
+        }
+
+        if isinstance(entry, dict):
+            raw_kind = entry.get("kind")
+            if isinstance(raw_kind, str) and raw_kind.strip():
+                entry_data["kind"] = raw_kind.strip()
+            if "sources" in entry:
+                entry_data["sources"] = entry["sources"]
+
+        normalized.append(entry_data)
 
     return normalized
 
@@ -285,7 +292,11 @@ def generate_html(
     dataset_entries = _normalize_dataset_entries(datasets, output_dir)
 
     merged_entry = None
-    if len(dataset_entries) > 1:
+    has_explicit_merged = any(
+        isinstance(entry, dict) and (entry.get("kind") or "") in {"merged", "merged_csv"}
+        for entry in dataset_entries
+    )
+    if len(dataset_entries) > 1 and not has_explicit_merged:
         merged_sources = []
         for entry in dataset_entries:
             csv_rel = (entry.get("csv") or "").strip()
