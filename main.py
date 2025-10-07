@@ -2,7 +2,7 @@
 import os
 import csv
 import time
-from typing import Optional
+from typing import Callable, Optional
 
 from extract_frames import extract_and_crop
 from generate_gallery import generate_html
@@ -63,7 +63,13 @@ def load_master_options(src_csv: str) -> list:
         return []
     return options
 
-def main(video_dir="videos", result_dir=DEFAULT_RESULT_DIR, ocr_upsample=OCR_UPSAMPLE):
+
+def main(
+    video_dir="videos",
+    result_dir=DEFAULT_RESULT_DIR,
+    ocr_upsample=OCR_UPSAMPLE,
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
+) -> None:
     start_time = time.time()
     print("[INFO] 動画ごとの処理開始...")
 
@@ -71,12 +77,37 @@ def main(video_dir="videos", result_dir=DEFAULT_RESULT_DIR, ocr_upsample=OCR_UPS
 
     master_src = str(templates_path("master_relics.csv"))
     master_options = load_master_options(master_src)
-    dataset_entries = []
+    dataset_entries: list[dict[str, str]] = []
 
-    for video_file in os.listdir(video_dir):
-        if not video_file.lower().endswith((".mp4", ".avi", ".mov", ".mkv")):
+    video_files: list[str] = []
+    for entry in sorted(os.listdir(video_dir)):
+        if not entry.lower().endswith((".mp4", ".avi", ".mov", ".mkv")):
             continue
+        video_path = os.path.join(video_dir, entry)
+        if not os.path.isfile(video_path):
+            continue
+        video_files.append(entry)
 
+    total_steps = len(video_files) * 2 + 1 if video_files else 1
+    current_step = 0
+
+    def report(message: str, *, advance: bool = False) -> None:
+        nonlocal current_step
+        if advance:
+            current_step = min(current_step + 1, total_steps)
+        if progress_callback:
+            try:
+                progress_callback(current_step, total_steps, message)
+            except Exception as callback_err:  # pragma: no cover - 通知失敗は致命的でない
+                print(f"[WARN] プログレス更新に失敗しました: {callback_err}")
+
+    report("動画処理を準備中...")
+
+    if not video_files:
+        print("[WARN] 処理対象の動画が見つかりません。")
+        report("処理対象の動画が見つかりませんでした")
+
+    for video_file in video_files:
         video_path = os.path.join(video_dir, video_file)
         base_name = os.path.splitext(video_file)[0]
         video_output_dir = os.path.join(result_dir, base_name)
@@ -85,15 +116,15 @@ def main(video_dir="videos", result_dir=DEFAULT_RESULT_DIR, ocr_upsample=OCR_UPS
         os.makedirs(video_output_dir, exist_ok=True)
 
         print(f"[PROCESSING] {video_file} を処理中...")
-
-        # 1. フレーム抽出 & crop
+        report(f"{video_file} のフレーム抽出中...")
         extract_and_crop(video_path, frame_dir=frames_dir, crop_dir=crops_dir)
+        report(f"{video_file} のフレーム抽出完了", advance=True)
 
-        # 2. OCR＋マッチング結果をCSVに出力
         csv_path = os.path.join(video_output_dir, f"{base_name}.csv")
         corrections_csv = os.path.join(video_output_dir, "corrections.csv")
         item_color = detect_item_color(base_name)
 
+        report(f"{video_file} のOCR/マッチング中...")
         process_images(
             image_dir=crops_dir,
             output_path=csv_path,
@@ -103,6 +134,7 @@ def main(video_dir="videos", result_dir=DEFAULT_RESULT_DIR, ocr_upsample=OCR_UPS
             corrections_csv=corrections_csv,
             item_color=item_color,
         )
+        report(f"{video_file} のOCR/マッチング完了", advance=True)
         print(f"[✓] {crops_dir} の結果を {csv_path} に出力しました")
 
         dataset_entries.append(
@@ -122,6 +154,7 @@ def main(video_dir="videos", result_dir=DEFAULT_RESULT_DIR, ocr_upsample=OCR_UPS
     default_img_dir = dataset_entries[0]["img_dir"] if dataset_entries else ""
 
     viewer_path = os.path.join(result_dir, "viewer.html")
+    report("HTML を生成中...")
     generate_html(
         default_csv_path,
         default_img_dir,
@@ -133,8 +166,8 @@ def main(video_dir="videos", result_dir=DEFAULT_RESULT_DIR, ocr_upsample=OCR_UPS
         active_dataset_index=0,
     )
 
+    report("全処理完了", advance=True)
     elapsed = time.time() - start_time
     print(f"[✓] 全処理完了！処理時間: {elapsed:.2f}秒")
-
 if __name__ == "__main__":
     main()
