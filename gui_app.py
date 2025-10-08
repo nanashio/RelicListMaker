@@ -4,7 +4,9 @@ from __future__ import annotations
 import contextlib
 import io
 import queue
+import shutil
 import sys
+import types
 import threading
 import traceback
 import tkinter as tk
@@ -16,6 +18,17 @@ import main as pipeline_main
 from merge_results import MergeResultsError, merge_results
 from viewer_server import ServerContext, create_server, _open_browser
 
+
+try:
+    from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
+
+    _HAS_DND = True
+except Exception:  # noqa: BLE001 - optional dependency
+    TkinterDnD = None
+    DND_FILES = "DND_Files"
+    _HAS_DND = False
+
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".wmv", ".m4v"}
 
 def _default_base_dir() -> Path:
     """実行形態に応じて videos/results の既定配置場所を返す."""
@@ -95,13 +108,16 @@ class RelicGuiApp:
         self._progress_mode = "idle"
         self._pipeline_progress_token: Optional[int] = None
         self._merge_progress_token: Optional[int] = None
+        self._tkdnd_ready = False
 
         self._build_layout()
+        self._init_drag_and_drop()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.after(self.POLL_INTERVAL_MS, self._process_log_queue)
 
     def _build_layout(self) -> None:
         main_frame = ttk.Frame(self.root, padding=12)
+        self.main_frame = main_frame
         main_frame.grid(row=0, column=0, sticky="nsew")
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
@@ -175,6 +191,153 @@ class RelicGuiApp:
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
 
+
+    
+
+    def _init_drag_and_drop(self) -> None:
+        """動画ファイルのドラッグ＆ドロップ受付を設定する."""
+
+        self._dnd_enabled = False
+        widgets: list[tk.Misc] = []
+
+        if not hasattr(self.root, "drop_target_register"):
+            self._attach_tkdnd(self.root)
+        if hasattr(self.root, "drop_target_register"):
+            widgets.append(self.root)
+
+        main_frame = getattr(self, "main_frame", None)
+        if main_frame is not None and not hasattr(main_frame, "drop_target_register"):
+            self._attach_tkdnd(main_frame)
+        if main_frame is not None and hasattr(main_frame, "drop_target_register"):
+            widgets.append(main_frame)
+
+        for widget in widgets:
+            try:
+                widget.drop_target_register(DND_FILES)
+                widget.dnd_bind("<<Drop>>", self._handle_file_drop)
+                self._dnd_enabled = True
+            except Exception as exc:  # noqa: BLE001 - 環境により未対応
+                self.append_log(f"[WARN] ドラッグ＆ドロップの初期化に失敗しました: {exc}")
+
+        if self._dnd_enabled:
+            self.append_log("[GUI] 動画ファイルをウィンドウへドラッグ＆ドロップできます")
+        elif not widgets:
+            self.append_log("[WARN] この環境ではドラッグ＆ドロップを利用できません (tkdnd未検出)")
+
+    def _attach_tkdnd(self, widget: tk.Misc) -> None:
+        """tkdnd が利用できる場合に Tk ウィジェットへDnDメソッドを付与する."""
+
+        if not isinstance(widget, tk.Misc):
+            return
+        if hasattr(widget, "drop_target_register"):
+            return
+        if not self._ensure_tkdnd_available():
+            return
+
+        tk_app = widget.tk
+
+        def drop_target_register(self_widget: tk.Misc, *dnd_types: str) -> None:
+            types_tuple = dnd_types or (DND_FILES,)
+            tk_app.call('tkdnd::drop_target', 'register', self_widget._w, *types_tuple)
+
+        def drop_target_unregister(self_widget: tk.Misc, *dnd_types: str) -> None:
+            types_tuple = dnd_types or (DND_FILES,)
+            tk_app.call('tkdnd::drop_target', 'unregister', self_widget._w, *types_tuple)
+
+        def dnd_bind(self_widget: tk.Misc, sequence: str, func, add: str = ''):
+            return self_widget.bind(sequence, func, add=add)
+
+        widget.drop_target_register = types.MethodType(drop_target_register, widget)
+        widget.drop_target_unregister = types.MethodType(drop_target_unregister, widget)
+        widget.dnd_bind = types.MethodType(dnd_bind, widget)
+
+    def _ensure_tkdnd_available(self) -> bool:
+        if self._tkdnd_ready:
+            return True
+        try:
+            self.root.tk.call('package', 'require', 'tkdnd')
+        except tk.TclError:
+            return False
+        self._tkdnd_ready = True
+        return True
+
+    def _handle_file_drop(self, event) -> None:
+        """ドラッグ＆ドロップされたファイル/フォルダを処理する."""
+    
+        data = getattr(event, "data", "")
+        if not data:
+            return
+    
+        try:
+            dropped = [Path(path) for path in self.root.tk.splitlist(data)]
+        except Exception:
+            dropped = [Path(data)]
+    
+        if not dropped:
+            return
+    
+        current_video_dir = self._resolve_input_path(self.video_dir_var.get())
+        current_video_dir.mkdir(parents=True, exist_ok=True)
+    
+        added_files: list[str] = []
+        skipped_files: list[str] = []
+        updated_dir = False
+    
+        for entry in dropped:
+            if entry.is_dir():
+                self.video_dir_var.set(self._to_user_value(entry))
+                current_video_dir = self._resolve_input_path(self.video_dir_var.get())
+                current_video_dir.mkdir(parents=True, exist_ok=True)
+                updated_dir = True
+                continue
+    
+            suffix = entry.suffix.lower()
+            if suffix not in VIDEO_EXTENSIONS:
+                skipped_files.append(entry.name)
+                continue
+    
+            destination = current_video_dir / entry.name
+            try:
+                if destination.resolve() == entry.resolve():
+                    added_files.append(entry.name)
+                    continue
+            except OSError:
+                pass
+    
+            destination = self._resolve_unique_destination(destination)
+    
+            try:
+                shutil.copy2(entry, destination)
+                added_files.append(destination.name)
+            except (OSError, shutil.Error) as exc:
+                self.append_log(f"[WARN] {entry.name} のコピーに失敗しました: {exc}")
+    
+        if added_files:
+            summary = ", ".join(added_files)
+            self.append_log(f"[GUI] {len(added_files)} 件の動画を追加しました: {summary}")
+        if skipped_files:
+            summary = ", ".join(skipped_files)
+            self.append_log(f"[WARN] 対応外のファイルをスキップしました: {summary}")
+        if updated_dir:
+            self.append_log("[GUI] 動画フォルダをドラッグされたフォルダに切り替えました")
+    
+    def _resolve_unique_destination(self, destination: Path) -> Path:
+        """同名ファイルがある場合は連番付き名称に退避する."""
+    
+        if not destination.exists():
+            return destination
+    
+        stem = destination.stem
+        suffix = destination.suffix
+        parent = destination.parent
+        counter = 1
+    
+        while True:
+            candidate = parent / f"{stem}_{counter}{suffix}"
+            if not candidate.exists():
+                return candidate
+            counter += 1
+    
     def _resolve_input_path(self, value: str) -> Path:
         raw = Path(value.strip()) if value else Path()
         if raw.is_absolute():
@@ -495,7 +658,10 @@ class RelicGuiApp:
 
 
 def main() -> None:
-    root = tk.Tk()
+    if TkinterDnD is not None:
+        root = TkinterDnD.Tk()
+    else:
+        root = tk.Tk()
     app = RelicGuiApp(root)
     root.mainloop()
 
