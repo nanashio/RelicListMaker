@@ -1,19 +1,17 @@
 # main.py
 import os
-import csv
 import time
 from typing import Callable, Optional
 
 from extract_frames import extract_and_crop
 from generate_gallery import generate_html
 from match_and_export import process_images
+from relic_data import load_master_csv
 from resource_paths import templates_path
 
 VIDEO_DIR = "videos"
 DEFAULT_RESULT_DIR = "results"
 OCR_UPSAMPLE = 1.5
-
-
 
 
 COLOR_KEYWORDS = {
@@ -44,26 +42,6 @@ def detect_item_color(name: str) -> Optional[str]:
 
     return None
 
-def load_master_options(src_csv: str) -> list:
-    options = []
-    seen = set()
-    try:
-        with open(src_csv, "r", encoding="utf-8") as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
-                value = (row.get("EffectBase") or "").strip()
-                if value and value != "-" and value not in seen:
-                    seen.add(value)
-                    options.append(value)
-    except FileNotFoundError:
-        print(f"[!] マスターデータが見つかりません: {src_csv}")
-        return []
-    except Exception as err:
-        print(f"[!] マスターデータの読み込みに失敗しました: {err}")
-        return []
-    return options
-
-
 def main(
     video_dir="videos",
     result_dir=DEFAULT_RESULT_DIR,
@@ -75,8 +53,8 @@ def main(
 
     os.makedirs(result_dir, exist_ok=True)
 
-    master_src = str(templates_path("master_relics.csv"))
-    master_options = load_master_options(master_src)
+    master_src = templates_path("master_relics.csv")
+    master_options = load_master_csv(master_src)
     dataset_entries: list[dict[str, str]] = []
 
     video_files: list[str] = []

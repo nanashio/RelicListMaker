@@ -1,9 +1,10 @@
 import os
-import csv
 import html
 import json
 import shutil
 from typing import Optional, Sequence
+
+from relic_data import load_master_csv, load_master_json, normalize_master_values
 from resource_paths import templates_path
 
 RESULTS_CSV_PATH = "results_input_video.csv"
@@ -30,22 +31,6 @@ def _sanitize_symbols(symbols):
         if text:
             cleaned.append(text)
     return cleaned
-
-
-def _normalize_master_options(options: Optional[Sequence[str]]):
-    if not options:
-        return []
-
-    normalized = []
-    seen = set()
-    for entry in options:
-        if entry is None:
-            continue
-        text = str(entry).strip()
-        if text and text not in seen and text != "-":
-            seen.add(text)
-            normalized.append(text)
-    return normalized
 
 
 def _normalize_dataset_entries(datasets, output_dir: str):
@@ -171,55 +156,6 @@ def _copy_static_asset(
     return relative_path.replace(os.sep, "/")
 
 
-def _extract_master_options_from_csv(master_abs_path: Optional[str], column_name: str = "EffectBase"):
-    if not master_abs_path or not os.path.exists(master_abs_path):
-        return []
-
-    options = []
-    seen = set()
-    try:
-        with open(master_abs_path, "r", encoding="utf-8") as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
-                value = (row.get(column_name) or "").strip()
-                if value and value != "-" and value not in seen:
-                    seen.add(value)
-                    options.append(value)
-    except Exception as exc:
-        print(f"[!] マスターデータの読み込みに失敗しました: {exc}")
-    return options
-
-
-def _extract_master_options_from_json(master_abs_path: Optional[str]):
-    if not master_abs_path or not os.path.exists(master_abs_path):
-        return []
-
-    try:
-        with open(master_abs_path, "r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except Exception as exc:
-        print(f"[!] マスターデータ(JSON)の読み込みに失敗しました: {exc}")
-        return []
-
-    if not isinstance(data, list):
-        return []
-
-    options = []
-    seen = set()
-    for entry in data:
-        value = ""
-        if isinstance(entry, str):
-            value = entry.strip()
-        elif isinstance(entry, dict):
-            raw = entry.get("EffectBase") or entry.get("effect") or entry.get("name")
-            if isinstance(raw, str):
-                value = raw.strip()
-        if value and value != "-" and value not in seen:
-            seen.add(value)
-            options.append(value)
-    return options
-
-
 def generate_html(
     results_path,
     img_dir,
@@ -263,7 +199,7 @@ def generate_html(
     else:
         img_rel_dir = "."
 
-    master_options = _normalize_master_options(master_options)
+    master_options = normalize_master_values(master_options)
     master_csv_rel_path = ""
     master_json_rel_path = ""
 
@@ -274,7 +210,7 @@ def generate_html(
             master_json_abs = os.path.abspath(os.path.join(output_dir, master_json_path))
         if os.path.exists(master_json_abs):
             master_json_rel_path = os.path.relpath(master_json_abs, output_dir)
-            master_options = _extract_master_options_from_json(master_json_abs)
+            master_options = load_master_json(master_json_abs)
         else:
             print(f"[!] マスターデータ(JSON)が見つかりません: {master_json_abs}")
 
@@ -285,7 +221,7 @@ def generate_html(
             master_csv_abs = os.path.abspath(os.path.join(output_dir, master_csv_path))
         if os.path.exists(master_csv_abs):
             master_csv_rel_path = os.path.relpath(master_csv_abs, output_dir)
-            master_options = _extract_master_options_from_csv(master_csv_abs)
+            master_options = load_master_csv(master_csv_abs)
         else:
             print(f"[!] マスターデータ(CSV)が見つかりません: {master_csv_abs}")
 

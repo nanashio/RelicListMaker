@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Iterable, Optional, Sequence
 
 from generate_gallery import generate_html
-from resource_paths import templates_path
+from relic_data import load_master_csv
 
 MERGED_DIR_NAME = "merged"
 MERGED_CSV_NAME = "merged.csv"
@@ -392,7 +392,7 @@ def merge_results(
         str(viewer_path),
         master_csv_path=None,
         master_json_path="",
-        master_options=_load_master_options(),
+        master_options=load_master_csv(),
         datasets=merged_entries + source_entries,
         active_dataset_index=active_dataset_index,
     )
@@ -400,22 +400,3 @@ def merge_results(
 
     return merged_dir
 
-def _load_master_options() -> list[str]:
-    master_csv = templates_path("master_relics.csv")
-    options: list[str] = []
-    seen: set[str] = set()
-    if not master_csv.exists():
-        print(f"[WARN] master_relics.csv が見つかりません: {master_csv}")
-        return options
-
-    try:
-        with master_csv.open("r", encoding="utf-8") as handle:
-            reader = csv.DictReader(handle)
-            for row in reader:
-                value = (row.get("EffectBase") or "").strip()
-                if value and value != "-" and value not in seen:
-                    seen.add(value)
-                    options.append(value)
-    except OSError as err:
-        print(f"[WARN] master_relics.csv の読み込みに失敗しました: {err}")
-    return options

@@ -7,13 +7,14 @@ import pytesseract
 from rapidfuzz import process, fuzz
 
 from preprocess import prepare_crop_for_ocr
+from relic_data import load_master_csv, normalize_master_values
 from resource_paths import templates_path
 from tesseract_bundle import configure_pytesseract
 
 BUNDLED_TESSERACT = configure_pytesseract()
 _TESSERACT_NOTICE_SHOWN = False
 
-DICTIONARY_FILE = str(templates_path('master_relics.csv'))
+DICTIONARY_PATH = templates_path('master_relics.csv')
 COLUMN_NAME_IN_CSV = 'EffectBase'
 
 # 元サイズ (1920x1080前提)
@@ -38,17 +39,6 @@ def scale_crop_boxes(boxes, scale=1.0):
             int(y2 * scale)
         ))
     return scaled
-
-def load_dictionary(file_path, column_name):
-    try:
-        df = pd.read_csv(file_path)
-        if column_name not in df.columns:
-            print(f"Column '{column_name}' not found. Available: {df.columns}")
-            return []
-        return df[column_name].dropna().astype(str).tolist()
-    except Exception as e:
-        print(f"Error loading dictionary: {e}")
-        return []
 
 def load_corrections(corrections_csv):
     if not corrections_csv or not os.path.exists(corrections_csv):
@@ -81,16 +71,32 @@ def clean_ocr_text(text):
     return " ".join(lines)
 
 
-def ocr_and_match(img_path, dictionary, corrections_map=None, scale=1.0, upsample=DEFAULT_UPSAMPLE, preprocess=True):
+def ocr_and_match(
+    img_path,
+    dictionary,
+    corrections_map=None,
+    scale=1.0,
+    upsample=DEFAULT_UPSAMPLE,
+    preprocess=True,
+    crop_boxes=None,
+):
     try:
         img_cv = cv2.imread(img_path)
-        results = []
-        crop_boxes = scale_crop_boxes(BASE_CROP_BOXES, scale)
+        if img_cv is None:
+            raise FileNotFoundError(f"画像を読み込めませんでした: {img_path}")
 
-        for (x1, y1, x2, y2) in crop_boxes:
+        results: list[dict[str, object]] = []
+        boxes = crop_boxes or scale_crop_boxes(BASE_CROP_BOXES, scale)
+
+        for (x1, y1, x2, y2) in boxes:
             crop = img_cv[y1:y2, x1:x2]
             if crop is None or crop.size == 0:
-                results.append("No image")
+                results.append({
+                    "match": "No image",
+                    "score": 0.0,
+                    "raw": "",
+                    "source": "error",
+                })
                 continue
 
             if preprocess:
@@ -98,7 +104,9 @@ def ocr_and_match(img_path, dictionary, corrections_map=None, scale=1.0, upsampl
             else:
                 ocr_input = crop
                 if upsample and upsample != 1.0:
-                    ocr_input = cv2.resize(ocr_input, None, fx=upsample, fy=upsample, interpolation=cv2.INTER_CUBIC)
+                    ocr_input = cv2.resize(
+                        ocr_input, None, fx=upsample, fy=upsample, interpolation=cv2.INTER_CUBIC
+                    )
                 ocr_input = cv2.cvtColor(ocr_input, cv2.COLOR_BGR2GRAY)
 
             raw_text = pytesseract.image_to_string(ocr_input, lang='jpn', config=OCR_CONFIG)
@@ -119,13 +127,14 @@ def ocr_and_match(img_path, dictionary, corrections_map=None, scale=1.0, upsampl
                 "match": best_match,
                 "score": float(score) if score is not None else 0.0,
                 "raw": text,
-                "source": source
+                "source": source,
             })
 
         return results
     except Exception as e:
         print(f"OCR error: {e}")
-        return [{"match": "Error", "score": 0.0, "raw": "", "source": "error"}] * len(BASE_CROP_BOXES)
+        fallback_length = len(crop_boxes) if crop_boxes else len(BASE_CROP_BOXES)
+        return [{"match": "Error", "score": 0.0, "raw": "", "source": "error"}] * fallback_length
 
 def process_images(
     image_dir="crops",
@@ -148,7 +157,7 @@ def process_images(
     version = pytesseract.get_tesseract_version()
     print(f"Tesseract Ver: {version}")
 
-    dictionary = load_dictionary(DICTIONARY_FILE, COLUMN_NAME_IN_CSV)
+    dictionary = load_master_csv(DICTIONARY_PATH, column=COLUMN_NAME_IN_CSV)
     if not dictionary:
         print("辞書の読み込み失敗")
         return
@@ -156,7 +165,9 @@ def process_images(
     corrections_map = load_corrections(corrections_csv)
     if corrections_map:
         # 辞書候補にフィードバック語を加えてマッチ精度を向上
-        dictionary = list(dict.fromkeys(dictionary + list(corrections_map.values())))
+        dictionary = normalize_master_values(list(dictionary) + list(corrections_map.values()))
+
+    crop_boxes = scale_crop_boxes(BASE_CROP_BOXES, scale)
 
     data = []
     for fname in sorted(os.listdir(image_dir)):
@@ -170,6 +181,7 @@ def process_images(
             scale=scale,
             upsample=upsample,
             preprocess=preprocess,
+            crop_boxes=crop_boxes,
         )
 
         row = {"Image": fname, "Duplicate": False, "ItemColor": item_color or 'none'}
