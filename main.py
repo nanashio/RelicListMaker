@@ -1,6 +1,7 @@
 # main.py
 import os
 import time
+from pathlib import Path
 from typing import Callable, Optional
 
 from extract_frames import extract_and_crop
@@ -47,6 +48,8 @@ def main(
     result_dir=DEFAULT_RESULT_DIR,
     ocr_upsample=OCR_UPSAMPLE,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
+    video_files: Optional[list[str]] = None,
+    item_color_overrides: Optional[dict[str, str]] = None,
 ) -> None:
     start_time = time.time()
     print("[INFO] 動画ごとの処理開始...")
@@ -57,16 +60,30 @@ def main(
     master_options = load_master_csv(master_src)
     dataset_entries: list[dict[str, str]] = []
 
-    video_files: list[str] = []
-    for entry in sorted(os.listdir(video_dir)):
-        if not entry.lower().endswith((".mp4", ".avi", ".mov", ".mkv")):
-            continue
-        video_path = os.path.join(video_dir, entry)
-        if not os.path.isfile(video_path):
-            continue
-        video_files.append(entry)
+    selected_videos: list[str] = []
+    if video_files:
+        for candidate in video_files:
+            path_obj = Path(candidate)
+            if not path_obj.is_absolute():
+                path_obj = Path(video_dir) / path_obj
+            if not path_obj.exists() or not path_obj.is_file():
+                print(f"[WARN] 指定された動画ファイルが見つかりません: {path_obj}")
+                continue
+            selected_videos.append(str(path_obj.resolve()))
+    else:
+        for entry in sorted(os.listdir(video_dir)):
+            if not entry.lower().endswith((".mp4", ".avi", ".mov", ".mkv")):
+                continue
+            video_path = os.path.join(video_dir, entry)
+            if not os.path.isfile(video_path):
+                continue
+            selected_videos.append(str(Path(video_path).resolve()))
 
-    total_steps = len(video_files) * 2 + 1 if video_files else 1
+    override_map = {}
+    if item_color_overrides:
+        override_map = {os.path.abspath(path): value for path, value in item_color_overrides.items()}
+
+    total_steps = len(selected_videos) * 2 + 1 if selected_videos else 1
     current_step = 0
 
     def report(message: str, *, advance: bool = False) -> None:
@@ -81,12 +98,13 @@ def main(
 
     report("動画処理を準備中...")
 
-    if not video_files:
+    if not selected_videos:
         print("[WARN] 処理対象の動画が見つかりません。")
         report("処理対象の動画が見つかりませんでした")
 
-    for video_file in video_files:
-        video_path = os.path.join(video_dir, video_file)
+    for video_path in selected_videos:
+        video_path = os.path.abspath(video_path)
+        video_file = os.path.basename(video_path)
         base_name = os.path.splitext(video_file)[0]
         video_output_dir = os.path.join(result_dir, base_name)
         frames_dir = os.path.join(video_output_dir, "frames")
@@ -100,7 +118,11 @@ def main(
 
         csv_path = os.path.join(video_output_dir, f"{base_name}.csv")
         corrections_csv = os.path.join(video_output_dir, "corrections.csv")
-        item_color = detect_item_color(base_name)
+        override_color = override_map.get(video_path)
+        if override_color is not None and override_color != "none":
+            item_color = None if override_color == "none" else override_color
+        else:
+            item_color = detect_item_color(base_name)
 
         report(f"{video_file} のOCR/マッチング中...")
         process_images(

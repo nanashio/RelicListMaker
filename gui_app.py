@@ -30,6 +30,110 @@ except Exception:  # noqa: BLE001 - optional dependency
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".wmv", ".m4v"}
 
+
+if sys.platform.startswith("win"):
+    import ctypes
+    from ctypes import wintypes
+else:
+    ctypes = None
+    wintypes = None
+
+
+_WINDOWS_DROP_SUPPORT = None
+
+
+if sys.platform.startswith("win") and ctypes is not None and hasattr(wintypes, "LRESULT"):
+    class _WindowsDropSupport:
+        WM_DROPFILES = 0x0233
+        GWL_WNDPROC = -4
+
+        def __init__(self) -> None:
+            self._user32 = ctypes.windll.user32
+            self._shell32 = ctypes.windll.shell32
+            self._targets: dict[int, dict[str, object]] = {}
+            self._wndproc_factory = ctypes.WINFUNCTYPE(
+                wintypes.LRESULT,
+                wintypes.HWND,
+                wintypes.UINT,
+                wintypes.WPARAM,
+                wintypes.LPARAM,
+            )
+            self._set_window_long = self._user32.SetWindowLongPtrW
+            self._set_window_long.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_void_p]
+            self._set_window_long.restype = ctypes.c_void_p
+            self._call_window_proc = self._user32.CallWindowProcW
+            self._call_window_proc.argtypes = [ctypes.c_void_p, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+            self._call_window_proc.restype = wintypes.LRESULT
+            self._shell32.DragAcceptFiles.argtypes = [wintypes.HWND, wintypes.BOOL]
+            self._shell32.DragAcceptFiles.restype = None
+            self._shell32.DragQueryFileW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_wchar_p, ctypes.c_uint]
+            self._shell32.DragQueryFileW.restype = ctypes.c_uint
+            self._shell32.DragFinish.argtypes = [ctypes.c_void_p]
+            self._shell32.DragFinish.restype = None
+
+        def register(self, widget: tk.Misc, callback) -> None:
+            hwnd = int(widget.winfo_id())
+            entry = self._targets.get(hwnd)
+            if entry is None:
+                callbacks: list = []
+                entry = {"widget": widget, "callbacks": callbacks}
+
+                def wnd_proc(h_wnd, msg, w_param, l_param):
+                    if msg == self.WM_DROPFILES:
+                        paths = self._extract_paths(w_param)
+                        if paths:
+                            for cb in list(callbacks):
+                                widget.after(0, cb, list(paths))
+                        return 0
+                    return self._call_window_proc(entry["old_proc"], h_wnd, msg, w_param, l_param)
+
+                proc = self._wndproc_factory(wnd_proc)
+                old_proc = self._set_window_long(
+                    wintypes.HWND(hwnd),
+                    self.GWL_WNDPROC,
+                    ctypes.cast(proc, ctypes.c_void_p),
+                )
+                self._shell32.DragAcceptFiles(wintypes.HWND(hwnd), True)
+                entry.update({"proc": proc, "old_proc": old_proc})
+                self._targets[hwnd] = entry
+            else:
+                callbacks = entry["callbacks"]
+
+            if callback not in callbacks:
+                callbacks.append(callback)
+
+        def unregister(self, widget: tk.Misc) -> None:
+            hwnd = int(widget.winfo_id())
+            entry = self._targets.get(hwnd)
+            if not entry:
+                return
+            entry["callbacks"] = []
+            self._set_window_long(wintypes.HWND(hwnd), self.GWL_WNDPROC, entry["old_proc"])
+            self._shell32.DragAcceptFiles(wintypes.HWND(hwnd), False)
+            self._targets.pop(hwnd, None)
+
+        def _extract_paths(self, h_drop) -> list[str]:
+            count = self._shell32.DragQueryFileW(h_drop, 0xFFFFFFFF, None, 0)
+            paths: list[str] = []
+            for index in range(count):
+                length = self._shell32.DragQueryFileW(h_drop, index, None, 0) + 1
+                buffer = ctypes.create_unicode_buffer(length)
+                self._shell32.DragQueryFileW(h_drop, index, buffer, length)
+                paths.append(buffer.value)
+            self._shell32.DragFinish(h_drop)
+            return paths
+
+
+    def _get_windows_drop_support() -> "_WindowsDropSupport | None":
+        global _WINDOWS_DROP_SUPPORT
+        if _WINDOWS_DROP_SUPPORT is None:
+            _WINDOWS_DROP_SUPPORT = _WindowsDropSupport()
+        return _WINDOWS_DROP_SUPPORT
+else:
+    def _get_windows_drop_support() -> None:
+        return None
+
+
 def _default_base_dir() -> Path:
     """実行形態に応じて videos/results の既定配置場所を返す."""
 
@@ -109,11 +213,20 @@ class RelicGuiApp:
         self._pipeline_progress_token: Optional[int] = None
         self._merge_progress_token: Optional[int] = None
         self._tkdnd_ready = False
+        self.color_options = ["none", "red", "green", "blue", "yellow"]
+        self._dropped_videos: list[dict[str, str]] = []
+        self._dropped_video_set: set[str] = set()
+        self.queue_tree: Optional[ttk.Treeview] = None
+        self.queue_color_box: Optional[ttk.Combobox] = None
+        self.queue_color_var: tk.StringVar = tk.StringVar(value=self.color_options[0])
+        self.queue_selection_var: tk.StringVar = tk.StringVar(value="ドラッグ＆ドロップで動画を追加してください")
 
         self._build_layout()
         self._init_drag_and_drop()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.after(self.POLL_INTERVAL_MS, self._process_log_queue)
+
+
 
     def _build_layout(self) -> None:
         main_frame = ttk.Frame(self.root, padding=12)
@@ -151,8 +264,53 @@ class RelicGuiApp:
             variable=self.open_browser_var,
         ).grid(row=5, column=0, columnspan=3, sticky="w", pady=4)
 
+        queue_frame = ttk.LabelFrame(main_frame, text="処理キュー", padding=12)
+        queue_frame.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
+        main_frame.rowconfigure(1, weight=1)
+        queue_frame.columnconfigure(0, weight=1)
+        queue_frame.rowconfigure(0, weight=1)
+
+        self.queue_tree = ttk.Treeview(
+            queue_frame,
+            columns=("name", "color", "fullpath"),
+            displaycolumns=("name", "color"),
+            show="headings",
+            selectmode="extended",
+            height=6,
+        )
+        self.queue_tree.heading("name", text="動画")
+        self.queue_tree.heading("color", text="item_color")
+        self.queue_tree.column("name", anchor="w", width=260)
+        self.queue_tree.column("color", anchor="center", width=100)
+        self.queue_tree.column("fullpath", width=0, stretch=False)
+        queue_scroll = ttk.Scrollbar(queue_frame, orient="vertical", command=self.queue_tree.yview)
+        self.queue_tree.configure(yscrollcommand=queue_scroll.set)
+        self.queue_tree.grid(row=0, column=0, columnspan=3, sticky="nsew")
+        queue_scroll.grid(row=0, column=3, sticky="ns")
+        self.queue_tree.bind("<<TreeviewSelect>>", self._on_queue_selection)
+
+        self.queue_selection_var.set("ドラッグ＆ドロップで動画を追加してください")
+        selection_label = ttk.Label(queue_frame, textvariable=self.queue_selection_var, anchor="w")
+        selection_label.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(8, 0))
+
+        self.queue_color_var.set(self.color_options[0])
+        self.queue_color_box = ttk.Combobox(
+            queue_frame,
+            textvariable=self.queue_color_var,
+            values=self.color_options,
+            state="disabled",
+            width=12,
+        )
+        self.queue_color_box.grid(row=2, column=0, sticky="w", pady=(8, 0))
+        ttk.Button(queue_frame, text="色を適用", command=self._apply_selected_color).grid(
+            row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0)
+        )
+        ttk.Button(queue_frame, text="選択を削除", command=self._remove_selected_videos).grid(
+            row=2, column=2, sticky="w", padx=(8, 0), pady=(8, 0)
+        )
+
         actions_frame = ttk.LabelFrame(main_frame, text="操作", padding=12)
-        actions_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        actions_frame.grid(row=2, column=0, sticky="ew", pady=(12, 0))
         actions_frame.columnconfigure(0, weight=1)
         actions_frame.columnconfigure(1, weight=1)
         actions_frame.columnconfigure(2, weight=1)
@@ -173,15 +331,15 @@ class RelicGuiApp:
         ).grid(row=3, column=0, columnspan=3, sticky="w", padx=4, pady=(0, 4))
 
         progress_frame = ttk.LabelFrame(main_frame, text="進行状況", padding=12)
-        progress_frame.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        progress_frame.grid(row=3, column=0, sticky="ew", pady=(12, 0))
         progress_frame.columnconfigure(0, weight=1)
         self.progress_bar = ttk.Progressbar(progress_frame, orient="horizontal", mode="indeterminate")
         self.progress_bar.grid(row=0, column=0, sticky="ew")
         ttk.Label(progress_frame, textvariable=self.progress_var).grid(row=1, column=0, sticky="w", pady=(8, 0))
 
         log_frame = ttk.LabelFrame(main_frame, text="ログ", padding=12)
-        log_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
-        main_frame.rowconfigure(3, weight=1)
+        log_frame.grid(row=4, column=0, sticky="nsew", pady=(12, 0))
+        main_frame.rowconfigure(4, weight=1)
 
         self.log_text = tk.Text(log_frame, height=20, state="disabled", wrap="word")
         self.log_text.grid(row=0, column=0, sticky="nsew")
@@ -191,8 +349,7 @@ class RelicGuiApp:
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
 
-
-    
+        self._refresh_queue_view()
 
     def _init_drag_and_drop(self) -> None:
         """動画ファイルのドラッグ＆ドロップ受付を設定する."""
@@ -200,15 +357,11 @@ class RelicGuiApp:
         self._dnd_enabled = False
         widgets: list[tk.Misc] = []
 
-        if not hasattr(self.root, "drop_target_register"):
-            self._attach_tkdnd(self.root)
-        if hasattr(self.root, "drop_target_register"):
+        if self._attach_tkdnd(self.root):
             widgets.append(self.root)
 
         main_frame = getattr(self, "main_frame", None)
-        if main_frame is not None and not hasattr(main_frame, "drop_target_register"):
-            self._attach_tkdnd(main_frame)
-        if main_frame is not None and hasattr(main_frame, "drop_target_register"):
+        if main_frame is not None and self._attach_tkdnd(main_frame):
             widgets.append(main_frame)
 
         for widget in widgets:
@@ -221,28 +374,52 @@ class RelicGuiApp:
 
         if self._dnd_enabled:
             self.append_log("[GUI] 動画ファイルをウィンドウへドラッグ＆ドロップできます")
-        elif not widgets:
-            self.append_log("[WARN] この環境ではドラッグ＆ドロップを利用できません (tkdnd未検出)")
+        else:
+            self.append_log("[WARN] この環境ではドラッグ＆ドロップを利用できません (tkinterdnd2 / tkdnd の導入をご検討ください)")
 
-    def _attach_tkdnd(self, widget: tk.Misc) -> None:
-        """tkdnd が利用できる場合に Tk ウィジェットへDnDメソッドを付与する."""
+    def _attach_tkdnd(self, widget: tk.Misc) -> bool:
+        """tkdnd または代替手段でDnDメソッドを付与する."""
 
         if not isinstance(widget, tk.Misc):
-            return
+            return False
         if hasattr(widget, "drop_target_register"):
-            return
-        if not self._ensure_tkdnd_available():
-            return
+            return True
 
-        tk_app = widget.tk
+        if self._ensure_tkdnd_available():
+            tk_app = widget.tk
+
+            def drop_target_register(self_widget: tk.Misc, *dnd_types: str) -> None:
+                types_tuple = dnd_types or (DND_FILES,)
+                tk_app.call('tkdnd::drop_target', 'register', self_widget._w, *types_tuple)
+
+            def drop_target_unregister(self_widget: tk.Misc, *dnd_types: str) -> None:
+                types_tuple = dnd_types or (DND_FILES,)
+                tk_app.call('tkdnd::drop_target', 'unregister', self_widget._w, *types_tuple)
+
+            def dnd_bind(self_widget: tk.Misc, sequence: str, func, add: str = ''):
+                return self_widget.bind(sequence, func, add=add)
+
+            widget.drop_target_register = types.MethodType(drop_target_register, widget)
+            widget.drop_target_unregister = types.MethodType(drop_target_unregister, widget)
+            widget.dnd_bind = types.MethodType(dnd_bind, widget)
+            return True
+
+        if self._install_windows_drop(widget):
+            return True
+
+        return False
+
+
+    def _install_windows_drop(self, widget: tk.Misc) -> bool:
+        support = _get_windows_drop_support()
+        if support is None:
+            return False
 
         def drop_target_register(self_widget: tk.Misc, *dnd_types: str) -> None:
-            types_tuple = dnd_types or (DND_FILES,)
-            tk_app.call('tkdnd::drop_target', 'register', self_widget._w, *types_tuple)
+            support.register(self_widget, lambda paths, target=self_widget: self._on_windows_drop(target, paths))
 
         def drop_target_unregister(self_widget: tk.Misc, *dnd_types: str) -> None:
-            types_tuple = dnd_types or (DND_FILES,)
-            tk_app.call('tkdnd::drop_target', 'unregister', self_widget._w, *types_tuple)
+            support.unregister(self_widget)
 
         def dnd_bind(self_widget: tk.Misc, sequence: str, func, add: str = ''):
             return self_widget.bind(sequence, func, add=add)
@@ -250,6 +427,16 @@ class RelicGuiApp:
         widget.drop_target_register = types.MethodType(drop_target_register, widget)
         widget.drop_target_unregister = types.MethodType(drop_target_unregister, widget)
         widget.dnd_bind = types.MethodType(dnd_bind, widget)
+        return True
+
+    def _on_windows_drop(self, widget: tk.Misc, paths: list[str]) -> None:
+        if not paths:
+            return
+        try:
+            data = widget.tk.call('list', *paths)
+        except Exception:
+            data = ' '.join(paths)
+        widget.event_generate('<<Drop>>', data=data)
 
     def _ensure_tkdnd_available(self) -> bool:
         if self._tkdnd_ready:
@@ -263,64 +450,104 @@ class RelicGuiApp:
 
     def _handle_file_drop(self, event) -> None:
         """ドラッグ＆ドロップされたファイル/フォルダを処理する."""
-    
+
         data = getattr(event, "data", "")
         if not data:
             return
-    
+
         try:
             dropped = [Path(path) for path in self.root.tk.splitlist(data)]
         except Exception:
             dropped = [Path(data)]
-    
+
         if not dropped:
             return
-    
+
         current_video_dir = self._resolve_input_path(self.video_dir_var.get())
         current_video_dir.mkdir(parents=True, exist_ok=True)
-    
-        added_files: list[str] = []
+
+        video_sources: list[Path] = []
         skipped_files: list[str] = []
-        updated_dir = False
-    
+        skipped_dirs: list[str] = []
+
         for entry in dropped:
             if entry.is_dir():
-                self.video_dir_var.set(self._to_user_value(entry))
-                current_video_dir = self._resolve_input_path(self.video_dir_var.get())
-                current_video_dir.mkdir(parents=True, exist_ok=True)
-                updated_dir = True
+                found = False
+                for file_path in sorted(entry.rglob('*')):
+                    if not file_path.is_file():
+                        continue
+                    if file_path.suffix.lower() not in VIDEO_EXTENSIONS:
+                        continue
+                    video_sources.append(file_path)
+                    found = True
+                if not found:
+                    skipped_dirs.append(entry.name)
                 continue
-    
-            suffix = entry.suffix.lower()
-            if suffix not in VIDEO_EXTENSIONS:
+
+            if entry.suffix.lower() not in VIDEO_EXTENSIONS:
                 skipped_files.append(entry.name)
                 continue
-    
-            destination = current_video_dir / entry.name
+
+            video_sources.append(entry)
+
+        added_files: list[str] = []
+        reused_files: list[str] = []
+        seen_sources: set[str] = set()
+
+        for source in video_sources:
             try:
-                if destination.resolve() == entry.resolve():
-                    added_files.append(entry.name)
-                    continue
+                resolved_source = source.resolve()
             except OSError:
-                pass
-    
+                resolved_source = source
+
+            resolved_key = str(resolved_source)
+            if resolved_key in seen_sources:
+                continue
+            seen_sources.add(resolved_key)
+
+            destination = current_video_dir / resolved_source.name
+            same_file = False
+            if destination.exists():
+                try:
+                    if destination.resolve() == resolved_source:
+                        same_file = True
+                except OSError:
+                    same_file = False
+
+            if same_file:
+                self._record_dropped_video(destination)
+                reused_files.append(destination.name)
+                continue
+
             destination = self._resolve_unique_destination(destination)
-    
+
             try:
-                shutil.copy2(entry, destination)
-                added_files.append(destination.name)
+                shutil.copy2(resolved_source, destination)
             except (OSError, shutil.Error) as exc:
-                self.append_log(f"[WARN] {entry.name} のコピーに失敗しました: {exc}")
-    
+                self.append_log(f"[WARN] {resolved_source.name} のコピーに失敗しました: {exc}")
+                continue
+
+            self._record_dropped_video(destination)
+            added_files.append(destination.name)
+
+        if reused_files:
+            summary = ", ".join(reused_files)
+            self.append_log(f"[GUI] 既存の動画をキューに追加しました: {summary}")
         if added_files:
             summary = ", ".join(added_files)
-            self.append_log(f"[GUI] {len(added_files)} 件の動画を追加しました: {summary}")
+            self.append_log(f"[GUI] {len(added_files)} 件の動画を保存しました: {summary}")
         if skipped_files:
             summary = ", ".join(skipped_files)
             self.append_log(f"[WARN] 対応外のファイルをスキップしました: {summary}")
-        if updated_dir:
-            self.append_log("[GUI] 動画フォルダをドラッグされたフォルダに切り替えました")
-    
+        if skipped_dirs:
+            summary = ", ".join(skipped_dirs)
+            self.append_log(f"[WARN] 対応する動画が見つからないフォルダをスキップしました: {summary}")
+
+        if self._dropped_videos:
+            self.append_log(f"[GUI] 現在の処理対象: {len(self._dropped_videos)} 件")
+
+        self._refresh_queue_view()
+
     def _resolve_unique_destination(self, destination: Path) -> Path:
         """同名ファイルがある場合は連番付き名称に退避する."""
     
@@ -338,6 +565,90 @@ class RelicGuiApp:
                 return candidate
             counter += 1
     
+
+
+    def _record_dropped_video(self, path: Path) -> None:
+        try:
+            resolved = str(path.resolve())
+        except OSError:
+            resolved = str(path)
+        if resolved in self._dropped_video_set:
+            return
+        self._dropped_video_set.add(resolved)
+        base_name = Path(resolved).stem
+        detected = pipeline_main.detect_item_color(base_name) or "none"
+        self._dropped_videos.append({"path": resolved, "color": detected})
+
+    def _refresh_queue_view(self) -> None:
+        if self.queue_tree is None:
+            return
+        self.queue_tree.delete(*self.queue_tree.get_children())
+        for entry in self._dropped_videos:
+            path = entry.get("path", "")
+            name = Path(path).name if path else ""
+            color = entry.get("color", self.color_options[0]) or self.color_options[0]
+            self.queue_tree.insert("", "end", iid=path, values=(name, color, path))
+        self._update_queue_controls()
+
+    def _update_queue_controls(self) -> None:
+        if self.queue_tree is None or self.queue_color_box is None:
+            return
+        selected = self.queue_tree.selection()
+        if not selected:
+            message = "ドラッグ＆ドロップで動画を追加してください" if not self._dropped_videos else "動画を選択してください"
+            self.queue_selection_var.set(message)
+            self.queue_color_var.set(self.color_options[0])
+            self.queue_color_box.configure(state="disabled")
+            return
+        colors = {self.queue_tree.set(item, "color") for item in selected}
+        if len(colors) == 1:
+            self.queue_color_var.set(next(iter(colors)))
+        else:
+            self.queue_color_var.set(self.color_options[0])
+        self.queue_color_box.configure(state="readonly")
+        first_path = self.queue_tree.set(selected[0], "fullpath")
+        self.queue_selection_var.set(first_path)
+
+    def _on_queue_selection(self, _event=None) -> None:
+        self._update_queue_controls()
+
+    def _apply_selected_color(self) -> None:
+        if self.queue_tree is None:
+            return
+        selected = self.queue_tree.selection()
+        if not selected:
+            return
+        chosen = self.queue_color_var.get() or self.color_options[0]
+        if chosen not in self.color_options:
+            chosen = self.color_options[0]
+        for item in selected:
+            path = self.queue_tree.set(item, "fullpath")
+            self._update_video_color(path, chosen)
+        self._refresh_queue_view()
+
+    def _remove_selected_videos(self) -> None:
+        if self.queue_tree is None:
+            return
+        selected = self.queue_tree.selection()
+        if not selected:
+            return
+        remove_paths = {self.queue_tree.set(item, "fullpath") for item in selected}
+        if remove_paths:
+            self._dropped_videos = [entry for entry in self._dropped_videos if entry.get("path") not in remove_paths]
+            for path_value in remove_paths:
+                self._dropped_video_set.discard(path_value)
+            removed_names = [Path(path_value).name for path_value in remove_paths]
+            if removed_names:
+                summary = ", ".join(removed_names)
+                self.append_log(f"[GUI] {len(removed_names)} 件の動画をキューから削除しました: {summary}")
+        self._refresh_queue_view()
+
+    def _update_video_color(self, path: str, color: str) -> None:
+        for entry in self._dropped_videos:
+            if entry.get("path") == path:
+                entry["color"] = color
+                break
+
     def _resolve_input_path(self, value: str) -> Path:
         raw = Path(value.strip()) if value else Path()
         if raw.is_absolute():
@@ -488,8 +799,20 @@ class RelicGuiApp:
 
         video_dir = str(self._resolve_input_path(self.video_dir_var.get()))
         results_dir = str(self._resolve_input_path(self.results_dir_var.get()))
+        video_entries = list(self._dropped_videos)
+        if not video_entries:
+            messagebox.showinfo("動画未選択", "先に動画をドラッグ＆ドロップしてください。")
+            return
+
+        videos_to_process = [entry["path"] for entry in video_entries]
+        color_overrides = {
+            entry["path"]: entry.get("color", "none")
+            for entry in video_entries
+            if entry.get("color") not in (None, "", "none")
+        }
+
         self.run_button.configure(state="disabled")
-        self.append_log(f"[GUI] 動画処理を開始します: {video_dir} -> {results_dir}")
+        self.append_log(f"[GUI] 動画処理を開始します: {video_dir} -> {results_dir} ({len(videos_to_process)} 件)")
         token = self._start_progress("動画処理を準備中...")
         self._pipeline_progress_token = token
 
@@ -512,6 +835,8 @@ class RelicGuiApp:
                         result_dir=results_dir,
                         ocr_upsample=ocr_value,
                         progress_callback=progress_callback,
+                        video_files=videos_to_process,
+                        item_color_overrides=color_overrides,
                     )
                 self.append_log("[GUI] 動画処理が完了しました")
             except Exception as exc:  # noqa: BLE001 - GUIログに表示するため広く捕捉
@@ -530,6 +855,11 @@ class RelicGuiApp:
         if self._pipeline_progress_token is not None:
             self._stop_progress(self._pipeline_progress_token)
             self._pipeline_progress_token = None
+        if self._dropped_videos:
+            self.append_log('[GUI] キューをクリアしました')
+        self._dropped_videos.clear()
+        self._dropped_video_set.clear()
+        self._refresh_queue_view()
 
     def on_merge_results(self) -> None:
         if self.merge_thread and self.merge_thread.is_alive():

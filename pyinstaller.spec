@@ -27,10 +27,20 @@ def collect_datas(source: Path, prefix: str):
         entries.append((str(file_path), str(target_dir)))
     return entries
 
+try:
+    import tkinterdnd2  # type: ignore
+except ImportError:  # tkinterdnd2 は任意依存
+    tkinterdnd2 = None
+    TKDND_DATAS = []
+else:
+    tkdnd_dir = Path(tkinterdnd2.__file__).resolve().parent / 'tkdnd'
+    TKDND_DATAS = collect_datas(tkdnd_dir, 'tkdnd') if tkdnd_dir.exists() else []
 
 datas = []
 datas.extend(collect_datas(templates_dir, "templates"))
 datas.extend(collect_datas(tesseract_dir, "tesseract"))
+
+datas.extend(TKDND_DATAS)
 
 placeholder_root = project_dir / "build" / "__pyinstaller_placeholders__"
 placeholder_root.mkdir(parents=True, exist_ok=True)
@@ -53,6 +63,9 @@ hiddenimports = [
     "rapidfuzz.fuzz",
     "pytesseract",
 ]
+
+if tkinterdnd2 is not None:
+    hiddenimports.append("tkinterdnd2")
 
 
 a = Analysis(
