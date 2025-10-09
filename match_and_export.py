@@ -1,13 +1,15 @@
 import os
 import csv
+import re
 
 import cv2
 import pandas as pd
 import pytesseract
 from rapidfuzz import process, fuzz
+from typing import Sequence
 
 from preprocess import prepare_crop_for_ocr
-from relic_data import load_master_csv, normalize_master_values
+from relic_data import load_master_effects_and_levels, normalize_master_values
 from resource_paths import templates_path
 from tesseract_bundle import configure_pytesseract
 
@@ -27,6 +29,87 @@ BASE_CROP_BOXES = [
 OCR_CONFIG = "--oem 3 --psm 6 -c preserve_interword_spaces=1"
 DEFAULT_UPSAMPLE = 1.5
 CORRECTION_SCORE = 100.0
+LEVEL_OPTIONS_SEPARATOR = " | "
+_LEVEL_NORMALIZE_TABLE = str.maketrans({
+    '０': '0',
+    '１': '1',
+    '２': '2',
+    '３': '3',
+    '４': '4',
+    '５': '5',
+    '６': '6',
+    '７': '7',
+    '８': '8',
+    '９': '9',
+    '＋': '+',
+    '－': '-',
+    'ー': '-',
+    '−': '-',
+    'Ⅰ': '1',
+    'Ⅱ': '2',
+    'Ⅲ': '3',
+    'Ⅳ': '4',
+    'Ⅴ': '5',
+})
+
+
+def _normalize_level_text(text: str) -> str:
+    if not text:
+        return ""
+    normalized = text.translate(_LEVEL_NORMALIZE_TABLE)
+    return normalized.replace(" ", "").replace("　", "")
+
+
+def _detect_level(raw_text: str, candidates: Sequence[str]) -> str:
+    if not raw_text or not candidates:
+        return ""
+    normalized_raw = _normalize_level_text(raw_text)
+    if not normalized_raw:
+        return ""
+
+    normalized_candidates = []
+    for candidate in candidates:
+        if not candidate:
+            continue
+        normalized_candidate = _normalize_level_text(candidate)
+        if normalized_candidate:
+            normalized_candidates.append((candidate, normalized_candidate))
+
+    for original, normalized in normalized_candidates:
+        if normalized and normalized in normalized_raw:
+            return original
+
+    match = re.search(r"[+](\d+)$", normalized_raw) or re.search(r"[+](\d+)", normalized_raw)
+    if match:
+        digits = match.group(1)
+        for original, normalized in normalized_candidates:
+            if normalized.endswith(digits):
+                return original
+        return f"+{digits}"
+    return ""
+
+
+def _find_level_candidates(effect_name: str, level_map: dict[str, list[str]]) -> list[str]:
+    if not effect_name:
+        return []
+    if effect_name in level_map:
+        return level_map[effect_name]
+    for base, tokens in level_map.items():
+        if base and base in effect_name:
+            return tokens
+    return []
+
+
+def _serialize_level_options(levels: Sequence[str]) -> str:
+    filtered = [level for level in (levels or []) if level]
+    if not filtered:
+        return ""
+    ordered = []
+    for level in filtered:
+        if level not in ordered:
+            ordered.append(level)
+    return LEVEL_OPTIONS_SEPARATOR.join(ordered)
+
 
 def scale_crop_boxes(boxes, scale=1.0):
     """拡大倍率に応じてcrop座標をスケーリング"""
@@ -157,7 +240,9 @@ def process_images(
     version = pytesseract.get_tesseract_version()
     print(f"Tesseract Ver: {version}")
 
-    dictionary = load_master_csv(DICTIONARY_PATH, column=COLUMN_NAME_IN_CSV)
+    dictionary, level_map = load_master_effects_and_levels(
+        DICTIONARY_PATH, column=COLUMN_NAME_IN_CSV
+    )
     if not dictionary:
         print("辞書の読み込み失敗")
         return
@@ -186,11 +271,23 @@ def process_images(
 
         row = {"Image": fname, "Duplicate": False, "ItemColor": item_color or 'none'}
         for idx, match in enumerate(matches, start=1):
-            row[f"RawText{idx}"] = match.get("raw", "")
-            row[f"Effect{idx}"] = match.get("match", "")
+            raw_value = match.get("raw", "")
+            effect_value = match.get("match", "")
+            row[f"RawText{idx}"] = raw_value
+            row[f"Effect{idx}"] = effect_value
             row[f"Effect{idx}Score"] = match.get("score", 0.0)
             row[f"Effect{idx}Source"] = match.get("source", "dictionary")
             row[f"Effect{idx}Status"] = "pending"
+
+            if level_map:
+                candidates = _find_level_candidates(str(effect_value), level_map)
+                if candidates:
+                    detected_level = _detect_level(str(raw_value), candidates)
+                    row[f"Effect{idx}Level"] = detected_level or ""
+                    options_value = _serialize_level_options(candidates)
+                    if options_value:
+                        row[f"Effect{idx}LevelOptions"] = options_value
+            row[f"Effect{idx}LevelCorrection"] = row.get(f"Effect{idx}LevelCorrection", "")
 
         data.append(row)
 

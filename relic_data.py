@@ -11,7 +11,9 @@ from resource_paths import templates_path
 
 MASTER_RELICS_FILENAME = "master_relics.csv"
 DEFAULT_MASTER_COLUMN = "EffectBase"
+LEVELS_COLUMN = "Levels"
 _SKIP_VALUES = {"", "-"}
+_FALSE_VALUES = {"false", "no", "none"}
 
 
 def resolve_master_csv_path(path: Optional[Union[str, Path]] = None) -> Path:
@@ -42,6 +44,25 @@ def normalize_master_values(values: Optional[Iterable[object]]) -> list[str]:
     return normalized
 
 
+def _parse_levels_field(raw_value: object) -> list[str]:
+    """Levels カラムの値をリストへ変換する。"""
+
+    if raw_value is None:
+        return []
+    text_value = str(raw_value).strip()
+    if not text_value:
+        return []
+    if text_value.lower() in _FALSE_VALUES:
+        return []
+
+    levels: list[str] = []
+    for token in text_value.split(","):
+        cleaned = token.strip()
+        if cleaned and cleaned not in _SKIP_VALUES and cleaned not in levels:
+            levels.append(cleaned)
+    return levels
+
+
 def load_master_csv(
     path: Optional[Union[str, Path]] = None,
     *,
@@ -68,6 +89,56 @@ def load_master_csv(
         return []
 
     return normalize_master_values(raw_values)
+
+
+def load_master_effects_and_levels(
+    path: Optional[Union[str, Path]] = None,
+    *,
+    column: str = DEFAULT_MASTER_COLUMN,
+) -> tuple[list[str], dict[str, list[str]]]:
+    """EffectBase 候補と対応するレベル一覧を同時に読み込む。"""
+
+    csv_path = resolve_master_csv_path(path)
+    if not csv_path.exists():
+        print(f"[WARN] master_relics.csv が見つかりません: {csv_path}")
+        return [], {}
+
+    effects: list[str] = []
+    levels_map: dict[str, list[str]] = {}
+    try:
+        with csv_path.open("r", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            fieldnames = reader.fieldnames or []
+            if column not in fieldnames:
+                print(f"[WARN] master_relics.csv にカラム '{column}' が見つかりません: {csv_path}")
+                return [], {}
+            has_levels_column = LEVELS_COLUMN in fieldnames
+            for row in reader:
+                base = str(row.get(column, "")).strip()
+                if not base or base in _SKIP_VALUES:
+                    continue
+                effects.append(base)
+                if has_levels_column:
+                    tokens = _parse_levels_field(row.get(LEVELS_COLUMN))
+                    if tokens:
+                        existing = levels_map.get(base, [])
+                        merged = list(existing)
+                        for token in tokens:
+                            if token not in merged:
+                                merged.append(token)
+                        if merged:
+                            levels_map[base] = merged
+    except OSError as err:
+        print(f"[WARN] master_relics.csv の読み込みに失敗しました: {err}")
+        return [], {}
+
+    normalized_effects = normalize_master_values(effects)
+    filtered_levels: dict[str, list[str]] = {}
+    for effect in normalized_effects:
+        tokens = levels_map.get(effect)
+        if tokens:
+            filtered_levels[effect] = tokens
+    return normalized_effects, filtered_levels
 
 
 def load_master_json(

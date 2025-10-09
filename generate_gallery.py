@@ -2,6 +2,7 @@ import os
 import html
 import json
 import shutil
+import time
 from typing import Optional, Sequence
 
 from relic_data import load_master_csv, load_master_json, normalize_master_values
@@ -140,7 +141,7 @@ def _copy_static_asset(
     output_dir: str,
     override: Optional[str] = None,
     target_relative_path: Optional[str] = None,
-) -> str:
+) -> tuple[str, str]:
     source = _resolve_asset_path(default_path, override)
     if target_relative_path:
         relative_path = target_relative_path
@@ -152,8 +153,21 @@ def _copy_static_asset(
         shutil.copyfile(source, destination)
     except FileNotFoundError as exc:
         raise FileNotFoundError(f"静的アセットが見つかりません: {source}") from exc
-    # HTML内で使いやすいようにパス区切りを統一
-    return relative_path.replace(os.sep, "/")
+    normalized = relative_path.replace(os.sep, "/")
+    return normalized, destination
+
+
+
+
+def _cache_busted_path(relative_path: str, target_path: Optional[str]) -> str:
+    if not relative_path or not target_path:
+        return relative_path
+    try:
+        version = str(int(os.path.getmtime(target_path)))
+    except OSError:
+        return relative_path
+    separator = '&' if '?' in relative_path else '?'
+    return f"{relative_path}{separator}v={version}"
 
 
 def generate_html(
@@ -282,23 +296,40 @@ def generate_html(
 
     html_template = _load_text_asset(TEMPLATE_HTML_PATH, template_path)
     if css_relative_override is not None:
-        css_relative = css_relative_override.replace("\\", "/")
+        css_relative = css_relative_override.replace('\\', '/')
+        if '://' in css_relative_override:
+            css_abs_path = None
+        elif os.path.isabs(css_relative_override):
+            css_abs_path = css_relative_override
+        else:
+            candidate = os.path.join(output_dir, css_relative)
+            css_abs_path = candidate if os.path.exists(candidate) else None
     else:
-        css_relative = _copy_static_asset(
+        css_relative, css_abs_path = _copy_static_asset(
             TEMPLATE_CSS_PATH,
             output_dir,
             override=css_template_path,
             target_relative_path=css_output_name,
         )
+    css_reference = _cache_busted_path(css_relative, css_abs_path)
+
     if js_relative_override is not None:
-        js_relative = js_relative_override.replace("\\", "/")
+        js_relative = js_relative_override.replace('\\', '/')
+        if '://' in js_relative_override:
+            js_abs_path = None
+        elif os.path.isabs(js_relative_override):
+            js_abs_path = js_relative_override
+        else:
+            candidate_js = os.path.join(output_dir, js_relative)
+            js_abs_path = candidate_js if os.path.exists(candidate_js) else None
     else:
-        js_relative = _copy_static_asset(
+        js_relative, js_abs_path = _copy_static_asset(
             TEMPLATE_JS_PATH,
             output_dir,
             override=js_template_path,
             target_relative_path=js_output_name,
         )
+    js_reference = _cache_busted_path(js_relative, js_abs_path)
 
     html_output = html_template
     embed_options = master_options if not master_json_rel_path else []
@@ -309,8 +340,8 @@ def generate_html(
     html_output = html_output.replace("__MASTER_CSV__", _escape_attr(master_csv_rel_path))
     html_output = html_output.replace("__MASTER_JSON__", _escape_attr(master_json_rel_path))
     html_output = html_output.replace("__MASTER_OPTIONS__", _escape_attr(json.dumps(embed_options, ensure_ascii=False)))
-    html_output = html_output.replace("__CSS_FILE__", _escape_attr(css_relative))
-    html_output = html_output.replace("__JS_FILE__", _escape_attr(js_relative))
+    html_output = html_output.replace("__CSS_FILE__", _escape_attr(css_reference))
+    html_output = html_output.replace("__JS_FILE__", _escape_attr(js_reference))
     html_output = html_output.replace("__DATASETS__", _escape_attr(json.dumps(dataset_entries, ensure_ascii=False)))
     html_output = html_output.replace("__ACTIVE_DATASET__", _escape_attr(str(active_dataset_index)))
 
