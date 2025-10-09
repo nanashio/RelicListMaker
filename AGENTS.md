@@ -25,3 +25,8 @@ pytest を 推奨 し `tests/` に モジュール 対応 テスト (`tests/test
 
 ## OCR とアセット管理
 `pytesseract` が 参照 する Tesseract 日本語 データ と `master_relics.csv` を 常に 最新 状態 に 保ち、更新 理由 と Diff を 残して ください。`match_and_export.py` は ガウシアン ブラー + Otsu 二値化 + メディアン ブラー と `--oem 3 --psm 6 -c preserve_interword_spaces=1` 設定 で OCR 精度 を 向上 させ、レビュー CSV で得た NG 例 から 辞書 を 見直す 運用 を 想定 しています (`results/<video名>/corrections.csv` を用意 すれば RawText 対応 の 修正 を 優先 可能)。前処理 や パイプライン を 変更 した 場合 は 1920x1080 基準 の クロップ 座標 と `results/<video名>/` に 出力 された 生成 物 を レビュー 時 に 共有 してください。
+
+## エージェント作業ポリシー
+コミットやプッシュは、ユーザーから明示的な指示があるまで実行しないこと。
+そのほかの作業ディレクトリ内での操作は許可なく実施してよい。
+nl や sed などの閲覧系コマンドは許可なく実行してよい。
