@@ -11,7 +11,7 @@ import threading
 import traceback
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, ttk, font
 from typing import Optional
 
 import main as pipeline_main
@@ -188,6 +188,7 @@ class RelicGuiApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("NightReign Relic ツール")
+        self._apply_japanese_fonts()
 
         self.base_dir = _default_base_dir()
         self.video_dir_var = tk.StringVar(value="videos")
@@ -196,7 +197,7 @@ class RelicGuiApp:
         self.server_host_var = tk.StringVar(value="127.0.0.1")
         self.server_port_var = tk.StringVar(value="0")
         self.open_browser_var = tk.BooleanVar(value=True)
-        self.server_status_var = tk.StringVar(value="サーバー停止中")
+        self.settings_visible = tk.BooleanVar(value=False)
         self.merge_only_reviewed_var = tk.BooleanVar(value=True)
 
         self.pipeline_thread: Optional[threading.Thread] = None
@@ -217,8 +218,6 @@ class RelicGuiApp:
         self._dropped_videos: list[dict[str, str]] = []
         self._dropped_video_set: set[str] = set()
         self.queue_tree: Optional[ttk.Treeview] = None
-        self.queue_color_box: Optional[ttk.Combobox] = None
-        self.queue_color_var: tk.StringVar = tk.StringVar(value=self.color_options[0])
         self.queue_selection_var: tk.StringVar = tk.StringVar(value="ドラッグ＆ドロップで動画を追加してください")
 
         self._build_layout()
@@ -226,7 +225,121 @@ class RelicGuiApp:
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.after(self.POLL_INTERVAL_MS, self._process_log_queue)
 
+    def _apply_japanese_fonts(self) -> None:
+        """Tkの標準フォントを日本語表示に適したフォントへ切り替える."""
+        try:
+            self.root.update_idletasks()
+            families = list(font.families(self.root))
+        except tk.TclError:
+            return
 
+        if not families:
+            return
+
+        def match_font_name(candidate: str) -> str | None:
+            lowered = candidate.casefold()
+            for name in families:
+                name_lower = name.casefold()
+                if name_lower == lowered or lowered in name_lower:
+                    return name
+            return None
+
+        candidate_map: dict[str, tuple[str, ...]] = {
+            "windows": (
+                "Yu Gothic UI",
+                "Yu Gothic",
+                "游ゴシック UI",
+                "游ゴシック",
+                "Meiryo UI",
+                "Meiryo",
+                "メイリオ",
+                "MS Gothic",
+                "ＭＳ ゴシック",
+            ),
+            "darwin": (
+                "Hiragino Sans",
+                "Hiragino Kaku Gothic ProN",
+                "ヒラギノ角ゴ ProN W3",
+                "ヒラギノ角ゴシック",
+                "YuGothic",
+                "游ゴシック",
+                "Osaka",
+            ),
+            "linux": (
+                "Noto Sans CJK JP",
+                "Noto Sans JP",
+                "Source Han Sans JP",
+                "源ノ角ゴシック",
+                "IPAPGothic",
+                "IPAGothic",
+                "IPAexGothic",
+                "VL Gothic",
+                "TakaoPGothic",
+                "TakaoGothic",
+            ),
+            "default": (
+                "Noto Sans CJK JP",
+                "Noto Sans JP",
+                "Yu Gothic UI",
+                "游ゴシック",
+                "Meiryo",
+                "メイリオ",
+                "Hiragino Sans",
+            ),
+        }
+        if sys.platform.startswith("win"):
+            key = "windows"
+        elif sys.platform == "darwin":
+            key = "darwin"
+        elif sys.platform.startswith("linux"):
+            key = "linux"
+        else:
+            key = "default"
+
+        chosen = None
+        for candidate in candidate_map.get(key, candidate_map["default"]):
+            match = match_font_name(candidate)
+            if match:
+                chosen = match
+                break
+
+        if chosen is None:
+            for candidate in candidate_map["default"]:
+                match = match_font_name(candidate)
+                if match:
+                    chosen = match
+                    break
+
+        if chosen is None:
+            keywords = (
+                "gothic",
+                "ゴシック",
+                "mincho",
+                "明朝",
+                "hiragino",
+                "ヒラギノ",
+                "noto",
+                "源ノ",
+                "source han",
+                "ipa",
+                "takao",
+                "jp",
+            )
+            for name in families:
+                name_lower = name.casefold()
+                if any(keyword in name_lower for keyword in keywords):
+                    chosen = name
+                    break
+
+        if chosen is None:
+            return
+
+        for target in ("TkDefaultFont", "TkTextFont", "TkHeadingFont", "TkMenuFont"):
+            try:
+                tk_font = font.nametofont(target)
+                tk_font.configure(family=chosen)
+            except tk.TclError:
+                continue
 
     def _build_layout(self) -> None:
         main_frame = ttk.Frame(self.root, padding=12)
@@ -235,8 +348,25 @@ class RelicGuiApp:
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
 
-        config_frame = ttk.LabelFrame(main_frame, text="設定", padding=12)
-        config_frame.grid(row=0, column=0, sticky="nsew")
+        main_frame.columnconfigure(0, weight=1)
+
+        settings_container = ttk.Frame(main_frame)
+        settings_container.grid(row=0, column=0, sticky="ew")
+        settings_container.columnconfigure(0, weight=0)
+        settings_container.columnconfigure(1, weight=1)
+
+        self.settings_toggle_button = ttk.Button(
+            settings_container,
+            text="設定を表示",
+            command=self._toggle_settings_visibility,
+            width=16,
+        )
+        self.settings_toggle_button.grid(row=0, column=0, sticky="w", pady=(0, 4))
+
+        self.config_frame = ttk.LabelFrame(settings_container, text="設定", padding=12)
+        self.config_frame.grid(row=1, column=0, columnspan=2, sticky="nsew")
+        settings_container.rowconfigure(1, weight=1)
+        config_frame = self.config_frame
         config_frame.columnconfigure(1, weight=1)
 
         ttk.Label(config_frame, text="動画フォルダ").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=2)
@@ -264,10 +394,11 @@ class RelicGuiApp:
             variable=self.open_browser_var,
         ).grid(row=5, column=0, columnspan=3, sticky="w", pady=4)
 
-        queue_frame = ttk.LabelFrame(main_frame, text="処理キュー", padding=12)
+        queue_frame = ttk.LabelFrame(main_frame, text="動画処理", padding=12)
         queue_frame.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
         main_frame.rowconfigure(1, weight=1)
-        queue_frame.columnconfigure(0, weight=1)
+        for col_index in range(3):
+            queue_frame.columnconfigure(col_index, weight=1)
         queue_frame.rowconfigure(0, weight=1)
 
         self.queue_tree = ttk.Treeview(
@@ -288,58 +419,53 @@ class RelicGuiApp:
         self.queue_tree.grid(row=0, column=0, columnspan=3, sticky="nsew")
         queue_scroll.grid(row=0, column=3, sticky="ns")
         self.queue_tree.bind("<<TreeviewSelect>>", self._on_queue_selection)
+        self.queue_tree.bind("<Button-1>", self._on_queue_click, add="+")
+        self.queue_tree.bind("<MouseWheel>", self._on_queue_scroll_event, add="+")
+        self.queue_tree.bind("<Button-4>", self._on_queue_scroll_event, add="+")
+        self.queue_tree.bind("<Button-5>", self._on_queue_scroll_event, add="+")
+        self.queue_tree.bind("<Configure>", self._on_queue_scroll_event, add="+")
+        self.inline_color_combo: Optional[ttk.Combobox] = None
+        self._inline_color_item: Optional[str] = None
+        self._create_inline_color_editor()
 
         self.queue_selection_var.set("ドラッグ＆ドロップで動画を追加してください")
         selection_label = ttk.Label(queue_frame, textvariable=self.queue_selection_var, anchor="w")
         selection_label.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(8, 0))
 
-        self.queue_color_var.set(self.color_options[0])
-        self.queue_color_box = ttk.Combobox(
-            queue_frame,
-            textvariable=self.queue_color_var,
-            values=self.color_options,
-            state="disabled",
-            width=12,
-        )
-        self.queue_color_box.grid(row=2, column=0, sticky="w", pady=(8, 0))
-        ttk.Button(queue_frame, text="色を適用", command=self._apply_selected_color).grid(
-            row=2, column=1, sticky="w", padx=(8, 0), pady=(8, 0)
-        )
-        ttk.Button(queue_frame, text="選択を削除", command=self._remove_selected_videos).grid(
-            row=2, column=2, sticky="w", padx=(8, 0), pady=(8, 0)
+        self.run_button = ttk.Button(queue_frame, text="動画処理を実行", command=self.on_run_pipeline)
+        self.run_button.grid(row=2, column=0, columnspan=2, sticky="ew", padx=(0, 8), pady=(8, 0))
+
+        ttk.Button(queue_frame, text="選択動画を削除", command=self._remove_selected_videos).grid(
+            row=2, column=2, sticky="ew", pady=(8, 0)
         )
 
-        actions_frame = ttk.LabelFrame(main_frame, text="操作", padding=12)
+        actions_frame = ttk.LabelFrame(main_frame, text="処理結果の確認", padding=12)
         actions_frame.grid(row=2, column=0, sticky="ew", pady=(12, 0))
         actions_frame.columnconfigure(0, weight=1)
         actions_frame.columnconfigure(1, weight=1)
-        actions_frame.columnconfigure(2, weight=1)
 
-        self.run_button = ttk.Button(actions_frame, text="動画処理を実行", command=self.on_run_pipeline)
-        self.run_button.grid(row=0, column=0, sticky="ew", padx=4, pady=4)
         self.server_start_button = ttk.Button(actions_frame, text="ビューワを開く", command=self.on_start_server)
-        self.server_start_button.grid(row=0, column=1, sticky="ew", padx=4, pady=4)
-
-        ttk.Label(actions_frame, textvariable=self.server_status_var).grid(row=1, column=0, columnspan=3, sticky="w", padx=4, pady=(4, 0))
+        self.server_start_button.grid(row=0, column=0, sticky="ew", padx=(4, 2), pady=4)
 
         self.merge_button = ttk.Button(actions_frame, text="統合結果を生成", command=self.on_merge_results)
-        self.merge_button.grid(row=2, column=0, columnspan=3, sticky="ew", padx=4, pady=(8, 4))
+        self.merge_button.grid(row=0, column=1, sticky="ew", padx=(2, 4), pady=4)
+
         ttk.Checkbutton(
             actions_frame,
             text="効果が全てレビュー済みの項目のみ統合",
             variable=self.merge_only_reviewed_var,
-        ).grid(row=3, column=0, columnspan=3, sticky="w", padx=4, pady=(0, 4))
+        ).grid(row=1, column=1, sticky="w", padx=(2, 4), pady=(0, 4))
 
-        progress_frame = ttk.LabelFrame(main_frame, text="進行状況", padding=12)
-        progress_frame.grid(row=3, column=0, sticky="ew", pady=(12, 0))
+        progress_frame = ttk.Frame(queue_frame, padding=8)
+        progress_frame.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(12, 0))
         progress_frame.columnconfigure(0, weight=1)
         self.progress_bar = ttk.Progressbar(progress_frame, orient="horizontal", mode="indeterminate")
         self.progress_bar.grid(row=0, column=0, sticky="ew")
         ttk.Label(progress_frame, textvariable=self.progress_var).grid(row=1, column=0, sticky="w", pady=(8, 0))
 
         log_frame = ttk.LabelFrame(main_frame, text="ログ", padding=12)
-        log_frame.grid(row=4, column=0, sticky="nsew", pady=(12, 0))
-        main_frame.rowconfigure(4, weight=1)
+        log_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+        main_frame.rowconfigure(3, weight=1)
 
         self.log_text = tk.Text(log_frame, height=20, state="disabled", wrap="word")
         self.log_text.grid(row=0, column=0, sticky="nsew")
@@ -349,7 +475,26 @@ class RelicGuiApp:
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
 
+        self._set_settings_visibility(self.settings_visible.get())
+
+        self._refresh_progress_display()
         self._refresh_queue_view()
+
+    def _toggle_settings_visibility(self) -> None:
+        """設定セクションの表示状態をトグルする。"""
+
+        self._set_settings_visibility(not self.settings_visible.get())
+
+    def _set_settings_visibility(self, visible: bool) -> None:
+        """設定セクションを表示/非表示に切り替える。"""
+
+        self.settings_visible.set(visible)
+        if visible:
+            self.config_frame.grid()
+            self.settings_toggle_button.configure(text="設定を隠す")
+        else:
+            self.config_frame.grid_remove()
+            self.settings_toggle_button.configure(text="設定を表示")
 
     def _init_drag_and_drop(self) -> None:
         """動画ファイルのドラッグ＆ドロップ受付を設定する."""
@@ -582,6 +727,7 @@ class RelicGuiApp:
     def _refresh_queue_view(self) -> None:
         if self.queue_tree is None:
             return
+        self._hide_inline_color_editor()
         self.queue_tree.delete(*self.queue_tree.get_children())
         for entry in self._dropped_videos:
             path = entry.get("path", "")
@@ -591,44 +737,100 @@ class RelicGuiApp:
         self._update_queue_controls()
 
     def _update_queue_controls(self) -> None:
-        if self.queue_tree is None or self.queue_color_box is None:
+        if self.queue_tree is None:
             return
         selected = self.queue_tree.selection()
         if not selected:
             message = "ドラッグ＆ドロップで動画を追加してください" if not self._dropped_videos else "動画を選択してください"
             self.queue_selection_var.set(message)
-            self.queue_color_var.set(self.color_options[0])
-            self.queue_color_box.configure(state="disabled")
             return
-        colors = {self.queue_tree.set(item, "color") for item in selected}
-        if len(colors) == 1:
-            self.queue_color_var.set(next(iter(colors)))
-        else:
-            self.queue_color_var.set(self.color_options[0])
-        self.queue_color_box.configure(state="readonly")
         first_path = self.queue_tree.set(selected[0], "fullpath")
         self.queue_selection_var.set(first_path)
 
     def _on_queue_selection(self, _event=None) -> None:
         self._update_queue_controls()
 
-    def _apply_selected_color(self) -> None:
+    def _on_queue_click(self, event) -> None:
         if self.queue_tree is None:
             return
-        selected = self.queue_tree.selection()
-        if not selected:
+        region = self.queue_tree.identify("region", event.x, event.y)
+        if region != "cell":
+            self._hide_inline_color_editor()
             return
-        chosen = self.queue_color_var.get() or self.color_options[0]
+        column = self.queue_tree.identify_column(event.x)
+        item = self.queue_tree.identify_row(event.y)
+        if column == "#2" and item:
+            self.root.after_idle(lambda: self._show_inline_color_editor(item))
+        else:
+            self._hide_inline_color_editor()
+
+    def _create_inline_color_editor(self) -> None:
+        if self.queue_tree is None:
+            return
+        self.inline_color_combo = ttk.Combobox(
+            self.queue_tree,
+            values=self.color_options,
+            state="readonly",
+            width=8,
+        )
+        self.inline_color_combo.bind("<<ComboboxSelected>>", self._on_inline_color_selected)
+        self.inline_color_combo.bind("<FocusOut>", lambda _event: self._hide_inline_color_editor())
+        self.inline_color_combo.bind("<Escape>", lambda _event: self._hide_inline_color_editor())
+        self.inline_color_combo.place_forget()
+
+    def _show_inline_color_editor(self, item: str) -> None:
+        if self.queue_tree is None or self.inline_color_combo is None:
+            return
+        bbox = self.queue_tree.bbox(item, "color")
+        if not bbox:
+            self._hide_inline_color_editor()
+            return
+        x, y, width, height = bbox
+        current = self.queue_tree.set(item, "color") or self.color_options[0]
+        if current not in self.color_options:
+            current = self.color_options[0]
+        self.inline_color_combo.configure(values=self.color_options)
+        self.inline_color_combo.place(x=x, y=y, width=width, height=height)
+        self.inline_color_combo.set(current)
+        self.inline_color_combo.lift()
+        self.inline_color_combo.focus_set()
+        self._inline_color_item = item
+
+        def _open_dropdown() -> None:
+            try:
+                self.inline_color_combo.event_generate("<Alt-Down>")
+            except tk.TclError:
+                pass
+
+        self.root.after_idle(_open_dropdown)
+
+    def _hide_inline_color_editor(self) -> None:
+        if self.inline_color_combo is None:
+            return
+        self.inline_color_combo.place_forget()
+        self._inline_color_item = None
+
+    def _on_inline_color_selected(self, _event=None) -> None:
+        if self.queue_tree is None or self.inline_color_combo is None or self._inline_color_item is None:
+            return
+        chosen = self.inline_color_combo.get() or self.color_options[0]
         if chosen not in self.color_options:
             chosen = self.color_options[0]
-        for item in selected:
-            path = self.queue_tree.set(item, "fullpath")
-            self._update_video_color(path, chosen)
-        self._refresh_queue_view()
+        target = self._inline_color_item
+        self._update_video_color(target, chosen)
+        if self.queue_tree.exists(target):
+            self.queue_tree.set(target, "color", chosen)
+        self._hide_inline_color_editor()
+        self._update_queue_controls()
+
+    def _on_queue_scroll_event(self, _event=None) -> None:
+        self._hide_inline_color_editor()
+
 
     def _remove_selected_videos(self) -> None:
         if self.queue_tree is None:
             return
+        self._hide_inline_color_editor()
         selected = self.queue_tree.selection()
         if not selected:
             return
@@ -936,7 +1138,6 @@ class RelicGuiApp:
         url = f"http://{context.host}:{context.port}/"
         self.server_start_button.configure(state="normal")
 
-        self.server_status_var.set(f"サーバー稼働中: {url}")
         self.server_start_button.configure(text="ビューワを再度開く")
         self.append_log(f"[GUI] ビューワサーバーを起動しました: {url}")
         self.append_log(f"[GUI] ビューワルート: {context.results_dir}")
@@ -957,7 +1158,6 @@ class RelicGuiApp:
             self.server_context = None
             self.server_thread = None
             self.server_start_button.configure(state="normal")
-            self.server_status_var.set("サーバー停止中")
         self.server_start_button.configure(text="ビューワを開く")
         self.server_start_button.configure(state="normal")
 
@@ -976,8 +1176,7 @@ class RelicGuiApp:
                 self.server_thread = None
                 self.server_start_button.configure(text="ビューワを開く")
                 self.server_start_button.configure(state="normal")
-                self.server_status_var.set("サーバー停止中")
-
+    
         if self.merge_thread and self.merge_thread.is_alive():
             try:
                 self.merge_thread.join(timeout=1)
