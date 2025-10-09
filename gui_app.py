@@ -197,6 +197,7 @@ class RelicGuiApp:
         self.server_host_var = tk.StringVar(value="127.0.0.1")
         self.server_port_var = tk.StringVar(value="0")
         self.open_browser_var = tk.BooleanVar(value=True)
+        self.save_frames_var = tk.BooleanVar(value=False)
         self.settings_visible = tk.BooleanVar(value=False)
         self.merge_only_reviewed_var = tk.BooleanVar(value=True)
 
@@ -393,6 +394,12 @@ class RelicGuiApp:
             text="サーバー起動時にブラウザを開く",
             variable=self.open_browser_var,
         ).grid(row=5, column=0, columnspan=3, sticky="w", pady=4)
+
+        ttk.Checkbutton(
+            config_frame,
+            text="全体画像を出力する",
+            variable=self.save_frames_var,
+        ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(0, 4))
 
         queue_frame = ttk.LabelFrame(main_frame, text="動画処理", padding=12)
         queue_frame.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
@@ -1039,6 +1046,7 @@ class RelicGuiApp:
                         progress_callback=progress_callback,
                         video_files=videos_to_process,
                         item_color_overrides=color_overrides,
+                        save_full_frames=self.save_frames_var.get(),
                     )
                 self.append_log("[GUI] 動画処理が完了しました")
             except Exception as exc:  # noqa: BLE001 - GUIログに表示するため広く捕捉

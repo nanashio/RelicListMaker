@@ -32,8 +32,9 @@ def is_similar(img1, img2, threshold=10.0):
     return diff_ratio < threshold
 
 
-def extract_and_crop(video_path, frame_dir="frames", crop_dir="crops"):
-    os.makedirs(frame_dir, exist_ok=True)
+def extract_and_crop(video_path, frame_dir="frames", crop_dir="crops", save_full_frames: bool = True):
+    if save_full_frames:
+        os.makedirs(frame_dir, exist_ok=True)
     os.makedirs(crop_dir, exist_ok=True)
 
     cap = cv2.VideoCapture(video_path)
@@ -51,8 +52,9 @@ def extract_and_crop(video_path, frame_dir="frames", crop_dir="crops"):
         if frame_count % interval == 0:
             if prev_frame is None or not is_similar(frame, prev_frame):
                 fname = f"{video_name}_frame_{saved_count+1:05d}.png"
-                full_frame_path = os.path.join(frame_dir, fname)
-                cv2.imwrite(full_frame_path, frame)
+                if save_full_frames:
+                    full_frame_path = os.path.join(frame_dir, fname)
+                    cv2.imwrite(full_frame_path, frame)
 
                 crop = safe_crop(frame, *CROP_BOX)
                 cv2.imwrite(os.path.join(crop_dir, fname), crop)

@@ -50,6 +50,7 @@ def main(
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
     video_files: Optional[list[str]] = None,
     item_color_overrides: Optional[dict[str, str]] = None,
+    save_full_frames: bool = False,
 ) -> None:
     start_time = time.time()
     print("[INFO] 動画ごとの処理開始...")
@@ -113,7 +114,12 @@ def main(
 
         print(f"[PROCESSING] {video_file} を処理中...")
         report(f"{video_file} のフレーム抽出中...")
-        extract_and_crop(video_path, frame_dir=frames_dir, crop_dir=crops_dir)
+        extract_and_crop(
+            video_path,
+            frame_dir=frames_dir,
+            crop_dir=crops_dir,
+            save_full_frames=save_full_frames,
+        )
         report(f"{video_file} のフレーム抽出完了", advance=True)
 
         csv_path = os.path.join(video_output_dir, f"{base_name}.csv")
