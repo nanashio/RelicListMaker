@@ -9,7 +9,7 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from merge_results import MERGED_CSV_NAME, MERGED_DIR_NAME, merge_results
+from merge_results import MERGED_CSV_NAME, MERGED_DIR_NAME, merge_results, _is_duplicate
 
 
 def _write_csv(path: Path, header: list[str], rows: list[list[str]]) -> None:
@@ -166,3 +166,37 @@ def test_merge_results_can_include_pending_when_option_disabled(sample_results: 
     assert len(rows) == 3
     datasets = {row["Dataset"] for row in rows}
     assert datasets == {"video_a", "video_b", "video_c"}
+
+
+def test_merge_results_with_real_dataset(sample_results_dir: Path) -> None:
+    dataset_dir = sample_results_dir / "1080p_red"
+    csv_path = dataset_dir / "1080p_red.csv"
+    with csv_path.open("r", encoding="utf-8") as handle:
+        base_rows = list(csv.DictReader(handle))
+
+    assert base_rows
+
+    expected_count = sum(1 for row in base_rows if not _is_duplicate(row.get("Duplicate")))
+
+    merged_dir = merge_results(sample_results_dir, only_reviewed=False)
+    merged_csv = merged_dir / MERGED_CSV_NAME
+    assert merged_csv.exists()
+
+    with merged_csv.open("r", encoding="utf-8") as handle:
+        merged_rows = list(csv.DictReader(handle))
+
+    assert merged_rows
+    assert len(merged_rows) == expected_count
+
+    first_row = merged_rows[0]
+    assert first_row["Dataset"] == "1080p_red"
+    assert first_row["DatasetFolder"] == "1080p_red"
+    assert first_row["BaseImage"].startswith("1080p_red_frame_")
+    assert first_row["Image"].startswith("1080p_red_")
+
+    copied_image = merged_dir / "crops" / first_row["Image"]
+    assert copied_image.exists()
+
+    viewer_html = (sample_results_dir / "viewer.html").read_text(encoding="utf-8")
+    merged_entry_path = f"{merged_dir.name}/{MERGED_CSV_NAME}"
+    assert merged_entry_path in viewer_html
