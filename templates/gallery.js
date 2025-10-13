@@ -74,6 +74,110 @@
         datasetSources: []
     };
 
+    function getRecordByIndex(index) {
+        if (Number.isNaN(index) || index < 0 || index >= state.records.length) {
+            return null;
+        }
+        const record = state.records[index];
+        return record && typeof record === 'object' ? record : null;
+    }
+
+    function resolveItemElement(element) {
+        if (!element) {
+            return null;
+        }
+        if (element.classList && element.classList.contains('item')) {
+            return element;
+        }
+        return element.closest ? element.closest('.item') : null;
+    }
+
+    function getItemContext(element) {
+        const item = resolveItemElement(element);
+        if (!item) {
+            return null;
+        }
+        const recordIndex = Number(item.dataset.recordIndex);
+        const record = getRecordByIndex(recordIndex);
+        if (!record) {
+            return null;
+        }
+        return { item, recordIndex, record };
+    }
+
+    function createFlagManager(key, truthyTokens) {
+        const normalizedTokens = new Set(
+            (truthyTokens || []).map((token) => (token || '').toString().toLowerCase())
+        );
+
+        const normalize = (value) => {
+            if (value === true) {
+                return true;
+            }
+            if (value === false || value == null) {
+                return false;
+            }
+            if (typeof value === 'number') {
+                return value === 1;
+            }
+            if (typeof value === 'string') {
+                const text = value.trim().toLowerCase();
+                return normalizedTokens.has(text);
+            }
+            return false;
+        };
+
+        const isSet = (record) => {
+            if (!record || typeof record !== 'object') {
+                return false;
+            }
+            return normalize(record[key]);
+        };
+
+        const set = (recordIndex, nextState) => {
+            const record = getRecordByIndex(recordIndex);
+            if (!record) {
+                return false;
+            }
+            if (nextState) {
+                if (isSet(record)) {
+                    return false;
+                }
+                record[key] = true;
+                return true;
+            }
+            if (Object.prototype.hasOwnProperty.call(record, key)) {
+                delete record[key];
+                return true;
+            }
+            return false;
+        };
+
+        return { normalize, isSet, set };
+    }
+
+    const duplicateFlags = createFlagManager(DUPLICATE_KEY, ['true', '1', 'yes', 'duplicate']);
+    const favoriteFlags = createFlagManager(FAVORITE_KEY, ['true', '1', 'yes', 'favorite']);
+
+    function updateRecordField(recordIndex, key, value) {
+        const record = getRecordByIndex(recordIndex);
+        if (!record) {
+            return false;
+        }
+        if (value) {
+            if (record[key] === value) {
+                return false;
+            }
+            record[key] = value;
+            return true;
+        }
+        if (Object.prototype.hasOwnProperty.call(record, key)) {
+            delete record[key];
+            return true;
+        }
+        return false;
+    }
+
     function resolveCsvSavePath(csvPath) {
         if (!csvPath) {
             return '';
@@ -971,95 +1075,27 @@
     }
 
     function normalizeDuplicateFlag(value) {
-        if (value === true) {
-            return true;
-        }
-        if (value === false || value == null) {
-            return false;
-        }
-        if (typeof value === 'number') {
-            return value === 1;
-        }
-        if (typeof value === 'string') {
-            const text = value.trim().toLowerCase();
-            return text === 'true' || text === '1' || text === 'yes' || text === 'duplicate';
-        }
-        return false;
+        return duplicateFlags.normalize(value);
     }
 
     function isRecordDuplicate(record) {
-        if (!record || typeof record !== 'object') {
-            return false;
-        }
-        return normalizeDuplicateFlag(record[DUPLICATE_KEY]);
+        return duplicateFlags.isSet(record);
     }
 
     function setRecordDuplicate(recordIndex, isDuplicate) {
-        if (Number.isNaN(recordIndex)) {
-            return false;
-        }
-        const record = state.records[recordIndex];
-        if (!record || typeof record !== 'object') {
-            return false;
-        }
-        if (isDuplicate) {
-            if (normalizeDuplicateFlag(record[DUPLICATE_KEY])) {
-                return false;
-            }
-            record[DUPLICATE_KEY] = true;
-            return true;
-        }
-        if (Object.prototype.hasOwnProperty.call(record, DUPLICATE_KEY)) {
-            delete record[DUPLICATE_KEY];
-            return true;
-        }
-        return false;
+        return duplicateFlags.set(recordIndex, isDuplicate);
     }
 
     function normalizeFavoriteFlag(value) {
-        if (value === true) {
-            return true;
-        }
-        if (value === false || value == null) {
-            return false;
-        }
-        if (typeof value === 'number') {
-            return value === 1;
-        }
-        if (typeof value === 'string') {
-            const text = value.trim().toLowerCase();
-            return text === 'true' || text === '1' || text === 'yes' || text === 'favorite';
-        }
-        return false;
+        return favoriteFlags.normalize(value);
     }
 
     function isRecordFavorite(record) {
-        if (!record || typeof record !== 'object') {
-            return false;
-        }
-        return normalizeFavoriteFlag(record[FAVORITE_KEY]);
+        return favoriteFlags.isSet(record);
     }
 
     function setRecordFavorite(recordIndex, isFavorite) {
-        if (Number.isNaN(recordIndex)) {
-            return false;
-        }
-        const record = state.records[recordIndex];
-        if (!record || typeof record !== 'object') {
-            return false;
-        }
-        if (isFavorite) {
-            if (normalizeFavoriteFlag(record[FAVORITE_KEY])) {
-                return false;
-            }
-            record[FAVORITE_KEY] = true;
-            return true;
-        }
-        if (Object.prototype.hasOwnProperty.call(record, FAVORITE_KEY)) {
-            delete record[FAVORITE_KEY];
-            return true;
-        }
-        return false;
+        return favoriteFlags.set(recordIndex, isFavorite);
     }
 
     function normalizeItemColor(value) {
@@ -1069,11 +1105,8 @@
     }
 
     function setRecordItemColor(recordIndex, colorKey) {
-        if (Number.isNaN(recordIndex)) {
-            return false;
-        }
-        const record = state.records[recordIndex];
-        if (!record || typeof record !== 'object') {
+        const record = getRecordByIndex(recordIndex);
+        if (!record) {
             return false;
         }
         const normalized = normalizeItemColor(colorKey);
@@ -1121,9 +1154,8 @@
         if (!item) {
             return;
         }
-        const recordIndex = Number(item.dataset.recordIndex);
-        const record = Number.isNaN(recordIndex) ? null : state.records[recordIndex];
-        const colorKey = record && typeof record === 'object' ? record.ItemColor : '';
+        const context = getItemContext(item);
+        const colorKey = context ? context.record.ItemColor : '';
         applyItemColor(item, colorKey);
     }
 
@@ -1146,9 +1178,8 @@
         if (!item) {
             return;
         }
-        const recordIndex = Number(item.dataset.recordIndex);
-        const record = Number.isNaN(recordIndex) ? null : state.records[recordIndex];
-        const isFavorite = isRecordFavorite(record);
+        const context = getItemContext(item);
+        const isFavorite = context ? isRecordFavorite(context.record) : false;
         updateFavoriteVisuals(item, isFavorite);
     }
 
@@ -1172,10 +1203,9 @@
         if (!item) {
             return;
         }
+        const context = getItemContext(item);
         const imageName = item.dataset.imageName || '';
-        const recordIndex = Number(item.dataset.recordIndex);
-        const record = Number.isNaN(recordIndex) ? null : state.records[recordIndex];
-        const recordDuplicate = isRecordDuplicate(record);
+        const recordDuplicate = context ? isRecordDuplicate(context.record) : false;
         const storedDuplicate = imageName ? duplicates.has(imageName) : false;
         const isDuplicate = recordDuplicate || storedDuplicate;
         if (imageName) {
@@ -1530,54 +1560,23 @@
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
             return false;
         }
-        const record = state.records[recordIndex];
-        if (!record) {
-            return false;
-        }
         const key = `Effect${slotIndex}Correction`;
-        if (value) {
-            if (record[key] === value) {
-                return false;
-            }
-            record[key] = value;
-            return true;
-        }
-        if (Object.prototype.hasOwnProperty.call(record, key)) {
-            delete record[key];
-            return true;
-        }
-        return false;
+        return updateRecordField(recordIndex, key, value);
     }
     function updateRecordLevelCorrection(recordIndex, slotIndex, value) {
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
             return false;
         }
-        const record = state.records[recordIndex];
-        if (!record) {
-            return false;
-        }
         const key = `Effect${slotIndex}LevelCorrection`;
-        if (value) {
-            if (record[key] === value) {
-                return false;
-            }
-            record[key] = value;
-            return true;
-        }
-        if (Object.prototype.hasOwnProperty.call(record, key)) {
-            delete record[key];
-            return true;
-        }
-        return false;
+        return updateRecordField(recordIndex, key, value);
     }
-
 
     function recordStatusChange(effect, status) {
         const indexes = getEffectIndexes(effect);
         if (!indexes) {
             return false;
         }
-        const record = state.records[indexes.recordIndex];
+        const record = getRecordByIndex(indexes.recordIndex);
         if (!record) {
             return false;
         }
@@ -1648,13 +1647,12 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
         if (!button) {
             return;
         }
-        const item = button.closest('.item');
-        if (!item) {
+        const context = getItemContext(button);
+        if (!context) {
             return;
         }
+        const { item, record, recordIndex } = context;
         const imageName = button.dataset.image || item.dataset.imageName || '';
-        const recordIndex = Number(item.dataset.recordIndex);
-        const record = Number.isNaN(recordIndex) ? null : state.records[recordIndex];
         const currentState = isRecordDuplicate(record) || item.dataset.duplicate === 'true';
         const nextState = !currentState;
         if (imageName) {
@@ -1673,12 +1671,11 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
         if (!button) {
             return;
         }
-        const item = button.closest('.item');
-        if (!item) {
+        const context = getItemContext(button);
+        if (!context) {
             return;
         }
-        const recordIndex = Number(item.dataset.recordIndex);
-        const record = Number.isNaN(recordIndex) ? null : state.records[recordIndex];
+        const { item, record, recordIndex } = context;
         const nextState = !isRecordFavorite(record);
         const recordChanged = setRecordFavorite(recordIndex, nextState);
         updateFavoriteVisuals(item, nextState);
@@ -1692,14 +1689,13 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
         if (!button) {
             return;
         }
-        const item = button.closest('.item');
-        if (!item) {
+        const context = getItemContext(button);
+        if (!context) {
             return;
         }
-        const recordIndex = Number(item.dataset.recordIndex);
-        const record = Number.isNaN(recordIndex) ? null : state.records[recordIndex];
+        const { item, record, recordIndex } = context;
         const targetColor = (button.value || '').trim().toLowerCase();
-        const currentColor = record && typeof record === 'object' ? normalizeItemColor(record.ItemColor) : '';
+        const currentColor = normalizeItemColor(record.ItemColor);
         const nextColor = currentColor === targetColor ? '' : targetColor;
         const recordChanged = setRecordItemColor(recordIndex, nextColor);
         if (recordChanged) {
