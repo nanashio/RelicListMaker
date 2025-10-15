@@ -744,6 +744,30 @@
         return sanitized;
     }
 
+    function getBaseLevelOptions(effect) {
+        if (!effect) {
+            return [];
+        }
+        const json = effect.dataset.levelOptionsBaseJson;
+        if (json) {
+            try {
+                const parsed = JSON.parse(json);
+                return sanitizeLevelList(parsed);
+            } catch (error) {
+                console.warn('レベル候補(base json)の解析に失敗しました:', error);
+            }
+        }
+        const legacyBase = effect.dataset.levelOptionsBase;
+        if (legacyBase != null) {
+            return sanitizeLevelList(legacyBase.split('|'));
+        }
+        const display = effect.dataset.levelOptionsDisplay;
+        if (display != null) {
+            return sanitizeLevelList(display.split('|'));
+        }
+        return [];
+    }
+
     function parseLevelOptions(raw) {
         if (raw == null) {
             return [];
@@ -1636,6 +1660,8 @@
             levelInput.appendChild(optionNode);
         });
 
+        effect.dataset.levelOptionsBaseJson = JSON.stringify(levelChoices);
+
         const initialLevelValue = levelCorrection || levelValue || '';
         levelInput.value = initialLevelValue;
 
@@ -1757,10 +1783,7 @@
         const previousValue = select.value == null ? '' : String(select.value);
         const baseOptions = Array.isArray(baseOptionsOverride)
             ? sanitizeLevelList(baseOptionsOverride)
-            : sanitizeLevelList(
-                (effect.dataset.levelOptionsBase || effect.dataset.levelOptionsDisplay || '')
-                    .split('|')
-            );
+            : getBaseLevelOptions(effect);
 
         const extrasSource = Array.isArray(extraOptions)
             ? extraOptions
