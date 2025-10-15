@@ -85,7 +85,8 @@ h1 { text-align: center; margin-bottom: 16px; }
 
 .effect[data-status="pass"], .effect[data-status="corrected"] { border-color: #4c6ef5; background: #eef1ff; }
 .effect[data-status="pass"] .status-indicator, .effect[data-status="corrected"] .status-indicator { color: #2441a9; font-weight: 600; }
-.effect[data-status="corrected"] .correction-input { background: #e0f7e7; border-color: #3bab64; color: #2a8b4d; }
+.effect[data-correction]:not([data-correction=""]) .correction-input { background: #e0f7e7; border-color: #3bab64; color: #2a8b4d; }
+.effect[data-level-correction]:not([data-level-correction=""]) .level-input { background: #e0f7e7; border-color: #3bab64; color: #2a8b4d; }
 
 @media (max-width: 900px) {
     .item { flex-direction: column; align-items: stretch; }

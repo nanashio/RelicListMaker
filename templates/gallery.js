@@ -732,16 +732,80 @@
             .filter((value) => value !== '');
     }
 
+    function normalizeLevelNumericValue(value) {
+        if (value == null) {
+            return null;
+        }
+        const text = String(value).trim();
+        if (!text) {
+            return null;
+        }
+        const normalized = text
+            .replace(/[＋﹢]/g, '+')
+            .replace(/[－﹣−]/g, '-')
+            .replace(/\s+/g, '');
+        const match = normalized.match(/^[+-]?\d+(?:\.\d+)?$/);
+        if (!match) {
+            return null;
+        }
+        const numeric = Number(normalized);
+        return Number.isNaN(numeric) ? null : numeric;
+    }
+
+    function sortLevelsAscending(values) {
+        if (!Array.isArray(values)) {
+            return [];
+        }
+        return values.slice().sort((a, b) => {
+            const textA = String(a).trim();
+            const textB = String(b).trim();
+            const numA = normalizeLevelNumericValue(textA);
+            const numB = normalizeLevelNumericValue(textB);
+            const hasNumA = numA != null;
+            const hasNumB = numB != null;
+            if (hasNumA && hasNumB) {
+                if (numA !== numB) {
+                    return numA - numB;
+                }
+                return textA.localeCompare(textB, 'ja');
+            }
+            if (hasNumA) {
+                return -1;
+            }
+            if (hasNumB) {
+                return 1;
+            }
+            return textA.localeCompare(textB, 'ja');
+        });
+    }
+
     function setCorrectionLevelCandidates(effect, candidates) {
         const sanitized = sanitizeLevelList(candidates);
+        const sorted = sortLevelsAscending(sanitized);
         if (!effect) {
-            return sanitized;
+            return sorted;
         }
         const input = effect.querySelector ? effect.querySelector('.correction-input') : null;
         if (input) {
-            input.dataset.levelCandidates = JSON.stringify(sanitized);
+            input.dataset.levelCandidates = JSON.stringify(sorted);
         }
-        return sanitized;
+        return sorted;
+    }
+
+    function updateLevelInputAvailability(select, options) {
+        if (!select) {
+            return;
+        }
+        const hasUsableOption = Array.isArray(options) && options.some((value) => {
+            if (value == null) {
+                return false;
+            }
+            return String(value).trim() !== '';
+        });
+        select.disabled = !hasUsableOption;
+        if (!hasUsableOption) {
+            select.value = '';
+        }
     }
 
     function getBaseLevelOptions(effect) {
@@ -906,10 +970,11 @@
             return;
         }
 
-        const applyCandidates = (candidates) => {
-            const sanitized = setCorrectionLevelCandidates(effect, candidates);
-            if (sanitized.length) {
-                rebuildLevelSelectOptions(effect, select, sanitized);
+        const applyCandidates = (candidates, overrideBase = true) => {
+            const sortedCandidates = setCorrectionLevelCandidates(effect, candidates);
+            if (overrideBase) {
+                effect.dataset.levelOptionsBaseJson = JSON.stringify(sortedCandidates);
+                rebuildLevelSelectOptions(effect, select, sortedCandidates);
             } else {
                 rebuildLevelSelectOptions(effect, select);
             }
@@ -917,7 +982,7 @@
 
         const normalized = normalizeEffectName(effectName);
         if (!state.masterLevelsLoaded) {
-            applyCandidates([]);
+            applyCandidates([], false);
             void ensureMasterLevels().then(() => {
                 applyMasterLevelOptions(effect, select, normalized);
             });
@@ -925,7 +990,7 @@
         }
 
         if (!normalized) {
-            applyCandidates([]);
+            applyCandidates([], false);
             return;
         }
 
@@ -1173,7 +1238,7 @@
         if (!dom.gallery) {
             return;
         }
-        dom.gallery.querySelectorAll('.raw').forEach((element) => {
+        dom.gallery.querySelectorAll('.raw, .prediction').forEach((element) => {
             element.style.display = state.showOcr ? '' : 'none';
         });
     }
@@ -1563,6 +1628,7 @@
         effect.dataset.slot = String(slot);
         effect.dataset.image = (imageName || '').toLowerCase();
         effect.dataset.pred = predictionText.toLowerCase();
+        effect.dataset.predictionValue = predictionText;
         effect.dataset.raw = rawText.toLowerCase();
         effect.dataset.recordIndex = String(recordIndex);
 
@@ -1574,9 +1640,13 @@
         const levelCorrectionKey = `Effect${slot}LevelCorrection`;
         const levelCorrectionRaw = record[levelCorrectionKey];
         const levelCorrection = levelCorrectionRaw == null ? '' : String(levelCorrectionRaw).trim();
+        const levelSuppressedRaw = record[`Effect${slot}LevelSuppressed`];
+        const levelSuppressed = typeof levelSuppressedRaw === 'boolean' ? levelSuppressedRaw : String(levelSuppressedRaw || '').trim().toLowerCase() === 'true';
+        const preserveOriginalLevel = !levelSuppressed;
+        effect.dataset.preserveOriginalLevel = preserveOriginalLevel ? 'true' : 'false';
 
         const levelOptionsDisplay = levelOptions.join('|');
-        const displayLevel = levelCorrection || levelValue;
+        const displayLevel = levelCorrection || (preserveOriginalLevel ? levelValue : '');
 
         effect.dataset.level = displayLevel ? displayLevel.toLowerCase() : '';
         effect.dataset.levelOriginal = levelValue ? levelValue.toLowerCase() : '';
@@ -1598,10 +1668,12 @@
         predictionLine.appendChild(predictionLabel);
         predictionLine.appendChild(predictionValueNode);
 
+        predictionLine.style.display = state.showOcr ? '' : 'none';
         effect.appendChild(predictionLine);
         updateLevelBadge(effect);
 
         const rawLine = createElement('div', 'raw', `OCR: ${ocrDisplay} / 一致度 ${scoreDisplay}`);
+        rawLine.style.display = state.showOcr ? '' : 'none';
 
         const correctionKey = `Effect${slot}Correction`;
         const correctionValue = record[correctionKey] == null ? '' : String(record[correctionKey]);
@@ -1644,29 +1716,56 @@
             levelChoices.push(text);
         };
 
-        levelOptions.forEach(pushLevelChoice);
-        pushLevelChoice(levelValue);
+        const originalLevelLower = levelValue ? levelValue.toLowerCase() : '';
+        let originalInOptions = false;
+        levelOptions.forEach((option) => {
+            const text = option == null ? '' : String(option).trim();
+            if (!text) {
+                return;
+            }
+            const lower = text.toLowerCase();
+            if (originalLevelLower && lower === originalLevelLower) {
+                originalInOptions = true;
+                if (preserveOriginalLevel) {
+                    pushLevelChoice(text);
+                }
+                return;
+            }
+            pushLevelChoice(text);
+        });
+
+        if (levelValue) {
+            if (preserveOriginalLevel) {
+                pushLevelChoice(levelValue);
+            } else if (originalInOptions && levelChoices.length) {
+                pushLevelChoice(levelValue);
+            }
+        }
+
         pushLevelChoice(levelCorrection);
+
+        const sortedLevelChoices = sortLevelsAscending(levelChoices);
 
         const emptyOption = document.createElement('option');
         emptyOption.value = '';
-        emptyOption.textContent = '未設定';
+        emptyOption.textContent = '';
         levelInput.appendChild(emptyOption);
 
-        levelChoices.forEach((option) => {
+        sortedLevelChoices.forEach((option) => {
             const optionNode = document.createElement('option');
             optionNode.value = option;
             optionNode.textContent = option;
             levelInput.appendChild(optionNode);
         });
 
-        effect.dataset.levelOptionsBaseJson = JSON.stringify(levelChoices);
+        effect.dataset.levelOptionsBaseJson = JSON.stringify(sortedLevelChoices);
 
-        const initialLevelValue = levelCorrection || levelValue || '';
+        const initialLevelValue = levelCorrection || (preserveOriginalLevel ? levelValue : '') || '';
         levelInput.value = initialLevelValue;
+        updateLevelInputAvailability(levelInput, sortedLevelChoices);
 
         const effectNameForLevels = levelCorrection || correctionValue || predictionText;
-        const correctionInput = createCorrectionInput(correctionValue);
+        const correctionInput = createCorrectionInput(correctionValue, predictionText);
 
         decisionRow.appendChild(passButton);
         decisionRow.appendChild(correctionInput);
@@ -1700,6 +1799,7 @@
         }
         let badge = predictionLine.querySelector('.level-badge');
         const originalValue = effect.dataset.levelOriginalValue || '';
+        const preserveOriginalLevel = effect.dataset.preserveOriginalLevel !== 'false';
         const correctionValue = effect.dataset.levelCorrectionValue || '';
         const optionsDisplay = effect.dataset.levelOptionsDisplay || '';
         const optionsList = optionsDisplay ? optionsDisplay.split('|').map((value) => value.trim()).filter((value) => value) : [];
@@ -1715,7 +1815,7 @@
             return;
         }
 
-        if (originalValue) {
+        if (originalValue && preserveOriginalLevel) {
             if (!badge) {
                 badge = createElement('span', 'level-badge');
                 predictionLine.appendChild(badge);
@@ -1727,14 +1827,19 @@
         }
 
         if (optionsList.length) {
-            const displayText = optionsList.join(' / ');
+            const primaryOption = optionsList[0];
             if (!badge) {
                 badge = createElement('span', 'level-badge level-badge--missing');
                 predictionLine.appendChild(badge);
             }
-            badge.textContent = displayText;
+            badge.textContent = primaryOption;
             badge.className = 'level-badge level-badge--missing';
-            badge.title = `候補: ${displayText}`;
+            if (optionsList.length > 1) {
+                const tooltipText = optionsList.join(' / ');
+                badge.title = `候補: ${tooltipText}`;
+            } else {
+                badge.title = `候補: ${primaryOption}`;
+            }
             return;
         }
 
@@ -1759,7 +1864,7 @@
         });
     }
 
-    function createCorrectionInput(selectedValue) {
+    function createCorrectionInput(selectedValue, fallbackValue) {
         const input = document.createElement('input');
         input.type = 'search';
         input.className = 'correction-input';
@@ -1770,7 +1875,8 @@
             input.placeholder = 'マスターデータ未設定';
             input.disabled = true;
         }
-        input.value = selectedValue || '';
+        const initialValue = selectedValue || fallbackValue || '';
+        input.value = initialValue;
         updateInputValueAttribute(input);
         return input;
     }
@@ -1811,22 +1917,51 @@
             finalValues.push(text);
         };
 
-        baseOptions.forEach(pushOption);
-        extras.forEach(pushOption);
-
         const originalValue = effect.dataset.levelOriginalValue || '';
+        const preserveOriginalLevel = effect.dataset.preserveOriginalLevel !== 'false';
+        const originalLower = originalValue ? originalValue.toLowerCase() : '';
+        let originalEncountered = false;
+
+        const addCandidate = (candidate) => {
+            const text = candidate == null ? '' : String(candidate).trim();
+            if (!text) {
+                return;
+            }
+            const lower = text.toLowerCase();
+            if (originalLower && lower === originalLower) {
+                originalEncountered = true;
+                if (preserveOriginalLevel) {
+                    pushOption(text);
+                }
+                return;
+            }
+            pushOption(text);
+        };
+
+        baseOptions.forEach(addCandidate);
+        extras.forEach(addCandidate);
+
+        if (originalValue) {
+            if (preserveOriginalLevel) {
+                pushOption(originalValue);
+            } else if (originalEncountered && finalValues.length) {
+                pushOption(originalValue);
+            }
+        }
+
         const levelCorrectionValue = effect.dataset.levelCorrectionValue || '';
-        pushOption(originalValue);
         pushOption(levelCorrectionValue);
+
+        const sortedFinalValues = sortLevelsAscending(finalValues);
 
         select.textContent = '';
 
         const emptyOption = document.createElement('option');
         emptyOption.value = '';
-        emptyOption.textContent = '未設定';
+        emptyOption.textContent = '';
         select.appendChild(emptyOption);
 
-        finalValues.forEach((value) => {
+        sortedFinalValues.forEach((value) => {
             const optionNode = document.createElement('option');
             optionNode.value = value;
             optionNode.textContent = value;
@@ -1841,18 +1976,20 @@
                 continue;
             }
             const lower = candidate.toLowerCase();
-            if (finalValues.some((value) => value.toLowerCase() === lower)) {
+            if (sortedFinalValues.some((value) => value.toLowerCase() === lower)) {
                 applied = candidate;
                 break;
             }
         }
-        if (!applied && finalValues.length) {
-            applied = finalValues[0];
+        if (!applied && sortedFinalValues.length) {
+            applied = sortedFinalValues[0];
         }
         select.value = applied || '';
+        updateLevelInputAvailability(select, sortedFinalValues);
 
-        effect.dataset.levelOptionsDisplay = finalValues.join('|');
-        effect.dataset.levelOptions = finalValues.map((value) => value.toLowerCase()).join('|');
+        effect.dataset.levelOptionsDisplay = sortedFinalValues.join('|');
+        effect.dataset.levelOptions = sortedFinalValues.map((value) => value.toLowerCase()).join('|');
+        updateLevelBadge(effect);
     }
 
     function correctionChangeHandler(effect, input) {
@@ -1867,15 +2004,39 @@
             const statusChanged = recordStatusChange(effect, nextStatus);
             const correctionChanged = updateRecordCorrection(indexes.recordIndex, indexes.slotIndex, selected);
             effect.dataset.correction = selected ? selected.toLowerCase() : '';
+            effect.dataset.preserveOriginalLevel = selected ? 'false' : 'true';
             updateEffectStatus(effect, nextStatus);
 
+            const suppressLevel = Boolean(selected);
+            const suppressedChanged = updateRecordLevelSuppressed(indexes.recordIndex, indexes.slotIndex, suppressLevel);
+            if (suppressLevel) {
+                effect.dataset.levelOptionsBaseJson = JSON.stringify([]);
+            } else {
+                const baseString = effect.dataset.levelOptionsBase || '';
+                const restored = baseString ? sanitizeLevelList(baseString.split('|')) : [];
+                const restoredSorted = sortLevelsAscending(restored);
+                effect.dataset.levelOptionsBaseJson = JSON.stringify(restoredSorted);
+            }
+
+            let levelCleared = false;
             const levelSelect = effect.querySelector('.level-input');
             if (levelSelect) {
+                if (updateRecordLevelCorrection(indexes.recordIndex, indexes.slotIndex, '')) {
+                    levelCleared = true;
+                }
+                effect.dataset.levelCorrection = '';
+                effect.dataset.levelCorrectionValue = '';
+                const originalLevelValue = effect.dataset.levelOriginalValue || '';
+                const preserveOriginalLevel = effect.dataset.preserveOriginalLevel !== 'false';
+                const effectiveLevel = preserveOriginalLevel ? originalLevelValue : '';
+                effect.dataset.level = effectiveLevel ? effectiveLevel.toLowerCase() : '';
+                levelSelect.value = '';
+                updateLevelInputAvailability(levelSelect, []);
                 applyMasterLevelOptions(effect, levelSelect, selected);
             }
 
             refreshItemCaches(effect.closest('.item'));
-            if (!statusChanged && correctionChanged) {
+            if (!statusChanged && (correctionChanged || levelCleared || suppressedChanged)) {
                 storage.scheduleSave();
             }
             applyFilters();
@@ -1955,6 +2116,14 @@
         }
         const key = `Effect${slotIndex}LevelCorrection`;
         return updateRecordField(recordIndex, key, value);
+    }
+    function updateRecordLevelSuppressed(recordIndex, slotIndex, suppressed) {
+        if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
+            return false;
+        }
+        const key = `Effect${slotIndex}LevelSuppressed`;
+        const normalized = suppressed ? 'true' : '';
+        return updateRecordField(recordIndex, key, normalized);
     }
 
     function recordStatusChange(effect, status) {
@@ -2457,15 +2626,24 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
                     effect.dataset.correction = '';
                     effect.dataset.levelCorrection = '';
                     effect.dataset.levelCorrectionValue = '';
+                    effect.dataset.preserveOriginalLevel = 'true';
                     const originalLevelValue = effect.dataset.levelOriginalValue || '';
                     effect.dataset.level = originalLevelValue ? originalLevelValue.toLowerCase() : '';
 
+                    const baseString = effect.dataset.levelOptionsBase || '';
+                    const restoredBase = baseString ? sanitizeLevelList(baseString.split('|')) : [];
+                    const restoredBaseSorted = sortLevelsAscending(restoredBase);
+                    effect.dataset.levelOptionsBaseJson = JSON.stringify(restoredBaseSorted);
+
                     const input = effect.querySelector('.correction-input');
                     if (input) {
-                        const replacement = createCorrectionInput('');
+                        const predictionDefault = effect.dataset.predictionValue || '';
+                        const replacement = createCorrectionInput('', predictionDefault);
                         input.replaceWith(replacement);
                         replacement.addEventListener('change', correctionChangeHandler(effect, replacement));
                     }
+
+                    const suppressRecordChanged = updateRecordLevelSuppressed(indexes.recordIndex, indexes.slotIndex, false);
 
                     const levelInput = effect.querySelector('.level-input');
                     if (levelInput) {
@@ -2475,7 +2653,7 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
                     setCorrectionLevelCandidates(effect, []);
                     updateLevelBadge(effect);
 
-                    if (!statusChanged && (correctionChanged || levelChanged)) {
+                    if (!statusChanged && (correctionChanged || levelChanged || suppressRecordChanged)) {
                         storage.scheduleSave();
                     }
                 }
