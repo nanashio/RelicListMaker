@@ -3,9 +3,9 @@ import html
 import json
 import shutil
 import time
-from typing import Optional, Sequence
+from typing import Dict, List, Optional, Sequence
 
-from relic_data import load_master_csv, load_master_json, normalize_master_values
+from relic_data import load_master_csv, load_master_json, load_master_effects_and_levels, normalize_master_values
 from resource_paths import templates_path
 
 RESULTS_CSV_PATH = "results_input_video.csv"
@@ -216,6 +216,23 @@ def generate_html(
     master_options = normalize_master_values(master_options)
     master_csv_rel_path = ""
     master_json_rel_path = ""
+    master_levels_map: Dict[str, List[str]] = {}
+
+    master_csv_abs: Optional[str] = None
+    if master_csv_path:
+        candidate = master_csv_path if os.path.isabs(master_csv_path) else os.path.abspath(os.path.join(output_dir, master_csv_path))
+        if os.path.exists(candidate):
+            master_csv_abs = candidate
+            master_csv_rel_path = os.path.relpath(candidate, output_dir)
+        else:
+            print(f"[!] マスターデータ(CSV)が見つかりません: {candidate}")
+    if master_csv_abs is None:
+        fallback_csv = DEFAULT_MASTER_CSV if os.path.isabs(DEFAULT_MASTER_CSV) else os.path.abspath(os.path.join(output_dir, DEFAULT_MASTER_CSV))
+        if os.path.exists(fallback_csv):
+            master_csv_abs = fallback_csv
+            master_csv_rel_path = os.path.relpath(fallback_csv, output_dir)
+        else:
+            print(f"[!] 既定のマスターデータ(CSV)が見つかりません: {fallback_csv}")
 
     if not master_options and master_json_path:
         if os.path.isabs(master_json_path):
@@ -228,16 +245,11 @@ def generate_html(
         else:
             print(f"[!] マスターデータ(JSON)が見つかりません: {master_json_abs}")
 
-    if not master_options and master_csv_path:
-        if os.path.isabs(master_csv_path):
-            master_csv_abs = master_csv_path
-        else:
-            master_csv_abs = os.path.abspath(os.path.join(output_dir, master_csv_path))
-        if os.path.exists(master_csv_abs):
-            master_csv_rel_path = os.path.relpath(master_csv_abs, output_dir)
-            master_options = load_master_csv(master_csv_abs)
-        else:
-            print(f"[!] マスターデータ(CSV)が見つかりません: {master_csv_abs}")
+    if not master_options and master_csv_abs:
+        master_options = load_master_csv(master_csv_abs)
+
+    if master_csv_abs:
+        _, master_levels_map = load_master_effects_and_levels(master_csv_abs)
 
     dataset_entries = _normalize_dataset_entries(datasets, output_dir)
 
@@ -340,6 +352,7 @@ def generate_html(
     html_output = html_output.replace("__MASTER_CSV__", _escape_attr(master_csv_rel_path))
     html_output = html_output.replace("__MASTER_JSON__", _escape_attr(master_json_rel_path))
     html_output = html_output.replace("__MASTER_OPTIONS__", _escape_attr(json.dumps(embed_options, ensure_ascii=False)))
+    html_output = html_output.replace("__MASTER_LEVELS__", _escape_attr(json.dumps(master_levels_map, ensure_ascii=False)))
     html_output = html_output.replace("__CSS_FILE__", _escape_attr(css_reference))
     html_output = html_output.replace("__JS_FILE__", _escape_attr(js_reference))
     html_output = html_output.replace("__DATASETS__", _escape_attr(json.dumps(dataset_entries, ensure_ascii=False)))

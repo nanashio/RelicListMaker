@@ -19,12 +19,15 @@
         masterCsv: masterCsvPath = '',
         masterJson: masterJsonPath = '',
         masterOptions: masterOptionsJson = '[]',
+        masterLevels: masterLevelsJson = '{}',
         datasets: datasetsJson = '[]',
         activeDataset: activeDatasetAttr = ''
     } = body.dataset || {};
 
     const datasets = parseDatasets(datasetsJson);
     const activeDatasetIndex = parseDatasetIndex(activeDatasetAttr, datasets.length);
+    const preloadedMasterLevels = parseMasterLevels(masterLevelsJson);
+    const hasPreloadedMasterLevels = preloadedMasterLevels instanceof Map && preloadedMasterLevels.size > 0;
 
     const dom = {
         gallery: document.getElementById('gallery'),
@@ -65,6 +68,9 @@
         masterJsonPath: masterJsonPath || '',
         masterOptions: parseMasterOptions(masterOptionsJson),
         masterDatalistPrepared: false,
+        masterLevels: preloadedMasterLevels,
+        masterLevelsLoaded: hasPreloadedMasterLevels,
+        masterLevelsPromise: null,
         showOcr: false,
         datasets,
         activeDatasetIndex,
@@ -698,6 +704,14 @@
         summary.style.textAlign = 'center';
     }
 
+    function updateInputValueAttribute(input) {
+        if (!input) {
+            return;
+        }
+        const current = input.value == null ? '' : String(input.value);
+        input.setAttribute('value', current);
+    }
+
     function createElement(tag, className, text) {
         const element = document.createElement(tag);
         if (className) {
@@ -707,6 +721,27 @@
             element.textContent = text;
         }
         return element;
+    }
+
+    function sanitizeLevelList(values) {
+        if (!Array.isArray(values)) {
+            return [];
+        }
+        return values
+            .map((value) => (value == null ? '' : String(value).trim()))
+            .filter((value) => value !== '');
+    }
+
+    function setCorrectionLevelCandidates(effect, candidates) {
+        const sanitized = sanitizeLevelList(candidates);
+        if (!effect) {
+            return sanitized;
+        }
+        const input = effect.querySelector ? effect.querySelector('.correction-input') : null;
+        if (input) {
+            input.dataset.levelCandidates = JSON.stringify(sanitized);
+        }
+        return sanitized;
     }
 
     function parseLevelOptions(raw) {
@@ -726,6 +761,156 @@
             .split('|')
             .map((entry) => entry.trim())
             .filter((entry) => entry !== '');
+    }
+
+    function normalizeEffectName(value) {
+        if (value == null) {
+            return '';
+        }
+        return String(value).trim();
+    }
+
+    function effectKey(value) {
+        const normalized = normalizeEffectName(value);
+        return normalized ? normalized.toLowerCase() : '';
+    }
+
+    function parseLevelTokens(raw) {
+        if (raw == null) {
+            return [];
+        }
+        const text = String(raw).trim();
+        if (!text) {
+            return [];
+        }
+        const lower = text.toLowerCase();
+        if (lower === 'false' || lower === 'no' || lower === 'none') {
+            return [];
+        }
+        return text
+            .split(',')
+            .map((token) => token.trim())
+            .filter((token) => token && token !== '-');
+    }
+
+    function parseMasterLevelsCsv(csvText) {
+        const records = parseCsvRecords(csvText);
+        const map = new Map();
+        records.forEach((record) => {
+            if (!record || typeof record !== 'object') {
+                return;
+            }
+            const effectName = normalizeEffectName(
+                record.EffectBase || record.effect || record.name || record.value
+            );
+            if (!effectName || effectName === '-') {
+                return;
+            }
+            const levels = parseLevelTokens(record.Levels);
+            if (!levels.length) {
+                return;
+            }
+            const key = effectKey(effectName);
+            const existing = map.get(key) || [];
+            levels.forEach((level) => {
+                const normalizedLevel = String(level).trim();
+                if (!normalizedLevel) {
+                    return;
+                }
+                const lower = normalizedLevel.toLowerCase();
+                if (existing.some((value) => value.toLowerCase() === lower)) {
+                    return;
+                }
+                existing.push(normalizedLevel);
+            });
+            if (existing.length) {
+                map.set(key, existing);
+            }
+        });
+        return map;
+    }
+
+    async function ensureMasterLevels() {
+        if (state.masterLevelsLoaded) {
+            return;
+        }
+        if (state.masterLevelsPromise) {
+            await state.masterLevelsPromise;
+            return;
+        }
+        state.masterLevelsPromise = (async () => {
+            const csvPath = state.masterCsvPath;
+            if (!csvPath) {
+                state.masterLevels = null;
+                state.masterLevelsLoaded = true;
+                state.masterLevelsPromise = null;
+                return;
+            }
+            try {
+                const response = await fetch(csvPath, { cache: 'no-cache' });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const csvText = await response.text();
+                state.masterLevels = parseMasterLevelsCsv(csvText);
+            } catch (error) {
+                console.warn('レベル候補の読み込みに失敗しました:', error);
+                state.masterLevels = null;
+            } finally {
+                state.masterLevelsLoaded = true;
+                state.masterLevelsPromise = null;
+            }
+        })();
+        await state.masterLevelsPromise;
+    }
+
+    function getMasterLevelOptions(effectName) {
+        const key = effectKey(effectName);
+        if (!key) {
+            return null;
+        }
+        const map = state.masterLevels;
+        if (!(map instanceof Map)) {
+            return null;
+        }
+        const values = map.get(key);
+        return Array.isArray(values) && values.length ? values.slice() : [];
+    }
+
+    function applyMasterLevelOptions(effect, select, effectName) {
+        if (!effect || !select) {
+            return;
+        }
+
+        const applyCandidates = (candidates) => {
+            const sanitized = setCorrectionLevelCandidates(effect, candidates);
+            if (sanitized.length) {
+                rebuildLevelSelectOptions(effect, select, sanitized);
+            } else {
+                rebuildLevelSelectOptions(effect, select);
+            }
+        };
+
+        const normalized = normalizeEffectName(effectName);
+        if (!state.masterLevelsLoaded) {
+            applyCandidates([]);
+            void ensureMasterLevels().then(() => {
+                applyMasterLevelOptions(effect, select, normalized);
+            });
+            return;
+        }
+
+        if (!normalized) {
+            applyCandidates([]);
+            return;
+        }
+
+        const options = getMasterLevelOptions(normalized);
+        if (options && options.length) {
+            applyCandidates(options);
+        } else {
+            applyCandidates([]);
+        }
     }
 
     function parseMasterOptions(source) {
@@ -759,6 +944,68 @@
                 return String(entry).trim();
             })
             .filter((value) => value !== '');
+    }
+
+
+    function parseMasterLevels(source) {
+        const map = new Map();
+        if (!source) {
+            return map;
+        }
+        let payload = source;
+        if (typeof source === 'string') {
+            const text = source.trim();
+            if (!text) {
+                return map;
+            }
+            try {
+                payload = JSON.parse(text);
+            } catch (error) {
+                console.warn('master levelsの解析に失敗しました:', error);
+                return map;
+            }
+        }
+
+        if (!payload || typeof payload !== 'object') {
+            return map;
+        }
+        const entries = Array.isArray(payload) ? payload : Object.entries(payload);
+        const normalizeEntry = (entry) => {
+            if (!entry) {
+                return null;
+            }
+            if (Array.isArray(entry)) {
+                return entry;
+            }
+            if (typeof entry === 'object' && 'key' in entry && 'value' in entry) {
+                return [entry.key, entry.value];
+            }
+            return null;
+        };
+        entries.forEach((entry) => {
+            let key;
+            let value;
+            if (Array.isArray(entry) && entry.length >= 2) {
+                [key, value] = entry;
+            } else {
+                const normalizedEntry = normalizeEntry(entry);
+                if (!normalizedEntry) {
+                    return;
+                }
+                [key, value] = normalizedEntry;
+            }
+            const effect = effectKey(key);
+            if (!effect) {
+                return;
+            }
+            const list = Array.isArray(value) ? value : [value];
+            const sanitized = sanitizeLevelList(list);
+            if (!sanitized.length) {
+                return;
+            }
+            map.set(effect, sanitized);
+        });
+        return map;
     }
 
     function setupMasterOptions() {
@@ -1312,6 +1559,7 @@
         effect.dataset.levelOriginalValue = levelValue;
         effect.dataset.levelOptions = levelOptionsLower.join('|');
         effect.dataset.levelOptionsDisplay = levelOptionsDisplay;
+        effect.dataset.levelOptionsBase = levelOptionsDisplay;
         effect.dataset.levelCorrection = levelCorrection ? levelCorrection.toLowerCase() : '';
         effect.dataset.levelCorrectionValue = levelCorrection;
 
@@ -1350,23 +1598,48 @@
         passButton.dataset.value = 'pass';
 
         const levelInputId = `level-input-${recordIndex}-${slot}`;
-        const levelInput = document.createElement('input');
-        levelInput.type = 'search';
+        const levelInput = document.createElement('select');
         levelInput.id = levelInputId;
         levelInput.className = 'level-input';
-        levelInput.value = levelCorrection;
-        let levelOptionsDatalist = null;
-        if (levelOptions.length) {
-            const datalistId = `level-options-${recordIndex}-${slot}`;
-            levelOptionsDatalist = document.createElement('datalist');
-            levelOptionsDatalist.id = datalistId;
-            levelOptions.forEach((option) => {
-                const optionNode = document.createElement('option');
-                optionNode.value = option;
-                levelOptionsDatalist.appendChild(optionNode);
-            });
-            levelInput.setAttribute('list', datalistId);
-        }
+
+        const levelChoices = [];
+        const seenLevels = new Set();
+        const pushLevelChoice = (value) => {
+            if (value == null) {
+                return;
+            }
+            const text = String(value).trim();
+            if (!text) {
+                return;
+            }
+            const key = text.toLowerCase();
+            if (seenLevels.has(key)) {
+                return;
+            }
+            seenLevels.add(key);
+            levelChoices.push(text);
+        };
+
+        levelOptions.forEach(pushLevelChoice);
+        pushLevelChoice(levelValue);
+        pushLevelChoice(levelCorrection);
+
+        const emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = '未設定';
+        levelInput.appendChild(emptyOption);
+
+        levelChoices.forEach((option) => {
+            const optionNode = document.createElement('option');
+            optionNode.value = option;
+            optionNode.textContent = option;
+            levelInput.appendChild(optionNode);
+        });
+
+        const initialLevelValue = levelCorrection || levelValue || '';
+        levelInput.value = initialLevelValue;
+
+        const effectNameForLevels = levelCorrection || correctionValue || predictionText;
         const correctionInput = createCorrectionInput(correctionValue);
 
         decisionRow.appendChild(passButton);
@@ -1376,9 +1649,8 @@
 
         effect.appendChild(rawLine);
         effect.appendChild(decision);
-        if (levelOptionsDatalist) {
-            effect.appendChild(levelOptionsDatalist);
-        }
+
+        applyMasterLevelOptions(effect, levelInput, effectNameForLevels);
 
         if (state.datasetKind === 'merged') {
             passButton.disabled = true;
@@ -1473,11 +1745,96 @@
             input.disabled = true;
         }
         input.value = selectedValue || '';
+        updateInputValueAttribute(input);
         return input;
+    }
+
+    function rebuildLevelSelectOptions(effect, select, baseOptionsOverride, extraOptions) {
+        if (!effect || !select) {
+            return;
+        }
+
+        const previousValue = select.value == null ? '' : String(select.value);
+        const baseOptions = Array.isArray(baseOptionsOverride)
+            ? sanitizeLevelList(baseOptionsOverride)
+            : sanitizeLevelList(
+                (effect.dataset.levelOptionsBase || effect.dataset.levelOptionsDisplay || '')
+                    .split('|')
+            );
+
+        const extrasSource = Array.isArray(extraOptions)
+            ? extraOptions
+            : extraOptions == null
+                ? []
+                : [extraOptions];
+        const extras = sanitizeLevelList(extrasSource);
+
+        const finalValues = [];
+        const seen = new Set();
+
+        const pushOption = (value) => {
+            if (value == null) {
+                return;
+            }
+            const text = String(value).trim();
+            if (!text) {
+                return;
+            }
+            const lower = text.toLowerCase();
+            if (seen.has(lower)) {
+                return;
+            }
+            seen.add(lower);
+            finalValues.push(text);
+        };
+
+        baseOptions.forEach(pushOption);
+        extras.forEach(pushOption);
+
+        const originalValue = effect.dataset.levelOriginalValue || '';
+        const levelCorrectionValue = effect.dataset.levelCorrectionValue || '';
+        pushOption(originalValue);
+        pushOption(levelCorrectionValue);
+
+        select.textContent = '';
+
+        const emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = '未設定';
+        select.appendChild(emptyOption);
+
+        finalValues.forEach((value) => {
+            const optionNode = document.createElement('option');
+            optionNode.value = value;
+            optionNode.textContent = value;
+            select.appendChild(optionNode);
+        });
+
+        const candidates = [previousValue, levelCorrectionValue, originalValue, baseOptions[0], extras[0]];
+        let applied = '';
+        for (let index = 0; index < candidates.length; index += 1) {
+            const candidate = candidates[index];
+            if (!candidate) {
+                continue;
+            }
+            const lower = candidate.toLowerCase();
+            if (finalValues.some((value) => value.toLowerCase() === lower)) {
+                applied = candidate;
+                break;
+            }
+        }
+        if (!applied && finalValues.length) {
+            applied = finalValues[0];
+        }
+        select.value = applied || '';
+
+        effect.dataset.levelOptionsDisplay = finalValues.join('|');
+        effect.dataset.levelOptions = finalValues.map((value) => value.toLowerCase()).join('|');
     }
 
     function correctionChangeHandler(effect, input) {
         return () => {
+            updateInputValueAttribute(input);
             const selected = input.value.trim();
             const indexes = getEffectIndexes(effect);
             if (!indexes) {
@@ -1488,6 +1845,12 @@
             const correctionChanged = updateRecordCorrection(indexes.recordIndex, indexes.slotIndex, selected);
             effect.dataset.correction = selected ? selected.toLowerCase() : '';
             updateEffectStatus(effect, nextStatus);
+
+            const levelSelect = effect.querySelector('.level-input');
+            if (levelSelect) {
+                applyMasterLevelOptions(effect, levelSelect, selected);
+            }
+
             refreshItemCaches(effect.closest('.item'));
             if (!statusChanged && correctionChanged) {
                 storage.scheduleSave();
@@ -2084,7 +2447,9 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
                     const levelInput = effect.querySelector('.level-input');
                     if (levelInput) {
                         levelInput.value = '';
+                        rebuildLevelSelectOptions(effect, levelInput);
                     }
+                    setCorrectionLevelCandidates(effect, []);
                     updateLevelBadge(effect);
 
                     if (!statusChanged && (correctionChanged || levelChanged)) {
@@ -2445,6 +2810,7 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
         attachEventHandlers();
         prepareInitialDataset();
         setupDatasetSelector();
+        await ensureMasterLevels();
         await ensureMasterOptions();
         if (state.datasets.length) {
             await switchDataset(state.activeDatasetIndex, { forceReload: true });
