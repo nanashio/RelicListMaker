@@ -1,2722 +1,1312 @@
 (() => {
     'use strict';
 
-    const MASTER_DATALIST_ID = 'master-relic-options';
     const DUPLICATE_KEY = 'Duplicate';
     const FAVORITE_KEY = 'Favorite';
-    const ITEM_COLOR_OPTIONS = [
+    const ITEM_COLOR_KEY = 'ItemColor';
+    const MASTER_DATALIST_ID = 'master-relic-options';
+    const SAVE_ENDPOINT = '/__viewer_api__/save';
+    const SAVE_DEBOUNCE_MS = 300;
+
+    const ITEM_COLORS = [
+        { key: '', label: 'なし' },
         { key: 'red', label: '赤', className: 'item-color-red' },
         { key: 'yellow', label: '黄', className: 'item-color-yellow' },
         { key: 'green', label: '緑', className: 'item-color-green' },
         { key: 'blue', label: '青', className: 'item-color-blue' }
     ];
 
-    const body = document.body;
-    const {
-        resultsCsv: initialCsvPath = '',
-        imgDir: imageDir = '.',
-        labelSymbols: labelSymbolsJson = '[]',
-        masterCsv: masterCsvPath = '',
-        masterJson: masterJsonPath = '',
-        masterOptions: masterOptionsJson = '[]',
-        masterLevels: masterLevelsJson = '{}',
-        datasets: datasetsJson = '[]',
-        activeDataset: activeDatasetAttr = ''
-    } = body.dataset || {};
-
-    const datasets = parseDatasets(datasetsJson);
-    const activeDatasetIndex = parseDatasetIndex(activeDatasetAttr, datasets.length);
-    const preloadedMasterLevels = parseMasterLevels(masterLevelsJson);
-    const hasPreloadedMasterLevels = preloadedMasterLevels instanceof Map && preloadedMasterLevels.size > 0;
-
     const dom = {
+        body: document.body,
         gallery: document.getElementById('gallery'),
         datasetSelector: document.getElementById('dataset-selector'),
         datasetSelect: document.getElementById('dataset-select'),
         galleryStatus: document.getElementById('gallery-status'),
+        gallerySummary: document.getElementById('gallery-summary'),
         searchInput: document.getElementById('search-input'),
         filterSelect: document.getElementById('filter-status'),
         colorFilter: document.getElementById('filter-color'),
-        showDuplicatesToggle: document.getElementById('show-duplicates'),
-        showOcrToggle: document.getElementById('show-ocr'),
-        lightbox: document.getElementById('lightbox'),
-        lightboxImg: document.querySelector('#lightbox img'),
-        lightboxClose: document.getElementById('lightbox-close'),
-        downloadCsvButton: document.getElementById('download-csv'),
-        uploadCsvButton: document.getElementById('upload-csv'),
-        uploadCsvInput: document.getElementById('upload-csv-input'),
+        showDuplicates: document.getElementById('show-duplicates'),
+        showOcr: document.getElementById('show-ocr'),
+        downloadButton: document.getElementById('download-csv'),
+        uploadButton: document.getElementById('upload-csv'),
+        uploadInput: document.getElementById('upload-csv-input'),
         storageStatus: document.getElementById('storage-status'),
-        summary: document.getElementById('gallery-summary')
+        lightbox: document.getElementById('lightbox'),
+        lightboxImage: document.querySelector('#lightbox img'),
+        lightboxClose: document.getElementById('lightbox-close'),
+        masterDatalist: document.getElementById(MASTER_DATALIST_ID)
     };
 
-    if (dom.uploadCsvButton) {
-        dom.uploadCsvButton.disabled = true;
-        dom.uploadCsvButton.title = 'ローカルCSVのインポートは無効化されています';
-    }
-
-    if (!dom.gallery) {
+    if (!dom.body || !dom.gallery) {
         return;
     }
 
-    const state = {
-        records: [],
-        items: [],
-        labelSymbols: parseLabelSymbols(labelSymbolsJson),
-        imageDir: imageDir || '.',
-        csvPath: initialCsvPath,
-        masterCsvPath: masterCsvPath || '',
-        masterJsonPath: masterJsonPath || '',
-        masterOptions: parseMasterOptions(masterOptionsJson),
-        masterDatalistPrepared: false,
-        masterLevels: preloadedMasterLevels,
-        masterLevelsLoaded: hasPreloadedMasterLevels,
-        masterLevelsPromise: null,
-        showOcr: false,
-        datasets,
-        activeDatasetIndex,
-        datasetLabel: '',
-        datasetFolder: '',
-        datasetKind: '',
-        datasetSources: []
-    };
+    const config = parseConfig(dom.body.dataset || {});
 
-    function getRecordByIndex(index) {
-        if (Number.isNaN(index) || index < 0 || index >= state.records.length) {
-            return null;
+    class GalleryApp {
+        constructor(rootDom, options) {
+            this.dom = rootDom;
+            this.options = options;
+            this.records = [];
+            this.items = [];
+            this.headers = [];
+            this.labelSymbols = options.labelSymbols.slice();
+            this.masterOptions = options.masterOptions.slice();
+            this.masterLevels = new Map(options.masterLevels);
+            this.datasets = options.datasets;
+            this.activeDatasetIndex = options.activeDatasetIndex;
+            this.currentDataset = null;
+            this.imageDir = options.imageDir;
+            this.csvPath = options.csvPath;
+            this.datasetLabel = '';
+            this.datasetKind = '';
+            this.datasetReadOnly = false;
+            this.saveTimer = null;
+            this.lastSavedAt = null;
+            this.showOcr = false;
         }
-        const record = state.records[index];
-        return record && typeof record === 'object' ? record : null;
-    }
 
-    function resolveItemElement(element) {
-        if (!element) {
-            return null;
+        async init() {
+            this.setupDatasetSelector();
+            this.attachEvents();
+            await this.prepareMasterData();
+            if (this.dom.uploadButton) {
+                this.dom.uploadButton.disabled = true;
+                this.dom.uploadButton.title = 'ローカルCSVのインポートは無効化されています';
+            }
+            if (this.dom.uploadInput) {
+                this.dom.uploadInput.disabled = true;
+            }
+            await this.loadInitialDataset();
+            this.updateOcrVisibility(Boolean(this.dom.showOcr && this.dom.showOcr.checked));
         }
-        if (element.classList && element.classList.contains('item')) {
-            return element;
-        }
-        return element.closest ? element.closest('.item') : null;
-    }
 
-    function getItemContext(element) {
-        const item = resolveItemElement(element);
-        if (!item) {
-            return null;
-        }
-        const recordIndex = Number(item.dataset.recordIndex);
-        const record = getRecordByIndex(recordIndex);
-        if (!record) {
-            return null;
-        }
-        return { item, recordIndex, record };
-    }
+        async prepareMasterData() {
+            if (this.masterOptions.length && !this.dom.masterDatalist) {
+                const datalist = document.createElement('datalist');
+                datalist.id = MASTER_DATALIST_ID;
+                document.body.appendChild(datalist);
+                this.dom.masterDatalist = datalist;
+            }
+            if (this.dom.masterDatalist) {
+                this.dom.masterDatalist.innerHTML = '';
+                this.masterOptions.forEach((option) => {
+                    const item = document.createElement('option');
+                    item.value = option;
+                    this.dom.masterDatalist.appendChild(item);
+                });
+            }
 
-    function createFlagManager(key, truthyTokens) {
-        const normalizedTokens = new Set(
-            (truthyTokens || []).map((token) => (token || '').toString().toLowerCase())
-        );
-
-        const normalize = (value) => {
-            if (value === true) {
-                return true;
-            }
-            if (value === false || value == null) {
-                return false;
-            }
-            if (typeof value === 'number') {
-                return value === 1;
-            }
-            if (typeof value === 'string') {
-                const text = value.trim().toLowerCase();
-                return normalizedTokens.has(text);
-            }
-            return false;
-        };
-
-        const isSet = (record) => {
-            if (!record || typeof record !== 'object') {
-                return false;
-            }
-            return normalize(record[key]);
-        };
-
-        const set = (recordIndex, nextState) => {
-            const record = getRecordByIndex(recordIndex);
-            if (!record) {
-                return false;
-            }
-            if (nextState) {
-                if (isSet(record)) {
-                    return false;
+            if (!this.masterLevels.size && this.options.masterCsv) {
+                try {
+                    const response = await fetch(this.options.masterCsv, { cache: 'no-cache' });
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    const text = await response.text();
+                    this.masterLevels = parseMasterLevelsCsv(text);
+                } catch (error) {
+                    console.warn('マスターレベルの取得に失敗しました:', error);
                 }
-                record[key] = true;
-                return true;
-            }
-            if (Object.prototype.hasOwnProperty.call(record, key)) {
-                delete record[key];
-                return true;
-            }
-            return false;
-        };
-
-        return { normalize, isSet, set };
-    }
-
-    const duplicateFlags = createFlagManager(DUPLICATE_KEY, ['true', '1', 'yes', 'duplicate']);
-    const favoriteFlags = createFlagManager(FAVORITE_KEY, ['true', '1', 'yes', 'favorite']);
-
-    function updateRecordField(recordIndex, key, value) {
-        const record = getRecordByIndex(recordIndex);
-        if (!record) {
-            return false;
-        }
-        if (value) {
-            if (record[key] === value) {
-                return false;
-            }
-            record[key] = value;
-            return true;
-        }
-        if (Object.prototype.hasOwnProperty.call(record, key)) {
-            delete record[key];
-            return true;
-        }
-        return false;
-    }
-
-    function resolveCsvSavePath(csvPath) {
-        if (!csvPath) {
-            return '';
-        }
-        const trimmed = csvPath.trim();
-        if (!trimmed) {
-            return '';
-        }
-        try {
-            const resolved = new URL(trimmed, window.location.href);
-            const basePath = window.location.pathname.replace(/[^/]+$/, '');
-            let relative = decodeURIComponent(resolved.pathname || '');
-            if (basePath && relative.startsWith(basePath)) {
-                relative = relative.slice(basePath.length);
-            }
-            if (!relative) {
-                relative = trimmed;
-            }
-            return relative.replace(/^\/+/, '');
-        } catch (error) {
-            console.warn('CSVパスの解決に失敗しました:', error);
-            return trimmed.replace(/^\/+/, '');
-        }
-    }
-
-    const duplicates = createDuplicateManager(() => state.csvPath);
-
-    const storage = createOpfsManager(() => state.records);
-
-    function clampDatasetIndex(index) {
-        if (!state.datasets.length) {
-            return -1;
-        }
-        const parsed = Number.parseInt(index, 10);
-        if (Number.isNaN(parsed) || parsed < 0) {
-            return 0;
-        }
-        if (parsed >= state.datasets.length) {
-            return state.datasets.length - 1;
-        }
-        return parsed;
-    }
-
-    function getCurrentDataset() {
-        if (!state.datasets.length) {
-            return null;
-        }
-        const index = clampDatasetIndex(state.activeDatasetIndex);
-        if (index < 0) {
-            return null;
-        }
-        return state.datasets[index] || null;
-    }
-
-    function prepareInitialDataset() {
-        if (!state.datasets.length) {
-            return;
-        }
-        const dataset = getCurrentDataset();
-        if (!dataset) {
-            state.activeDatasetIndex = state.datasets.length ? 0 : -1;
-            return;
-        }
-        state.activeDatasetIndex = clampDatasetIndex(state.activeDatasetIndex);
-        const descriptor = resolveDatasetState(dataset, state.activeDatasetIndex);
-        applyDatasetState(descriptor);
-    }
-
-    function setupDatasetSelector() {
-        if (!dom.datasetSelector || !dom.datasetSelect) {
-            return;
-        }
-        if (!state.datasets.length) {
-            dom.datasetSelector.classList.add('hidden');
-            dom.datasetSelect.innerHTML = '';
-            return;
-        }
-
-        dom.datasetSelect.innerHTML = '';
-        state.datasets.forEach((dataset, index) => {
-            const option = document.createElement('option');
-            option.value = String(index);
-            option.textContent = datasetOptionLabel(dataset, index);
-            dom.datasetSelect.appendChild(option);
-        });
-        dom.datasetSelector.classList.remove('hidden');
-        const currentIndex = clampDatasetIndex(state.activeDatasetIndex);
-        dom.datasetSelect.value = String(currentIndex);
-        dom.datasetSelect.title = datasetOptionLabel(getCurrentDataset(), currentIndex);
-    }
-
-    function updateDatasetIndicator() {
-        if (!dom.datasetSelector || !dom.datasetSelect) {
-            return;
-        }
-        if (!state.datasets.length) {
-            dom.datasetSelector.classList.add('hidden');
-            return;
-        }
-        const currentIndex = clampDatasetIndex(state.activeDatasetIndex);
-        dom.datasetSelector.classList.remove('hidden');
-        dom.datasetSelect.value = String(currentIndex);
-        dom.datasetSelect.title = datasetOptionLabel(getCurrentDataset(), currentIndex);
-    }
-
-    async function switchDataset(index, options = {}) {
-        if (!state.datasets.length) {
-            return;
-        }
-        const nextIndex = clampDatasetIndex(index);
-        const dataset = state.datasets[nextIndex];
-        if (!dataset) {
-            return;
-        }
-
-        const descriptor = resolveDatasetState(dataset, nextIndex);
-        const expectedImageDir = descriptor.kind === 'merged' ? '' : descriptor.imageDir || '.';
-        const forceReload = Boolean(options.forceReload);
-        const shouldReload =
-            forceReload ||
-            state.activeDatasetIndex !== nextIndex ||
-            state.csvPath !== descriptor.csvPath ||
-            state.imageDir !== expectedImageDir ||
-            state.datasetKind !== descriptor.kind ||
-            !areSourcesEqual(state.datasetSources, descriptor.sources);
-
-        state.activeDatasetIndex = nextIndex;
-        applyDatasetState(descriptor);
-
-        updateDatasetIndicator();
-
-        if (!shouldReload) {
-            return;
-        }
-
-        if (dom.gallery) {
-            dom.gallery.textContent = '';
-        }
-        state.records = [];
-        state.items = [];
-
-        await loadInitialData();
-    }
-
-    const SUMMARY_INLINE_STYLE = {
-        textAlign: 'center',
-        color: '#333',
-        fontSize: '14px',
-        margin: '0 auto 12px'
-    };
-
-    function ensureSummaryElement() {
-        let summary = dom.summary;
-
-        if (!summary || !summary.isConnected) {
-            const existing = document.getElementById('gallery-summary');
-            if (existing && existing !== dom.summary) {
-                summary = existing;
-            } else if (!summary || !summary.isConnected) {
-                summary = document.createElement('p');
             }
         }
 
-        if (!summary) {
-            summary = document.createElement('p');
-        }
-
-        summary.id = summary.id || 'gallery-summary';
-        summary.classList.add('gallery-summary');
-
-        summary.style.textAlign = SUMMARY_INLINE_STYLE.textAlign;
-        summary.style.color = SUMMARY_INLINE_STYLE.color;
-        summary.style.fontSize = SUMMARY_INLINE_STYLE.fontSize;
-        summary.style.margin = SUMMARY_INLINE_STYLE.margin;
-        summary.style.width = '100%';
-
-        if (!summary.parentNode) {
-            const reference = dom.galleryStatus && dom.galleryStatus.parentNode ? dom.galleryStatus : dom.gallery;
-            if (reference && reference.parentNode) {
-                reference.parentNode.insertBefore(summary, reference);
-            } else {
-                document.body.insertBefore(summary, document.body.firstChild || null);
-            }
-        }
-
-        dom.summary = summary;
-        return summary;
-    }
-
-    function parseLabelSymbols(jsonText) {
-        try {
-            const parsed = JSON.parse(jsonText || '[]');
-            if (Array.isArray(parsed) && parsed.length) {
-                return parsed
-                    .map((symbol) => (symbol == null ? '' : String(symbol)))
-                    .filter((symbol) => symbol !== '')
-                    .slice();
-            }
-        } catch (error) {
-            console.warn('label symbolsの解析に失敗しました:', error);
-        }
-        return ['①', '②', '③'];
-    }
-
-    function parseDatasetIndex(value, length) {
-        const total = Number.isFinite(length) ? Number(length) : 0;
-        if (!total) {
-            return -1;
-        }
-        const parsed = Number.parseInt(value, 10);
-        if (Number.isNaN(parsed)) {
-            return 0;
-        }
-        if (parsed < 0) {
-            return 0;
-        }
-        if (parsed >= total) {
-            return total - 1;
-        }
-        return parsed;
-    }
-
-    function normalizeDatasetSources(rawSources) {
-        if (!Array.isArray(rawSources)) {
-            return [];
-        }
-        const result = [];
-        rawSources.forEach((source, index) => {
-            if (!source || typeof source !== 'object') {
+        setupDatasetSelector() {
+            const { datasetSelector, datasetSelect } = this.dom;
+            if (!datasetSelector || !datasetSelect) {
                 return;
             }
-            const csv = typeof source.csv === 'string' ? source.csv.trim() : '';
-            if (!csv) {
+            datasetSelect.innerHTML = '';
+            if (!this.datasets.length) {
+                datasetSelector.classList.add('hidden');
                 return;
             }
-            const imgDir = typeof source.imgDir === 'string' ? source.imgDir.trim() : '';
-            const label = typeof source.label === 'string' ? source.label.trim() : '';
-            const folder = typeof source.folder === 'string' ? source.folder.trim() : '';
-            const sourceIndex = Number.isFinite(source.index) ? Number(source.index) : index;
-            result.push({
-                label,
-                csv,
-                imgDir,
-                folder,
-                index: sourceIndex
+            this.datasets.forEach((dataset, index) => {
+                const option = document.createElement('option');
+                option.value = String(index);
+                option.textContent = datasetLabel(dataset, index);
+                datasetSelect.appendChild(option);
             });
-        });
-        return result;
+            datasetSelector.classList.remove('hidden');
+            const clamped = clampIndex(this.activeDatasetIndex, this.datasets.length);
+            datasetSelect.value = String(clamped);
+        }
+
+        attachEvents() {
+            const { datasetSelect, gallery, searchInput, filterSelect, colorFilter, showDuplicates, showOcr, downloadButton } = this.dom;
+            if (datasetSelect) {
+                datasetSelect.addEventListener('change', (event) => {
+                    const index = Number.parseInt(event.target.value, 10);
+                    void this.switchDataset(Number.isNaN(index) ? 0 : index);
+                });
+            }
+            if (gallery) {
+                gallery.addEventListener('click', (event) => this.handleGalleryClick(event));
+                gallery.addEventListener('input', (event) => this.handleGalleryInput(event));
+            }
+            if (searchInput) {
+                searchInput.addEventListener('input', () => this.applyFilters());
+            }
+            if (filterSelect) {
+                filterSelect.addEventListener('change', () => this.applyFilters());
+            }
+            if (colorFilter) {
+                colorFilter.addEventListener('change', () => this.applyFilters());
+            }
+            if (showDuplicates) {
+                showDuplicates.addEventListener('change', () => this.renderRecords());
+            }
+            if (showOcr) {
+                showOcr.addEventListener('change', () => this.updateOcrVisibility(showOcr.checked));
+            }
+            if (downloadButton) {
+                downloadButton.addEventListener('click', () => this.downloadCsv());
+            }
+            if (this.dom.lightboxClose) {
+                this.dom.lightboxClose.addEventListener('click', () => this.closeLightbox());
+            }
+            if (this.dom.lightbox) {
+                this.dom.lightbox.addEventListener('click', (event) => {
+                    if (event.target === this.dom.lightbox) {
+                        this.closeLightbox();
+                    }
+                });
+            }
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    this.closeLightbox();
+                }
+            });
+        }
+
+        async loadInitialDataset() {
+            if (this.datasets.length) {
+                await this.switchDataset(this.activeDatasetIndex, true);
+            } else {
+                await this.loadDataset({
+                    label: this.options.datasetLabel,
+                    csvPath: this.csvPath,
+                    imageDir: this.imageDir,
+                    kind: 'single',
+                    readOnly: false
+                });
+            }
+        }
+
+        async switchDataset(index, force = false) {
+            const clamped = clampIndex(index, this.datasets.length);
+            const dataset = this.datasets[clamped];
+            if (!dataset) {
+                return;
+            }
+            if (!force && this.currentDataset === dataset) {
+                this.updateDatasetIndicator(clamped);
+                return;
+            }
+            this.activeDatasetIndex = clamped;
+            await this.loadDataset(dataset);
+            this.updateDatasetIndicator(clamped);
+        }
+
+        updateDatasetIndicator(index) {
+            const { datasetSelect } = this.dom;
+            if (!datasetSelect) {
+                return;
+            }
+            datasetSelect.value = String(index);
+        }
+
+        async loadDataset(dataset) {
+            this.currentDataset = dataset;
+            this.imageDir = dataset.imageDir || this.options.imageDir || '.';
+            this.csvPath = dataset.csvPath || this.options.csvPath || '';
+            this.datasetLabel = dataset.label || '';
+            this.datasetKind = dataset.kind || 'single';
+            this.datasetReadOnly = Boolean(dataset.readOnly || this.datasetKind === 'merged');
+            this.setStorageMessage(this.datasetReadOnly ? '統合ビューは読み取り専用です。' : '変更は自動で保存されます。', false);
+
+            try {
+                this.showStatus('読み込み中...');
+                const loadResult = await this.fetchRecords(dataset);
+                this.labelSymbols = ensureLabelSymbols(this.labelSymbols, loadResult.records);
+                this.records = loadResult.records.map((row, rowIndex) =>
+                    createRecordModel(row, {
+                        index: rowIndex,
+                        labelSymbols: this.labelSymbols,
+                        imageDir: this.imageDir,
+                        datasetLabel: this.datasetLabel,
+                        datasetKind: this.datasetKind
+                    })
+                );
+                this.headers = mergeHeaders(loadResult.headers, collectRecordHeaders(this.records));
+                this.renderRecords();
+                this.showStatus('');
+            } catch (error) {
+                console.error(error);
+                this.showStatus(`データの読み込みに失敗しました: ${error.message || error}`, true);
+            }
+        }
+
+        async fetchRecords(dataset) {
+            if (dataset.kind === 'merged' && Array.isArray(dataset.sources) && dataset.sources.length) {
+                const combined = [];
+                const mergedHeaders = [];
+                for (let index = 0; index < dataset.sources.length; index += 1) {
+                    const source = dataset.sources[index];
+                    if (!source || typeof source !== 'object') {
+                        continue;
+                    }
+                    const csvPath = source.csv || '';
+                    if (!csvPath) {
+                        continue;
+                    }
+                    const response = await fetch(csvPath, { cache: 'no-cache' });
+                    if (!response.ok) {
+                        throw new Error(`${csvPath}: HTTP ${response.status}`);
+                    }
+                    const text = await response.text();
+                    const parsed = parseCsv(text);
+                    parsed.records.forEach((row) => {
+                        row.Dataset = source.label || dataset.label || `Dataset ${index + 1}`;
+                        row.DatasetFolder = source.folder || '';
+                        if (source.imgDir) {
+                            const rawImage = row.Image || '';
+                            if (rawImage && !/[\\/]/.test(rawImage)) {
+                                row.Image = joinPath(source.imgDir, rawImage);
+                            }
+                        }
+                        combined.push(row);
+                    });
+                    mergedHeaders.push(...parsed.headers);
+                }
+                return { records: combined, headers: mergedHeaders };
+            }
+
+            if (!dataset.csvPath) {
+                throw new Error('CSVパスが設定されていません。');
+            }
+            const response = await fetch(dataset.csvPath, { cache: 'no-cache' });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const text = await response.text();
+            return parseCsv(text);
+        }
+
+        renderRecords() {
+            const { gallery } = this.dom;
+            gallery.innerHTML = '';
+            this.items = [];
+
+            const includeDuplicates = Boolean(this.dom.showDuplicates && this.dom.showDuplicates.checked);
+            const fragment = document.createDocumentFragment();
+
+            const visibleRecords = includeDuplicates
+                ? this.records
+                : this.records.filter((record) => !record.duplicate);
+
+            visibleRecords.forEach((record, index) => {
+                const element = this.buildItem(record, index, visibleRecords.length);
+                if (element) {
+                    fragment.appendChild(element);
+                    this.items.push({ element, record });
+                }
+            });
+
+            if (!fragment.childNodes.length) {
+                const message = document.createElement('p');
+                message.className = 'no-result';
+                message.textContent = '表示できる項目がありません。';
+                gallery.appendChild(message);
+            } else {
+                gallery.appendChild(fragment);
+            }
+
+            this.applyFilters();
+        }
+
+        buildItem(record, index, total) {
+            const item = document.createElement('section');
+            item.className = 'item';
+            item.dataset.index = String(record.index);
+            item.dataset.duplicate = record.duplicate ? 'true' : 'false';
+            item.dataset.favorite = record.favorite ? 'true' : 'false';
+            if (record.itemColor) {
+                item.dataset.itemColor = record.itemColor;
+                item.classList.add(colorClass(record.itemColor));
+            }
+
+            const left = document.createElement('div');
+            left.className = 'item-left';
+            const right = document.createElement('div');
+            right.className = 'item-right';
+            item.append(left, right);
+
+            const image = document.createElement('img');
+            image.src = record.imagePath;
+            image.alt = record.displayName;
+            image.dataset.full = record.imagePath;
+            image.addEventListener('click', () => this.openLightbox(record.imagePath));
+            left.appendChild(image);
+
+            const controls = document.createElement('div');
+            controls.className = 'item-controls';
+            left.appendChild(controls);
+
+            if (!this.datasetReadOnly) {
+                controls.appendChild(this.buildDuplicateButton(record));
+                controls.appendChild(this.buildFavoriteButton(record));
+                controls.appendChild(this.buildColorSelect(record));
+            }
+
+            const meta = document.createElement('div');
+            meta.className = 'item-meta';
+            meta.appendChild(createTextSpan('item-position', `${index + 1} / ${total}`));
+            if (record.datasetLabel && this.datasetKind === 'merged') {
+                const badge = createTextSpan('dataset-label', record.datasetLabel);
+                badge.title = record.datasetFolder ? `${record.datasetLabel} (${record.datasetFolder})` : record.datasetLabel;
+                meta.appendChild(badge);
+            }
+            meta.appendChild(createTextSpan('filename', record.displayName));
+            controls.appendChild(meta);
+
+            if (!record.effects.length) {
+                const empty = document.createElement('p');
+                empty.className = 'no-effect';
+                empty.textContent = '効果情報がありません。';
+                right.appendChild(empty);
+            } else {
+                record.effects.forEach((effect) => {
+                    const effectNode = this.buildEffect(record, effect);
+                    if (effectNode) {
+                        right.appendChild(effectNode);
+                    }
+                });
+            }
+
+            updateSearchCache(item, record);
+            return item;
+        }
+
+        buildDuplicateButton(record) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'duplicate-toggle';
+            button.dataset.action = 'toggle-duplicate';
+            button.textContent = record.duplicate ? '重複を解除' : '重複として隠す';
+            button.setAttribute('aria-pressed', record.duplicate ? 'true' : 'false');
+            return button;
+        }
+
+        buildFavoriteButton(record) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'favorite-toggle';
+            button.dataset.action = 'toggle-favorite';
+            button.textContent = record.favorite ? '★ お気に入り' : '☆ お気に入り';
+            button.setAttribute('aria-pressed', record.favorite ? 'true' : 'false');
+            return button;
+        }
+
+        buildColorSelect(record) {
+            const wrapper = document.createElement('label');
+            wrapper.className = 'item-color-controls';
+            wrapper.textContent = '色';
+
+            const select = document.createElement('select');
+            select.className = 'item-color-select';
+            select.dataset.action = 'set-item-color';
+            select.value = record.itemColor;
+            ITEM_COLORS.forEach((option) => {
+                const node = document.createElement('option');
+                node.value = option.key;
+                node.textContent = option.label;
+                select.appendChild(node);
+            });
+            select.value = record.itemColor;
+            wrapper.appendChild(select);
+            return wrapper;
+        }
+
+        buildEffect(record, effect) {
+            const wrapper = document.createElement('article');
+            wrapper.className = 'effect';
+            wrapper.dataset.slot = String(effect.slot);
+            wrapper.dataset.recordIndex = String(record.index);
+            wrapper.dataset.status = effect.status;
+
+            const header = document.createElement('header');
+            header.className = 'effect-header';
+            header.appendChild(createTextSpan('effect-symbol', effect.symbol));
+            header.appendChild(createTextSpan('status-indicator', statusLabel(effect.status)));
+            wrapper.appendChild(header);
+
+            const prediction = document.createElement('div');
+            prediction.className = 'prediction';
+            prediction.appendChild(createTextSpan('prediction-label', '推定:'));
+            prediction.appendChild(createTextSpan('prediction-value', effect.prediction || '--'));
+            const levelBadge = document.createElement('span');
+            levelBadge.className = 'level-badge';
+            prediction.appendChild(levelBadge);
+            wrapper.appendChild(prediction);
+
+            const rawLine = document.createElement('div');
+            rawLine.className = 'raw';
+            rawLine.textContent = formatOcrLine(effect.rawText, effect.score);
+            wrapper.appendChild(rawLine);
+
+            const decision = document.createElement('div');
+            decision.className = 'decision';
+            wrapper.appendChild(decision);
+
+            if (!this.datasetReadOnly) {
+                const row = document.createElement('div');
+                row.className = 'decision-row';
+
+                const passButton = document.createElement('button');
+                passButton.type = 'button';
+                passButton.className = 'review-button pass';
+                passButton.dataset.action = 'set-status';
+                passButton.dataset.value = 'pass';
+                passButton.textContent = '合致';
+                row.appendChild(passButton);
+
+                const correctedButton = document.createElement('button');
+                correctedButton.type = 'button';
+                correctedButton.className = 'review-button corrected';
+                correctedButton.dataset.action = 'set-status';
+                correctedButton.dataset.value = 'corrected';
+                correctedButton.textContent = '修正済み';
+                row.appendChild(correctedButton);
+
+                const correctionInput = document.createElement('input');
+                correctionInput.type = 'search';
+                correctionInput.className = 'correction-input';
+                correctionInput.dataset.action = 'set-correction';
+                correctionInput.value = effect.correction;
+                if (this.masterOptions.length) {
+                    correctionInput.setAttribute('list', MASTER_DATALIST_ID);
+                    correctionInput.placeholder = 'マスタから選択';
+                }
+                row.appendChild(correctionInput);
+
+                const levelSelect = document.createElement('select');
+                levelSelect.className = 'level-input';
+                levelSelect.dataset.action = 'set-level';
+                populateLevelOptions(levelSelect, this.buildLevelCandidates(effect));
+                levelSelect.value = effect.levelCorrection || (effect.showOriginalLevel ? effect.level : '');
+                row.appendChild(levelSelect);
+
+                decision.appendChild(row);
+            }
+
+            applyStatusStyles(wrapper, effect.status);
+            updateLevelBadge(levelBadge, effect);
+            wrapper.dataset.correction = effect.correction;
+            wrapper.dataset.levelOriginal = effect.level;
+            wrapper.dataset.levelCorrection = effect.levelCorrection;
+            wrapper.dataset.showOriginal = effect.showOriginalLevel ? 'true' : 'false';
+            wrapper.dataset.prediction = (effect.prediction || '').toLowerCase();
+            wrapper.dataset.raw = (effect.rawText || '').toLowerCase();
+            return wrapper;
+        }
+
+        buildLevelCandidates(effect) {
+            const base = effect.levelOptions.slice();
+            const normalizedName = normalizeEffectName(effect.correction || effect.prediction);
+            if (normalizedName && this.masterLevels.has(normalizedName)) {
+                const extras = this.masterLevels.get(normalizedName) || [];
+                extras.forEach((candidate) => {
+                    if (!base.includes(candidate)) {
+                        base.push(candidate);
+                    }
+                });
+            }
+            if (effect.levelCorrection && !base.includes(effect.levelCorrection)) {
+                base.push(effect.levelCorrection);
+            }
+            if (effect.showOriginalLevel && effect.level && !base.includes(effect.level)) {
+                base.push(effect.level);
+            }
+            return base;
+        }
+
+        async handleGalleryClick(event) {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) {
+                return;
+            }
+            const action = target.dataset.action;
+            if (!action) {
+                return;
+            }
+
+            const item = target.closest('.item');
+            const effectNode = target.closest('.effect');
+            if (action === 'toggle-duplicate' && item) {
+                const record = this.findRecord(item);
+                if (record) {
+                    record.duplicate = !record.duplicate;
+                    record.raw[DUPLICATE_KEY] = record.duplicate ? 'True' : 'False';
+                    item.dataset.duplicate = record.duplicate ? 'true' : 'false';
+                    target.textContent = record.duplicate ? '重複を解除' : '重複として隠す';
+                    target.setAttribute('aria-pressed', record.duplicate ? 'true' : 'false');
+                    this.scheduleSave();
+                    this.applyFilters();
+                }
+                return;
+            }
+
+            if (action === 'toggle-favorite' && item) {
+                const record = this.findRecord(item);
+                if (record) {
+                    record.favorite = !record.favorite;
+                    record.raw[FAVORITE_KEY] = record.favorite ? 'True' : 'False';
+                    item.dataset.favorite = record.favorite ? 'true' : 'false';
+                    target.textContent = record.favorite ? '★ お気に入り' : '☆ お気に入り';
+                    target.setAttribute('aria-pressed', record.favorite ? 'true' : 'false');
+                    this.scheduleSave();
+                    this.applyFilters();
+                }
+                return;
+            }
+
+            if (action === 'set-status' && effectNode) {
+                const record = this.findRecord(effectNode.closest('.item'));
+                if (!record) {
+                    return;
+                }
+                const effect = findEffect(record, Number(effectNode.dataset.slot));
+                if (!effect) {
+                    return;
+                }
+                const value = target.dataset.value || 'pending';
+                const next = effect.status === value ? 'pending' : value;
+                effect.status = next;
+                effect.rawStatusKey = `Effect${effect.slot}Status`;
+                record.raw[effect.rawStatusKey] = next;
+                if (next === 'pass' && !effect.correction) {
+                    effect.levelCorrection = '';
+                    record.raw[`Effect${effect.slot}LevelCorrection`] = '';
+                    delete effectNode.dataset.levelCorrection;
+                }
+                applyStatusStyles(effectNode, next);
+                const indicator = effectNode.querySelector('.status-indicator');
+                if (indicator) {
+                    indicator.textContent = statusLabel(next);
+                }
+                this.scheduleSave();
+                this.updateSummary();
+                return;
+            }
+        }
+
+        handleGalleryInput(event) {
+            const target = event.target;
+            if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) {
+                return;
+            }
+            const action = target.dataset.action;
+            if (!action) {
+                return;
+            }
+            const item = target.closest('.item');
+            const record = this.findRecord(item);
+            if (!record) {
+                return;
+            }
+
+            if (action === 'set-item-color') {
+                const select = target;
+                record.itemColor = select.value || '';
+                record.raw[ITEM_COLOR_KEY] = record.itemColor;
+                if (record.itemColor) {
+                    item.dataset.itemColor = record.itemColor;
+                } else {
+                    delete item.dataset.itemColor;
+                }
+                item.classList.remove('item-color-red', 'item-color-yellow', 'item-color-green', 'item-color-blue');
+                if (record.itemColor) {
+                    item.classList.add(colorClass(record.itemColor));
+                }
+                this.scheduleSave();
+                this.applyFilters();
+                return;
+            }
+
+            const effectNode = target.closest('.effect');
+            if (!effectNode) {
+                return;
+            }
+            const effect = findEffect(record, Number(effectNode.dataset.slot));
+            if (!effect) {
+                return;
+            }
+
+            if (action === 'set-correction') {
+                const value = target.value.trim();
+                effect.correction = value;
+                record.raw[`Effect${effect.slot}Correction`] = value;
+                if (value) {
+                    effectNode.dataset.correction = value.toLowerCase();
+                } else {
+                    delete effectNode.dataset.correction;
+                }
+                if (value) {
+                    effect.status = 'corrected';
+                    record.raw[`Effect${effect.slot}Status`] = 'corrected';
+                    applyStatusStyles(effectNode, effect.status);
+                    const indicator = effectNode.querySelector('.status-indicator');
+                    if (indicator) {
+                        indicator.textContent = statusLabel(effect.status);
+                    }
+                } else if (effect.status === 'corrected') {
+                    effect.status = 'pending';
+                    record.raw[`Effect${effect.slot}Status`] = 'pending';
+                    applyStatusStyles(effectNode, effect.status);
+                    const indicator = effectNode.querySelector('.status-indicator');
+                    if (indicator) {
+                        indicator.textContent = statusLabel(effect.status);
+                    }
+                }
+                const levelSelect = effectNode.querySelector('.level-input');
+                if (levelSelect) {
+                    populateLevelOptions(levelSelect, this.buildLevelCandidates(effect));
+                    levelSelect.value = effect.levelCorrection || (effect.showOriginalLevel ? effect.level : '');
+                }
+                const badge = effectNode.querySelector('.level-badge');
+                if (badge) {
+                    updateLevelBadge(badge, effect);
+                }
+                this.scheduleSave();
+                updateSearchCache(item, record);
+                this.applyFilters();
+                return;
+            }
+
+            if (action === 'set-level') {
+                const value = target.value.trim();
+                effect.levelCorrection = value;
+                record.raw[`Effect${effect.slot}LevelCorrection`] = value;
+                if (value) {
+                    effectNode.dataset.levelCorrection = value;
+                } else {
+                    delete effectNode.dataset.levelCorrection;
+                }
+                const badge = effectNode.querySelector('.level-badge');
+                if (badge) {
+                    updateLevelBadge(badge, effect);
+                }
+                this.scheduleSave();
+            }
+        }
+
+        findRecord(item) {
+            if (!item) {
+                return null;
+            }
+            const index = Number(item.dataset.index);
+            if (Number.isNaN(index) || index < 0 || index >= this.records.length) {
+                return null;
+            }
+            return this.records[index] || null;
+        }
+
+        applyFilters() {
+            const term = (this.dom.searchInput && this.dom.searchInput.value.trim().toLowerCase()) || '';
+            const filter = this.dom.filterSelect ? this.dom.filterSelect.value : 'all';
+            const colorFilter = this.dom.colorFilter ? this.dom.colorFilter.value : 'all';
+
+            this.items.forEach(({ element, record }) => {
+                const matchesSearch = !term || (element.dataset.search || '').includes(term);
+                const matchesStatus = matchStatusFilter(filter, record);
+                const matchesColor = matchColorFilter(colorFilter, record);
+                const hideDuplicate = record.duplicate && (!this.dom.showDuplicates || !this.dom.showDuplicates.checked);
+                const visible = matchesSearch && matchesStatus && matchesColor && !hideDuplicate;
+                element.style.display = visible ? '' : 'none';
+            });
+
+            this.updateSummary();
+        }
+
+        updateSummary() {
+            if (!this.dom.gallerySummary) {
+                return;
+            }
+            const total = this.records.length;
+            let confirmed = 0;
+            let pending = 0;
+            this.records.forEach((record) => {
+                const hasPending = record.effects.length
+                    ? record.effects.some((effect) => effect.status === 'pending')
+                    : true;
+                if (hasPending) {
+                    pending += 1;
+                }
+                const firstThree = record.effects.slice(0, 3);
+                if (firstThree.length && firstThree.every((effect) => effect.status === 'pass' || effect.status === 'corrected')) {
+                    confirmed += 1;
+                }
+            });
+            const prefix = this.datasetLabel ? `[${this.datasetLabel}] ` : '';
+            this.dom.gallerySummary.textContent = `${prefix}全体 ${total} 件 / 確認済み ${confirmed} 件 / 未レビュー ${pending} 件`;
+            this.dom.gallerySummary.style.display = total ? 'block' : 'none';
+        }
+
+        updateOcrVisibility(show) {
+            this.showOcr = show;
+            if (this.dom.showOcr) {
+                this.dom.showOcr.checked = show;
+            }
+            this.items.forEach(({ element }) => {
+                element.querySelectorAll('.prediction, .raw').forEach((node) => {
+                    node.style.display = show ? '' : 'none';
+                });
+            });
+        }
+
+        setStorageMessage(message, isError) {
+            if (!this.dom.storageStatus) {
+                return;
+            }
+            this.dom.storageStatus.textContent = message || '';
+            this.dom.storageStatus.classList.toggle('error', Boolean(isError));
+            this.dom.storageStatus.style.display = message ? 'inline' : 'none';
+        }
+
+        showStatus(message, isError = false) {
+            if (!this.dom.galleryStatus) {
+                return;
+            }
+            this.dom.galleryStatus.textContent = message;
+            this.dom.galleryStatus.classList.toggle('error', Boolean(isError));
+            this.dom.galleryStatus.style.display = message ? 'block' : 'none';
+        }
+
+        scheduleSave() {
+            if (this.datasetReadOnly) {
+                this.setStorageMessage('統合ビューでは保存できません。', true);
+                return;
+            }
+            if (this.saveTimer) {
+                clearTimeout(this.saveTimer);
+            }
+            this.saveTimer = setTimeout(() => {
+                this.saveTimer = null;
+                void this.saveNow();
+            }, SAVE_DEBOUNCE_MS);
+        }
+
+        async saveNow() {
+            if (this.datasetReadOnly) {
+                return;
+            }
+            if (!this.csvPath) {
+                this.setStorageMessage('保存先のCSVパスが不明です。', true);
+                return;
+            }
+            try {
+                this.setStorageMessage('保存中...', false);
+                const response = await fetch(SAVE_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        csvPath: this.csvPath,
+                        datasetLabel: this.datasetLabel || '',
+                        records: this.records.map((record) => record.raw)
+                    })
+                });
+                if (!response.ok) {
+                    const detail = await response.text();
+                    throw new Error(detail || `HTTP ${response.status}`);
+                }
+                this.lastSavedAt = new Date();
+                this.setStorageMessage(`保存しました ${this.lastSavedAt.toLocaleTimeString()}`, false);
+            } catch (error) {
+                console.error('保存に失敗しました:', error);
+                this.setStorageMessage(`保存失敗: ${error.message || error}`, true);
+            }
+        }
+
+        downloadCsv() {
+            if (!this.records.length) {
+                this.setStorageMessage('エクスポート可能なデータがありません。', true);
+                return;
+            }
+            const csvText = buildCsv(this.records.map((record) => record.raw), this.headers);
+            if (!csvText) {
+                this.setStorageMessage('CSVの生成に失敗しました。', true);
+                return;
+            }
+            const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const base = fileName(this.csvPath) || 'results.csv';
+            link.download = base.replace(/\.csv$/i, '_review.csv');
+            link.href = url;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            this.setStorageMessage('CSVをダウンロードしました。', false);
+        }
+
+        openLightbox(src) {
+            if (!this.dom.lightbox || !this.dom.lightboxImage) {
+                return;
+            }
+            this.dom.lightboxImage.src = src;
+            this.dom.lightbox.classList.add('show');
+        }
+
+        closeLightbox() {
+            if (!this.dom.lightbox || !this.dom.lightboxImage) {
+                return;
+            }
+            this.dom.lightboxImage.src = '';
+            this.dom.lightbox.classList.remove('show');
+        }
     }
 
-    function normalizeDatasetEntry(entry, index) {
-        if (entry == null) {
-            return null;
-        }
+    const app = new GalleryApp(dom, config);
+    void app.init();
 
-        let label = '';
-        let csv = '';
-        let imgDir = '';
-        let folder = '';
-        let kind = '';
-        let sources = [];
-
-        if (typeof entry === 'string') {
-            csv = entry;
-        } else if (Array.isArray(entry)) {
-            if (entry.length > 0) {
-                csv = entry[0];
-            }
-            if (entry.length > 1) {
-                imgDir = entry[1];
-            }
-            if (entry.length > 2) {
-                label = entry[2];
-            }
-        } else if (typeof entry === 'object') {
-            label = entry.label ?? entry.name ?? '';
-            csv = entry.csv ?? entry.results ?? entry.results_csv ?? entry.resultsCsv ?? '';
-            imgDir = entry.imgDir ?? entry.img_dir ?? entry.imageDir ?? entry.image_dir ?? entry.images ?? '';
-            folder = entry.folder ?? '';
-            kind = typeof entry.kind === 'string' ? entry.kind.trim() : typeof entry.type === 'string' ? entry.type.trim() : '';
-            if (!kind && entry.merged === true) {
-                kind = 'merged';
-            }
-            const rawSources = entry.sources ?? entry.merge ?? entry.mergeSources ?? entry.children ?? null;
-            sources = normalizeDatasetSources(rawSources);
-        } else {
-            csv = String(entry);
-        }
-
-        label = typeof label === 'string' ? label.trim() : '';
-        csv = typeof csv === 'string' ? csv.trim() : '';
-        imgDir = typeof imgDir === 'string' ? imgDir.trim() : '';
-        folder = typeof folder === 'string' ? folder.trim() : '';
-        kind = typeof kind === 'string' ? kind.trim().toLowerCase() : '';
-
-        const hasCsv = Boolean(csv);
-        const acceptsEmptyCsv = kind === 'merged' && sources.length > 0;
-        if (!hasCsv && !acceptsEmptyCsv) {
-            return null;
-        }
-
+    function parseConfig(dataset) {
         return {
-            label,
-            csv,
-            imgDir,
-            folder,
-            index,
-            kind,
-            sources
+            csvPath: dataset.resultsCsv || '',
+            imageDir: dataset.imgDir || '.',
+            labelSymbols: parseJsonArray(dataset.labelSymbols, ['①', '②', '③']),
+            masterCsv: dataset.masterCsv || '',
+            masterOptions: parseJsonArray(dataset.masterOptions, []),
+            masterLevels: parseMasterLevels(dataset.masterLevels),
+            datasets: parseDatasets(dataset.datasets),
+            activeDatasetIndex: Number.parseInt(dataset.activeDataset, 10) || 0,
+            datasetLabel: dataset.datasetLabel || ''
         };
     }
 
-    function parseDatasets(jsonText) {
-        if (!jsonText) {
+    function parseJsonArray(source, fallback) {
+        if (!source) {
+            return fallback.slice();
+        }
+        try {
+            const parsed = JSON.parse(source);
+            if (Array.isArray(parsed)) {
+                return parsed.map((value) => String(value));
+            }
+        } catch (error) {
+            console.warn('JSON配列の解析に失敗しました:', error);
+        }
+        return fallback.slice();
+    }
+
+    function parseMasterLevels(source) {
+        if (!source) {
+            return new Map();
+        }
+        try {
+            const parsed = JSON.parse(source);
+            const entries = Array.isArray(parsed) ? parsed : Object.entries(parsed);
+            const map = new Map();
+            entries.forEach(([key, value]) => {
+                const normalizedKey = normalizeEffectName(key);
+                if (!normalizedKey) {
+                    return;
+                }
+                const list = Array.isArray(value) ? value : [value];
+                const levels = list
+                    .map((entry) => String(entry).trim())
+                    .filter((entry) => entry);
+                if (levels.length) {
+                    map.set(normalizedKey, Array.from(new Set(levels)));
+                }
+            });
+            return map;
+        } catch (error) {
+            console.warn('マスターレベルJSONの解析に失敗しました:', error);
+            return new Map();
+        }
+    }
+
+    function parseDatasets(source) {
+        if (!source) {
             return [];
         }
         try {
-            const parsed = JSON.parse(jsonText);
+            const parsed = JSON.parse(source);
             if (!Array.isArray(parsed)) {
                 return [];
             }
             return parsed
-                .map((entry, index) => normalizeDatasetEntry(entry, index))
-                .filter((entry) => {
-                    if (!entry) {
-                        return false;
+                .map((entry) => {
+                    if (!entry || typeof entry !== 'object') {
+                        return null;
                     }
-                    if (entry.csv) {
-                        return true;
+                    const normalized = {
+                        label: entry.label || '',
+                        csvPath: entry.csv || entry.csvPath || '',
+                        imageDir: entry.imgDir || entry.imageDir || '',
+                        kind: entry.kind || 'single',
+                        readOnly: Boolean(entry.readOnly),
+                        sources: Array.isArray(entry.sources) ? entry.sources : []
+                    };
+                    if (!normalized.csvPath && normalized.kind !== 'merged') {
+                        return null;
                     }
-                    return entry.kind === 'merged' && Array.isArray(entry.sources) && entry.sources.length > 0;
-                });
+                    return normalized;
+                })
+                .filter(Boolean);
         } catch (error) {
-            console.warn('dataset listの解析に失敗しました:', error);
+            console.warn('datasetの解析に失敗しました:', error);
             return [];
         }
     }
 
-    function cloneDatasetSources(list) {
-        if (!Array.isArray(list)) {
-            return [];
+    function datasetLabel(dataset, index) {
+        const label = dataset.label || `データセット ${index + 1}`;
+        if (dataset.kind === 'merged') {
+            return `${label} (統合ビュー)`;
         }
-        return list.map((source) => ({
-            label: source && typeof source.label === 'string' ? source.label : '',
-            csv: source && typeof source.csv === 'string' ? source.csv : '',
-            imgDir: source && typeof source.imgDir === 'string' ? source.imgDir : '',
-            folder: source && typeof source.folder === 'string' ? source.folder : '',
-            index: source && Number.isFinite(source.index) ? Number(source.index) : 0
-        }));
+        return label;
     }
 
-    function areSourcesEqual(left, right) {
-        const a = Array.isArray(left) ? left : [];
-        const b = Array.isArray(right) ? right : [];
-        if (a.length !== b.length) {
-            return false;
-        }
-        for (let i = 0; i < a.length; i += 1) {
-            const leftEntry = a[i] || {};
-            const rightEntry = b[i] || {};
-            if ((leftEntry.csv || '') !== (rightEntry.csv || '')) {
-                return false;
-            }
-            if ((leftEntry.imgDir || '') !== (rightEntry.imgDir || '')) {
-                return false;
-            }
-            if ((leftEntry.label || '') !== (rightEntry.label || '')) {
-                return false;
-            }
-            if ((leftEntry.folder || '') !== (rightEntry.folder || '')) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    function resolveDatasetState(dataset, index) {
-        if (!dataset) {
-            return {
-                label: '',
-                folder: '',
-                kind: '',
-                csvPath: '',
-                imageDir: '',
-                sources: []
-            };
-        }
-        const label = dataset.label || '';
-        const folder = dataset.folder || '';
-        const kind = dataset.kind || '';
-        const sources = cloneDatasetSources(dataset.sources);
-        const isMerged = kind === 'merged' && sources.length > 0;
-        const csvPath = isMerged ? dataset.csv || 'merged-dataset.csv' : dataset.csv || '';
-        const imageDir = isMerged ? '' : dataset.imgDir || '';
-        return {
-            label,
-            folder,
-            kind,
-            csvPath,
-            imageDir,
-            sources
-        };
-    }
-
-    function applyDatasetState(descriptor) {
-        state.datasetLabel = descriptor.label || '';
-        state.datasetFolder = descriptor.folder || '';
-        state.datasetKind = descriptor.kind || '';
-        state.datasetSources = cloneDatasetSources(descriptor.sources);
-        if (state.datasetKind === 'merged') {
-            state.csvPath = descriptor.csvPath || 'merged-dataset.csv';
-            state.imageDir = '';
-        } else {
-            state.csvPath = descriptor.csvPath || '';
-            state.imageDir = descriptor.imageDir ? descriptor.imageDir : '.';
-        }
-        updateSaveAvailability();
-    }
-
-    function updateSaveAvailability() {
-        if (state.datasetKind === 'merged') {
-            setStorageStatus('統合ビューは読み取り専用です。個別データセットを選択してください。', true);
-        } else {
-            setStorageStatus('変更は即座にCSVへ保存されます。', false);
-        }
-    }
-
-    function datasetOptionLabel(dataset, index) {
-        if (!dataset) {
-            return `データセット ${index + 1}`;
-        }
-        const baseLabel = dataset.label || `データセット ${index + 1}`;
-        const folder = dataset.folder || '';
-        if (folder && folder !== baseLabel) {
-            const suffix = `(${folder})`;
-            if (!baseLabel.endsWith(suffix)) {
-                return `${baseLabel} ${suffix}`;
-            }
-        }
-        return baseLabel;
-    }
-
-    function showStatus(message, isError) {
-        if (!dom.galleryStatus) {
-            return;
-        }
-        dom.galleryStatus.textContent = message || '';
-        dom.galleryStatus.classList.toggle('error', Boolean(isError));
-        dom.galleryStatus.style.display = message ? 'block' : 'none';
-    }
-
-    function clearStatus() {
-        showStatus('', false);
-    }
-
-    function setStorageStatus(message, isError) {
-        if (!dom.storageStatus) {
-            return;
-        }
-        dom.storageStatus.textContent = message || '';
-        dom.storageStatus.classList.toggle('error', Boolean(isError));
-        dom.storageStatus.style.display = message ? 'inline' : 'none';
-    }
-
-    function updateSummary() {
-        const summary = ensureSummaryElement();
-        if (!summary) {
-            return;
-        }
-        const items = state.items || [];
-        const totalCount = items.length;
-        let fullyConfirmedCount = 0;
-        let pendingCount = 0;
-
-        items.forEach((item) => {
-            if (!item) {
-                return;
-            }
-            const effects = Array.from(item.querySelectorAll('.effect'));
-            if (!effects.length) {
-                pendingCount += 1;
-                return;
-            }
-            const slotStatuses = new Map();
-            let hasPending = false;
-            effects.forEach((effect) => {
-                const status = normalizeStatus(effect.dataset.status);
-                if (status === 'pending') {
-                    hasPending = true;
-                }
-                const slot = Number(effect.dataset.slot);
-                if (!Number.isNaN(slot)) {
-                    slotStatuses.set(slot, status);
-                }
-            });
-            if (hasPending) {
-                pendingCount += 1;
-            }
-            const targetSlots = [1, 2, 3];
-            const allSlotsPresent = targetSlots.every((slot) => slotStatuses.has(slot));
-            if (allSlotsPresent) {
-                const allReviewed = targetSlots.every((slot) => {
-                    const status = slotStatuses.get(slot);
-                    return status && status !== 'pending';
-                });
-                if (allReviewed) {
-                    fullyConfirmedCount += 1;
-                }
-            }
-        });
-
-        const datasetName = state.datasetLabel || '';
-        const prefix = datasetName ? `[${datasetName}] ` : '';
-        const summaryText = `${prefix}全体 ${totalCount} 件 / 確認済み ${fullyConfirmedCount} 件 / 未レビュー ${pendingCount} 件`;
-        summary.textContent = summaryText;
-        summary.style.display = 'flex';
-        summary.style.justifyContent = 'center';
-        summary.style.textAlign = 'center';
-    }
-
-    function updateInputValueAttribute(input) {
-        if (!input) {
-            return;
-        }
-        const current = input.value == null ? '' : String(input.value);
-        input.setAttribute('value', current);
-    }
-
-    function createElement(tag, className, text) {
-        const element = document.createElement(tag);
-        if (className) {
-            element.className = className;
-        }
-        if (text != null) {
-            element.textContent = text;
-        }
-        return element;
-    }
-
-    function sanitizeLevelList(values) {
-        if (!Array.isArray(values)) {
-            return [];
-        }
-        return values
-            .map((value) => (value == null ? '' : String(value).trim()))
-            .filter((value) => value !== '');
-    }
-
-    function normalizeLevelNumericValue(value) {
-        if (value == null) {
-            return null;
-        }
-        const text = String(value).trim();
-        if (!text) {
-            return null;
-        }
-        const normalized = text
-            .replace(/[＋﹢]/g, '+')
-            .replace(/[－﹣−]/g, '-')
-            .replace(/\s+/g, '');
-        const match = normalized.match(/^[+-]?\d+(?:\.\d+)?$/);
-        if (!match) {
-            return null;
-        }
-        const numeric = Number(normalized);
-        return Number.isNaN(numeric) ? null : numeric;
-    }
-
-    function sortLevelsAscending(values) {
-        if (!Array.isArray(values)) {
-            return [];
-        }
-        return values.slice().sort((a, b) => {
-            const textA = String(a).trim();
-            const textB = String(b).trim();
-            const numA = normalizeLevelNumericValue(textA);
-            const numB = normalizeLevelNumericValue(textB);
-            const hasNumA = numA != null;
-            const hasNumB = numB != null;
-            if (hasNumA && hasNumB) {
-                if (numA !== numB) {
-                    return numA - numB;
-                }
-                return textA.localeCompare(textB, 'ja');
-            }
-            if (hasNumA) {
-                return -1;
-            }
-            if (hasNumB) {
-                return 1;
-            }
-            return textA.localeCompare(textB, 'ja');
-        });
-    }
-
-    function setCorrectionLevelCandidates(effect, candidates) {
-        const sanitized = sanitizeLevelList(candidates);
-        const sorted = sortLevelsAscending(sanitized);
-        if (!effect) {
-            return sorted;
-        }
-        const input = effect.querySelector ? effect.querySelector('.correction-input') : null;
-        if (input) {
-            input.dataset.levelCandidates = JSON.stringify(sorted);
-        }
-        return sorted;
-    }
-
-    function updateLevelInputAvailability(select, options) {
-        if (!select) {
-            return;
-        }
-        const hasUsableOption = Array.isArray(options) && options.some((value) => {
-            if (value == null) {
-                return false;
-            }
-            return String(value).trim() !== '';
-        });
-        select.disabled = !hasUsableOption;
-        if (!hasUsableOption) {
-            select.value = '';
-        }
-    }
-
-    function getBaseLevelOptions(effect) {
-        if (!effect) {
-            return [];
-        }
-        const json = effect.dataset.levelOptionsBaseJson;
-        if (json) {
-            try {
-                const parsed = JSON.parse(json);
-                return sanitizeLevelList(parsed);
-            } catch (error) {
-                console.warn('レベル候補(base json)の解析に失敗しました:', error);
-            }
-        }
-        const legacyBase = effect.dataset.levelOptionsBase;
-        if (legacyBase != null) {
-            return sanitizeLevelList(legacyBase.split('|'));
-        }
-        const display = effect.dataset.levelOptionsDisplay;
-        if (display != null) {
-            return sanitizeLevelList(display.split('|'));
-        }
-        return [];
-    }
-
-    function parseLevelOptions(raw) {
-        if (raw == null) {
-            return [];
-        }
-        if (Array.isArray(raw)) {
-            return raw
-                .map((entry) => (entry == null ? '' : String(entry).trim()))
-                .filter((entry) => entry !== '');
-        }
-        const text = String(raw).trim();
-        if (!text) {
-            return [];
-        }
-        return text
-            .split('|')
-            .map((entry) => entry.trim())
-            .filter((entry) => entry !== '');
-    }
-
-    function normalizeEffectName(value) {
-        if (value == null) {
-            return '';
-        }
-        return String(value).trim();
-    }
-
-    function effectKey(value) {
-        const normalized = normalizeEffectName(value);
-        return normalized ? normalized.toLowerCase() : '';
-    }
-
-    function parseLevelTokens(raw) {
-        if (raw == null) {
-            return [];
-        }
-        const text = String(raw).trim();
-        if (!text) {
-            return [];
-        }
-        const lower = text.toLowerCase();
-        if (lower === 'false' || lower === 'no' || lower === 'none') {
-            return [];
-        }
-        return text
-            .split(',')
-            .map((token) => token.trim())
-            .filter((token) => token && token !== '-');
-    }
-
-    function parseMasterLevelsCsv(csvText) {
-        const records = parseCsvRecords(csvText);
-        const map = new Map();
-        records.forEach((record) => {
-            if (!record || typeof record !== 'object') {
-                return;
-            }
-            const effectName = normalizeEffectName(
-                record.EffectBase || record.effect || record.name || record.value
-            );
-            if (!effectName || effectName === '-') {
-                return;
-            }
-            const levels = parseLevelTokens(record.Levels);
-            if (!levels.length) {
-                return;
-            }
-            const key = effectKey(effectName);
-            const existing = map.get(key) || [];
-            levels.forEach((level) => {
-                const normalizedLevel = String(level).trim();
-                if (!normalizedLevel) {
-                    return;
-                }
-                const lower = normalizedLevel.toLowerCase();
-                if (existing.some((value) => value.toLowerCase() === lower)) {
-                    return;
-                }
-                existing.push(normalizedLevel);
-            });
-            if (existing.length) {
-                map.set(key, existing);
-            }
-        });
-        return map;
-    }
-
-    async function ensureMasterLevels() {
-        if (state.masterLevelsLoaded) {
-            return;
-        }
-        if (state.masterLevelsPromise) {
-            await state.masterLevelsPromise;
-            return;
-        }
-        state.masterLevelsPromise = (async () => {
-            const csvPath = state.masterCsvPath;
-            if (!csvPath) {
-                state.masterLevels = null;
-                state.masterLevelsLoaded = true;
-                state.masterLevelsPromise = null;
-                return;
-            }
-            try {
-                const response = await fetch(csvPath, { cache: 'no-cache' });
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                const csvText = await response.text();
-                state.masterLevels = parseMasterLevelsCsv(csvText);
-            } catch (error) {
-                console.warn('レベル候補の読み込みに失敗しました:', error);
-                state.masterLevels = null;
-            } finally {
-                state.masterLevelsLoaded = true;
-                state.masterLevelsPromise = null;
-            }
-        })();
-        await state.masterLevelsPromise;
-    }
-
-    function getMasterLevelOptions(effectName) {
-        const key = effectKey(effectName);
-        if (!key) {
-            return null;
-        }
-        const map = state.masterLevels;
-        if (!(map instanceof Map)) {
-            return null;
-        }
-        const values = map.get(key);
-        return Array.isArray(values) && values.length ? values.slice() : [];
-    }
-
-    function applyMasterLevelOptions(effect, select, effectName) {
-        if (!effect || !select) {
-            return;
-        }
-
-        const applyCandidates = (candidates, overrideBase = true) => {
-            const sortedCandidates = setCorrectionLevelCandidates(effect, candidates);
-            if (overrideBase) {
-                effect.dataset.levelOptionsBaseJson = JSON.stringify(sortedCandidates);
-                rebuildLevelSelectOptions(effect, select, sortedCandidates);
-            } else {
-                rebuildLevelSelectOptions(effect, select);
-            }
-        };
-
-        const normalized = normalizeEffectName(effectName);
-        if (!state.masterLevelsLoaded) {
-            applyCandidates([], false);
-            void ensureMasterLevels().then(() => {
-                applyMasterLevelOptions(effect, select, normalized);
-            });
-            return;
-        }
-
-        if (!normalized) {
-            applyCandidates([], false);
-            return;
-        }
-
-        const options = getMasterLevelOptions(normalized);
-        if (options && options.length) {
-            applyCandidates(options);
-        } else {
-            applyCandidates([]);
-        }
-    }
-
-    function parseMasterOptions(source) {
-        let list = source;
-        if (typeof source === 'string') {
-            if (!source) {
-                return [];
-            }
-            try {
-                list = JSON.parse(source);
-            } catch (error) {
-                console.warn('master optionsの解析に失敗しました:', error);
-                return [];
-            }
-        }
-
-        if (!Array.isArray(list)) {
-            return [];
-        }
-
-        return list
-            .map((entry) => {
-                if (entry == null) {
-                    return '';
-                }
-                if (typeof entry === 'object') {
-                    const raw =
-                        entry.EffectBase || entry.effect || entry.name || entry.value || '';
-                    return typeof raw === 'string' ? raw.trim() : '';
-                }
-                return String(entry).trim();
-            })
-            .filter((value) => value !== '');
-    }
-
-
-    function parseMasterLevels(source) {
-        const map = new Map();
-        if (!source) {
-            return map;
-        }
-        let payload = source;
-        if (typeof source === 'string') {
-            const text = source.trim();
-            if (!text) {
-                return map;
-            }
-            try {
-                payload = JSON.parse(text);
-            } catch (error) {
-                console.warn('master levelsの解析に失敗しました:', error);
-                return map;
-            }
-        }
-
-        if (!payload || typeof payload !== 'object') {
-            return map;
-        }
-        const entries = Array.isArray(payload) ? payload : Object.entries(payload);
-        const normalizeEntry = (entry) => {
-            if (!entry) {
-                return null;
-            }
-            if (Array.isArray(entry)) {
-                return entry;
-            }
-            if (typeof entry === 'object' && 'key' in entry && 'value' in entry) {
-                return [entry.key, entry.value];
-            }
-            return null;
-        };
-        entries.forEach((entry) => {
-            let key;
-            let value;
-            if (Array.isArray(entry) && entry.length >= 2) {
-                [key, value] = entry;
-            } else {
-                const normalizedEntry = normalizeEntry(entry);
-                if (!normalizedEntry) {
-                    return;
-                }
-                [key, value] = normalizedEntry;
-            }
-            const effect = effectKey(key);
-            if (!effect) {
-                return;
-            }
-            const list = Array.isArray(value) ? value : [value];
-            const sanitized = sanitizeLevelList(list);
-            if (!sanitized.length) {
-                return;
-            }
-            map.set(effect, sanitized);
-        });
-        return map;
-    }
-
-    function setupMasterOptions() {
-        state.masterDatalistPrepared = false;
-    }
-
-    function ensureMasterDatalist() {
-        if (state.masterDatalistPrepared) {
-            return;
-        }
-        let datalist = document.getElementById(MASTER_DATALIST_ID);
-        if (!datalist) {
-            datalist = document.createElement('datalist');
-            datalist.id = MASTER_DATALIST_ID;
-            document.body.appendChild(datalist);
-        } else {
-            datalist.textContent = '';
-        }
-
-        state.masterOptions.forEach((value) => {
-            const option = document.createElement('option');
-            option.value = value;
-            datalist.appendChild(option);
-        });
-
-        state.masterDatalistPrepared = true;
-    }
-
-    async function ensureMasterOptions() {
-        if (state.masterOptions.length) {
-            setupMasterOptions();
-            ensureMasterDatalist();
-            return;
-        }
-
-        if (!state.masterJsonPath) {
-            setupMasterOptions();
-            ensureMasterDatalist();
-            return;
-        }
-
-        try {
-            const response = await fetch(state.masterJsonPath, { cache: 'no-cache' });
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            const data = await response.json();
-            state.masterOptions = parseMasterOptions(data);
-        } catch (error) {
-            console.error('マスターデータの読み込みに失敗しました:', error);
-            setStorageStatus(`マスターデータの読み込みに失敗しました: ${error.message || error}`, true);
-            state.masterOptions = [];
-        }
-
-        setupMasterOptions();
-        ensureMasterDatalist();
-    }
-
-    function csvFileName() {
-        const baseName = storage.fileName || getFileName(state.csvPath) || 'results.csv';
-        const converted = baseName.replace(/\.csv$/i, '_review.csv');
-        if (converted !== baseName) {
-            return converted;
-        }
-        if (!baseName) {
-            return 'results_review.csv';
-        }
-        return `${baseName.replace(/\.csv$/i, '')}_review.csv`;
-    }
-
-    function joinPath(base, leaf) {
-        if (!leaf) {
-            return base || '';
-        }
-        if (!base) {
-            return leaf;
-        }
-        const cleanBase = base.replace(/[\/]+$/, '');
-        const cleanLeaf = leaf.replace(/^[\/]+/, '');
-        return `${cleanBase}/${cleanLeaf}`;
-    }
-
-    function normalizeStatus(value) {
-        const text = (value || '').toString().toLowerCase();
-        if (text === 'pass') {
-            return 'pass';
-        }
-        if (text === 'corrected') {
-            return 'corrected';
-        }
-        if (text === 'fail') {
-            return 'pending';
-        }
-        return 'pending';
-    }
-
-    function statusLabel(status) {
-        if (status === 'pass') {
-            return '確認済み';
-        }
-        if (status === 'corrected') {
-            return '修正済み';
-        }
-        return '未レビュー';
-    }
-
-    function ensureLabelCoverage(records) {
-        let maxSlot = state.labelSymbols.length;
-        records.forEach((record) => {
-            if (!record || typeof record !== 'object') {
-                return;
-            }
-            Object.keys(record).forEach((key) => {
-                const match = /^Effect(\d+)$/.exec(key);
-                if (match) {
-                    const slot = parseInt(match[1], 10);
-                    if (!Number.isNaN(slot) && slot > maxSlot) {
-                        maxSlot = slot;
-                    }
-                }
-            });
-        });
-        for (let slot = state.labelSymbols.length + 1; slot <= maxSlot; slot += 1) {
-            state.labelSymbols.push(`Slot ${slot}`);
-        }
-    }
-
-    function includeDuplicatesNow() {
-        return Boolean(dom.showDuplicatesToggle && dom.showDuplicatesToggle.checked);
-    }
-
-    function ocrToggleState() {
-        return Boolean(dom.showOcrToggle && dom.showOcrToggle.checked);
-    }
-
-    function setOcrVisibility(show) {
-        state.showOcr = Boolean(show);
-        if (dom.showOcrToggle) {
-            dom.showOcrToggle.checked = state.showOcr;
-        }
-        if (!dom.gallery) {
-            return;
-        }
-        dom.gallery.querySelectorAll('.raw, .prediction').forEach((element) => {
-            element.style.display = state.showOcr ? '' : 'none';
-        });
-    }
-
-    function buildGallery() {
-        const includeDuplicates = includeDuplicatesNow();
-        dom.gallery.textContent = '';
-        state.items = [];
-
-        const fragment = document.createDocumentFragment();
-
-        const visibleTotal = state.records.reduce((count, currentRecord) => {
-            if (!currentRecord || typeof currentRecord !== 'object') {
-                return count;
-            }
-            return isRecordDuplicate(currentRecord) ? count : count + 1;
-        }, 0);
-        let visibleCounter = 0;
-
-        state.records.forEach((record, index) => {
-            const duplicateRecord = isRecordDuplicate(record);
-            if (!duplicateRecord) {
-                visibleCounter += 1;
-            }
-            if (duplicateRecord && !includeDuplicates) {
-                return;
-            }
-            const effectiveIndex = duplicateRecord ? (visibleCounter > 0 ? visibleCounter : 0) : visibleCounter;
-            const item = createItem(record, index, effectiveIndex, visibleTotal);
-            if (item) {
-                fragment.appendChild(item);
-                state.items.push(item);
-            }
-        });
-
-        if (fragment.childNodes.length) {
-            dom.gallery.appendChild(fragment);
-        }
-
-        updateSummary();
-        setOcrVisibility(ocrToggleState());
-
-        if (!state.items.length) {
-            showStatus('表示できる結果がありません。', false);
-            return;
-        }
-        clearStatus();
-        applyFilters();
-    }
-
-    function createItem(record, recordIndex, visibleIndex, visibleTotal) {
-        if (!record || typeof record !== 'object') {
-            return null;
-        }
-        const imageName = record.Image == null ? '' : String(record.Image);
-        const baseImageName = record.BaseImage == null ? '' : String(record.BaseImage);
-        const displayName = baseImageName || getFileName(imageName) || imageName;
-        const datasetName = state.datasetKind === 'merged' ? (record.Dataset == null ? '' : String(record.Dataset)) : '';
-        const datasetFolder = state.datasetKind === 'merged' ? (record.DatasetFolder == null ? '' : String(record.DatasetFolder)) : '';
-        const item = document.createElement('div');
-        item.className = 'item';
-        item.dataset.image = imageName.toLowerCase();
-        item.dataset.imageName = imageName;
-        item.dataset.recordIndex = String(recordIndex);
-        if (baseImageName) {
-            item.dataset.baseImage = baseImageName.toLowerCase();
-        }
-        if (datasetName) {
-            item.dataset.datasetLabel = datasetName.toLowerCase();
-        }
-
-        const leftColumn = createElement('div', 'item-left');
-        const rightColumn = createElement('div', 'item-right');
-        item.appendChild(leftColumn);
-        item.appendChild(rightColumn);
-
-        const imagePath = joinPath(state.imageDir, imageName);
-        const img = createElement('img');
-        img.src = imagePath;
-        img.alt = displayName || imageName;
-        img.dataset.full = imagePath;
-        img.tabIndex = 0;
-        leftColumn.appendChild(img);
-
-        const controls = createElement('div', 'item-controls');
-        const duplicateButton = createElement('button', 'duplicate-toggle');
-        duplicateButton.type = 'button';
-        duplicateButton.dataset.image = imageName;
-        duplicateButton.dataset.action = 'toggle-duplicate';
-        duplicateButton.setAttribute('aria-pressed', 'false');
-        controls.appendChild(duplicateButton);
-
-        const favoriteButton = createElement('button', 'favorite-toggle', 'お気に入り');
-        favoriteButton.type = 'button';
-        favoriteButton.dataset.image = imageName;
-        favoriteButton.dataset.action = 'toggle-favorite';
-        favoriteButton.setAttribute('aria-pressed', 'false');
-        controls.appendChild(favoriteButton);
-
-        const colorControls = createElement('div', 'item-color-controls');
-        const colorLabel = createElement('label', 'item-color-label', '色');
-        colorLabel.setAttribute('for', `item-color-${recordIndex}`);
-        const colorSelect = createElement('select', 'item-color-select');
-        colorSelect.id = `item-color-${recordIndex}`;
-        colorSelect.dataset.action = 'set-item-color';
-        colorSelect.dataset.recordIndex = String(recordIndex);
-        const emptyOption = createElement('option');
-        emptyOption.value = '';
-        emptyOption.textContent = 'なし';
-        colorSelect.appendChild(emptyOption);
-        ITEM_COLOR_OPTIONS.forEach((option) => {
-            const colorOption = createElement('option');
-            colorOption.value = option.key;
-            colorOption.textContent = option.label;
-            colorSelect.appendChild(colorOption);
-        });
-        colorControls.appendChild(colorLabel);
-        colorControls.appendChild(colorSelect);
-        controls.appendChild(colorControls);
-
-        const metaInfo = createElement('div', 'item-meta');
-        if (visibleTotal > 0) {
-            let displayIndex = visibleIndex;
-            if (displayIndex <= 0) {
-                displayIndex = 1;
-            } else if (displayIndex > visibleTotal) {
-                displayIndex = visibleTotal;
-            }
-            metaInfo.appendChild(createElement('span', 'item-position', `${displayIndex} / ${visibleTotal}`));
-        } else {
-            metaInfo.appendChild(createElement('span', 'item-position', '- / 0'));
-        }
-
-        if (state.datasetKind === 'merged' && datasetName) {
-            const datasetBadge = createElement('span', 'dataset-label', datasetName);
-            const badgeTitle = datasetFolder ? `${datasetName} (${datasetFolder})` : datasetName;
-            datasetBadge.setAttribute('title', badgeTitle);
-            metaInfo.appendChild(datasetBadge);
-        }
-
-        const filename = createElement('span', 'filename', displayName || imageName);
-        filename.setAttribute('title', imageName || displayName || '');
-        metaInfo.appendChild(filename);
-
-        controls.appendChild(metaInfo);
-        leftColumn.appendChild(controls);
-        bindImage(img);
-
-        let hasEffect = false;
-        state.labelSymbols.forEach((symbol, index) => {
-            const effect = createEffect(record, index + 1, symbol || `Slot ${index + 1}`, imageName, recordIndex);
-            if (effect) {
-                rightColumn.appendChild(effect);
-                hasEffect = true;
-            }
-        });
-
-        if (!hasEffect) {
-            const placeholder = document.createElement('p');
-            placeholder.className = 'no-effect';
-            placeholder.textContent = '効果情報がありません。';
-            rightColumn.appendChild(placeholder);
-        }
-
-        syncDuplicateState(item);
-        syncFavoriteState(item);
-        syncItemColorState(item);
-        refreshItemCaches(item);
-        return item;
-    }
-
-    function normalizeDuplicateFlag(value) {
-        return duplicateFlags.normalize(value);
-    }
-
-    function isRecordDuplicate(record) {
-        return duplicateFlags.isSet(record);
-    }
-
-    function setRecordDuplicate(recordIndex, isDuplicate) {
-        return duplicateFlags.set(recordIndex, isDuplicate);
-    }
-
-    function normalizeFavoriteFlag(value) {
-        return favoriteFlags.normalize(value);
-    }
-
-    function isRecordFavorite(record) {
-        return favoriteFlags.isSet(record);
-    }
-
-    function setRecordFavorite(recordIndex, isFavorite) {
-        return favoriteFlags.set(recordIndex, isFavorite);
-    }
-
-    function normalizeItemColor(value) {
-        const text = (value || '').toString().trim().toLowerCase();
-        const option = ITEM_COLOR_OPTIONS.find((entry) => entry.key === text);
-        return option ? option.key : '';
-    }
-
-    function setRecordItemColor(recordIndex, colorKey) {
-        const record = getRecordByIndex(recordIndex);
-        if (!record) {
-            return false;
-        }
-        const normalized = normalizeItemColor(colorKey);
-        if (normalized) {
-            if (record.ItemColor === normalized) {
-                return false;
-            }
-            record.ItemColor = normalized;
-            return true;
-        }
-        if (Object.prototype.hasOwnProperty.call(record, 'ItemColor')) {
-            delete record.ItemColor;
-            return true;
-        }
-        return false;
-    }
-
-    function applyItemColor(item, colorKey) {
-        if (!item) {
-            return;
-        }
-        const normalized = normalizeItemColor(colorKey);
-        ITEM_COLOR_OPTIONS.forEach((entry) => {
-            item.classList.remove(entry.className);
-        });
-        if (normalized) {
-            const option = ITEM_COLOR_OPTIONS.find((entry) => entry.key === normalized);
-            if (option) {
-                item.classList.add(option.className);
-            }
-            item.dataset.itemColor = normalized;
-        } else {
-            delete item.dataset.itemColor;
-        }
-        const select = item.querySelector('.item-color-select');
-        if (select) {
-            const value = normalized || '';
-            select.value = value;
-            select.classList.remove('option-red', 'option-yellow', 'option-green', 'option-blue', 'option-none');
-            select.classList.add(value ? `option-${value}` : 'option-none');
-        }
-    }
-
-    function syncItemColorState(item) {
-        if (!item) {
-            return;
-        }
-        const context = getItemContext(item);
-        const colorKey = context ? context.record.ItemColor : '';
-        applyItemColor(item, colorKey);
-    }
-
-    function updateFavoriteVisuals(item, isFavorite) {
-        if (!item) {
-            return;
-        }
-        const button = item.querySelector('.favorite-toggle');
-        const active = Boolean(isFavorite);
-        item.dataset.favorite = active ? 'true' : 'false';
-        item.classList.toggle('is-favorite', active);
-        if (button) {
-            button.textContent = active ? '★ お気に入り' : '☆ お気に入り';
-            button.classList.toggle('is-active', active);
-            button.setAttribute('aria-pressed', active ? 'true' : 'false');
-        }
-    }
-
-    function syncFavoriteState(item) {
-        if (!item) {
-            return;
-        }
-        const context = getItemContext(item);
-        const isFavorite = context ? isRecordFavorite(context.record) : false;
-        updateFavoriteVisuals(item, isFavorite);
-    }
-
-    function updateDuplicateVisuals(item, isDuplicate) {
-        if (!item) {
-            return;
-        }
-        const value = Boolean(isDuplicate);
-        item.dataset.duplicate = value ? 'true' : 'false';
-        item.classList.toggle('is-duplicate', value);
-
-        const button = item.querySelector('.duplicate-toggle');
-        if (button) {
-            button.textContent = value ? '重複を解除' : '重複として隠す';
-            button.setAttribute('aria-pressed', value ? 'true' : 'false');
-        }
-
-    }
-
-    function syncDuplicateState(item) {
-        if (!item) {
-            return;
-        }
-        const context = getItemContext(item);
-        const imageName = item.dataset.imageName || '';
-        const recordDuplicate = context ? isRecordDuplicate(context.record) : false;
-        const storedDuplicate = imageName ? duplicates.has(imageName) : false;
-        const isDuplicate = recordDuplicate || storedDuplicate;
-        if (imageName) {
-            duplicates.set(imageName, isDuplicate);
-        }
-        updateDuplicateVisuals(item, isDuplicate);
-    }
-
-    function refreshItemCaches(item) {
-        if (!item) {
-            return;
-        }
-        const tokens = [];
-        const statuses = new Set();
-
-        const imageToken = item.dataset.image;
-        if (imageToken) {
-            tokens.push(imageToken);
-        }
-        const baseImageToken = item.dataset.baseImage;
-        if (baseImageToken) {
-            tokens.push(baseImageToken);
-        }
-        const datasetToken = item.dataset.datasetLabel;
-        if (datasetToken) {
-            tokens.push(datasetToken);
-        }
-
-        item.querySelectorAll('.effect').forEach((effect) => {
-            const { pred = '', raw = '', correction = '', status = 'pending', level = '', levelOptions = '', levelCorrection = '' } = effect.dataset;
-            if (pred) {
-                tokens.push(pred);
-            }
-            if (raw) {
-                tokens.push(raw);
-            }
-            if (correction) {
-                tokens.push(correction);
-            }
-            if (level) {
-                tokens.push(level);
-            }
-            if (levelCorrection) {
-                tokens.push(levelCorrection);
-            }
-            if (levelOptions) {
-                tokens.push(levelOptions);
-            }
-            statuses.add(status || 'pending');
-        });
-
-        const combined = tokens
-            .filter((token) => token && token.trim() !== '')
-            .join(' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-
-        item.dataset.searchCache = combined ? ` ${combined} ` : '';
-
-        const statusValues = statuses.size ? Array.from(statuses) : ['pending'];
-        item.dataset.statusCache = `|${statusValues.join('|')}|`;
-        const effectStates = [];
-        item.querySelectorAll('.effect').forEach((effect) => {
-            const status = effect.dataset.status || 'pending';
-            effectStates.push(status);
-        });
-        item.dataset.effectStates = effectStates.join(',');
-    }
-
-    function createEffect(record, slot, symbol, imageName, recordIndex) {
-        const prediction = record[`Effect${slot}`];
-        const raw = record[`RawText${slot}`];
-        const score = record[`Effect${slot}Score`];
-        let statusValue = normalizeStatus(record[`Effect${slot}Status`]);
-
-        const predictionText = prediction == null ? '' : String(prediction);
-        const rawText = raw == null ? '' : String(raw);
-        const hasContent = predictionText || rawText || (!Number.isNaN(Number(score)) && score != null);
-        if (!hasContent) {
-            return null;
-        }
-
-        const effect = createElement('div', 'effect');
-        effect.dataset.slot = String(slot);
-        effect.dataset.image = (imageName || '').toLowerCase();
-        effect.dataset.pred = predictionText.toLowerCase();
-        effect.dataset.predictionValue = predictionText;
-        effect.dataset.raw = rawText.toLowerCase();
-        effect.dataset.recordIndex = String(recordIndex);
-
-        const levelValueRaw = record[`Effect${slot}Level`];
-        const levelValue = levelValueRaw == null ? '' : String(levelValueRaw).trim();
-        const levelOptionsRaw = record[`Effect${slot}LevelOptions`];
-        const levelOptions = parseLevelOptions(levelOptionsRaw);
-        const levelOptionsLower = levelOptions.map((value) => value.toLowerCase());
-        const levelCorrectionKey = `Effect${slot}LevelCorrection`;
-        const levelCorrectionRaw = record[levelCorrectionKey];
-        const levelCorrection = levelCorrectionRaw == null ? '' : String(levelCorrectionRaw).trim();
-        const levelSuppressedRaw = record[`Effect${slot}LevelSuppressed`];
-        const levelSuppressed = typeof levelSuppressedRaw === 'boolean' ? levelSuppressedRaw : String(levelSuppressedRaw || '').trim().toLowerCase() === 'true';
-        const preserveOriginalLevel = !levelSuppressed;
-        effect.dataset.preserveOriginalLevel = preserveOriginalLevel ? 'true' : 'false';
-
-        const levelOptionsDisplay = levelOptions.join('|');
-        const displayLevel = levelCorrection || (preserveOriginalLevel ? levelValue : '');
-
-        effect.dataset.level = displayLevel ? displayLevel.toLowerCase() : '';
-        effect.dataset.levelOriginal = levelValue ? levelValue.toLowerCase() : '';
-        effect.dataset.levelOriginalValue = levelValue;
-        effect.dataset.levelOptions = levelOptionsLower.join('|');
-        effect.dataset.levelOptionsDisplay = levelOptionsDisplay;
-        effect.dataset.levelOptionsBase = levelOptionsDisplay;
-        effect.dataset.levelCorrection = levelCorrection ? levelCorrection.toLowerCase() : '';
-        effect.dataset.levelCorrectionValue = levelCorrection;
-
-        const numericScore = Number(score);
-        const hasFiniteScore = Number.isFinite(numericScore);
-        const scoreDisplay = hasFiniteScore ? `${numericScore.toFixed(1)}%` : '--';
-        const ocrDisplay = rawText || '--';
-
-        const predictionLine = createElement('div', 'prediction');
-        const predictionLabel = createElement('span', 'prediction-label', '推定:');
-        const predictionValueNode = createElement('span', 'prediction-value', predictionText || '--');
-        predictionLine.appendChild(predictionLabel);
-        predictionLine.appendChild(predictionValueNode);
-
-        predictionLine.style.display = state.showOcr ? '' : 'none';
-        effect.appendChild(predictionLine);
-        updateLevelBadge(effect);
-
-        const rawLine = createElement('div', 'raw', `OCR: ${ocrDisplay} / 一致度 ${scoreDisplay}`);
-        rawLine.style.display = state.showOcr ? '' : 'none';
-
-        const correctionKey = `Effect${slot}Correction`;
-        const correctionValue = record[correctionKey] == null ? '' : String(record[correctionKey]);
-        if (correctionValue && statusValue !== 'pass') {
-            statusValue = 'corrected';
-        }
-
-        effect.dataset.correction = correctionValue.toLowerCase();
-        if (hasFiniteScore && numericScore < 60) {
-            effect.classList.add('low-confidence');
-            effect.dataset.lowConfidence = 'true';
-        }
-
-        const decision = createElement('div', 'decision');
-        const decisionRow = createElement('div', 'decision-row');
-        const passButton = createElement('button', 'review-button pass', '合致');
-        passButton.type = 'button';
-        passButton.dataset.value = 'pass';
-
-        const levelInputId = `level-input-${recordIndex}-${slot}`;
-        const levelInput = document.createElement('select');
-        levelInput.id = levelInputId;
-        levelInput.className = 'level-input';
-
-        const levelChoices = [];
-        const seenLevels = new Set();
-        const pushLevelChoice = (value) => {
-            if (value == null) {
-                return;
-            }
-            const text = String(value).trim();
-            if (!text) {
-                return;
-            }
-            const key = text.toLowerCase();
-            if (seenLevels.has(key)) {
-                return;
-            }
-            seenLevels.add(key);
-            levelChoices.push(text);
-        };
-
-        const originalLevelLower = levelValue ? levelValue.toLowerCase() : '';
-        let originalInOptions = false;
-        levelOptions.forEach((option) => {
-            const text = option == null ? '' : String(option).trim();
-            if (!text) {
-                return;
-            }
-            const lower = text.toLowerCase();
-            if (originalLevelLower && lower === originalLevelLower) {
-                originalInOptions = true;
-                if (preserveOriginalLevel) {
-                    pushLevelChoice(text);
-                }
-                return;
-            }
-            pushLevelChoice(text);
-        });
-
-        if (levelValue) {
-            if (preserveOriginalLevel) {
-                pushLevelChoice(levelValue);
-            } else if (originalInOptions && levelChoices.length) {
-                pushLevelChoice(levelValue);
-            }
-        }
-
-        pushLevelChoice(levelCorrection);
-
-        const sortedLevelChoices = sortLevelsAscending(levelChoices);
-
-        const emptyOption = document.createElement('option');
-        emptyOption.value = '';
-        emptyOption.textContent = '';
-        levelInput.appendChild(emptyOption);
-
-        sortedLevelChoices.forEach((option) => {
-            const optionNode = document.createElement('option');
-            optionNode.value = option;
-            optionNode.textContent = option;
-            levelInput.appendChild(optionNode);
-        });
-
-        effect.dataset.levelOptionsBaseJson = JSON.stringify(sortedLevelChoices);
-
-        const initialLevelValue = levelCorrection || (preserveOriginalLevel ? levelValue : '') || '';
-        levelInput.value = initialLevelValue;
-        updateLevelInputAvailability(levelInput, sortedLevelChoices);
-
-        const effectNameForLevels = levelCorrection || correctionValue || predictionText;
-        const correctionInput = createCorrectionInput(correctionValue, predictionText);
-
-        decisionRow.appendChild(passButton);
-        decisionRow.appendChild(correctionInput);
-        decisionRow.appendChild(levelInput);
-        decision.appendChild(decisionRow);
-
-        effect.appendChild(rawLine);
-        effect.appendChild(decision);
-
-        applyMasterLevelOptions(effect, levelInput, effectNameForLevels);
-
-        if (state.datasetKind === 'merged') {
-            passButton.disabled = true;
-            correctionInput.disabled = true;
-            levelInput.disabled = true;
-        }
-
-        updateEffectStatus(effect, statusValue);
-
-        correctionInput.addEventListener('change', correctionChangeHandler(effect, correctionInput));
-
-        const onLevelChange = levelChangeHandler(effect, levelInput);
-        levelInput.addEventListener('change', onLevelChange);
-
-        return effect;
-    }
-    function updateLevelBadge(effect) {
-        const predictionLine = effect.querySelector('.prediction');
-        if (!predictionLine) {
-            return;
-        }
-        let badge = predictionLine.querySelector('.level-badge');
-        const originalValue = effect.dataset.levelOriginalValue || '';
-        const preserveOriginalLevel = effect.dataset.preserveOriginalLevel !== 'false';
-        const correctionValue = effect.dataset.levelCorrectionValue || '';
-        const optionsDisplay = effect.dataset.levelOptionsDisplay || '';
-        const optionsList = optionsDisplay ? optionsDisplay.split('|').map((value) => value.trim()).filter((value) => value) : [];
-
-        if (correctionValue) {
-            if (!badge) {
-                badge = createElement('span', 'level-badge level-badge--corrected');
-                predictionLine.appendChild(badge);
-            }
-            badge.textContent = correctionValue;
-            badge.className = 'level-badge level-badge--corrected';
-            badge.title = originalValue ? `OCR: ${originalValue}` : '';
-            return;
-        }
-
-        if (originalValue && preserveOriginalLevel) {
-            if (!badge) {
-                badge = createElement('span', 'level-badge');
-                predictionLine.appendChild(badge);
-            }
-            badge.textContent = originalValue;
-            badge.className = 'level-badge';
-            badge.title = '';
-            return;
-        }
-
-        if (optionsList.length) {
-            const primaryOption = optionsList[0];
-            if (!badge) {
-                badge = createElement('span', 'level-badge level-badge--missing');
-                predictionLine.appendChild(badge);
-            }
-            badge.textContent = primaryOption;
-            badge.className = 'level-badge level-badge--missing';
-            if (optionsList.length > 1) {
-                const tooltipText = optionsList.join(' / ');
-                badge.title = `候補: ${tooltipText}`;
-            } else {
-                badge.title = `候補: ${primaryOption}`;
-            }
-            return;
-        }
-
-        if (badge) {
-            badge.remove();
-        }
-    }
-
-
-    function updateEffectStatus(effect, status) {
-        const normalized = normalizeStatus(status);
-        effect.dataset.status = normalized;
-        effect.classList.toggle('pending', normalized === 'pending');
-
-        const indicator = effect.querySelector('.status-indicator');
-        if (indicator) {
-            indicator.textContent = statusLabel(normalized);
-        }
-
-        effect.querySelectorAll('.review-button').forEach((button) => {
-            button.classList.toggle('selected', button.dataset.value === normalized);
-        });
-    }
-
-    function createCorrectionInput(selectedValue, fallbackValue) {
-        const input = document.createElement('input');
-        input.type = 'search';
-        input.className = 'correction-input';
-        if (state.masterOptions.length) {
-            input.setAttribute('list', MASTER_DATALIST_ID);
-            input.placeholder = 'master_relicsから選択';
-        } else {
-            input.placeholder = 'マスターデータ未設定';
-            input.disabled = true;
-        }
-        const initialValue = selectedValue || fallbackValue || '';
-        input.value = initialValue;
-        updateInputValueAttribute(input);
-        return input;
-    }
-
-    function rebuildLevelSelectOptions(effect, select, baseOptionsOverride, extraOptions) {
-        if (!effect || !select) {
-            return;
-        }
-
-        const previousValue = select.value == null ? '' : String(select.value);
-        const baseOptions = Array.isArray(baseOptionsOverride)
-            ? sanitizeLevelList(baseOptionsOverride)
-            : getBaseLevelOptions(effect);
-
-        const extrasSource = Array.isArray(extraOptions)
-            ? extraOptions
-            : extraOptions == null
-                ? []
-                : [extraOptions];
-        const extras = sanitizeLevelList(extrasSource);
-
-        const finalValues = [];
-        const seen = new Set();
-
-        const pushOption = (value) => {
-            if (value == null) {
-                return;
-            }
-            const text = String(value).trim();
-            if (!text) {
-                return;
-            }
-            const lower = text.toLowerCase();
-            if (seen.has(lower)) {
-                return;
-            }
-            seen.add(lower);
-            finalValues.push(text);
-        };
-
-        const originalValue = effect.dataset.levelOriginalValue || '';
-        const preserveOriginalLevel = effect.dataset.preserveOriginalLevel !== 'false';
-        const originalLower = originalValue ? originalValue.toLowerCase() : '';
-        let originalEncountered = false;
-
-        const addCandidate = (candidate) => {
-            const text = candidate == null ? '' : String(candidate).trim();
-            if (!text) {
-                return;
-            }
-            const lower = text.toLowerCase();
-            if (originalLower && lower === originalLower) {
-                originalEncountered = true;
-                if (preserveOriginalLevel) {
-                    pushOption(text);
-                }
-                return;
-            }
-            pushOption(text);
-        };
-
-        baseOptions.forEach(addCandidate);
-        extras.forEach(addCandidate);
-
-        if (originalValue) {
-            if (preserveOriginalLevel) {
-                pushOption(originalValue);
-            } else if (originalEncountered && finalValues.length) {
-                pushOption(originalValue);
-            }
-        }
-
-        const levelCorrectionValue = effect.dataset.levelCorrectionValue || '';
-        pushOption(levelCorrectionValue);
-
-        const sortedFinalValues = sortLevelsAscending(finalValues);
-
-        select.textContent = '';
-
-        const emptyOption = document.createElement('option');
-        emptyOption.value = '';
-        emptyOption.textContent = '';
-        select.appendChild(emptyOption);
-
-        sortedFinalValues.forEach((value) => {
-            const optionNode = document.createElement('option');
-            optionNode.value = value;
-            optionNode.textContent = value;
-            select.appendChild(optionNode);
-        });
-
-        const candidates = [previousValue, levelCorrectionValue, originalValue, baseOptions[0], extras[0]];
-        let applied = '';
-        for (let index = 0; index < candidates.length; index += 1) {
-            const candidate = candidates[index];
-            if (!candidate) {
+    function parseCsv(text) {
+        const rows = parseCsvRows(text);
+        if (!rows.length) {
+            return { headers: [], records: [] };
+        }
+        const headers = rows[0].map((header) => String(header || '').trim());
+        const records = [];
+        for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
+            const row = rows[rowIndex];
+            if (!row.length || row.every((cell) => String(cell || '').trim() === '')) {
                 continue;
             }
-            const lower = candidate.toLowerCase();
-            if (sortedFinalValues.some((value) => value.toLowerCase() === lower)) {
-                applied = candidate;
-                break;
-            }
-        }
-        if (!applied && sortedFinalValues.length) {
-            applied = sortedFinalValues[0];
-        }
-        select.value = applied || '';
-        updateLevelInputAvailability(select, sortedFinalValues);
-
-        effect.dataset.levelOptionsDisplay = sortedFinalValues.join('|');
-        effect.dataset.levelOptions = sortedFinalValues.map((value) => value.toLowerCase()).join('|');
-        updateLevelBadge(effect);
-    }
-
-    function correctionChangeHandler(effect, input) {
-        return () => {
-            updateInputValueAttribute(input);
-            const selected = input.value.trim();
-            const indexes = getEffectIndexes(effect);
-            if (!indexes) {
-                return;
-            }
-            const nextStatus = selected ? 'corrected' : 'pending';
-            const statusChanged = recordStatusChange(effect, nextStatus);
-            const correctionChanged = updateRecordCorrection(indexes.recordIndex, indexes.slotIndex, selected);
-            effect.dataset.correction = selected ? selected.toLowerCase() : '';
-            effect.dataset.preserveOriginalLevel = selected ? 'false' : 'true';
-            updateEffectStatus(effect, nextStatus);
-
-            const suppressLevel = Boolean(selected);
-            const suppressedChanged = updateRecordLevelSuppressed(indexes.recordIndex, indexes.slotIndex, suppressLevel);
-            if (suppressLevel) {
-                effect.dataset.levelOptionsBaseJson = JSON.stringify([]);
-            } else {
-                const baseString = effect.dataset.levelOptionsBase || '';
-                const restored = baseString ? sanitizeLevelList(baseString.split('|')) : [];
-                const restoredSorted = sortLevelsAscending(restored);
-                effect.dataset.levelOptionsBaseJson = JSON.stringify(restoredSorted);
-            }
-
-            let levelCleared = false;
-            const levelSelect = effect.querySelector('.level-input');
-            if (levelSelect) {
-                if (updateRecordLevelCorrection(indexes.recordIndex, indexes.slotIndex, '')) {
-                    levelCleared = true;
+            const record = {};
+            headers.forEach((header, columnIndex) => {
+                if (!header) {
+                    return;
                 }
-                effect.dataset.levelCorrection = '';
-                effect.dataset.levelCorrectionValue = '';
-                const originalLevelValue = effect.dataset.levelOriginalValue || '';
-                const preserveOriginalLevel = effect.dataset.preserveOriginalLevel !== 'false';
-                const effectiveLevel = preserveOriginalLevel ? originalLevelValue : '';
-                effect.dataset.level = effectiveLevel ? effectiveLevel.toLowerCase() : '';
-                levelSelect.value = '';
-                updateLevelInputAvailability(levelSelect, []);
-                applyMasterLevelOptions(effect, levelSelect, selected);
-            }
-
-            refreshItemCaches(effect.closest('.item'));
-            if (!statusChanged && (correctionChanged || levelCleared || suppressedChanged)) {
-                storage.scheduleSave();
-            }
-            applyFilters();
-        };
-    }
-    function levelChangeHandler(effect, input) {
-        return () => {
-            const selected = input.value.trim();
-            const previous = effect.dataset.levelCorrectionValue || '';
-            if (selected === previous) {
-                return;
-            }
-            const indexes = getEffectIndexes(effect);
-            if (!indexes) {
-                return;
-            }
-
-            const levelChanged = updateRecordLevelCorrection(indexes.recordIndex, indexes.slotIndex, selected);
-            effect.dataset.levelCorrection = selected ? selected.toLowerCase() : '';
-            effect.dataset.levelCorrectionValue = selected;
-
-            const originalValue = effect.dataset.levelOriginalValue || '';
-            const finalLevel = selected || originalValue;
-            effect.dataset.level = finalLevel ? finalLevel.toLowerCase() : '';
-
-            updateLevelBadge(effect);
-            const item = effect.closest('.item');
-            if (item) {
-                refreshItemCaches(item);
-            }
-
-            const hasEffectCorrection = Boolean(effect.dataset.correction);
-            const currentStatus = effect.dataset.status || 'pending';
-            let nextStatus = currentStatus;
-            if (selected) {
-                nextStatus = 'corrected';
-            } else if (!hasEffectCorrection && currentStatus === 'corrected') {
-                nextStatus = 'pending';
-            }
-
-            let statusChanged = false;
-            if (nextStatus !== currentStatus) {
-                statusChanged = recordStatusChange(effect, nextStatus);
-                if (statusChanged) {
-                    updateEffectStatus(effect, nextStatus);
-                }
-            }
-
-            if (!statusChanged && levelChanged) {
-                storage.scheduleSave();
-            }
-
-            applyFilters();
-        };
-    }
-
-
-    function getEffectIndexes(effect) {
-        const recordIndex = Number(effect.dataset.recordIndex);
-        const slotIndex = Number(effect.dataset.slot);
-        if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
-            return null;
-        }
-        return { recordIndex, slotIndex };
-    }
-
-    function updateRecordCorrection(recordIndex, slotIndex, value) {
-        if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
-            return false;
-        }
-        const key = `Effect${slotIndex}Correction`;
-        return updateRecordField(recordIndex, key, value);
-    }
-    function updateRecordLevelCorrection(recordIndex, slotIndex, value) {
-        if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
-            return false;
-        }
-        const key = `Effect${slotIndex}LevelCorrection`;
-        return updateRecordField(recordIndex, key, value);
-    }
-    function updateRecordLevelSuppressed(recordIndex, slotIndex, suppressed) {
-        if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
-            return false;
-        }
-        const key = `Effect${slotIndex}LevelSuppressed`;
-        const normalized = suppressed ? 'true' : '';
-        return updateRecordField(recordIndex, key, normalized);
-    }
-
-    function recordStatusChange(effect, status) {
-        const indexes = getEffectIndexes(effect);
-        if (!indexes) {
-            return false;
-        }
-        const record = getRecordByIndex(indexes.recordIndex);
-        if (!record) {
-            return false;
-        }
-        const key = `Effect${indexes.slotIndex}Status`;
-        if (record[key] !== status) {
-            record[key] = status;
-            storage.scheduleSave();
-            return true;
-        }
-        return false;
-    }
-
-    function applyFilters() {
-        const term = (dom.searchInput && dom.searchInput.value ? dom.searchInput.value : '').trim().toLowerCase();
-        const filter = dom.filterSelect ? dom.filterSelect.value : 'all';
-        const colorFilter = dom.colorFilter ? dom.colorFilter.value : 'all';
-        const includePending = filter === 'with-pending';
-        const resolvedOnly = filter === 'resolved';
-        const favoriteOnly = filter === 'favorite';
-        const showDuplicates = includeDuplicatesNow();
-
-        state.items.forEach((item) => {
-            if (!item) {
-                return;
-            }
-            if (item.dataset.duplicate === 'true' && !showDuplicates) {
-                item.style.display = 'none';
-                return;
-            }
-
-            const cache = item.dataset.searchCache || '';
-            const matchesSearch = !term || (cache && cache.includes(term));
-
-            let matchesFilter = true;
-
-if (filter !== 'all') {
-    const statuses = item.dataset.statusCache || '';
-    if (resolvedOnly) {
-        const effectStates = (item.dataset.effectStates || '').split(',').filter(Boolean);
-        matchesFilter = effectStates.length >= 3 && effectStates.every((stateValue, idx) => {
-            if (idx < 3) {
-                return stateValue === 'pass' || stateValue === 'corrected';
-            }
-            return true;
-        });
-    } else if (includePending) {
-        matchesFilter = statuses.includes('|pending|');
-    } else if (favoriteOnly) {
-        matchesFilter = item.dataset.favorite === 'true';
-    }
-}
-
-if (matchesFilter && colorFilter !== 'all') {
-    const itemColor = normalizeItemColor(item.dataset.itemColor || '');
-    if (colorFilter === 'none') {
-        matchesFilter = itemColor === '';
-    } else {
-        matchesFilter = itemColor === colorFilter;
-    }
-}
-
-item.style.display = matchesSearch && matchesFilter ? '' : 'none';
-        });
-        updateSummary();
-    }
-
-    function handleDuplicateToggle(button) {
-        if (!button) {
-            return;
-        }
-        const context = getItemContext(button);
-        if (!context) {
-            return;
-        }
-        const { item, record, recordIndex } = context;
-        const imageName = button.dataset.image || item.dataset.imageName || '';
-        const currentState = isRecordDuplicate(record) || item.dataset.duplicate === 'true';
-        const nextState = !currentState;
-        if (imageName) {
-            button.dataset.image = imageName;
-            duplicates.set(imageName, nextState);
-        }
-        const recordChanged = setRecordDuplicate(recordIndex, nextState);
-        updateDuplicateVisuals(item, nextState);
-        if (recordChanged) {
-            storage.scheduleSave();
-        }
-        buildGallery();
-    }
-
-    function handleFavoriteToggle(button) {
-        if (!button) {
-            return;
-        }
-        const context = getItemContext(button);
-        if (!context) {
-            return;
-        }
-        const { item, record, recordIndex } = context;
-        const nextState = !isRecordFavorite(record);
-        const recordChanged = setRecordFavorite(recordIndex, nextState);
-        updateFavoriteVisuals(item, nextState);
-        if (recordChanged) {
-            storage.scheduleSave();
-        }
-        applyFilters();
-    }
-
-    function handleItemColorToggle(button) {
-        if (!button) {
-            return;
-        }
-        const context = getItemContext(button);
-        if (!context) {
-            return;
-        }
-        const { item, record, recordIndex } = context;
-        const targetColor = (button.value || '').trim().toLowerCase();
-        const currentColor = normalizeItemColor(record.ItemColor);
-        const nextColor = currentColor === targetColor ? '' : targetColor;
-        const recordChanged = setRecordItemColor(recordIndex, nextColor);
-        if (recordChanged) {
-            storage.scheduleSave();
-        }
-        applyItemColor(item, nextColor);
-        applyFilters();
-    }
-
-    function bindImage(img) {
-        if (!img) {
-            return;
-        }
-        img.addEventListener('click', () => openLightbox(img));
-        img.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' || event.key === ' ' || event.keyCode === 13 || event.keyCode === 32) {
-                event.preventDefault();
-                openLightbox(img);
-            }
-        });
-    }
-
-    function openLightbox(img) {
-        if (!img || !dom.lightbox || !dom.lightboxImg) {
-            return;
-        }
-        dom.lightboxImg.src = img.dataset.full || img.src;
-        dom.lightboxImg.alt = img.alt || '';
-        dom.lightbox.classList.add('show');
-        dom.lightbox.setAttribute('aria-hidden', 'false');
-        if (dom.lightboxClose) {
-            dom.lightboxClose.focus();
-        }
-    }
-
-    function closeLightbox() {
-        if (!dom.lightbox || !dom.lightboxImg) {
-            return;
-        }
-        dom.lightbox.classList.remove('show');
-        dom.lightbox.setAttribute('aria-hidden', 'true');
-        dom.lightboxImg.src = '';
-        dom.lightboxImg.alt = '';
-    }
-
-    function collectCsvHeaders(records) {
-        const seen = new Set();
-        records.forEach((record) => {
-            if (record && typeof record === 'object') {
-                Object.keys(record).forEach((key) => {
-                    if (!seen.has(key)) {
-                        seen.add(key);
-                    }
-                });
-            }
-        });
-
-        if (!seen.size) {
-            return [];
-        }
-
-        const headers = [];
-        if (seen.delete('Image')) {
-            headers.push('Image');
-        }
-        headers.push(...Array.from(seen).sort());
-        return headers;
-    }
-
-    function csvEscape(value) {
-        const text = value == null ? '' : String(value);
-        return '"' + text.replace(/"/g, '""') + '"';
-    }
-
-    function generateCsv(records) {
-        const headers = collectCsvHeaders(records);
-        if (!headers.length) {
-            return '';
-        }
-
-        const lines = [];
-        lines.push(headers.map(csvEscape).join(','));
-
-        records.forEach((record) => {
-            const row = headers.map((key) => {
-                if (!record || typeof record !== 'object') {
-                    return csvEscape('');
-                }
-                const value = Object.prototype.hasOwnProperty.call(record, key) ? record[key] : '';
-                return csvEscape(value);
+                record[header] = row[columnIndex] == null ? '' : row[columnIndex];
             });
-            lines.push(row.join(','));
-        });
-
-        return lines.join('\n');
+            records.push(record);
+        }
+        return { headers, records };
     }
 
     function parseCsvRows(text) {
-        const rows = [];
-        if (!text) {
-            return rows;
-        }
-        const sanitized = String(text).replace(/^\uFEFF/, '');
-        const normalized = sanitized.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-        let field = '';
+        const result = [];
         let row = [];
-        let inQuotes = false;
-
-        for (let index = 0; index < normalized.length; index += 1) {
-            const char = normalized[index];
-            if (inQuotes) {
+        let field = '';
+        let quoted = false;
+        for (let index = 0; index < text.length; index += 1) {
+            const char = text[index];
+            if (quoted) {
                 if (char === '"') {
-                    const nextChar = normalized[index + 1];
-                    if (nextChar === '"') {
+                    if (text[index + 1] === '"') {
                         field += '"';
                         index += 1;
                     } else {
-                        inQuotes = false;
+                        quoted = false;
                     }
                 } else {
                     field += char;
                 }
                 continue;
             }
-
             if (char === '"') {
-                inQuotes = true;
+                quoted = true;
                 continue;
             }
-
             if (char === ',') {
                 row.push(field);
                 field = '';
                 continue;
             }
-
             if (char === '\n') {
                 row.push(field);
-                rows.push(row);
+                result.push(row);
                 row = [];
                 field = '';
                 continue;
             }
-
+            if (char === '\r') {
+                continue;
+            }
             field += char;
         }
-
-        if (inQuotes) {
-            row.push(field);
-            rows.push(row);
-        } else if (field !== '' || row.length) {
-            row.push(field);
-            rows.push(row);
-        }
-
-        return rows;
+        row.push(field);
+        result.push(row);
+        return result;
     }
 
-    function parseCsvRecords(text) {
-        const rows = parseCsvRows(text);
-        if (!rows.length) {
+    function ensureLabelSymbols(symbols, records) {
+        let maxSlot = symbols.length;
+        records.forEach((record) => {
+            Object.keys(record).forEach((key) => {
+                const match = /^Effect(\d+)$/.exec(key);
+                if (match) {
+                    const slot = Number.parseInt(match[1], 10);
+                    if (!Number.isNaN(slot) && slot > maxSlot) {
+                        maxSlot = slot;
+                    }
+                }
+            });
+        });
+        const next = symbols.slice();
+        for (let slot = symbols.length + 1; slot <= maxSlot; slot += 1) {
+            next.push(`Slot ${slot}`);
+        }
+        return next;
+    }
+
+    function createRecordModel(row, context) {
+        const raw = { ...row };
+        const imageName = String(row.Image || '').trim();
+        const baseImage = String(row.BaseImage || '').trim();
+        const datasetLabel = String(row.Dataset || context.datasetLabel || '').trim();
+        const datasetFolder = String(row.DatasetFolder || '').trim();
+        const displayName = baseImage || fileName(imageName) || imageName || '(no image)';
+        const imagePath = imageName ? joinPath(context.imageDir || '.', imageName) : '';
+
+        const duplicate = parseBoolean(row[DUPLICATE_KEY]);
+        const favorite = parseBoolean(row[FAVORITE_KEY]);
+        const itemColor = normalizeItemColor(row[ITEM_COLOR_KEY]);
+
+        const slotCount = context.labelSymbols.length;
+        const effects = [];
+        for (let slot = 1; slot <= slotCount; slot += 1) {
+            const prediction = String(row[`Effect${slot}`] || '').trim();
+            const rawText = String(row[`RawText${slot}`] || '').trim();
+            const scoreRaw = Number(row[`Effect${slot}Score`]);
+            const hasScore = Number.isFinite(scoreRaw);
+            if (!prediction && !rawText && !hasScore) {
+                continue;
+            }
+            let status = normalizeStatus(row[`Effect${slot}Status`]);
+            const correction = String(row[`Effect${slot}Correction`] || '').trim();
+            const level = String(row[`Effect${slot}Level`] || '').trim();
+            const levelOptions = parseLevelOptions(row[`Effect${slot}LevelOptions`]);
+            const levelCorrection = String(row[`Effect${slot}LevelCorrection`] || '').trim();
+            const levelSuppressed = parseBoolean(row[`Effect${slot}LevelSuppressed`]);
+            const showOriginalLevel = !levelSuppressed;
+            if (correction && status !== 'pass') {
+                status = 'corrected';
+            }
+            row[`Effect${slot}Status`] = status;
+            effects.push({
+                slot,
+                symbol: context.labelSymbols[slot - 1] || `Slot ${slot}`,
+                prediction,
+                rawText,
+                score: hasScore ? scoreRaw : null,
+                status,
+                correction,
+                level,
+                levelOptions,
+                levelCorrection,
+                showOriginalLevel,
+                rawStatusKey: `Effect${slot}Status`
+            });
+        }
+
+        return {
+            index: context.index,
+            raw,
+            imagePath,
+            displayName,
+            datasetLabel,
+            datasetFolder,
+            duplicate,
+            favorite,
+            itemColor,
+            effects
+        };
+    }
+
+    function parseLevelOptions(value) {
+        if (!value) {
             return [];
         }
+        return String(value)
+            .split('|')
+            .map((entry) => entry.trim())
+            .filter((entry) => entry);
+    }
 
-        const headers = rows[0].map((header) => {
-            if (header == null) {
+    function normalizeEffectName(value) {
+        return String(value || '').trim().toLowerCase();
+    }
+
+    function formatOcrLine(rawText, score) {
+        const ocr = rawText || '--';
+        if (!Number.isFinite(score)) {
+            return `OCR: ${ocr}`;
+        }
+        return `OCR: ${ocr} / 一致度 ${score.toFixed(1)}%`;
+    }
+
+    function applyStatusStyles(effectNode, status) {
+        if (!effectNode) {
+            return;
+        }
+        effectNode.dataset.status = status;
+        effectNode.classList.toggle('status-pass', status === 'pass');
+        effectNode.classList.toggle('status-corrected', status === 'corrected');
+        effectNode.classList.toggle('status-pending', status === 'pending');
+    }
+
+    function updateLevelBadge(badge, effect) {
+        if (!badge) {
+            return;
+        }
+        if (effect.levelCorrection) {
+            badge.className = 'level-badge level-badge--corrected';
+            badge.textContent = effect.levelCorrection;
+            return;
+        }
+        if (effect.showOriginalLevel && effect.level) {
+            badge.className = 'level-badge';
+            badge.textContent = effect.level;
+            return;
+        }
+        const firstOption = effect.levelOptions[0];
+        if (firstOption) {
+            badge.className = 'level-badge level-badge--missing';
+            badge.textContent = firstOption;
+            return;
+        }
+        badge.textContent = '';
+        badge.className = 'level-badge';
+    }
+
+    function populateLevelOptions(select, options) {
+        select.innerHTML = '';
+        const empty = document.createElement('option');
+        empty.value = '';
+        select.appendChild(empty);
+        const seen = new Set();
+        options.forEach((option) => {
+            const text = String(option || '').trim();
+            if (!text || seen.has(text.toLowerCase())) {
+                return;
+            }
+            seen.add(text.toLowerCase());
+            const node = document.createElement('option');
+            node.value = text;
+            node.textContent = text;
+            select.appendChild(node);
+        });
+    }
+
+    function mergeHeaders(base, extras) {
+        const result = base.slice();
+        extras.forEach((header) => {
+            if (header && !result.includes(header)) {
+                result.push(header);
+            }
+        });
+        return result;
+    }
+
+    function collectRecordHeaders(records) {
+        const headers = new Set();
+        records.forEach((record) => {
+            Object.keys(record.raw).forEach((key) => headers.add(key));
+        });
+        return Array.from(headers);
+    }
+
+    function buildCsv(records, headers) {
+        const effectiveHeaders = headers.length ? headers : collectRecordHeaders(records);
+        const lines = [effectiveHeaders.join(',')];
+        records.forEach((record) => {
+            const cells = effectiveHeaders.map((header) => escapeCsv(record[header] ?? ''));
+            lines.push(cells.join(','));
+        });
+        return lines.join('\n');
+    }
+
+    function escapeCsv(value) {
+        const text = String(value);
+        if (/[",\n]/.test(text)) {
+            return `"${text.replace(/"/g, '""')}"`;
+        }
+        return text;
+    }
+
+    function updateSearchCache(item, record) {
+        const tokens = [record.displayName.toLowerCase()];
+        if (record.datasetLabel) {
+            tokens.push(record.datasetLabel.toLowerCase());
+        }
+        record.effects.forEach((effect) => {
+            if (effect.prediction) {
+                tokens.push(effect.prediction.toLowerCase());
+            }
+            if (effect.rawText) {
+                tokens.push(effect.rawText.toLowerCase());
+            }
+            if (effect.correction) {
+                tokens.push(effect.correction.toLowerCase());
+            }
+        });
+        item.dataset.search = tokens.join(' ');
+    }
+
+    function parseBoolean(value) {
+        const text = String(value || '').trim().toLowerCase();
+        if (!text) {
+            return false;
+        }
+        return text === 'true' || text === '1' || text === 'yes';
+    }
+
+    function normalizeStatus(value) {
+        const text = String(value || '').trim().toLowerCase();
+        if (text === 'pass') {
+            return 'pass';
+        }
+        if (text === 'corrected') {
+            return 'corrected';
+        }
+        return 'pending';
+    }
+
+    function statusLabel(status) {
+        switch (status) {
+            case 'pass':
+                return '確認済み';
+            case 'corrected':
+                return '修正済み';
+            default:
+                return '未レビュー';
+        }
+    }
+
+    function colorClass(key) {
+        switch (key) {
+            case 'red':
+                return 'item-color-red';
+            case 'yellow':
+                return 'item-color-yellow';
+            case 'green':
+                return 'item-color-green';
+            case 'blue':
+                return 'item-color-blue';
+            default:
                 return '';
-            }
-            return String(header).trim();
-        });
-
-        const records = [];
-        for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
-            const cells = rows[rowIndex];
-            if (!cells || cells.every((cell) => {
-                const value = cell == null ? '' : String(cell).trim();
-                return value === '';
-            })) {
-                continue;
-            }
-
-            const record = {};
-            headers.forEach((header, columnIndex) => {
-                if (!header) {
-                    return;
-                }
-                const value = columnIndex < cells.length ? cells[columnIndex] : '';
-                record[header] = value == null ? '' : value;
-            });
-            records.push(record);
-        }
-
-        return records;
-    }
-
-    async function handleCsvImportFile(file) {
-        if (!file) {
-            return;
-        }
-        setStorageStatus('ローカルファイルからのインポートは無効化されています。結果フォルダ内のCSVを直接編集してください。', true);
-        return;
-        if (dom.uploadCsvInput) {
-            dom.uploadCsvInput.value = '';
         }
     }
 
-    async function loadMergedRecords(sources) {
-        const combined = [];
-        const list = Array.isArray(sources) ? sources : [];
-        for (let index = 0; index < list.length; index += 1) {
-            const source = list[index];
-            if (!source || typeof source !== 'object') {
-                continue;
-            }
-            const csvPath = typeof source.csv === 'string' ? source.csv : '';
-            if (!csvPath) {
-                continue;
-            }
-            const datasetLabel = source.label || source.folder || `Dataset ${index + 1}`;
-            const datasetFolder = source.folder || '';
-            const imageDir = source.imgDir || '';
-            let csvText = '';
-            try {
-                const response = await fetch(csvPath, { cache: 'no-cache' });
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                csvText = await response.text();
-            } catch (error) {
-                throw new Error(`${datasetLabel} のCSV取得に失敗しました: ${error.message || error}`);
-            }
-            const records = parseCsvRecords(csvText);
-            if (!records.length) {
-                continue;
-            }
-            records.forEach((record) => {
-                if (!record || typeof record !== 'object') {
-                    return;
-                }
-                const rawImage = record.Image == null ? '' : String(record.Image);
-                const hasPath = /[\/]/.test(rawImage);
-                const baseImage = rawImage ? rawImage.split(/[\/]/).pop() || rawImage : '';
-                const normalizedImage = rawImage
-                    ? hasPath
-                        ? rawImage
-                        : imageDir
-                            ? joinPath(imageDir, rawImage)
-                            : rawImage
-                    : '';
-                record.BaseImage = baseImage;
-                record.Image = normalizedImage;
-                record.Dataset = datasetLabel;
-                record.DatasetFolder = datasetFolder;
-                record.DatasetIndex = index;
-                record.SourceCsv = csvPath;
-                record.SourceImageDir = imageDir;
-            });
-            combined.push(...records);
-        }
-        return combined;
+    function normalizeItemColor(value) {
+        const key = String(value || '').trim().toLowerCase();
+        return ['red', 'yellow', 'green', 'blue'].includes(key) ? key : '';
     }
 
-    async function loadInitialData() {
-        const preferredName = getFileName(state.csvPath) || 'results.csv';
-
-        try {
-            const text = await storage.tryLoad(preferredName);
-            if (text) {
-                loadRecordsArray(JSON.parse(text));
-                clearStatus();
-                setStorageStatus('ブラウザから読み込みました。', false);
-                return;
-            }
-        } catch (error) {
-            console.warn('ブラウザからの読み込みに失敗しました:', error);
-        }
-
-        const isMerged = state.datasetKind === 'merged' && Array.isArray(state.datasetSources) && state.datasetSources.length > 0;
-        if (isMerged) {
-            try {
-                showStatus('読み込み中...', false);
-                const mergedRecords = await loadMergedRecords(state.datasetSources);
-                loadRecordsArray(mergedRecords);
-                clearStatus();
-        } catch (error) {
-            console.error('結合データセットのロードに失敗しました:', error);
-            showStatus(`結合データセットの読み込みに失敗しました: ${error.message || error}`, true);
-        }
-        return;
-        }
-
-        if (!state.csvPath) {
-            showStatus('CSVファイルのパスが指定されていません。', true);
-            return;
-        }
-
-        try {
-            showStatus('読み込み中...', false);
-            const response = await fetch(state.csvPath, { cache: 'no-cache' });
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            const csvText = await response.text();
-            const records = parseCsvRecords(csvText);
-            loadRecordsArray(records);
-            clearStatus();
-        } catch (error) {
-            console.error('CSVのロードに失敗しました:', error);
-            showStatus(`データの読み込みに失敗しました: ${error.message || error}. CSV出力の配置を確認してください。`, true);
-        }
-    }
-
-    function loadRecordsArray(data) {
-        const records = Array.isArray(data) ? data.slice() : data && typeof data === 'object' ? [data] : [];
-        ensureLabelCoverage(records);
-        state.records = records;
-        duplicates.prepare();
-        buildGallery();
-    }
-
-    function attachEventHandlers() {
-        if (dom.datasetSelect) {
-            dom.datasetSelect.addEventListener('change', (event) => {
-                const value = Number.parseInt(event.target.value, 10);
-                if (Number.isNaN(value)) {
-                    return;
-                }
-                void switchDataset(value);
-            });
-        }
-
-        dom.gallery.addEventListener('click', (event) => {
-            const duplicateButton = event.target.closest('.duplicate-toggle');
-            if (duplicateButton) {
-                event.preventDefault();
-                handleDuplicateToggle(duplicateButton);
-                return;
-            }
-
-            const favoriteButton = event.target.closest('.favorite-toggle');
-            if (favoriteButton) {
-                event.preventDefault();
-                handleFavoriteToggle(favoriteButton);
-                return;
-            }
-
-            const colorSelect = event.target.closest('.item-color-select');
-            if (colorSelect) {
-                event.preventDefault();
-                handleItemColorToggle(colorSelect);
-                return;
-            }
-
-            const button = event.target.closest('.review-button');
-            if (!button) {
-                return;
-            }
-            const effect = button.closest('.effect');
-            if (!effect) {
-                return;
-            }
-            const item = effect.closest('.item');
-            const current = effect.dataset.status || 'pending';
-            const targetValue = button.dataset.value || 'pass';
-            const next = current === targetValue ? 'pending' : targetValue;
-            updateEffectStatus(effect, next);
-            const statusChanged = recordStatusChange(effect, next);
-            if (next === 'pass') {
-                const indexes = getEffectIndexes(effect);
-                if (indexes) {
-                    const correctionChanged = updateRecordCorrection(indexes.recordIndex, indexes.slotIndex, '');
-                    let levelChanged = updateRecordLevelCorrection(indexes.recordIndex, indexes.slotIndex, '');
-                    effect.dataset.correction = '';
-                    effect.dataset.levelCorrection = '';
-                    effect.dataset.levelCorrectionValue = '';
-                    effect.dataset.preserveOriginalLevel = 'true';
-                    const originalLevelValue = effect.dataset.levelOriginalValue || '';
-                    effect.dataset.level = originalLevelValue ? originalLevelValue.toLowerCase() : '';
-
-                    const baseString = effect.dataset.levelOptionsBase || '';
-                    const restoredBase = baseString ? sanitizeLevelList(baseString.split('|')) : [];
-                    const restoredBaseSorted = sortLevelsAscending(restoredBase);
-                    effect.dataset.levelOptionsBaseJson = JSON.stringify(restoredBaseSorted);
-
-                    const input = effect.querySelector('.correction-input');
-                    if (input) {
-                        const predictionDefault = effect.dataset.predictionValue || '';
-                        const replacement = createCorrectionInput('', predictionDefault);
-                        input.replaceWith(replacement);
-                        replacement.addEventListener('change', correctionChangeHandler(effect, replacement));
-                    }
-
-                    const suppressRecordChanged = updateRecordLevelSuppressed(indexes.recordIndex, indexes.slotIndex, false);
-
-                    const levelInput = effect.querySelector('.level-input');
-                    if (levelInput) {
-                        levelInput.value = '';
-                        rebuildLevelSelectOptions(effect, levelInput);
-                    }
-                    setCorrectionLevelCandidates(effect, []);
-                    updateLevelBadge(effect);
-
-                    if (!statusChanged && (correctionChanged || levelChanged || suppressRecordChanged)) {
-                        storage.scheduleSave();
-                    }
-                }
-            }
-            if (item) {
-                refreshItemCaches(item);
-            }
-            applyFilters();
-        });
-
-        if (dom.searchInput) {
-            dom.searchInput.addEventListener('input', applyFilters);
-        }
-        if (dom.filterSelect) {
-            dom.filterSelect.addEventListener('change', applyFilters);
-        }
-        if (dom.colorFilter) {
-            dom.colorFilter.addEventListener('change', applyFilters);
-        }
-        if (dom.showDuplicatesToggle) {
-            dom.showDuplicatesToggle.addEventListener('change', () => {
-                buildGallery();
-            });
-        }
-        if (dom.showOcrToggle) {
-            dom.showOcrToggle.addEventListener('change', () => {
-                setOcrVisibility(ocrToggleState());
-            });
-        }
-        if (dom.downloadCsvButton) {
-            dom.downloadCsvButton.addEventListener('click', handleCsvExport);
-        }
-        if (dom.uploadCsvButton && dom.uploadCsvInput) {
-            dom.uploadCsvButton.addEventListener('click', () => {
-                dom.uploadCsvInput.value = '';
-                dom.uploadCsvInput.click();
-            });
-            dom.uploadCsvInput.addEventListener('change', () => {
-                const files = dom.uploadCsvInput.files || [];
-                const file = files.length ? files[0] : null;
-                if (file) {
-                    void handleCsvImportFile(file);
-                }
-            });
-        }
-        if (dom.lightboxClose) {
-            dom.lightboxClose.addEventListener('click', closeLightbox);
-        }
-        if (dom.lightbox) {
-            dom.lightbox.addEventListener('click', (event) => {
-                if (event.target === dom.lightbox) {
-                    closeLightbox();
-                }
-            });
-        }
-        document.addEventListener('keydown', (event) => {
-            if ((event.key === 'Escape' || event.keyCode === 27) && dom.lightbox && dom.lightbox.classList.contains('show')) {
-                closeLightbox();
-            }
-        });
-    }
-
-    function getFileName(path) {
+    function fileName(path) {
         if (!path) {
             return '';
         }
@@ -2724,301 +1314,92 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
         return parts[parts.length - 1] || '';
     }
 
-    function handleCsvExport() {
-        if (!state.records.length) {
-            setStorageStatus('エクスポート可能なデータがありません。', true);
-            return;
+    function joinPath(base, leaf) {
+        if (!base) {
+            return leaf;
         }
-
-        const csvText = generateCsv(state.records);
-        if (!csvText) {
-            setStorageStatus('エクスポート失敗: CSVを生成できませんでした。', true);
-            return;
+        if (!leaf) {
+            return base;
         }
-
-        const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = csvFileName();
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        setStorageStatus('CSVをダウンロードしました。', false);
+        if (/^(?:[a-z]+:)?\/\//i.test(leaf) || leaf.startsWith('/')) {
+            return leaf;
+        }
+        const cleanBase = base.replace(/[\\/]+$/, '');
+        const cleanLeaf = leaf.replace(/^[\\/]+/, '');
+        return `${cleanBase}/${cleanLeaf}`;
     }
 
-    function createDuplicateManager(getResultsPath) {
-        const storagePrefix = 'relic-gallery-duplicates:';
-        let cache = new Map();
-        let loadedKey = '';
-        let hasLoaded = false;
-
-        function normalizeName(name) {
-            return (name == null ? '' : String(name)).trim().toLowerCase();
+    function clampIndex(index, length) {
+        if (!length) {
+            return 0;
         }
-
-        function deriveBaseName() {
-            const source = typeof getResultsPath === 'function' ? getResultsPath() : '';
-            const text = source == null ? '' : String(source);
-            if (!text) {
-                return 'results.csv';
-            }
-            const parts = text.split(/[\\/]/).filter(Boolean);
-            if (!parts.length) {
-                return text || 'results.csv';
-            }
-            return parts[parts.length - 1];
+        const parsed = Number.parseInt(index, 10);
+        if (Number.isNaN(parsed) || parsed < 0) {
+            return 0;
         }
-
-        function storageKey() {
-            return `${storagePrefix}${deriveBaseName()}`;
+        if (parsed >= length) {
+            return length - 1;
         }
+        return parsed;
+    }
 
-        function getStorage() {
-            try {
-                if (typeof window === 'undefined' || !window.localStorage) {
-                    return null;
-                }
-                return window.localStorage;
-            } catch (error) {
-                console.warn('localStorageへのアクセスに失敗しました:', error);
-                return null;
-            }
-        }
-
-        function ensureLoaded() {
-            const key = storageKey();
-            if (hasLoaded && key === loadedKey) {
+    function parseMasterLevelsCsv(text) {
+        const { records } = parseCsv(text);
+        const map = new Map();
+        records.forEach((record) => {
+            const effectName = normalizeEffectName(record.EffectBase || record.effect || record.name || record.value);
+            if (!effectName) {
                 return;
             }
-
-            hasLoaded = true;
-            loadedKey = key;
-            cache = new Map();
-
-            const storage = getStorage();
-            if (!storage) {
+            const levels = parseLevelOptions(record.Levels);
+            if (!levels.length) {
                 return;
             }
-
-            try {
-                const raw = storage.getItem(key);
-                if (!raw) {
-                    return;
+            const unique = map.get(effectName) || [];
+            levels.forEach((level) => {
+                if (!unique.includes(level)) {
+                    unique.push(level);
                 }
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) {
-                    parsed.forEach((value) => {
-                        if (typeof value === 'string' && value.trim()) {
-                            const original = value.trim();
-                            cache.set(normalizeName(original), original);
-                        }
-                    });
-                }
-            } catch (error) {
-                console.warn('重複状態の読み込みに失敗しました:', error);
-            }
-        }
+            });
+            map.set(effectName, unique);
+        });
+        return map;
+    }
 
-        function persist() {
-            const storage = getStorage();
-            if (!storage) {
-                return;
-            }
-            const key = storageKey();
-            try {
-                const values = Array.from(cache.values()).sort((a, b) => a.localeCompare(b));
-                storage.setItem(key, JSON.stringify(values));
-            } catch (error) {
-                console.warn('重複状態の保存に失敗しました:', error);
-            }
-        }
+    function createTextSpan(className, text) {
+        const span = document.createElement('span');
+        span.className = className;
+        span.textContent = text;
+        return span;
+    }
 
-        function set(name, shouldMark) {
-            if (!name) {
-                return false;
-            }
-            ensureLoaded();
-            const normalized = normalizeName(name);
-            if (!normalized) {
-                return false;
-            }
-            const original = (name == null ? '' : String(name)).trim();
-            if (!original) {
-                return false;
-            }
-            if (shouldMark) {
-                const already = cache.has(normalized);
-                cache.set(normalized, original);
-                if (!already) {
-                    persist();
-                }
-                return true;
-            }
-            const existed = cache.delete(normalized);
-            if (existed) {
-                persist();
-            }
-            return false;
-        }
+    function findEffect(record, slot) {
+        return record.effects.find((effect) => effect.slot === slot) || null;
+    }
 
-        function toggle(name) {
-            if (!name) {
-                return false;
-            }
-            ensureLoaded();
-            const normalized = normalizeName(name);
-            if (!normalized) {
-                return false;
-            }
-            const original = (name == null ? '' : String(name)).trim();
-            if (!original) {
-                cache.delete(normalized);
-                persist();
-                return false;
-            }
-            if (cache.has(normalized)) {
-                cache.delete(normalized);
-                persist();
-                return false;
-            }
-            cache.set(normalized, original);
-            persist();
+    function matchStatusFilter(filter, record) {
+        if (filter === 'favorite') {
+            return record.favorite;
+        }
+        if (filter === 'resolved') {
+            const firstThree = record.effects.slice(0, 3);
+            return firstThree.length > 0 && firstThree.every((effect) => effect.status === 'pass' || effect.status === 'corrected');
+        }
+        if (filter === 'with-pending') {
+            return record.effects.length
+                ? record.effects.some((effect) => effect.status === 'pending')
+                : true;
+        }
+        return true;
+    }
+
+    function matchColorFilter(filter, record) {
+        if (filter === 'all') {
             return true;
         }
-
-        function has(name) {
-            if (!name) {
-                return false;
-            }
-            ensureLoaded();
-            return cache.has(normalizeName(name));
+        if (filter === 'none') {
+            return !record.itemColor;
         }
-
-        return {
-            prepare: ensureLoaded,
-            has,
-            set,
-            toggle
-        };
+        return record.itemColor === filter;
     }
-
-    function createOpfsManager(getData) {
-        const managerState = {
-            timer: null,
-            saving: false,
-            queued: false
-        };
-
-        function datasetEditable() {
-            return state.datasetKind !== 'merged';
-        }
-
-        function collectRecords() {
-            const data = typeof getData === 'function' ? getData() : [];
-            return Array.isArray(data) ? data : [];
-        }
-
-        async function writeOnce() {
-            if (!datasetEditable()) {
-                return;
-            }
-            const csvPath = resolveCsvSavePath(state.csvPath);
-            if (!csvPath) {
-                setStorageStatus('保存先のCSVパスを解決できません。', true);
-                return;
-            }
-
-            managerState.saving = true;
-            managerState.queued = false;
-            setStorageStatus('保存中...', false);
-
-            try {
-                const response = await fetch('/__viewer_api__/save', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({
-                        csvPath,
-                        records: collectRecords(),
-                        datasetLabel: state.datasetLabel || ''
-                    })
-                });
-
-                if (!response.ok) {
-                    const detail = await response.text();
-                    throw new Error(detail || `HTTP ${response.status}`);
-                }
-
-                setStorageStatus(`保存しました ${new Date().toLocaleTimeString()}`, false);
-            } catch (error) {
-                console.error('CSV保存に失敗しました:', error);
-                setStorageStatus(`保存失敗: ${error.message || error}`, true);
-            } finally {
-                managerState.saving = false;
-                if (managerState.queued) {
-                    managerState.queued = false;
-                    void writeOnce();
-                }
-            }
-        }
-
-        function scheduleSave() {
-            if (!datasetEditable()) {
-                setStorageStatus('統合ビューでは保存できません。個別データセットを選択してください。', true);
-                return;
-            }
-            if (managerState.saving) {
-                managerState.queued = true;
-                return;
-            }
-            if (managerState.timer) {
-                clearTimeout(managerState.timer);
-            }
-            managerState.timer = setTimeout(() => {
-                managerState.timer = null;
-                void writeOnce();
-            }, 250);
-        }
-
-        return {
-            supported: true,
-            usesOpfs: false,
-            usesLocalBackup: false,
-            get fileName() {
-                return getFileName(state.csvPath);
-            },
-            async tryLoad() {
-                return null;
-            },
-            async prepare() {
-                return;
-            },
-            scheduleSave,
-            async flushNow() {
-                if (!datasetEditable()) {
-                    return;
-                }
-                await writeOnce();
-            }
-        };
-    }
-
-    async function initialize() {
-        attachEventHandlers();
-        prepareInitialDataset();
-        setupDatasetSelector();
-        await ensureMasterLevels();
-        await ensureMasterOptions();
-        if (state.datasets.length) {
-            await switchDataset(state.activeDatasetIndex, { forceReload: true });
-        } else {
-            await loadInitialData();
-        }
-    }
-
-    void initialize();
 })();
