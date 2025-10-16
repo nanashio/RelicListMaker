@@ -1,7 +1,6 @@
-import argparse
-import os
-
 import cv2
+import os
+import argparse
 
 DEFAULT_RESIZE_SCALE = 1.5
 GAUSSIAN_KERNEL_SIZE = (3, 3)
