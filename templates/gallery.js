@@ -234,6 +234,110 @@
         };
     })();
 
+    const domUtils = (() => {
+        function setHidden(element, hidden) {
+            if (!element || !element.classList) {
+                return;
+            }
+            element.classList.toggle('hidden', Boolean(hidden));
+        }
+
+        function clearChildren(element) {
+            if (!element) {
+                return;
+            }
+            element.textContent = '';
+        }
+
+        function updateStatusElement(element, message, options = {}) {
+            if (!element) {
+                return;
+            }
+
+            const { isError = false, display = 'block', errorClass = 'error' } = options;
+            element.textContent = message || '';
+            if (element.classList && errorClass) {
+                element.classList.toggle(errorClass, Boolean(isError));
+            }
+            if (element.style) {
+                element.style.display = message ? display : 'none';
+            }
+        }
+
+        function applyInlineStyles(element, styles) {
+            if (!element || !styles || typeof styles !== 'object') {
+                return;
+            }
+            Object.keys(styles).forEach((key) => {
+                const value = styles[key];
+                if (value != null) {
+                    element.style[key] = value;
+                }
+            });
+        }
+
+        function ensureElement(current, options = {}) {
+            const {
+                selector = '',
+                id = '',
+                tagName = 'div',
+                classNames = [],
+                create
+            } = options;
+
+            let element = current || null;
+
+            const resolveCandidate = () => {
+                if (selector) {
+                    const foundBySelector = document.querySelector(selector);
+                    if (foundBySelector) {
+                        return foundBySelector;
+                    }
+                }
+                if (id) {
+                    const foundById = document.getElementById(id);
+                    if (foundById) {
+                        return foundById;
+                    }
+                }
+                return null;
+            };
+
+            if (!element || !element.isConnected) {
+                const candidate = resolveCandidate();
+                if (candidate) {
+                    element = candidate;
+                }
+            }
+
+            if (!element) {
+                element = typeof create === 'function' ? create() : document.createElement(tagName);
+            }
+
+            if (id && !element.id) {
+                element.id = id;
+            }
+
+            if (element.classList) {
+                classNames
+                    .filter((className) => typeof className === 'string' && className.length > 0)
+                    .forEach((className) => {
+                        element.classList.add(className);
+                    });
+            }
+
+            return element;
+        }
+
+        return {
+            setHidden,
+            clearChildren,
+            updateStatusElement,
+            applyInlineStyles,
+            ensureElement
+        };
+    })();
+
     const {
         parseDatasets,
         parseDatasetIndex,
@@ -241,6 +345,14 @@
         areSourcesEqual,
         resolveDatasetState
     } = datasetUtils;
+
+    const {
+        setHidden: setElementHidden,
+        clearChildren: clearElementChildren,
+        updateStatusElement,
+        applyInlineStyles: applyInlineStylesToElement,
+        ensureElement: ensureDomElement
+    } = domUtils;
 
     const datasets = parseDatasets(datasetsJson);
     const activeDatasetIndex = parseDatasetIndex(activeDatasetAttr, datasets.length);
@@ -475,19 +587,19 @@
             return;
         }
         if (!state.datasets.length) {
-            dom.datasetSelector.classList.add('hidden');
-            dom.datasetSelect.innerHTML = '';
+            setElementHidden(dom.datasetSelector, true);
+            clearElementChildren(dom.datasetSelect);
             return;
         }
 
-        dom.datasetSelect.innerHTML = '';
+        clearElementChildren(dom.datasetSelect);
         state.datasets.forEach((dataset, index) => {
             const option = document.createElement('option');
             option.value = String(index);
             option.textContent = datasetOptionLabel(dataset, index);
             dom.datasetSelect.appendChild(option);
         });
-        dom.datasetSelector.classList.remove('hidden');
+        setElementHidden(dom.datasetSelector, false);
         const currentIndex = clampDatasetIndex(state.activeDatasetIndex);
         dom.datasetSelect.value = String(currentIndex);
         dom.datasetSelect.title = datasetOptionLabel(getCurrentDataset(), currentIndex);
@@ -498,11 +610,11 @@
             return;
         }
         if (!state.datasets.length) {
-            dom.datasetSelector.classList.add('hidden');
+            setElementHidden(dom.datasetSelector, true);
             return;
         }
         const currentIndex = clampDatasetIndex(state.activeDatasetIndex);
-        dom.datasetSelector.classList.remove('hidden');
+        setElementHidden(dom.datasetSelector, false);
         dom.datasetSelect.value = String(currentIndex);
         dom.datasetSelect.title = datasetOptionLabel(getCurrentDataset(), currentIndex);
     }
@@ -537,9 +649,7 @@
             return;
         }
 
-        if (dom.gallery) {
-            dom.gallery.textContent = '';
-        }
+        clearElementChildren(dom.gallery);
         state.records = [];
         state.items = [];
 
@@ -554,29 +664,17 @@
     };
 
     function ensureSummaryElement() {
-        let summary = dom.summary;
+        const summary = ensureDomElement(dom.summary, {
+            selector: '#gallery-summary',
+            id: 'gallery-summary',
+            tagName: 'p',
+            classNames: ['gallery-summary']
+        });
 
-        if (!summary || !summary.isConnected) {
-            const existing = document.getElementById('gallery-summary');
-            if (existing && existing !== dom.summary) {
-                summary = existing;
-            } else if (!summary || !summary.isConnected) {
-                summary = document.createElement('p');
-            }
-        }
-
-        if (!summary) {
-            summary = document.createElement('p');
-        }
-
-        summary.id = summary.id || 'gallery-summary';
-        summary.classList.add('gallery-summary');
-
-        summary.style.textAlign = SUMMARY_INLINE_STYLE.textAlign;
-        summary.style.color = SUMMARY_INLINE_STYLE.color;
-        summary.style.fontSize = SUMMARY_INLINE_STYLE.fontSize;
-        summary.style.margin = SUMMARY_INLINE_STYLE.margin;
-        summary.style.width = '100%';
+        applyInlineStylesToElement(summary, {
+            ...SUMMARY_INLINE_STYLE,
+            width: '100%'
+        });
 
         if (!summary.parentNode) {
             const reference = dom.galleryStatus && dom.galleryStatus.parentNode ? dom.galleryStatus : dom.gallery;
@@ -645,12 +743,7 @@
     }
 
     function showStatus(message, isError) {
-        if (!dom.galleryStatus) {
-            return;
-        }
-        dom.galleryStatus.textContent = message || '';
-        dom.galleryStatus.classList.toggle('error', Boolean(isError));
-        dom.galleryStatus.style.display = message ? 'block' : 'none';
+        updateStatusElement(dom.galleryStatus, message, { isError, display: 'block' });
     }
 
     function clearStatus() {
@@ -658,12 +751,7 @@
     }
 
     function setStorageStatus(message, isError) {
-        if (!dom.storageStatus) {
-            return;
-        }
-        dom.storageStatus.textContent = message || '';
-        dom.storageStatus.classList.toggle('error', Boolean(isError));
-        dom.storageStatus.style.display = message ? 'inline' : 'none';
+        updateStatusElement(dom.storageStatus, message, { isError, display: 'inline' });
     }
 
     function updateSummary() {
@@ -1129,7 +1217,7 @@
             datalist.id = MASTER_DATALIST_ID;
             document.body.appendChild(datalist);
         } else {
-            datalist.textContent = '';
+            clearElementChildren(datalist);
         }
 
         state.masterOptions.forEach((value) => {
@@ -1263,7 +1351,7 @@
 
     function buildGallery() {
         const includeDuplicates = includeDuplicatesNow();
-        dom.gallery.textContent = '';
+        clearElementChildren(dom.gallery);
         state.items = [];
 
         const fragment = document.createDocumentFragment();
