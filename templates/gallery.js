@@ -472,15 +472,105 @@
         };
     })();
 
+    const recordUtils = (() => {
+        function ensureRecords(recordsOrProvider) {
+            if (typeof recordsOrProvider === 'function') {
+                return ensureRecords(recordsOrProvider());
+            }
+            return Array.isArray(recordsOrProvider) ? recordsOrProvider : [];
+        }
+
+        function getRecordByIndex(recordsOrProvider, index) {
+            const records = ensureRecords(recordsOrProvider);
+            if (Number.isNaN(index) || index < 0 || index >= records.length) {
+                return null;
+            }
+            const record = records[index];
+            return record && typeof record === 'object' ? record : null;
+        }
+
+        function updateRecordField(recordsOrProvider, recordIndex, key, value) {
+            const record = getRecordByIndex(recordsOrProvider, recordIndex);
+            if (!record) {
+                return false;
+            }
+            if (value) {
+                if (record[key] === value) {
+                    return false;
+                }
+                record[key] = value;
+                return true;
+            }
+            if (Object.prototype.hasOwnProperty.call(record, key)) {
+                delete record[key];
+                return true;
+            }
+            return false;
+        }
+
+        function createFlagManager(recordsOrProvider, key, truthyTokens) {
+            const normalizedTokens = new Set(
+                (truthyTokens || []).map((token) => (token || '').toString().toLowerCase())
+            );
+
+            const normalize = (value) => {
+                if (value === true) {
+                    return true;
+                }
+                if (value === false || value == null) {
+                    return false;
+                }
+                if (typeof value === 'number') {
+                    return value === 1;
+                }
+                if (typeof value === 'string') {
+                    const text = value.trim().toLowerCase();
+                    return normalizedTokens.has(text);
+                }
+                return false;
+            };
+
+            const isSet = (record) => {
+                if (!record || typeof record !== 'object') {
+                    return false;
+                }
+                return normalize(record[key]);
+            };
+
+            const set = (recordIndex, nextState) => {
+                const record = getRecordByIndex(recordsOrProvider, recordIndex);
+                if (!record) {
+                    return false;
+                }
+                if (nextState) {
+                    if (isSet(record)) {
+                        return false;
+                    }
+                    record[key] = true;
+                    return true;
+                }
+                if (Object.prototype.hasOwnProperty.call(record, key)) {
+                    delete record[key];
+                    return true;
+                }
+                return false;
+            };
+
+            return { normalize, isSet, set };
+        }
+
+        return { getRecordByIndex, updateRecordField, createFlagManager };
+    })();
+
+    if (typeof window !== 'undefined') {
+        window.galleryRecordUtils = recordUtils;
+    }
+
     const state = stateStore.core;
     const datasetState = stateStore.dataset;
 
     function getRecordByIndex(index) {
-        if (Number.isNaN(index) || index < 0 || index >= state.records.length) {
-            return null;
-        }
-        const record = state.records[index];
-        return record && typeof record === 'object' ? record : null;
+        return recordUtils.getRecordByIndex(state.records, index);
     }
 
     function resolveItemElement(element) {
@@ -506,77 +596,19 @@
         return { item, recordIndex, record };
     }
 
-    function createFlagManager(key, truthyTokens) {
-        const normalizedTokens = new Set(
-            (truthyTokens || []).map((token) => (token || '').toString().toLowerCase())
-        );
-
-        const normalize = (value) => {
-            if (value === true) {
-                return true;
-            }
-            if (value === false || value == null) {
-                return false;
-            }
-            if (typeof value === 'number') {
-                return value === 1;
-            }
-            if (typeof value === 'string') {
-                const text = value.trim().toLowerCase();
-                return normalizedTokens.has(text);
-            }
-            return false;
-        };
-
-        const isSet = (record) => {
-            if (!record || typeof record !== 'object') {
-                return false;
-            }
-            return normalize(record[key]);
-        };
-
-        const set = (recordIndex, nextState) => {
-            const record = getRecordByIndex(recordIndex);
-            if (!record) {
-                return false;
-            }
-            if (nextState) {
-                if (isSet(record)) {
-                    return false;
-                }
-                record[key] = true;
-                return true;
-            }
-            if (Object.prototype.hasOwnProperty.call(record, key)) {
-                delete record[key];
-                return true;
-            }
-            return false;
-        };
-
-        return { normalize, isSet, set };
-    }
-
-    const duplicateFlags = createFlagManager(DUPLICATE_KEY, ['true', '1', 'yes', 'duplicate']);
-    const favoriteFlags = createFlagManager(FAVORITE_KEY, ['true', '1', 'yes', 'favorite']);
+    const duplicateFlags = recordUtils.createFlagManager(
+        () => state.records,
+        DUPLICATE_KEY,
+        ['true', '1', 'yes', 'duplicate']
+    );
+    const favoriteFlags = recordUtils.createFlagManager(
+        () => state.records,
+        FAVORITE_KEY,
+        ['true', '1', 'yes', 'favorite']
+    );
 
     function updateRecordField(recordIndex, key, value) {
-        const record = getRecordByIndex(recordIndex);
-        if (!record) {
-            return false;
-        }
-        if (value) {
-            if (record[key] === value) {
-                return false;
-            }
-            record[key] = value;
-            return true;
-        }
-        if (Object.prototype.hasOwnProperty.call(record, key)) {
-            delete record[key];
-            return true;
-        }
-        return false;
+        return recordUtils.updateRecordField(state.records, recordIndex, key, value);
     }
 
     function resolveCsvSavePath(csvPath) {
