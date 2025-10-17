@@ -11,6 +11,118 @@
         { key: 'blue', label: '青', className: 'item-color-blue' }
     ];
 
+
+    function createRecordUtils() {
+        function ensureRecords(recordsOrProvider) {
+            if (typeof recordsOrProvider === 'function') {
+                return ensureRecords(recordsOrProvider());
+            }
+            return Array.isArray(recordsOrProvider) ? recordsOrProvider : [];
+        }
+
+        function getRecordByIndex(recordsOrProvider, index) {
+            const records = ensureRecords(recordsOrProvider);
+            if (Number.isNaN(index) || index < 0 || index >= records.length) {
+                return null;
+            }
+            const record = records[index];
+            return record && typeof record === 'object' ? record : null;
+        }
+
+        function updateRecordField(recordsOrProvider, recordIndex, key, value) {
+            const record = getRecordByIndex(recordsOrProvider, recordIndex);
+            if (!record) {
+                return false;
+            }
+            if (value) {
+                if (record[key] === value) {
+                    return false;
+                }
+                record[key] = value;
+                return true;
+            }
+            if (Object.prototype.hasOwnProperty.call(record, key)) {
+                delete record[key];
+                return true;
+            }
+            return false;
+        }
+
+        function createFlagManager(recordsOrProvider, key, truthyTokens) {
+            const normalizedTokens = new Set(
+                (truthyTokens || []).map((token) => (token || '').toString().toLowerCase())
+            );
+
+            const normalize = (value) => {
+                if (value === true) {
+                    return true;
+                }
+                if (value === false || value == null) {
+                    return false;
+                }
+                if (typeof value === 'number') {
+                    return value === 1;
+                }
+                if (typeof value === 'string') {
+                    const text = value.trim().toLowerCase();
+                    return normalizedTokens.has(text);
+                }
+                return false;
+            };
+
+            const isSet = (record) => {
+                if (!record || typeof record !== 'object') {
+                    return false;
+                }
+                return normalize(record[key]);
+            };
+
+            const set = (recordIndex, nextState) => {
+                const record = getRecordByIndex(recordsOrProvider, recordIndex);
+                if (!record) {
+                    return false;
+                }
+                if (nextState) {
+                    if (isSet(record)) {
+                        return false;
+                    }
+                    record[key] = true;
+                    return true;
+                }
+                if (Object.prototype.hasOwnProperty.call(record, key)) {
+                    delete record[key];
+                    return true;
+                }
+                return false;
+            };
+
+            return { normalize, isSet, set };
+        }
+
+        return { getRecordByIndex, updateRecordField, createFlagManager };
+    }
+
+    const recordUtils = createRecordUtils();
+    const globalObject = typeof globalThis !== 'undefined'
+        ? globalThis
+        : typeof self !== 'undefined'
+            ? self
+            : typeof window !== 'undefined'
+                ? window
+                : {};
+
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = { createRecordUtils, recordUtils };
+    }
+
+    if (globalObject && typeof globalObject === 'object') {
+        globalObject.galleryRecordUtils = recordUtils;
+    }
+
+    if (typeof document === 'undefined') {
+        return;
+    }
+
     const body = document.body;
     const {
         resultsCsv: initialCsvPath = '',
@@ -120,21 +232,14 @@
                 return [];
             }
             try {
-                const parsed = JSON.parse(jsonText);
-                if (!Array.isArray(parsed)) {
+                const raw = JSON.parse(jsonText);
+                if (!Array.isArray(raw)) {
                     return [];
                 }
-                return parsed
-                    .map((entry, entryIndex) => normalizeDatasetEntry(entry, entryIndex))
-                    .filter((entry) => {
-                        if (!entry) {
-                            return false;
-                        }
-                        if (entry.csv) {
-                            return true;
-                        }
-                        return entry.kind === 'merged' && Array.isArray(entry.sources) && entry.sources.length > 0;
-                    });
+                const parsed = raw
+                    .map((entry, index) => normalizeDatasetEntry(entry, index))
+                    .filter((entry) => entry !== null);
+                return parsed;
             } catch (error) {
                 console.warn('dataset listの解析に失敗しました:', error);
                 return [];
@@ -472,99 +577,6 @@
         };
     })();
 
-    const recordUtils = (() => {
-        function ensureRecords(recordsOrProvider) {
-            if (typeof recordsOrProvider === 'function') {
-                return ensureRecords(recordsOrProvider());
-            }
-            return Array.isArray(recordsOrProvider) ? recordsOrProvider : [];
-        }
-
-        function getRecordByIndex(recordsOrProvider, index) {
-            const records = ensureRecords(recordsOrProvider);
-            if (Number.isNaN(index) || index < 0 || index >= records.length) {
-                return null;
-            }
-            const record = records[index];
-            return record && typeof record === 'object' ? record : null;
-        }
-
-        function updateRecordField(recordsOrProvider, recordIndex, key, value) {
-            const record = getRecordByIndex(recordsOrProvider, recordIndex);
-            if (!record) {
-                return false;
-            }
-            if (value) {
-                if (record[key] === value) {
-                    return false;
-                }
-                record[key] = value;
-                return true;
-            }
-            if (Object.prototype.hasOwnProperty.call(record, key)) {
-                delete record[key];
-                return true;
-            }
-            return false;
-        }
-
-        function createFlagManager(recordsOrProvider, key, truthyTokens) {
-            const normalizedTokens = new Set(
-                (truthyTokens || []).map((token) => (token || '').toString().toLowerCase())
-            );
-
-            const normalize = (value) => {
-                if (value === true) {
-                    return true;
-                }
-                if (value === false || value == null) {
-                    return false;
-                }
-                if (typeof value === 'number') {
-                    return value === 1;
-                }
-                if (typeof value === 'string') {
-                    const text = value.trim().toLowerCase();
-                    return normalizedTokens.has(text);
-                }
-                return false;
-            };
-
-            const isSet = (record) => {
-                if (!record || typeof record !== 'object') {
-                    return false;
-                }
-                return normalize(record[key]);
-            };
-
-            const set = (recordIndex, nextState) => {
-                const record = getRecordByIndex(recordsOrProvider, recordIndex);
-                if (!record) {
-                    return false;
-                }
-                if (nextState) {
-                    if (isSet(record)) {
-                        return false;
-                    }
-                    record[key] = true;
-                    return true;
-                }
-                if (Object.prototype.hasOwnProperty.call(record, key)) {
-                    delete record[key];
-                    return true;
-                }
-                return false;
-            };
-
-            return { normalize, isSet, set };
-        }
-
-        return { getRecordByIndex, updateRecordField, createFlagManager };
-    })();
-
-    if (typeof window !== 'undefined') {
-        window.galleryRecordUtils = recordUtils;
-    }
 
     const state = stateStore.core;
     const datasetState = stateStore.dataset;
@@ -573,28 +585,50 @@
         return recordUtils.getRecordByIndex(state.records, index);
     }
 
-    function resolveItemElement(element) {
-        if (!element) {
-            return null;
+        function setDatasets(nextDatasets) {
+            dataset.list = Array.isArray(nextDatasets) ? nextDatasets.slice() : [];
+            if (!dataset.list.length) {
+                dataset.activeIndex = -1;
+                return;
+            }
+            if (dataset.activeIndex < 0 || dataset.activeIndex >= dataset.list.length) {
+                dataset.activeIndex = 0;
+            }
         }
-        if (element.classList && element.classList.contains('item')) {
-            return element;
-        }
-        return element.closest ? element.closest('.item') : null;
-    }
 
-    function getItemContext(element) {
-        const item = resolveItemElement(element);
-        if (!item) {
-            return null;
+        function clampIndex(index) {
+            if (!dataset.list.length) {
+                return -1;
+            }
+            const parsed = Number.parseInt(index, 10);
+            if (Number.isNaN(parsed) || parsed < 0) {
+                return 0;
+            }
+            if (parsed >= dataset.list.length) {
+                return dataset.list.length - 1;
+            }
+            return parsed;
         }
-        const recordIndex = Number(item.dataset.recordIndex);
-        const record = getRecordByIndex(recordIndex);
-        if (!record) {
-            return null;
+
+        function setActiveDatasetIndex(nextIndex) {
+            dataset.activeIndex = clampIndex(nextIndex);
+            return dataset.activeIndex;
         }
-        return { item, recordIndex, record };
-    }
+
+        function updateDescriptor(descriptor) {
+            const next = descriptor || {};
+            dataset.label = next.label || '';
+            dataset.folder = next.folder || '';
+            dataset.kind = next.kind || '';
+            dataset.sources = cloneDatasetSources(next.sources);
+            if (dataset.kind === 'merged') {
+                core.csvPath = next.csvPath || 'merged-dataset.csv';
+                core.imageDir = '';
+            } else {
+                core.csvPath = next.csvPath || '';
+                core.imageDir = next.imageDir ? next.imageDir : '.';
+            }
+        }
 
     const duplicateFlags = recordUtils.createFlagManager(
         () => state.records,
