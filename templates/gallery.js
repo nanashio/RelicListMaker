@@ -388,27 +388,92 @@
         return;
     }
 
-    const state = {
-        records: [],
-        items: [],
-        labelSymbols: parseLabelSymbols(labelSymbolsJson),
-        imageDir: imageDir || '.',
-        csvPath: initialCsvPath,
-        masterCsvPath: masterCsvPath || '',
-        masterJsonPath: masterJsonPath || '',
-        masterOptions: parseMasterOptions(masterOptionsJson),
-        masterDatalistPrepared: false,
-        masterLevels: preloadedMasterLevels,
-        masterLevelsLoaded: hasPreloadedMasterLevels,
-        masterLevelsPromise: null,
-        showOcr: false,
-        datasets,
-        activeDatasetIndex,
-        datasetLabel: '',
-        datasetFolder: '',
-        datasetKind: '',
-        datasetSources: []
-    };
+    const stateStore = (() => {
+        const dataset = {
+            list: Array.isArray(datasets) ? datasets.slice() : [],
+            activeIndex: -1,
+            label: '',
+            folder: '',
+            kind: '',
+            sources: []
+        };
+
+        const core = {
+            records: [],
+            items: [],
+            labelSymbols: parseLabelSymbols(labelSymbolsJson),
+            imageDir: imageDir || '.',
+            csvPath: initialCsvPath,
+            masterCsvPath: masterCsvPath || '',
+            masterJsonPath: masterJsonPath || '',
+            masterOptions: parseMasterOptions(masterOptionsJson),
+            masterDatalistPrepared: false,
+            masterLevels: preloadedMasterLevels,
+            masterLevelsLoaded: hasPreloadedMasterLevels,
+            masterLevelsPromise: null,
+            showOcr: false
+        };
+
+        function setDatasets(nextDatasets) {
+            dataset.list = Array.isArray(nextDatasets) ? nextDatasets.slice() : [];
+            if (!dataset.list.length) {
+                dataset.activeIndex = -1;
+                return;
+            }
+            if (dataset.activeIndex < 0 || dataset.activeIndex >= dataset.list.length) {
+                dataset.activeIndex = 0;
+            }
+        }
+
+        function clampIndex(index) {
+            if (!dataset.list.length) {
+                return -1;
+            }
+            const parsed = Number.parseInt(index, 10);
+            if (Number.isNaN(parsed) || parsed < 0) {
+                return 0;
+            }
+            if (parsed >= dataset.list.length) {
+                return dataset.list.length - 1;
+            }
+            return parsed;
+        }
+
+        function setActiveDatasetIndex(nextIndex) {
+            dataset.activeIndex = clampIndex(nextIndex);
+            return dataset.activeIndex;
+        }
+
+        function updateDescriptor(descriptor) {
+            const next = descriptor || {};
+            dataset.label = next.label || '';
+            dataset.folder = next.folder || '';
+            dataset.kind = next.kind || '';
+            dataset.sources = cloneDatasetSources(next.sources);
+            if (dataset.kind === 'merged') {
+                core.csvPath = next.csvPath || 'merged-dataset.csv';
+                core.imageDir = '';
+            } else {
+                core.csvPath = next.csvPath || '';
+                core.imageDir = next.imageDir ? next.imageDir : '.';
+            }
+        }
+
+        setDatasets(datasets);
+        setActiveDatasetIndex(activeDatasetIndex);
+
+        return {
+            core,
+            dataset,
+            setDatasets,
+            setActiveDatasetIndex,
+            clampIndex,
+            updateDescriptor
+        };
+    })();
+
+    const state = stateStore.core;
+    const datasetState = stateStore.dataset;
 
     function getRecordByIndex(index) {
         if (Number.isNaN(index) || index < 0 || index >= state.records.length) {
@@ -544,40 +609,30 @@
     const storage = createOpfsManager(() => state.records);
 
     function clampDatasetIndex(index) {
-        if (!state.datasets.length) {
-            return -1;
-        }
-        const parsed = Number.parseInt(index, 10);
-        if (Number.isNaN(parsed) || parsed < 0) {
-            return 0;
-        }
-        if (parsed >= state.datasets.length) {
-            return state.datasets.length - 1;
-        }
-        return parsed;
+        return stateStore.clampIndex(index);
     }
 
     function getCurrentDataset() {
-        if (!state.datasets.length) {
+        if (!datasetState.list.length) {
             return null;
         }
-        const index = clampDatasetIndex(state.activeDatasetIndex);
+        const index = clampDatasetIndex(datasetState.activeIndex);
         if (index < 0) {
             return null;
         }
-        return state.datasets[index] || null;
+        return datasetState.list[index] || null;
     }
 
     function prepareInitialDataset() {
-        if (!state.datasets.length) {
+        if (!datasetState.list.length) {
             return;
         }
         const dataset = getCurrentDataset();
         if (!dataset) {
-            state.activeDatasetIndex = state.datasets.length ? 0 : -1;
+            stateStore.setActiveDatasetIndex(datasetState.list.length ? 0 : -1);
             return;
         }
-        state.activeDatasetIndex = clampDatasetIndex(state.activeDatasetIndex);
+        stateStore.setActiveDatasetIndex(datasetState.activeIndex);
         const descriptor = resolveDatasetState(dataset);
         applyDatasetState(descriptor);
     }
@@ -586,21 +641,21 @@
         if (!dom.datasetSelector || !dom.datasetSelect) {
             return;
         }
-        if (!state.datasets.length) {
+        if (!datasetState.list.length) {
             setElementHidden(dom.datasetSelector, true);
             clearElementChildren(dom.datasetSelect);
             return;
         }
 
         clearElementChildren(dom.datasetSelect);
-        state.datasets.forEach((dataset, index) => {
+        datasetState.list.forEach((dataset, index) => {
             const option = document.createElement('option');
             option.value = String(index);
             option.textContent = datasetOptionLabel(dataset, index);
             dom.datasetSelect.appendChild(option);
         });
         setElementHidden(dom.datasetSelector, false);
-        const currentIndex = clampDatasetIndex(state.activeDatasetIndex);
+        const currentIndex = clampDatasetIndex(datasetState.activeIndex);
         dom.datasetSelect.value = String(currentIndex);
         dom.datasetSelect.title = datasetOptionLabel(getCurrentDataset(), currentIndex);
     }
@@ -609,22 +664,22 @@
         if (!dom.datasetSelector || !dom.datasetSelect) {
             return;
         }
-        if (!state.datasets.length) {
+        if (!datasetState.list.length) {
             setElementHidden(dom.datasetSelector, true);
             return;
         }
-        const currentIndex = clampDatasetIndex(state.activeDatasetIndex);
+        const currentIndex = clampDatasetIndex(datasetState.activeIndex);
         setElementHidden(dom.datasetSelector, false);
         dom.datasetSelect.value = String(currentIndex);
         dom.datasetSelect.title = datasetOptionLabel(getCurrentDataset(), currentIndex);
     }
 
     async function switchDataset(index, options = {}) {
-        if (!state.datasets.length) {
+        if (!datasetState.list.length) {
             return;
         }
         const nextIndex = clampDatasetIndex(index);
-        const dataset = state.datasets[nextIndex];
+        const dataset = datasetState.list[nextIndex];
         if (!dataset) {
             return;
         }
@@ -634,13 +689,13 @@
         const forceReload = Boolean(options.forceReload);
         const shouldReload =
             forceReload ||
-            state.activeDatasetIndex !== nextIndex ||
+            datasetState.activeIndex !== nextIndex ||
             state.csvPath !== descriptor.csvPath ||
             state.imageDir !== expectedImageDir ||
-            state.datasetKind !== descriptor.kind ||
-            !areSourcesEqual(state.datasetSources, descriptor.sources);
+            datasetState.kind !== descriptor.kind ||
+            !areSourcesEqual(datasetState.sources, descriptor.sources);
 
-        state.activeDatasetIndex = nextIndex;
+        stateStore.setActiveDatasetIndex(nextIndex);
         applyDatasetState(descriptor);
 
         updateDatasetIndicator();
@@ -705,22 +760,12 @@
     }
 
     function applyDatasetState(descriptor) {
-        state.datasetLabel = descriptor.label || '';
-        state.datasetFolder = descriptor.folder || '';
-        state.datasetKind = descriptor.kind || '';
-        state.datasetSources = cloneDatasetSources(descriptor.sources);
-        if (state.datasetKind === 'merged') {
-            state.csvPath = descriptor.csvPath || 'merged-dataset.csv';
-            state.imageDir = '';
-        } else {
-            state.csvPath = descriptor.csvPath || '';
-            state.imageDir = descriptor.imageDir ? descriptor.imageDir : '.';
-        }
+        stateStore.updateDescriptor(descriptor);
         updateSaveAvailability();
     }
 
     function updateSaveAvailability() {
-        if (state.datasetKind === 'merged') {
+        if (datasetState.kind === 'merged') {
             setStorageStatus('統合ビューは読み取り専用です。個別データセットを選択してください。', true);
         } else {
             setStorageStatus('変更は即座にCSVへ保存されます。', false);
@@ -801,7 +846,7 @@
             }
         });
 
-        const datasetName = state.datasetLabel || '';
+        const datasetName = datasetState.label || '';
         const prefix = datasetName ? `[${datasetName}] ` : '';
         const summaryText = `${prefix}全体 ${totalCount} 件 / 確認済み ${fullyConfirmedCount} 件 / 未レビュー ${pendingCount} 件`;
         summary.textContent = summaryText;
@@ -1402,8 +1447,8 @@
         const imageName = record.Image == null ? '' : String(record.Image);
         const baseImageName = record.BaseImage == null ? '' : String(record.BaseImage);
         const displayName = baseImageName || getFileName(imageName) || imageName;
-        const datasetName = state.datasetKind === 'merged' ? (record.Dataset == null ? '' : String(record.Dataset)) : '';
-        const datasetFolder = state.datasetKind === 'merged' ? (record.DatasetFolder == null ? '' : String(record.DatasetFolder)) : '';
+        const datasetName = datasetState.kind === 'merged' ? (record.Dataset == null ? '' : String(record.Dataset)) : '';
+        const datasetFolder = datasetState.kind === 'merged' ? (record.DatasetFolder == null ? '' : String(record.DatasetFolder)) : '';
         const item = document.createElement('div');
         item.className = 'item';
         item.dataset.image = imageName.toLowerCase();
@@ -1478,7 +1523,7 @@
             metaInfo.appendChild(createElement('span', 'item-position', '- / 0'));
         }
 
-        if (state.datasetKind === 'merged' && datasetName) {
+        if (datasetState.kind === 'merged' && datasetName) {
             const datasetBadge = createElement('span', 'dataset-label', datasetName);
             const badgeTitle = datasetFolder ? `${datasetName} (${datasetFolder})` : datasetName;
             datasetBadge.setAttribute('title', badgeTitle);
@@ -1883,7 +1928,7 @@
 
         applyMasterLevelOptions(effect, levelInput, effectNameForLevels);
 
-        if (state.datasetKind === 'merged') {
+        if (datasetState.kind === 'merged') {
             passButton.disabled = true;
             correctionInput.disabled = true;
             levelInput.disabled = true;
@@ -2634,11 +2679,11 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
             console.warn('ブラウザからの読み込みに失敗しました:', error);
         }
 
-        const isMerged = state.datasetKind === 'merged' && Array.isArray(state.datasetSources) && state.datasetSources.length > 0;
+        const isMerged = datasetState.kind === 'merged' && Array.isArray(datasetState.sources) && datasetState.sources.length > 0;
         if (isMerged) {
             try {
                 showStatus('読み込み中...', false);
-                const mergedRecords = await loadMergedRecords(state.datasetSources);
+                const mergedRecords = await loadMergedRecords(datasetState.sources);
                 loadRecordsArray(mergedRecords);
                 clearStatus();
         } catch (error) {
@@ -3018,7 +3063,7 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
         };
 
         function datasetEditable() {
-            return state.datasetKind !== 'merged';
+            return datasetState.kind !== 'merged';
         }
 
         function collectRecords() {
@@ -3050,7 +3095,7 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
                     body: JSON.stringify({
                         csvPath,
                         records: collectRecords(),
-                        datasetLabel: state.datasetLabel || ''
+                        datasetLabel: datasetState.label || ''
                     })
                 });
 
@@ -3119,8 +3164,8 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
         setupDatasetSelector();
         await ensureMasterLevels();
         await ensureMasterOptions();
-        if (state.datasets.length) {
-            await switchDataset(state.activeDatasetIndex, { forceReload: true });
+        if (datasetState.list.length) {
+            await switchDataset(datasetState.activeIndex, { forceReload: true });
         } else {
             await loadInitialData();
         }
