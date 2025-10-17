@@ -590,28 +590,50 @@
         return recordUtils.getRecordByIndex(state.records, index);
     }
 
-    function resolveItemElement(element) {
-        if (!element) {
-            return null;
+        function setDatasets(nextDatasets) {
+            dataset.list = Array.isArray(nextDatasets) ? nextDatasets.slice() : [];
+            if (!dataset.list.length) {
+                dataset.activeIndex = -1;
+                return;
+            }
+            if (dataset.activeIndex < 0 || dataset.activeIndex >= dataset.list.length) {
+                dataset.activeIndex = 0;
+            }
         }
-        if (element.classList && element.classList.contains('item')) {
-            return element;
-        }
-        return element.closest ? element.closest('.item') : null;
-    }
 
-    function getItemContext(element) {
-        const item = resolveItemElement(element);
-        if (!item) {
-            return null;
+        function clampIndex(index) {
+            if (!dataset.list.length) {
+                return -1;
+            }
+            const parsed = Number.parseInt(index, 10);
+            if (Number.isNaN(parsed) || parsed < 0) {
+                return 0;
+            }
+            if (parsed >= dataset.list.length) {
+                return dataset.list.length - 1;
+            }
+            return parsed;
         }
-        const recordIndex = Number(item.dataset.recordIndex);
-        const record = getRecordByIndex(recordIndex);
-        if (!record) {
-            return null;
+
+        function setActiveDatasetIndex(nextIndex) {
+            dataset.activeIndex = clampIndex(nextIndex);
+            return dataset.activeIndex;
         }
-        return { item, recordIndex, record };
-    }
+
+        function updateDescriptor(descriptor) {
+            const next = descriptor || {};
+            dataset.label = next.label || '';
+            dataset.folder = next.folder || '';
+            dataset.kind = next.kind || '';
+            dataset.sources = cloneDatasetSources(next.sources);
+            if (dataset.kind === 'merged') {
+                core.csvPath = next.csvPath || 'merged-dataset.csv';
+                core.imageDir = '';
+            } else {
+                core.csvPath = next.csvPath || '';
+                core.imageDir = next.imageDir ? next.imageDir : '.';
+            }
+        }
 
     const duplicateFlags = recordUtils.createFlagManager(
         () => state.records,
