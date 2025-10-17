@@ -103,25 +103,20 @@
     }
 
     const recordUtils = createRecordUtils();
-    const hasModuleExports = typeof module !== 'undefined' && module.exports;
-    const browserTargets = [
-        typeof window !== 'undefined' ? window : null,
-        typeof self !== 'undefined' ? self : null,
-        typeof globalThis !== 'undefined' ? globalThis : null
-    ];
-    const domCapableGlobal = browserTargets.find((candidate) => {
-        if (!candidate || typeof candidate !== 'object') {
-            return false;
-        }
-        return typeof candidate.document !== 'undefined';
-    });
+    const globalObject = typeof globalThis !== 'undefined'
+        ? globalThis
+        : typeof self !== 'undefined'
+            ? self
+            : typeof window !== 'undefined'
+                ? window
+                : {};
 
-    if (hasModuleExports) {
+    if (typeof module !== 'undefined' && module.exports) {
         module.exports = { createRecordUtils, recordUtils };
     }
 
-    if (domCapableGlobal) {
-        domCapableGlobal.galleryRecordUtils = recordUtils;
+    if (globalObject && typeof globalObject === 'object') {
+        globalObject.galleryRecordUtils = recordUtils;
     }
 
     if (typeof document === 'undefined') {

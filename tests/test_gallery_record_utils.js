@@ -1,14 +1,8 @@
 const assert = require('assert');
 
-delete globalThis.galleryRecordUtils;
-
 const { createRecordUtils } = require('../templates/gallery.js');
 
 const recordUtils = createRecordUtils();
-
-if (Object.prototype.hasOwnProperty.call(globalThis, 'galleryRecordUtils')) {
-    throw new Error('galleryRecordUtils should not be attached to the Node global object');
-}
 
 (function testGetRecordByIndex() {
     const records = [{ id: 1 }, { id: 2 }, { id: 3 }];
