@@ -24,6 +24,336 @@
         activeDataset: activeDatasetAttr = ''
     } = body.dataset || {};
 
+    const datasetUtils = (() => {
+        function normalizeDatasetSources(rawSources) {
+            if (!Array.isArray(rawSources)) {
+                return [];
+            }
+            const result = [];
+            rawSources.forEach((source, index) => {
+                if (!source || typeof source !== 'object') {
+                    return;
+                }
+                const csv = typeof source.csv === 'string' ? source.csv.trim() : '';
+                if (!csv) {
+                    return;
+                }
+                const imgDir = typeof source.imgDir === 'string' ? source.imgDir.trim() : '';
+                const label = typeof source.label === 'string' ? source.label.trim() : '';
+                const folder = typeof source.folder === 'string' ? source.folder.trim() : '';
+                const sourceIndex = Number.isFinite(source.index) ? Number(source.index) : index;
+                result.push({
+                    label,
+                    csv,
+                    imgDir,
+                    folder,
+                    index: sourceIndex
+                });
+            });
+            return result;
+        }
+
+        function normalizeDatasetEntry(entry, index) {
+            if (entry == null) {
+                return null;
+            }
+
+            let label = '';
+            let csv = '';
+            let imgDir = '';
+            let folder = '';
+            let kind = '';
+            let sources = [];
+
+            if (typeof entry === 'string') {
+                csv = entry;
+            } else if (Array.isArray(entry)) {
+                if (entry.length > 0) {
+                    csv = entry[0];
+                }
+                if (entry.length > 1) {
+                    imgDir = entry[1];
+                }
+                if (entry.length > 2) {
+                    label = entry[2];
+                }
+            } else if (typeof entry === 'object') {
+                label = entry.label ?? entry.name ?? '';
+                csv = entry.csv ?? entry.results ?? entry.results_csv ?? entry.resultsCsv ?? '';
+                imgDir = entry.imgDir ?? entry.img_dir ?? entry.imageDir ?? entry.image_dir ?? entry.images ?? '';
+                folder = entry.folder ?? '';
+                kind = typeof entry.kind === 'string' ? entry.kind.trim() : typeof entry.type === 'string' ? entry.type.trim() : '';
+                if (!kind && entry.merged === true) {
+                    kind = 'merged';
+                }
+                const rawSources = entry.sources ?? entry.merge ?? entry.mergeSources ?? entry.children ?? null;
+                sources = normalizeDatasetSources(rawSources);
+            } else {
+                csv = String(entry);
+            }
+
+            label = typeof label === 'string' ? label.trim() : '';
+            csv = typeof csv === 'string' ? csv.trim() : '';
+            imgDir = typeof imgDir === 'string' ? imgDir.trim() : '';
+            folder = typeof folder === 'string' ? folder.trim() : '';
+            kind = typeof kind === 'string' ? kind.trim().toLowerCase() : '';
+
+            const hasCsv = Boolean(csv);
+            const acceptsEmptyCsv = kind === 'merged' && sources.length > 0;
+            if (!hasCsv && !acceptsEmptyCsv) {
+                return null;
+            }
+
+            return {
+                label,
+                csv,
+                imgDir,
+                folder,
+                index,
+                kind,
+                sources
+            };
+        }
+
+        function parseDatasets(jsonText) {
+            if (!jsonText) {
+                return [];
+            }
+            try {
+                const parsed = JSON.parse(jsonText);
+                if (!Array.isArray(parsed)) {
+                    return [];
+                }
+                return parsed
+                    .map((entry, entryIndex) => normalizeDatasetEntry(entry, entryIndex))
+                    .filter((entry) => {
+                        if (!entry) {
+                            return false;
+                        }
+                        if (entry.csv) {
+                            return true;
+                        }
+                        return entry.kind === 'merged' && Array.isArray(entry.sources) && entry.sources.length > 0;
+                    });
+            } catch (error) {
+                console.warn('dataset listの解析に失敗しました:', error);
+                return [];
+            }
+        }
+
+        function parseDatasetIndex(value, length) {
+            const total = Number.isFinite(length) ? Number(length) : 0;
+            if (!total) {
+                return -1;
+            }
+            const parsed = Number.parseInt(value, 10);
+            if (Number.isNaN(parsed)) {
+                return 0;
+            }
+            if (parsed < 0) {
+                return 0;
+            }
+            if (parsed >= total) {
+                return total - 1;
+            }
+            return parsed;
+        }
+
+        function cloneDatasetSources(list) {
+            if (!Array.isArray(list)) {
+                return [];
+            }
+            return list.map((source) => ({
+                label: source && typeof source.label === 'string' ? source.label : '',
+                csv: source && typeof source.csv === 'string' ? source.csv : '',
+                imgDir: source && typeof source.imgDir === 'string' ? source.imgDir : '',
+                folder: source && typeof source.folder === 'string' ? source.folder : '',
+                index: source && Number.isFinite(source.index) ? Number(source.index) : 0
+            }));
+        }
+
+        function areSourcesEqual(left, right) {
+            const a = Array.isArray(left) ? left : [];
+            const b = Array.isArray(right) ? right : [];
+            if (a.length !== b.length) {
+                return false;
+            }
+            for (let i = 0; i < a.length; i += 1) {
+                const leftEntry = a[i] || {};
+                const rightEntry = b[i] || {};
+                if ((leftEntry.csv || '') !== (rightEntry.csv || '')) {
+                    return false;
+                }
+                if ((leftEntry.imgDir || '') !== (rightEntry.imgDir || '')) {
+                    return false;
+                }
+                if ((leftEntry.label || '') !== (rightEntry.label || '')) {
+                    return false;
+                }
+                if ((leftEntry.folder || '') !== (rightEntry.folder || '')) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function resolveDatasetState(dataset) {
+            if (!dataset) {
+                return {
+                    label: '',
+                    folder: '',
+                    kind: '',
+                    csvPath: '',
+                    imageDir: '',
+                    sources: []
+                };
+            }
+            const label = dataset.label || '';
+            const folder = dataset.folder || '';
+            const kind = dataset.kind || '';
+            const sources = cloneDatasetSources(dataset.sources);
+            const isMerged = kind === 'merged' && sources.length > 0;
+            const csvPath = isMerged ? dataset.csv || 'merged-dataset.csv' : dataset.csv || '';
+            const imageDir = isMerged ? '' : dataset.imgDir || '';
+            return {
+                label,
+                folder,
+                kind,
+                csvPath,
+                imageDir,
+                sources
+            };
+        }
+
+        return {
+            parseDatasets,
+            parseDatasetIndex,
+            cloneDatasetSources,
+            areSourcesEqual,
+            resolveDatasetState
+        };
+    })();
+
+    const domUtils = (() => {
+        function setHidden(element, hidden) {
+            if (!element || !element.classList) {
+                return;
+            }
+            element.classList.toggle('hidden', Boolean(hidden));
+        }
+
+        function clearChildren(element) {
+            if (!element) {
+                return;
+            }
+            element.textContent = '';
+        }
+
+        function updateStatusElement(element, message, options = {}) {
+            if (!element) {
+                return;
+            }
+
+            const { isError = false, display = 'block', errorClass = 'error' } = options;
+            element.textContent = message || '';
+            if (element.classList && errorClass) {
+                element.classList.toggle(errorClass, Boolean(isError));
+            }
+            if (element.style) {
+                element.style.display = message ? display : 'none';
+            }
+        }
+
+        function applyInlineStyles(element, styles) {
+            if (!element || !styles || typeof styles !== 'object') {
+                return;
+            }
+            Object.keys(styles).forEach((key) => {
+                const value = styles[key];
+                if (value != null) {
+                    element.style[key] = value;
+                }
+            });
+        }
+
+        function ensureElement(current, options = {}) {
+            const {
+                selector = '',
+                id = '',
+                tagName = 'div',
+                classNames = [],
+                create
+            } = options;
+
+            let element = current || null;
+
+            const resolveCandidate = () => {
+                if (selector) {
+                    const foundBySelector = document.querySelector(selector);
+                    if (foundBySelector) {
+                        return foundBySelector;
+                    }
+                }
+                if (id) {
+                    const foundById = document.getElementById(id);
+                    if (foundById) {
+                        return foundById;
+                    }
+                }
+                return null;
+            };
+
+            if (!element || !element.isConnected) {
+                const candidate = resolveCandidate();
+                if (candidate) {
+                    element = candidate;
+                }
+            }
+
+            if (!element) {
+                element = typeof create === 'function' ? create() : document.createElement(tagName);
+            }
+
+            if (id && !element.id) {
+                element.id = id;
+            }
+
+            if (element.classList) {
+                classNames
+                    .filter((className) => typeof className === 'string' && className.length > 0)
+                    .forEach((className) => {
+                        element.classList.add(className);
+                    });
+            }
+
+            return element;
+        }
+
+        return {
+            setHidden,
+            clearChildren,
+            updateStatusElement,
+            applyInlineStyles,
+            ensureElement
+        };
+    })();
+
+    const {
+        parseDatasets,
+        parseDatasetIndex,
+        cloneDatasetSources,
+        areSourcesEqual,
+        resolveDatasetState
+    } = datasetUtils;
+
+    const {
+        setHidden: setElementHidden,
+        clearChildren: clearElementChildren,
+        updateStatusElement,
+        applyInlineStyles: applyInlineStylesToElement,
+        ensureElement: ensureDomElement
+    } = domUtils;
+
     const datasets = parseDatasets(datasetsJson);
     const activeDatasetIndex = parseDatasetIndex(activeDatasetAttr, datasets.length);
     const preloadedMasterLevels = parseMasterLevels(masterLevelsJson);
@@ -248,7 +578,7 @@
             return;
         }
         state.activeDatasetIndex = clampDatasetIndex(state.activeDatasetIndex);
-        const descriptor = resolveDatasetState(dataset, state.activeDatasetIndex);
+        const descriptor = resolveDatasetState(dataset);
         applyDatasetState(descriptor);
     }
 
@@ -257,19 +587,19 @@
             return;
         }
         if (!state.datasets.length) {
-            dom.datasetSelector.classList.add('hidden');
-            dom.datasetSelect.innerHTML = '';
+            setElementHidden(dom.datasetSelector, true);
+            clearElementChildren(dom.datasetSelect);
             return;
         }
 
-        dom.datasetSelect.innerHTML = '';
+        clearElementChildren(dom.datasetSelect);
         state.datasets.forEach((dataset, index) => {
             const option = document.createElement('option');
             option.value = String(index);
             option.textContent = datasetOptionLabel(dataset, index);
             dom.datasetSelect.appendChild(option);
         });
-        dom.datasetSelector.classList.remove('hidden');
+        setElementHidden(dom.datasetSelector, false);
         const currentIndex = clampDatasetIndex(state.activeDatasetIndex);
         dom.datasetSelect.value = String(currentIndex);
         dom.datasetSelect.title = datasetOptionLabel(getCurrentDataset(), currentIndex);
@@ -280,11 +610,11 @@
             return;
         }
         if (!state.datasets.length) {
-            dom.datasetSelector.classList.add('hidden');
+            setElementHidden(dom.datasetSelector, true);
             return;
         }
         const currentIndex = clampDatasetIndex(state.activeDatasetIndex);
-        dom.datasetSelector.classList.remove('hidden');
+        setElementHidden(dom.datasetSelector, false);
         dom.datasetSelect.value = String(currentIndex);
         dom.datasetSelect.title = datasetOptionLabel(getCurrentDataset(), currentIndex);
     }
@@ -299,7 +629,7 @@
             return;
         }
 
-        const descriptor = resolveDatasetState(dataset, nextIndex);
+        const descriptor = resolveDatasetState(dataset);
         const expectedImageDir = descriptor.kind === 'merged' ? '' : descriptor.imageDir || '.';
         const forceReload = Boolean(options.forceReload);
         const shouldReload =
@@ -319,9 +649,7 @@
             return;
         }
 
-        if (dom.gallery) {
-            dom.gallery.textContent = '';
-        }
+        clearElementChildren(dom.gallery);
         state.records = [];
         state.items = [];
 
@@ -336,29 +664,17 @@
     };
 
     function ensureSummaryElement() {
-        let summary = dom.summary;
+        const summary = ensureDomElement(dom.summary, {
+            selector: '#gallery-summary',
+            id: 'gallery-summary',
+            tagName: 'p',
+            classNames: ['gallery-summary']
+        });
 
-        if (!summary || !summary.isConnected) {
-            const existing = document.getElementById('gallery-summary');
-            if (existing && existing !== dom.summary) {
-                summary = existing;
-            } else if (!summary || !summary.isConnected) {
-                summary = document.createElement('p');
-            }
-        }
-
-        if (!summary) {
-            summary = document.createElement('p');
-        }
-
-        summary.id = summary.id || 'gallery-summary';
-        summary.classList.add('gallery-summary');
-
-        summary.style.textAlign = SUMMARY_INLINE_STYLE.textAlign;
-        summary.style.color = SUMMARY_INLINE_STYLE.color;
-        summary.style.fontSize = SUMMARY_INLINE_STYLE.fontSize;
-        summary.style.margin = SUMMARY_INLINE_STYLE.margin;
-        summary.style.width = '100%';
+        applyInlineStylesToElement(summary, {
+            ...SUMMARY_INLINE_STYLE,
+            width: '100%'
+        });
 
         if (!summary.parentNode) {
             const reference = dom.galleryStatus && dom.galleryStatus.parentNode ? dom.galleryStatus : dom.gallery;
@@ -386,206 +702,6 @@
             console.warn('label symbolsの解析に失敗しました:', error);
         }
         return ['①', '②', '③'];
-    }
-
-    function parseDatasetIndex(value, length) {
-        const total = Number.isFinite(length) ? Number(length) : 0;
-        if (!total) {
-            return -1;
-        }
-        const parsed = Number.parseInt(value, 10);
-        if (Number.isNaN(parsed)) {
-            return 0;
-        }
-        if (parsed < 0) {
-            return 0;
-        }
-        if (parsed >= total) {
-            return total - 1;
-        }
-        return parsed;
-    }
-
-    function normalizeDatasetSources(rawSources) {
-        if (!Array.isArray(rawSources)) {
-            return [];
-        }
-        const result = [];
-        rawSources.forEach((source, index) => {
-            if (!source || typeof source !== 'object') {
-                return;
-            }
-            const csv = typeof source.csv === 'string' ? source.csv.trim() : '';
-            if (!csv) {
-                return;
-            }
-            const imgDir = typeof source.imgDir === 'string' ? source.imgDir.trim() : '';
-            const label = typeof source.label === 'string' ? source.label.trim() : '';
-            const folder = typeof source.folder === 'string' ? source.folder.trim() : '';
-            const sourceIndex = Number.isFinite(source.index) ? Number(source.index) : index;
-            result.push({
-                label,
-                csv,
-                imgDir,
-                folder,
-                index: sourceIndex
-            });
-        });
-        return result;
-    }
-
-    function normalizeDatasetEntry(entry, index) {
-        if (entry == null) {
-            return null;
-        }
-
-        let label = '';
-        let csv = '';
-        let imgDir = '';
-        let folder = '';
-        let kind = '';
-        let sources = [];
-
-        if (typeof entry === 'string') {
-            csv = entry;
-        } else if (Array.isArray(entry)) {
-            if (entry.length > 0) {
-                csv = entry[0];
-            }
-            if (entry.length > 1) {
-                imgDir = entry[1];
-            }
-            if (entry.length > 2) {
-                label = entry[2];
-            }
-        } else if (typeof entry === 'object') {
-            label = entry.label ?? entry.name ?? '';
-            csv = entry.csv ?? entry.results ?? entry.results_csv ?? entry.resultsCsv ?? '';
-            imgDir = entry.imgDir ?? entry.img_dir ?? entry.imageDir ?? entry.image_dir ?? entry.images ?? '';
-            folder = entry.folder ?? '';
-            kind = typeof entry.kind === 'string' ? entry.kind.trim() : typeof entry.type === 'string' ? entry.type.trim() : '';
-            if (!kind && entry.merged === true) {
-                kind = 'merged';
-            }
-            const rawSources = entry.sources ?? entry.merge ?? entry.mergeSources ?? entry.children ?? null;
-            sources = normalizeDatasetSources(rawSources);
-        } else {
-            csv = String(entry);
-        }
-
-        label = typeof label === 'string' ? label.trim() : '';
-        csv = typeof csv === 'string' ? csv.trim() : '';
-        imgDir = typeof imgDir === 'string' ? imgDir.trim() : '';
-        folder = typeof folder === 'string' ? folder.trim() : '';
-        kind = typeof kind === 'string' ? kind.trim().toLowerCase() : '';
-
-        const hasCsv = Boolean(csv);
-        const acceptsEmptyCsv = kind === 'merged' && sources.length > 0;
-        if (!hasCsv && !acceptsEmptyCsv) {
-            return null;
-        }
-
-        return {
-            label,
-            csv,
-            imgDir,
-            folder,
-            index,
-            kind,
-            sources
-        };
-    }
-
-    function parseDatasets(jsonText) {
-        if (!jsonText) {
-            return [];
-        }
-        try {
-            const parsed = JSON.parse(jsonText);
-            if (!Array.isArray(parsed)) {
-                return [];
-            }
-            return parsed
-                .map((entry, index) => normalizeDatasetEntry(entry, index))
-                .filter((entry) => {
-                    if (!entry) {
-                        return false;
-                    }
-                    if (entry.csv) {
-                        return true;
-                    }
-                    return entry.kind === 'merged' && Array.isArray(entry.sources) && entry.sources.length > 0;
-                });
-        } catch (error) {
-            console.warn('dataset listの解析に失敗しました:', error);
-            return [];
-        }
-    }
-
-    function cloneDatasetSources(list) {
-        if (!Array.isArray(list)) {
-            return [];
-        }
-        return list.map((source) => ({
-            label: source && typeof source.label === 'string' ? source.label : '',
-            csv: source && typeof source.csv === 'string' ? source.csv : '',
-            imgDir: source && typeof source.imgDir === 'string' ? source.imgDir : '',
-            folder: source && typeof source.folder === 'string' ? source.folder : '',
-            index: source && Number.isFinite(source.index) ? Number(source.index) : 0
-        }));
-    }
-
-    function areSourcesEqual(left, right) {
-        const a = Array.isArray(left) ? left : [];
-        const b = Array.isArray(right) ? right : [];
-        if (a.length !== b.length) {
-            return false;
-        }
-        for (let i = 0; i < a.length; i += 1) {
-            const leftEntry = a[i] || {};
-            const rightEntry = b[i] || {};
-            if ((leftEntry.csv || '') !== (rightEntry.csv || '')) {
-                return false;
-            }
-            if ((leftEntry.imgDir || '') !== (rightEntry.imgDir || '')) {
-                return false;
-            }
-            if ((leftEntry.label || '') !== (rightEntry.label || '')) {
-                return false;
-            }
-            if ((leftEntry.folder || '') !== (rightEntry.folder || '')) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    function resolveDatasetState(dataset, index) {
-        if (!dataset) {
-            return {
-                label: '',
-                folder: '',
-                kind: '',
-                csvPath: '',
-                imageDir: '',
-                sources: []
-            };
-        }
-        const label = dataset.label || '';
-        const folder = dataset.folder || '';
-        const kind = dataset.kind || '';
-        const sources = cloneDatasetSources(dataset.sources);
-        const isMerged = kind === 'merged' && sources.length > 0;
-        const csvPath = isMerged ? dataset.csv || 'merged-dataset.csv' : dataset.csv || '';
-        const imageDir = isMerged ? '' : dataset.imgDir || '';
-        return {
-            label,
-            folder,
-            kind,
-            csvPath,
-            imageDir,
-            sources
-        };
     }
 
     function applyDatasetState(descriptor) {
@@ -627,12 +743,7 @@
     }
 
     function showStatus(message, isError) {
-        if (!dom.galleryStatus) {
-            return;
-        }
-        dom.galleryStatus.textContent = message || '';
-        dom.galleryStatus.classList.toggle('error', Boolean(isError));
-        dom.galleryStatus.style.display = message ? 'block' : 'none';
+        updateStatusElement(dom.galleryStatus, message, { isError, display: 'block' });
     }
 
     function clearStatus() {
@@ -640,12 +751,7 @@
     }
 
     function setStorageStatus(message, isError) {
-        if (!dom.storageStatus) {
-            return;
-        }
-        dom.storageStatus.textContent = message || '';
-        dom.storageStatus.classList.toggle('error', Boolean(isError));
-        dom.storageStatus.style.display = message ? 'inline' : 'none';
+        updateStatusElement(dom.storageStatus, message, { isError, display: 'inline' });
     }
 
     function updateSummary() {
@@ -1111,7 +1217,7 @@
             datalist.id = MASTER_DATALIST_ID;
             document.body.appendChild(datalist);
         } else {
-            datalist.textContent = '';
+            clearElementChildren(datalist);
         }
 
         state.masterOptions.forEach((value) => {
@@ -1245,7 +1351,7 @@
 
     function buildGallery() {
         const includeDuplicates = includeDuplicatesNow();
-        dom.gallery.textContent = '';
+        clearElementChildren(dom.gallery);
         state.items = [];
 
         const fragment = document.createDocumentFragment();
