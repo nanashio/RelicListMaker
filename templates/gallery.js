@@ -648,6 +648,14 @@
 
     const { core: state, dataset: datasetState } = stateStore.getState();
 
+    function handleStateChange() {
+        updateDatasetIndicator();
+        updateSaveAvailability();
+    }
+
+    stateStore.subscribe(handleStateChange);
+    handleStateChange();
+
     function getRecordByIndex(index) {
         return recordUtils.getRecordByIndex(state.records, index);
     }
@@ -809,7 +817,6 @@
         stateStore.setActiveDatasetIndex(nextIndex);
         applyDatasetState(descriptor);
 
-        updateDatasetIndicator();
 
         if (!shouldReload) {
             return;
@@ -872,7 +879,6 @@
 
     function applyDatasetState(descriptor) {
         stateStore.updateDescriptor(descriptor);
-        updateSaveAvailability();
     }
 
     function updateSaveAvailability() {
