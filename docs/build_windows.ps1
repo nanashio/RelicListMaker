@@ -100,20 +100,27 @@ try {
             throw "robocopy failed with exit code $rc"
         }
 
-        $copiedLines = $robocopyOutput | Where-Object { $_ -match '\\' }
-        $copiedLines = $copiedLines | Where-Object { $_ -match '\s+\d+\s+\w' }
+        $copiedEntries = @()
+        foreach ($line in $robocopyOutput) {
+            if ($line -match '\s+(?<status>New File|New Dir|Newer|Modified)\s+(?<size>-?\d+)\s+(?<path>.+)$') {
+                $rawPath = $matches['path'].Trim()
+                $relative = $rawPath.Replace($repoRoot, '').TrimStart('\\')
+                if (-not $relative) {
+                    $relative = $rawPath
+                }
+                $copiedEntries += [pscustomobject]@{
+                    Status = $matches['status']
+                    Size = [int]$matches['size']
+                    Path = $relative
+                }
+            }
+        }
+
         $copyReport = {
             Write-Info 'Files copied:'
-            if ($copiedLines -and $copiedLines.Count -gt 0) {
-                foreach ($line in $copiedLines) {
-                    $normalized = ($line -replace '\s{2,}', ' ').Trim()
-                    $parts = $normalized -split ' ' | Where-Object { $_ }
-                    $rawPath = $parts[-1]
-                    $relative = $rawPath.Replace($repoRoot, '').TrimStart('\\')
-                    if (-not $relative) {
-                        $relative = $rawPath
-                    }
-                    Write-Host ("    - {0}" -f $relative)
+            if ($copiedEntries -and $copiedEntries.Count -gt 0) {
+                foreach ($entry in $copiedEntries) {
+                    Write-Host ("    - {0,-10} {1}" -f $entry.Status, $entry.Path)
                 }
             } else {
                 Write-Host '    (No files copied)'
@@ -179,8 +186,4 @@ catch {
 finally {
     Pop-Location
 
-    if (-not $Quiet -and $Host.Name -eq 'ConsoleHost') {
-        Write-Host 'Press Enter to exit...' -ForegroundColor Yellow
-        [void](Read-Host)
-    }
 }
