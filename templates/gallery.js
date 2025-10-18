@@ -1107,6 +1107,52 @@
 
     const { clampDatasetIndex, getCurrentDataset, prepareInitialDataset, switchDataset } = datasetManager;
 
+    const appFactory = window.galleryAppFactory || null;
+
+    const createAppController =
+        appFactory && typeof appFactory.createAppController === 'function'
+            ? appFactory.createAppController
+            : function createAppControllerFallback(config = {}) {
+                  const {
+                      attachEventHandlers: attachHandlers = () => {},
+                      prepareInitialDataset: prepareDataset = () => {},
+                      setupDatasetSelector: setupSelector = () => {},
+                      ensureMasterLevels: loadMasterLevels = async () => {},
+                      ensureMasterOptions: loadMasterOptions = async () => {},
+                      datasetState: dsState = { list: [], activeIndex: -1 },
+                      switchDataset: switchFn = async () => {},
+                      loadInitialData: loadData = async () => {}
+                  } = config;
+
+                  return {
+                      async initialize() {
+                          attachHandlers();
+                          prepareDataset();
+                          setupSelector();
+                          await loadMasterLevels();
+                          await loadMasterOptions();
+                          if (dsState && Array.isArray(dsState.list) && dsState.list.length) {
+                              await switchFn(dsState.activeIndex, { forceReload: true });
+                          } else {
+                              await loadData();
+                          }
+                      }
+                  };
+              };
+
+    const appController = createAppController({
+        attachEventHandlers,
+        prepareInitialDataset,
+        setupDatasetSelector,
+        ensureMasterLevels,
+        ensureMasterOptions,
+        datasetState,
+        switchDataset,
+        loadInitialData
+    });
+
+    void appController.initialize();
+
     stateStore.subscribe(handleStateChange);
     handleStateChange();
 
@@ -3534,18 +3580,6 @@ item.style.display = matchesSearch && matchesFilter ? '' : 'none';
 
 
 
-    async function initialize() {
-        attachEventHandlers();
-        prepareInitialDataset();
-        setupDatasetSelector();
-        await ensureMasterLevels();
-        await ensureMasterOptions();
-        if (datasetState.list.length) {
-            await switchDataset(datasetState.activeIndex, { forceReload: true });
-        } else {
-            await loadInitialData();
-        }
-    }
 
-    void initialize();
+
 })();
