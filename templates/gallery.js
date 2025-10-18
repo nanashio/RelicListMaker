@@ -388,9 +388,25 @@
         return;
     }
 
-    const stateStore = (() => {
+    function createStateStore(initialState = {}) {
+        const listeners = new Set();
+        const core = {
+            records: [],
+            items: [],
+            labelSymbols: initialState.labelSymbols || [],
+            imageDir: initialState.imageDir || '.',
+            csvPath: initialState.csvPath || '',
+            masterCsvPath: initialState.masterCsvPath || '',
+            masterJsonPath: initialState.masterJsonPath || '',
+            masterOptions: Array.isArray(initialState.masterOptions) ? initialState.masterOptions.slice() : [],
+            masterDatalistPrepared: false,
+            masterLevels: initialState.masterLevels,
+            masterLevelsLoaded: Boolean(initialState.masterLevelsLoaded),
+            masterLevelsPromise: null,
+            showOcr: false
+        };
         const dataset = {
-            list: Array.isArray(datasets) ? datasets.slice() : [],
+            list: [],
             activeIndex: -1,
             label: '',
             folder: '',
@@ -398,23 +414,50 @@
             sources: []
         };
 
-        const core = {
-            records: [],
-            items: [],
-            labelSymbols: parseLabelSymbols(labelSymbolsJson),
-            imageDir: imageDir || '.',
-            csvPath: initialCsvPath,
-            masterCsvPath: masterCsvPath || '',
-            masterJsonPath: masterJsonPath || '',
-            masterOptions: parseMasterOptions(masterOptionsJson),
-            masterDatalistPrepared: false,
-            masterLevels: preloadedMasterLevels,
-            masterLevelsLoaded: hasPreloadedMasterLevels,
-            masterLevelsPromise: null,
-            showOcr: false
-        };
+        let suppressNotifications = false;
 
-        function setDatasets(nextDatasets) {
+        function emitChange() {
+            if (suppressNotifications) {
+                return;
+            }
+            listeners.forEach((listener) => {
+                try {
+                    listener({ core, dataset });
+                } catch (error) {
+                    console.error('state listener error', error);
+                }
+            });
+        }
+
+        function subscribe(listener) {
+            if (typeof listener !== 'function') {
+                return () => undefined;
+            }
+            listeners.add(listener);
+            return () => {
+                listeners.delete(listener);
+            };
+        }
+
+        function getState() {
+            return { core, dataset };
+        }
+
+        function update(updater) {
+            if (typeof updater === 'function') {
+                updater({ core, dataset });
+            } else if (updater && typeof updater === 'object') {
+                if (updater.core && typeof updater.core === 'object') {
+                    Object.assign(core, updater.core);
+                }
+                if (updater.dataset && typeof updater.dataset === 'object') {
+                    Object.assign(dataset, updater.dataset);
+                }
+            }
+            emitChange();
+        }
+
+        function setDatasetsInternal(nextDatasets) {
             dataset.list = Array.isArray(nextDatasets) ? nextDatasets.slice() : [];
             if (!dataset.list.length) {
                 dataset.activeIndex = -1;
@@ -440,7 +483,12 @@
         }
 
         function setActiveDatasetIndex(nextIndex) {
-            dataset.activeIndex = clampIndex(nextIndex);
+            const clamped = clampIndex(nextIndex);
+            if (clamped === dataset.activeIndex) {
+                return dataset.activeIndex;
+            }
+            dataset.activeIndex = clamped;
+            emitChange();
             return dataset.activeIndex;
         }
 
@@ -457,21 +505,53 @@
                 core.csvPath = next.csvPath || '';
                 core.imageDir = next.imageDir ? next.imageDir : '.';
             }
+            emitChange();
         }
 
-        setDatasets(datasets);
-        setActiveDatasetIndex(activeDatasetIndex);
+        suppressNotifications = true;
+        try {
+            setDatasetsInternal(initialState.datasets);
+            setActiveDatasetIndex(initialState.activeDatasetIndex);
+        } finally {
+            suppressNotifications = false;
+        }
 
         return {
             core,
             dataset,
-            setDatasets,
+            getState,
+            subscribe,
+            update,
+            setDatasets(nextDatasets) {
+                suppressNotifications = true;
+                try {
+                    setDatasetsInternal(nextDatasets);
+                    if (dataset.activeIndex >= dataset.list.length) {
+                        dataset.activeIndex = dataset.list.length ? dataset.list.length - 1 : -1;
+                    }
+                } finally {
+                    suppressNotifications = false;
+                }
+                emitChange();
+            },
             setActiveDatasetIndex,
             clampIndex,
             updateDescriptor
         };
-    })();
+    }
 
+    const stateStore = createStateStore({
+        datasets: Array.isArray(datasets) ? datasets.slice() : [],
+        activeDatasetIndex: activeDatasetIndex,
+        labelSymbols: parseLabelSymbols(labelSymbolsJson),
+        imageDir: imageDir || '.',
+        csvPath: initialCsvPath,
+        masterCsvPath: masterCsvPath || '',
+        masterJsonPath: masterJsonPath || '',
+        masterOptions: parseMasterOptions(masterOptionsJson),
+        masterLevels: preloadedMasterLevels,
+        masterLevelsLoaded: hasPreloadedMasterLevels
+    });
     const recordUtils = (() => {
         function ensureRecords(recordsOrProvider) {
             if (typeof recordsOrProvider === 'function') {
@@ -566,8 +646,7 @@
         window.galleryRecordUtils = recordUtils;
     }
 
-    const state = stateStore.core;
-    const datasetState = stateStore.dataset;
+    const { core: state, dataset: datasetState } = stateStore.getState();
 
     function getRecordByIndex(index) {
         return recordUtils.getRecordByIndex(state.records, index);
