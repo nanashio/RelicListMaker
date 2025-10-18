@@ -79,6 +79,7 @@
 - 分割の最中に影響箇所（HTML テンプレート等）を洗い出し、必要な更新を別途メモしておく。
 
 ## DOM / 状態ユーティリティ統合方針
+- DOM ユーティリティを `templates/gallery/utils/dom.js` と `templates/gallery/domUtils.js` に分離し、ブラウザ側では `window.galleryDomUtils` を通して利用する（フォールバック関数を残して段階的に移行）。
 - **DOM ヘルパー再編**: `ensureElement` / `clearChildren` / `applyInlineStyles` などの DOM 操作関数を `templates/gallery/utils/dom.js` に集約し、返り値と副作用を明示的にする。要素の生成 (`createElement`) と属性付与を小さな純粋関数として切り出し、描画モジュールから利用。
 - **イベント依存の排除**: DOM ユーティリティはイベント登録を内包しない。イベントモジュールにてユーティリティを組み合わせ、テスト時は仮想 DOM 上で独立検証できるようにする。
 - **状態ストア設計**: `state`, `datasetState`, `duplicates`, `favorites` などの管理を `state/store.js` に集約し、読み取り/書き込み API (`getState`, `updateState`, `subscribe`) を提供。直接プロパティへアクセスしないよう呼び出し側を段階的に移行。
