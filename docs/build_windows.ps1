@@ -68,6 +68,7 @@ try {
     $wslPathResult = & wsl.exe wslpath -w $WslPath
     $wslSource = $wslPathResult.Trim()
     $skipCopy = $false
+    $copyReport = $null
     if (-not $wslSource) {
         Write-Warning ('WSL パスを解決できませんでした。コピーをスキップします: {0}' -f $WslPath)
         $skipCopy = $true
@@ -88,8 +89,6 @@ try {
             '/MT:4',
             '/R:1',
             '/W:1',
-            '/NFL',
-            '/NDL',
             '/NJH',
             '/NJS',
             '/NP',
@@ -101,13 +100,20 @@ try {
             throw "robocopy failed with exit code $rc"
         }
 
-        $copiedLines = $robocopyOutput | Where-Object { $_ -match '^\s*\d+\s+[\w\./-]+' }
+        $copiedLines = $robocopyOutput | Where-Object { $_ -match '\\' }
 
         $copyReport = {
             Write-Info 'Files copied:'
             if ($copiedLines -and $copiedLines.Count -gt 0) {
                 foreach ($line in $copiedLines) {
-                    Write-Host "    $line"
+                    $normalized = ($line -replace '\s{2,}', ' ').Trim()
+                    $parts = $normalized -split ' ' | Where-Object { $_ }
+                    $rawPath = $parts[-1]
+                    $relative = $rawPath.Replace($repoRoot, '').TrimStart('\\')
+                    if (-not $relative) {
+                        $relative = $rawPath
+                    }
+                    Write-Host ("    - {0}" -f $relative)
                 }
             } elseif (-not $Quiet) {
                 Write-Host '    (No files copied)'
