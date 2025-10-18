@@ -208,6 +208,292 @@ describe('gallery data utils', () => {
 });
 
 
+describe('gallery view', () => {
+  function createStubElement(tag) {
+    const element = {};
+    let textContentValue = '';
+    const classSet = new Set();
+    let classNameValue = '';
+
+    const updateClassName = () => {
+      classNameValue = Array.from(classSet).join(' ');
+    };
+
+    Object.defineProperty(element, 'className', {
+      get() {
+        return classNameValue;
+      },
+      set(value) {
+        classSet.clear();
+        if (value) {
+          String(value)
+            .split(/\s+/)
+            .filter(Boolean)
+            .forEach((className) => classSet.add(className));
+        }
+        updateClassName();
+      }
+    });
+
+    Object.defineProperty(element, 'textContent', {
+      get() {
+        return textContentValue;
+      },
+      set(value) {
+        textContentValue = value == null ? '' : String(value);
+        element.children.length = 0;
+      }
+    });
+
+    element.tagName = tag.toUpperCase();
+    element.children = [];
+    element.dataset = {};
+    element.style = {};
+    element.attributes = {};
+    element.parentNode = null;
+    element.nodeType = 1;
+
+    element.classList = {
+      add(className) {
+        if (className && !classSet.has(className)) {
+          classSet.add(className);
+          updateClassName();
+        }
+      },
+      remove(className) {
+        if (classSet.delete(className)) {
+          updateClassName();
+        }
+      },
+      contains(className) {
+        return classSet.has(className);
+      },
+      toggle(className, force) {
+        if (force === undefined) {
+          if (classSet.has(className)) {
+            classSet.delete(className);
+            updateClassName();
+            return false;
+          }
+          classSet.add(className);
+          updateClassName();
+          return true;
+        }
+        if (force) {
+          this.add(className);
+          return true;
+        }
+        this.remove(className);
+        return false;
+      }
+    };
+
+    element.setAttribute = (name, value) => {
+      element.attributes[name] = String(value);
+    };
+
+    element.getAttribute = (name) => element.attributes[name];
+
+    element.appendChild = (child) => {
+      if (!child) {
+        return null;
+      }
+      if (child.nodeType === 11) {
+        child.childNodes.slice().forEach((node) => {
+          element.appendChild(node);
+        });
+        child.childNodes.length = 0;
+        return child;
+      }
+      child.parentNode = element;
+      element.children.push(child);
+      return child;
+    };
+
+    element.querySelectorAll = (selector) => {
+      const selectors = selector.split(',').map((part) => part.trim()).filter(Boolean);
+      if (!selectors.length) {
+        return [];
+      }
+      const results = [];
+      const traverse = (node) => {
+        node.children.forEach((child) => {
+          selectors.forEach((sel) => {
+            if (sel.startsWith('.')) {
+              const className = sel.slice(1);
+              if (child.classList.contains && child.classList.contains(className)) {
+                results.push(child);
+              }
+            }
+          });
+          if (child.children && child.children.length) {
+            traverse(child);
+          }
+        });
+      };
+      traverse(element);
+      return results;
+    };
+
+    element.querySelector = (selector) => element.querySelectorAll(selector)[0] || null;
+
+    element.closest = (selector) => {
+      if (!selector.startsWith('.')) {
+        return null;
+      }
+      const target = selector.slice(1);
+      let current = element;
+      while (current) {
+        if (current.classList && current.classList.contains(target)) {
+          return current;
+        }
+        current = current.parentNode || null;
+      }
+      return null;
+    };
+
+    return element;
+  }
+
+  function createDocumentStub() {
+    return {
+      createElement: (tag) => createStubElement(tag),
+      createDocumentFragment: () => ({
+        nodeType: 11,
+        childNodes: [],
+        appendChild(node) {
+          this.childNodes.push(node);
+          return node;
+        }
+      }),
+      querySelector: () => null,
+      getElementById: () => null
+    };
+  }
+
+  function defaultCreateElement(tag, className, text) {
+    const element = global.document.createElement(tag);
+    if (className) {
+      className.split(/\s+/).filter(Boolean).forEach((name) => element.classList.add(name));
+    }
+    if (text != null) {
+      element.textContent = text;
+    }
+    return element;
+  }
+
+  let galleryFactory;
+
+  beforeEach(() => {
+    global.window = {};
+    global.document = createDocumentStub();
+    runScript('templates/gallery/render/galleryView.js');
+    galleryFactory = global.window.galleryRenderFactory;
+  });
+
+  afterEach(() => {
+    delete global.document;
+  });
+
+  test('buildGallery respects duplicate toggle', () => {
+    const state = {
+      records: [
+        { Image: 'alpha.png' },
+        { Image: 'beta.png', Duplicate: true }
+      ],
+      items: [],
+      labelSymbols: [],
+      imageDir: 'images',
+      showOcr: false
+    };
+    const datasetState = { kind: 'normal', list: [], activeIndex: 0 };
+    const galleryElement = createStubElement('div');
+    const dom = {
+      gallery: galleryElement,
+      showDuplicatesToggle: { checked: false },
+      showOcrToggle: { checked: false },
+      searchInput: { value: '' },
+      filterSelect: { value: 'all' },
+      colorFilter: { value: 'all' }
+    };
+    const duplicateStore = new Map();
+    const duplicates = {
+      has: (key) => duplicateStore.get(key) === true,
+      set: (key, value) => {
+        if (!key) {
+          return;
+        }
+        if (value) {
+          duplicateStore.set(key, true);
+        } else {
+          duplicateStore.delete(key);
+        }
+      }
+    };
+    const summaryCalls = [];
+    const statusCalls = [];
+
+    const galleryView = galleryFactory.createGalleryView({
+      state,
+      datasetState,
+      dom,
+      duplicates,
+      itemColorOptions: [
+        { key: 'red', label: '赤', className: 'item-color-red' },
+        { key: 'blue', label: '青', className: 'item-color-blue' }
+      ],
+      createEffect: () => null,
+      bindImage: () => {},
+      createElement: defaultCreateElement,
+      joinPath: (base, leaf) => {
+        if (!base) {
+          return leaf || '';
+        }
+        if (!leaf) {
+          return base;
+        }
+        return `${base}/${leaf}`;
+      },
+      getFileName: (path) => {
+        if (!path) {
+          return '';
+        }
+        const parts = String(path).split(/\\|\//);
+        return parts[parts.length - 1] || '';
+      },
+      showStatus: (message) => {
+        statusCalls.push(message);
+      },
+      clearStatus: () => {
+        statusCalls.push('clear');
+      },
+      updateSummary: () => {
+        summaryCalls.push('summary');
+      },
+      getRecordByIndex: (index) => state.records[index] || null,
+      isRecordDuplicate: (record) => Boolean(record && record.Duplicate),
+      isRecordFavorite: (record) => Boolean(record && record.Favorite)
+    });
+
+    galleryView.buildGallery();
+    assert.equal(state.items.length, 1);
+    assert.equal(dom.gallery.children.length, 1);
+
+    dom.showDuplicatesToggle.checked = true;
+    galleryView.buildGallery();
+    assert.equal(state.items.length, 2);
+    assert.equal(dom.gallery.children.length, 2);
+
+    galleryView.applyFilters();
+    assert.ok(summaryCalls.length >= 1);
+
+    galleryView.setOcrVisibility(true);
+    assert.equal(state.showOcr, true);
+    assert.equal(dom.showOcrToggle.checked, true);
+  });
+});
+
+
 describe('gallery dataset manager', () => {
   beforeEach(() => {
     global.window = {};

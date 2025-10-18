@@ -9,7 +9,35 @@ test.describe('Relic viewer', () => {
     await expect(page).toHaveURL(/sample_viewer\.html$/);
   });
 
+
+  test('ビューア初期化でエラーが発生しない', async ({ page }) => {
+    const pageErrors: Error[] = [];
+    const consoleErrors: string[] = [];
+
+    page.on('pageerror', (error) => {
+      pageErrors.push(error);
+    });
+    page.on('console', (message) => {
+      if (message.type() === 'error') {
+        consoleErrors.push(message.text());
+      }
+    });
+
+    await page.goto('/sample_viewer.html');
+    await page.waitForLoadState('networkidle');
+
+    expect(pageErrors, pageErrors.map((error) => error.message).join('\n')).toHaveLength(0);
+    expect(consoleErrors, consoleErrors.join('\n')).toHaveLength(0);
+  });
+
   test('ビューアの主要な操作が機能する', async ({ page }) => {
+    const consoleErrors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') {
+        consoleErrors.push(message.text());
+      }
+    });
+
     await page.goto('/sample_viewer.html');
 
     const items = page.locator('.item');
@@ -42,6 +70,16 @@ test.describe('Relic viewer', () => {
     const firstImage = page.locator('.item-left img').first();
     await firstImage.click();
     await expect(page.locator('#lightbox')).toHaveAttribute('aria-hidden', 'false');
+
+    const colorControl = page.locator('.item-color-select').first();
+    await colorControl.selectOption('yellow');
+    await expect(colorControl).toHaveValue('yellow');
+
+    await expect(async () => {
+      await colorControl.selectOption('');
+    }).not.toThrow();
+
+    expect(consoleErrors, consoleErrors.join('\n')).toHaveLength(0);
 
     await page.locator('#lightbox-close').click();
     await expect(page.locator('#lightbox')).toHaveAttribute('aria-hidden', 'true');

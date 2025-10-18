@@ -92,7 +92,7 @@ try {
             '/NJH',
             '/NJS',
             '/NP',
-            '/XD', '.git', '.venv', 'results', 'videos'
+            '/XD', '.git', '.venv', 'results', 'videos', 'node_modules'
         )
         $robocopyOutput = & robocopy @robocopyArgs
         $rc = $LASTEXITCODE

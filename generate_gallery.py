@@ -18,6 +18,16 @@ TEMPLATE_HTML_PATH = str(templates_path("gallery.html"))
 TEMPLATE_CSS_PATH = str(templates_path("gallery.css"))
 TEMPLATE_JS_PATH = str(templates_path("gallery.js"))
 
+ADDITIONAL_GALLERY_SCRIPTS = [
+    "gallery/utils/dom.js",
+    "gallery/utils/data.js",
+    "gallery/state/store.js",
+    "gallery/dataset/manager.js",
+    "gallery/storage/utils.js",
+    "gallery/app/controller.js",
+    "gallery/render/galleryView.js"
+]
+
 
 def _escape_attr(value: str) -> str:
     return html.escape(value or "", quote=True)
@@ -157,6 +167,14 @@ def _copy_static_asset(
     return normalized, destination
 
 
+
+
+def _copy_gallery_modules(output_dir: str) -> None:
+    for relative in ADDITIONAL_GALLERY_SCRIPTS:
+        source_path = templates_path(relative)
+        destination = os.path.join(output_dir, relative.replace("/", os.sep))
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        shutil.copyfile(str(source_path), destination)
 
 
 def _cache_busted_path(relative_path: str, target_path: Optional[str]) -> str:
@@ -342,6 +360,8 @@ def generate_html(
             target_relative_path=js_output_name,
         )
     js_reference = _cache_busted_path(js_relative, js_abs_path)
+
+    _copy_gallery_modules(output_dir)
 
     html_output = html_template
     embed_options = master_options if not master_json_rel_path else []

@@ -97,3 +97,23 @@
 - **派生状態の扱い**: 検索キャッシュ・重複フラグなどは selector 的関数を別モジュールに定義し、UI レンダリング時に利用。副作用を持つ更新処理は store 内で完結させる。
 - **永続化との境界**: ストレージ層は store 経由で同期し、DOM 側から直接フェッチ/保存を呼び出さない。これによりユニットテストでストレージをモック化しやすくする。
 - **移行ステップ**: 既存のユーティリティ関数の利用箇所を調査し、`domUtils` / `stateStore` 相当の即時実行ブロックを廃止。まずは新モジュールを追加し、旧関数をラップする薄い層を用意して互換性を維持しつつ置き換えを進める。
+
+
+## 依存関係調査（2024-02-14）
+### レンダリング（`buildGallery`〜`createEffect`）
+- `templates/gallery.js:1911` `buildGallery` は `state.records` / `duplicates` / `dom.gallery` / `createItem` / `updateSummary` / `applyFilters` に依存し、副作用として `state.items` を再生成する。
+- `templates/gallery.js:1957` `createItem` ブロックは `bindImage` / `syncDuplicateState` / `syncFavoriteState` / `syncItemColorState` / `refreshItemCaches` と `datasetState.kind` を参照し、左右カラムを DOM 生成する。
+- `templates/gallery.js:2133` `appendItemEffects` 〜 `createEffect` は `state.labelSymbols` / `datasetState.kind` / `applyMasterLevelOptions` / `updateEffectStatus` / `levelChangeHandler` など多数の補助関数を前提に DOM を構築し、マスターデータ取得後の再描画が必要。
+
+### イベントハンドラ
+- `templates/gallery.js:3248` `attachEventHandlers` は `dom.datasetSelect` / `dom.gallery` / `dom.lightbox` 等の参照と `switchDataset` / `handleDuplicateToggle` / `recordStatusChange` / `updateRecordCorrection` 系の状態更新関数に依存する。
+- 各イベントハンドラは DOM クエリ (`closest`) と `state` 更新 (`setRecordDuplicate` 等) を組み合わせており、副作用を持つコールバックを注入できる構造が必要。
+
+### 状態・データユーティリティ
+- `templates/gallery.js:200` 付近の `datasetUtils` は `parseDatasets` / `resolveDatasetState` / `areSourcesEqual` を内包し、`templates/gallery/dataset/manager.js` のファクトリと重複機能を持つ。
+- `templates/gallery.js:342` 以降の DOM / データフォールバックは `window.galleryDomUtils` / `window.galleryDataUtils` が未登録の場合に備えているが、モジュール化後は依存を明示して注入する構造に切り替えられる。
+
+## 次に切り出すタスク案
+1. `buildGallery`〜`createItem` を `render/galleryView.js`（既存 or 新設）へ移動し、`{ state, datasetState, dom, duplicates, favoriteFlags }` などの依存を引数で受け取る純粋なファクトリにする。
+2. `createEffect` 周辺とレベル補助関数を `render/effectFactory.js` として独立させ、`sanitizeLevelList` / `sortLevelsAscending` / `applyMasterLevelOptions` を外部注入する設計に整える。
+3. `attachEventHandlers` と個別ハンドラを `events/galleryEvents.js` へ移し、`switchDataset` / `recordStatusChange` / `updateRecordCorrection` などのコールバックを DI することでテスト容易性と責務分離を実現する。

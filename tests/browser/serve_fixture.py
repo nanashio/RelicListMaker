@@ -26,6 +26,21 @@ def _build_fixture_tree(base_dir: Path) -> None:
     shutil.copy2(templates_dir / "gallery.css", base_dir / "gallery.css")
     shutil.copy2(templates_dir / "gallery.js", base_dir / "gallery.js")
 
+    additional_scripts = [
+        Path('gallery/utils/dom.js'),
+        Path('gallery/utils/data.js'),
+        Path('gallery/state/store.js'),
+        Path('gallery/dataset/manager.js'),
+        Path('gallery/storage/utils.js'),
+        Path('gallery/app/controller.js'),
+        Path('gallery/render/galleryView.js')
+    ]
+    for relative in additional_scripts:
+        source = templates_dir / relative
+        destination = base_dir / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+
     _write_png(crops_dir / "sample_red.png", (220, 38, 38))
     _write_png(crops_dir / "sample_blue.png", (37, 99, 235))
 
