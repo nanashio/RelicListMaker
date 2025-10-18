@@ -887,6 +887,7 @@
                   };
               };
     const stateStore = createStateStore({
+
         datasets: Array.isArray(datasets) ? datasets.slice() : [],
         activeDatasetIndex: activeDatasetIndex,
         labelSymbols: parseLabelSymbols(labelSymbolsJson),
@@ -999,6 +1000,113 @@
         updateSaveAvailability();
     }
 
+    const datasetManagerFactory = window.galleryDatasetManagerFactory || null;
+
+    const createDatasetManager =
+        datasetManagerFactory && typeof datasetManagerFactory.createDatasetManager === 'function'
+            ? datasetManagerFactory.createDatasetManager
+            : function createDatasetManagerFallback(config = {}) {
+                  const {
+                      stateStore: store,
+                      datasetState: dsState,
+                      state: coreState,
+                      resolveDatasetState: resolveState,
+                      areSourcesEqual: compareSources,
+                      applyDatasetState: applyState,
+                      clearForReload,
+                      loadInitialData: loadData
+                  } = config;
+
+                  const clampIndex = (index) => store.clampIndex(index);
+
+                  const getCurrentDataset = () => {
+                      if (!dsState.list.length) {
+                          return null;
+                      }
+                      const idx = clampIndex(dsState.activeIndex);
+                      if (idx < 0) {
+                          return null;
+                      }
+                      return dsState.list[idx] || null;
+                  };
+
+                  const prepareInitialDataset = () => {
+                      if (!dsState.list.length) {
+                          return;
+                      }
+                      const dataset = getCurrentDataset();
+                      if (!dataset) {
+                          store.setActiveDatasetIndex(dsState.list.length ? 0 : -1);
+                          return;
+                      }
+                      store.setActiveDatasetIndex(dsState.activeIndex);
+                      const descriptor = resolveState(dataset);
+                      applyState(descriptor);
+                  };
+
+                  const switchDataset = async (index, options = {}) => {
+                      if (!dsState.list.length) {
+                          return;
+                      }
+                      const nextIndex = clampIndex(index);
+                      const dataset = dsState.list[nextIndex];
+                      if (!dataset) {
+                          return;
+                      }
+
+                      const descriptor = resolveState(dataset);
+                      const expectedImageDir = descriptor.kind === 'merged' ? '' : descriptor.imageDir || '.';
+                      const forceReload = Boolean(options.forceReload);
+                      const shouldReload =
+                          forceReload ||
+                          dsState.activeIndex !== nextIndex ||
+                          coreState.csvPath !== descriptor.csvPath ||
+                          coreState.imageDir !== expectedImageDir ||
+                          dsState.kind !== descriptor.kind ||
+                          !compareSources(dsState.sources, descriptor.sources);
+
+                      store.setActiveDatasetIndex(nextIndex);
+                      applyState(descriptor);
+
+                      if (!shouldReload) {
+                          return;
+                      }
+
+                      if (typeof clearForReload === 'function') {
+                          clearForReload();
+                      }
+                      if (typeof loadData === 'function') {
+                          await loadData();
+                      }
+                  };
+
+                  return {
+                      clampDatasetIndex: clampIndex,
+                      getCurrentDataset,
+                      prepareInitialDataset,
+                      switchDataset
+                  };
+              };
+
+    const clearGalleryForReload = () => {
+        clearElementChildren(dom.gallery);
+        state.records = [];
+        state.items = [];
+    };
+
+    const datasetManager = createDatasetManager({
+        stateStore,
+        datasetState,
+        state,
+        resolveDatasetState,
+        areSourcesEqual,
+        applyDatasetState,
+        clearForReload: clearGalleryForReload,
+        loadInitialData: () => loadInitialData()
+    });
+
+    const { clampDatasetIndex, getCurrentDataset, prepareInitialDataset, switchDataset } = datasetManager;
+
     stateStore.subscribe(handleStateChange);
     handleStateChange();
 
@@ -1079,34 +1187,11 @@
         setStorageStatus
     });
 
-    function clampDatasetIndex(index) {
-        return stateStore.clampIndex(index);
-    }
 
-    function getCurrentDataset() {
-        if (!datasetState.list.length) {
-            return null;
-        }
-        const index = clampDatasetIndex(datasetState.activeIndex);
-        if (index < 0) {
-            return null;
-        }
-        return datasetState.list[index] || null;
-    }
 
-    function prepareInitialDataset() {
-        if (!datasetState.list.length) {
-            return;
-        }
-        const dataset = getCurrentDataset();
-        if (!dataset) {
-            stateStore.setActiveDatasetIndex(datasetState.list.length ? 0 : -1);
-            return;
-        }
-        stateStore.setActiveDatasetIndex(datasetState.activeIndex);
-        const descriptor = resolveDatasetState(dataset);
-        applyDatasetState(descriptor);
-    }
+
+
+
 
     function setupDatasetSelector() {
         if (!dom.datasetSelector || !dom.datasetSelect) {
@@ -1143,42 +1228,6 @@
         setElementHidden(dom.datasetSelector, false);
         dom.datasetSelect.value = String(currentIndex);
         dom.datasetSelect.title = datasetOptionLabel(getCurrentDataset(), currentIndex);
-    }
-
-    async function switchDataset(index, options = {}) {
-        if (!datasetState.list.length) {
-            return;
-        }
-        const nextIndex = clampDatasetIndex(index);
-        const dataset = datasetState.list[nextIndex];
-        if (!dataset) {
-            return;
-        }
-
-        const descriptor = resolveDatasetState(dataset);
-        const expectedImageDir = descriptor.kind === 'merged' ? '' : descriptor.imageDir || '.';
-        const forceReload = Boolean(options.forceReload);
-        const shouldReload =
-            forceReload ||
-            datasetState.activeIndex !== nextIndex ||
-            state.csvPath !== descriptor.csvPath ||
-            state.imageDir !== expectedImageDir ||
-            datasetState.kind !== descriptor.kind ||
-            !areSourcesEqual(datasetState.sources, descriptor.sources);
-
-        stateStore.setActiveDatasetIndex(nextIndex);
-        applyDatasetState(descriptor);
-
-
-        if (!shouldReload) {
-            return;
-        }
-
-        clearElementChildren(dom.gallery);
-        state.records = [];
-        state.items = [];
-
-        await loadInitialData();
     }
 
     const SUMMARY_INLINE_STYLE = {

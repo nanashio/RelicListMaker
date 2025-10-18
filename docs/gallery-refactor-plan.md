@@ -79,6 +79,7 @@
 - 分割の最中に影響箇所（HTML テンプレート等）を洗い出し、必要な更新を別途メモしておく。
 
 ## DOM / 状態ユーティリティ統合方針
+- データセット切替ロジックを `templates/gallery/dataset/manager.js` に切り出し、ギャラリー側ではファクトリ経由 + フォールバックで利用。
 - CSV 読み込み・結合ローダー・保存マネージャを `templates/gallery/storage/utils.js` として分離し、ギャラリー側ではフォールバックを保持。
 - 状態管理を `templates/gallery/state/store.js` に切り出し、`window.galleryStateStoreFactory` 経由で `createStateStore` を利用できるようにした（ギャラリー本体ではフォールバックを維持）。
 - DOM ユーティリティを `templates/gallery/utils/dom.js` と `templates/gallery/domUtils.js` に分離し、ブラウザ側では `window.galleryDomUtils` を通して利用する（フォールバック関数を残して段階的に移行）。
