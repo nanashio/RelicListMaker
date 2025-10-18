@@ -101,7 +101,7 @@ try {
         }
 
         $copiedLines = $robocopyOutput | Where-Object { $_ -match '\\' }
-
+        $copiedLines = $copiedLines | Where-Object { $_ -match '\s+\d+\s+\w' }
         $copyReport = {
             Write-Info 'Files copied:'
             if ($copiedLines -and $copiedLines.Count -gt 0) {
@@ -115,7 +115,7 @@ try {
                     }
                     Write-Host ("    - {0}" -f $relative)
                 }
-            } elseif (-not $Quiet) {
+            } else {
                 Write-Host '    (No files copied)'
             }
         }
