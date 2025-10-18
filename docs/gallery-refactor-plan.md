@@ -106,12 +106,21 @@
 - `templates/gallery.js:342` 以降の DOM / データフォールバックは `window.galleryDomUtils` / `window.galleryDataUtils` が未登録の場合に備えているが、モジュール化後は依存を明示して注入する構造に切り替えられる。
 
 ## テスト戦略
-- ロジック切り出し後に `tests/` 以下でユニットテストを追加。特に以下を対象とする。  
-  - データセット解決（`normalizeDatasetEntry` など）。  
-  - 文字列正規化／レベル候補処理。  
-  - ステータス更新／補正値の適用。  
-- DOM 組み立ては Jest + JSDOM などを導入可能な場合、簡易的なスナップショットテストを検討。
-- ブラウザ挙動は Playwright による自動テスト（`npm run test:browser`）で主要操作をカバーする。フィクスチャ生成とサーバ起動は `tests/browser/serve_fixture.py` が担い、CI（`.github/workflows/tests.yml`）でも同コマンドを実行する。手動確認が必要なシナリオは README などに追記して補足する。
+### 基本方針
+- 詳細な実行手順や推奨コマンドは `docs/testing-guide.md` に集約しているため、常に同ドキュメントを参照する。
+- モジュール分割に合わせてテスト階層を維持し、ユニットテスト／統合テスト／ブラウザテストの責務を明確に切り分ける。
+
+### ユニットテスト
+- 新設モジュールは `tests/` 配下から直接 import 可能な構成にし、`pytest` で自動化する（詳細手順: `docs/testing-guide.md` の「Python ユニットテスト」節）。
+- 特に以下の純粋ロジックを対象にケースを追加する。
+  - データセット解決（例: `normalizeDatasetEntry`）。
+  - 文字列正規化やレベル候補処理。
+  - ステータス更新／補正値の適用。
+- Node 側の補助モジュールは `node --test` ベースのテストを維持し、必要に応じて `tests/js/gallery_modules.test.mjs` を拡張する。
+
+### ブラウザテスト
+- UI の回帰確認は Playwright テストで実施し、各シナリオは `npm run test:browser` を通じて検証する（起動方法やフィクスチャ生成は `docs/testing-guide.md` を参照）。
+- 追加で必要な手動確認がある場合は README などに手順を追記し、Playwright テストで再現できる部分は自動化を優先する。
 
 ## リスクと対応
 - **ES Modules 化による互換性**: HTML テンプレートとビルドパイプラインを確認し、`type="module"` への切り替えが可能か事前検証する。難しい場合はバンドラ導入（Vite 等）も検討。
