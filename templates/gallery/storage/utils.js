@@ -5,10 +5,7 @@
         }
         const sanitized = String(text);
         const rows = [];
-        const normalized = sanitized.replace(/
-/g, '
-').replace(//g, '
-');
+        const normalized = sanitized.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         let field = '';
         let row = [];
         let inQuotes = false;
@@ -41,8 +38,7 @@
                 continue;
             }
 
-            if (char === '
-') {
+            if (char === '\n') {
                 row.push(field);
                 rows.push(row);
                 row = [];
@@ -104,7 +100,7 @@
     async function loadMergedRecords(sources, options = {}) {
         const {
             parseRecords = parseCsvRecords,
-            joinPath = (base, name) => `${base ? `${base.replace(/\\$/, '')}/` : ''}${name}`
+            joinPath = (base, name) => `${base ? `${base.replace(/\\\\$/, '')}/` : ''}${name}`
         } = options;
 
         const combined = [];
@@ -140,8 +136,8 @@
                     return;
                 }
                 const rawImage = record.Image == null ? '' : String(record.Image);
-                const hasPath = /[\/]/.test(rawImage);
-                const baseImage = rawImage ? rawImage.split(/[\/]/).pop() || rawImage : '';
+                const hasPath = /[\\/]/.test(rawImage);
+                const baseImage = rawImage ? rawImage.split(/[\\/]/).pop() || rawImage : '';
                 const normalizedImage = rawImage
                     ? hasPath
                         ? rawImage
@@ -259,7 +255,7 @@
             usesLocalBackup: false,
             get fileName() {
                 const csvPath = getCsvPath();
-                const parts = (csvPath || '').split(/[\/]/);
+                const parts = (csvPath || '').split(/[\\/]/);
                 return parts.length ? parts[parts.length - 1] : 'results.csv';
             },
             async tryLoad() {

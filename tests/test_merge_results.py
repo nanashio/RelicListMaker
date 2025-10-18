@@ -171,6 +171,8 @@ def test_merge_results_can_include_pending_when_option_disabled(sample_results: 
 def test_merge_results_with_real_dataset(sample_results_dir: Path) -> None:
     dataset_dir = sample_results_dir / "1080p_red"
     csv_path = dataset_dir / "1080p_red.csv"
+    if not csv_path.exists():
+        pytest.skip("sample dataset '1080p_red' is not available")
     with csv_path.open("r", encoding="utf-8") as handle:
         base_rows = list(csv.DictReader(handle))
 
