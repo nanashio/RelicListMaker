@@ -222,3 +222,6 @@ crops/
 frames/
 results/
 videos/
+node_modules/
+playwright-report/
+test-results/
