@@ -79,6 +79,11 @@ test.describe('Relic viewer', () => {
       await colorControl.selectOption('');
     }).not.toThrow();
 
+    await page.screenshot({
+      path: `test-results/viewer-${Date.now()}.png`,
+      fullPage: true
+    });
+
     expect(consoleErrors, consoleErrors.join('\n')).toHaveLength(0);
 
     await page.locator('#lightbox-close').click();
