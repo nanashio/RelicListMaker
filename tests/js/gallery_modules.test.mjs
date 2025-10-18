@@ -1,4 +1,4 @@
-import { test, describe, beforeEach } from 'node:test';
+import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -61,6 +61,152 @@ describe('gallery state store', () => {
     assert.equal(store.dataset.sources.length, 1);
   });
 });
+
+describe('gallery dom utils', () => {
+  let domUtils;
+  let selectorMap;
+  let idMap;
+
+  function createMockElement() {
+    const classSet = new Set();
+    return {
+      id: '',
+      textContent: '',
+      style: {},
+      isConnected: true,
+      classList: {
+        add: (className) => classSet.add(className),
+        toggle: (className, force) => {
+          const shouldHaveClass = force === undefined ? !classSet.has(className) : Boolean(force);
+          if (shouldHaveClass) {
+            classSet.add(className);
+          } else {
+            classSet.delete(className);
+          }
+        },
+        contains: (className) => classSet.has(className)
+      }
+    };
+  }
+
+  beforeEach(() => {
+    global.window = {};
+    selectorMap = new Map();
+    idMap = new Map();
+    global.document = {
+      querySelector: (selector) => selectorMap.get(selector) || null,
+      getElementById: (id) => idMap.get(id) || null,
+      createElement: (tagName) => {
+        const element = createMockElement();
+        element.createdTagName = tagName;
+        element.isConnected = false;
+        return element;
+      }
+    };
+    runScript('templates/gallery/utils/dom.js');
+    domUtils = global.window.galleryDomUtils;
+  });
+
+  afterEach(() => {
+    delete global.document;
+  });
+
+  test('manipulation helpers update element state', () => {
+    const element = createMockElement();
+    element.textContent = 'keep me';
+
+    domUtils.setHidden(element, true);
+    assert.equal(element.classList.contains('hidden'), true);
+
+    domUtils.clearChildren(element);
+    assert.equal(element.textContent, '');
+
+    domUtils.updateStatusElement(element, 'Ready', { isError: true, display: 'inline' });
+    assert.equal(element.textContent, 'Ready');
+    assert.equal(element.style.display, 'inline');
+    assert.equal(element.classList.contains('error'), true);
+
+    domUtils.updateStatusElement(element, 'Ready', { isError: false });
+    assert.equal(element.classList.contains('error'), false);
+
+    domUtils.updateStatusElement(element, '', {});
+    assert.equal(element.style.display, 'none');
+
+    domUtils.applyInlineStyles(element, { color: 'red', padding: null });
+    assert.equal(element.style.color, 'red');
+    assert.equal(Object.prototype.hasOwnProperty.call(element.style, 'padding'), false);
+  });
+
+  test('ensureElement reuses existing element and augments metadata', () => {
+    const element = createMockElement();
+    element.isConnected = true;
+
+    const result = domUtils.ensureElement(element, {
+      id: 'existing',
+      classNames: ['alpha', 'beta']
+    });
+
+    assert.strictEqual(result, element);
+    assert.equal(result.id, 'existing');
+    assert.equal(result.classList.contains('alpha'), true);
+    assert.equal(result.classList.contains('beta'), true);
+  });
+
+  test('ensureElement resolves via selectors or creates with fallback', () => {
+    const fromSelector = createMockElement();
+    selectorMap.set('.target', fromSelector);
+
+    const resolved = domUtils.ensureElement(null, {
+      selector: '.target',
+      id: 'selected',
+      classNames: ['picked']
+    });
+    assert.strictEqual(resolved, fromSelector);
+    assert.equal(resolved.id, 'selected');
+    assert.equal(resolved.classList.contains('picked'), true);
+
+    const created = domUtils.ensureElement(null, {
+      id: 'created',
+      classNames: ['made'],
+      tagName: 'section'
+    });
+
+    assert.equal(created.id, 'created');
+    assert.equal(created.createdTagName, 'section');
+    assert.equal(created.classList.contains('made'), true);
+    assert.equal(created.isConnected, false);
+  });
+});
+
+describe('gallery data utils', () => {
+  let dataUtils;
+
+  beforeEach(() => {
+    global.window = {};
+    runScript('templates/gallery/utils/data.js');
+    dataUtils = global.window.galleryDataUtils;
+  });
+
+  test('sanitizeLevelList trims and removes empty entries', () => {
+    const values = [' 10 ', null, '', 'Alpha', '  ', undefined, '＋２', 0];
+    const sanitized = dataUtils.sanitizeLevelList(values);
+    assert.deepEqual(sanitized, ['10', 'Alpha', '＋２', '0']);
+  });
+
+  test('normalizeLevelNumericValue handles full-width signs and invalid input', () => {
+    assert.equal(dataUtils.normalizeLevelNumericValue(' ＋12 '), 12);
+    assert.equal(dataUtils.normalizeLevelNumericValue('﹣7'), -7);
+    assert.equal(dataUtils.normalizeLevelNumericValue(''), null);
+    assert.equal(dataUtils.normalizeLevelNumericValue('abc'), null);
+  });
+
+  test('sortLevelsAscending orders numeric values before text while preserving raw input', () => {
+    const values = ['Flat', ' +2 ', '-1', 'A', '10', 'beta'];
+    const sorted = dataUtils.sortLevelsAscending(values);
+    assert.deepEqual(sorted, ['-1', ' +2 ', '10', 'A', 'beta', 'Flat']);
+  });
+});
+
 
 describe('gallery dataset manager', () => {
   beforeEach(() => {
