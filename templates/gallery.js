@@ -1868,94 +1868,223 @@
     }
 
     function createEffect(record, slot, symbol, imageName, recordIndex) {
-        const prediction = record[`Effect${slot}`];
-        const raw = record[`RawText${slot}`];
-        const score = record[`Effect${slot}Score`];
-        let statusValue = normalizeStatus(record[`Effect${slot}Status`]);
-
-        const predictionText = prediction == null ? '' : String(prediction);
-        const rawText = raw == null ? '' : String(raw);
-        const hasContent = predictionText || rawText || (!Number.isNaN(Number(score)) && score != null);
-        if (!hasContent) {
+        const context = createEffectContext(record, slot, symbol, imageName, recordIndex);
+        if (!context) {
             return null;
         }
 
-        const effect = createElement('div', 'effect');
-        effect.dataset.slot = String(slot);
-        effect.dataset.image = (imageName || '').toLowerCase();
-        effect.dataset.pred = predictionText.toLowerCase();
-        effect.dataset.predictionValue = predictionText;
-        effect.dataset.raw = rawText.toLowerCase();
-        effect.dataset.recordIndex = String(recordIndex);
+        const effect = createEffectElement(context);
 
-        const levelValueRaw = record[`Effect${slot}Level`];
-        const levelValue = levelValueRaw == null ? '' : String(levelValueRaw).trim();
-        const levelOptionsRaw = record[`Effect${slot}LevelOptions`];
-        const levelOptions = parseLevelOptions(levelOptionsRaw);
-        const levelOptionsLower = levelOptions.map((value) => value.toLowerCase());
-        const levelCorrectionKey = `Effect${slot}LevelCorrection`;
-        const levelCorrectionRaw = record[levelCorrectionKey];
-        const levelCorrection = levelCorrectionRaw == null ? '' : String(levelCorrectionRaw).trim();
-        const levelSuppressedRaw = record[`Effect${slot}LevelSuppressed`];
-        const levelSuppressed = typeof levelSuppressedRaw === 'boolean' ? levelSuppressedRaw : String(levelSuppressedRaw || '').trim().toLowerCase() === 'true';
-        const preserveOriginalLevel = !levelSuppressed;
-        effect.dataset.preserveOriginalLevel = preserveOriginalLevel ? 'true' : 'false';
+        const predictionLine = createEffectPredictionLine(context);
+        effect.appendChild(predictionLine);
+        updateLevelBadge(effect);
 
-        const levelOptionsDisplay = levelOptions.join('|');
-        const displayLevel = levelCorrection || (preserveOriginalLevel ? levelValue : '');
+        const rawLine = createEffectRawLine(context);
+        effect.appendChild(rawLine);
 
-        effect.dataset.level = displayLevel ? displayLevel.toLowerCase() : '';
-        effect.dataset.levelOriginal = levelValue ? levelValue.toLowerCase() : '';
-        effect.dataset.levelOriginalValue = levelValue;
-        effect.dataset.levelOptions = levelOptionsLower.join('|');
-        effect.dataset.levelOptionsDisplay = levelOptionsDisplay;
-        effect.dataset.levelOptionsBase = levelOptionsDisplay;
-        effect.dataset.levelCorrection = levelCorrection ? levelCorrection.toLowerCase() : '';
-        effect.dataset.levelCorrectionValue = levelCorrection;
+        const decisionElements = createEffectDecision(effect, context);
+        effect.appendChild(decisionElements.container);
+
+        applyMasterLevelOptions(effect, decisionElements.levelInput, context.effectNameForLevels);
+
+        if (datasetState.kind === 'merged') {
+            decisionElements.passButton.disabled = true;
+            decisionElements.correctionInput.disabled = true;
+            decisionElements.levelInput.disabled = true;
+        }
+
+        updateEffectStatus(effect, context.statusValue);
+
+        decisionElements.correctionInput.addEventListener('change', correctionChangeHandler(effect, decisionElements.correctionInput));
+
+        const onLevelChange = levelChangeHandler(effect, decisionElements.levelInput);
+        decisionElements.levelInput.addEventListener('change', onLevelChange);
+
+        return effect;
+    }
+
+    function createEffectContext(record, slot, symbol, imageName, recordIndex) {
+        if (!record || typeof record !== 'object') {
+            return null;
+        }
+
+        const prediction = record[`Effect${slot}`];
+        const raw = record[`RawText${slot}`];
+        const score = record[`Effect${slot}Score`];
+
+        const predictionText = prediction == null ? '' : String(prediction);
+        const rawText = raw == null ? '' : String(raw);
+        const hasScoreValue = score != null && !Number.isNaN(Number(score));
+        if (!predictionText && !rawText && !hasScoreValue) {
+            return null;
+        }
 
         const numericScore = Number(score);
         const hasFiniteScore = Number.isFinite(numericScore);
         const scoreDisplay = hasFiniteScore ? `${numericScore.toFixed(1)}%` : '--';
         const ocrDisplay = rawText || '--';
 
-        const predictionLine = createElement('div', 'prediction');
-        const predictionLabel = createElement('span', 'prediction-label', '推定:');
-        const predictionValueNode = createElement('span', 'prediction-value', predictionText || '--');
-        predictionLine.appendChild(predictionLabel);
-        predictionLine.appendChild(predictionValueNode);
-
-        predictionLine.style.display = state.showOcr ? '' : 'none';
-        effect.appendChild(predictionLine);
-        updateLevelBadge(effect);
-
-        const rawLine = createElement('div', 'raw', `OCR: ${ocrDisplay} / 一致度 ${scoreDisplay}`);
-        rawLine.style.display = state.showOcr ? '' : 'none';
+        const levelValueRaw = record[`Effect${slot}Level`];
+        const levelValue = levelValueRaw == null ? '' : String(levelValueRaw).trim();
+        const levelOptionsRaw = record[`Effect${slot}LevelOptions`];
+        const levelOptions = parseLevelOptions(levelOptionsRaw);
+        const levelOptionsLower = levelOptions.map((value) => (value == null ? '' : String(value).toLowerCase()));
+        const levelCorrectionKey = `Effect${slot}LevelCorrection`;
+        const levelCorrectionRaw = record[levelCorrectionKey];
+        const levelCorrection = levelCorrectionRaw == null ? '' : String(levelCorrectionRaw).trim();
+        const levelSuppressedRaw = record[`Effect${slot}LevelSuppressed`];
+        const levelSuppressed =
+            typeof levelSuppressedRaw === 'boolean'
+                ? levelSuppressedRaw
+                : String(levelSuppressedRaw || '').trim().toLowerCase() === 'true';
+        const preserveOriginalLevel = !levelSuppressed;
+        const levelOptionsDisplay = levelOptions.join('|');
+        const displayLevel = levelCorrection || (preserveOriginalLevel ? levelValue : '');
 
         const correctionKey = `Effect${slot}Correction`;
         const correctionValue = record[correctionKey] == null ? '' : String(record[correctionKey]);
-        if (correctionValue && statusValue !== 'pass') {
-            statusValue = 'corrected';
-        }
 
-        effect.dataset.correction = correctionValue.toLowerCase();
-        if (hasFiniteScore && numericScore < 60) {
+        const initialStatus = normalizeStatus(record[`Effect${slot}Status`]);
+        const statusValue = correctionValue && initialStatus !== 'pass' ? 'corrected' : initialStatus;
+
+        const predictionLower = predictionText.toLowerCase();
+        const rawLower = rawText.toLowerCase();
+        const levelValueLower = levelValue ? levelValue.toLowerCase() : '';
+        const displayLevelLower = displayLevel ? displayLevel.toLowerCase() : '';
+        const levelCorrectionLower = levelCorrection ? levelCorrection.toLowerCase() : '';
+        const correctionValueLower = correctionValue.toLowerCase();
+
+        const normalizedImageName = imageName == null ? '' : String(imageName);
+        const imageNameLower = normalizedImageName.toLowerCase();
+
+        return {
+            record,
+            slot,
+            symbol,
+            imageName: normalizedImageName,
+            imageNameLower,
+            recordIndex,
+            predictionText,
+            predictionLower,
+            rawText,
+            rawLower,
+            numericScore,
+            hasFiniteScore,
+            scoreDisplay,
+            ocrDisplay,
+            statusValue,
+            levelValue,
+            levelValueLower,
+            levelOptions,
+            levelOptionsLower,
+            levelOptionsDisplay,
+            levelCorrection,
+            levelCorrectionLower,
+            preserveOriginalLevel,
+            displayLevel,
+            displayLevelLower,
+            correctionValue,
+            correctionValueLower,
+            effectNameForLevels: levelCorrection || correctionValue || predictionText,
+            lowConfidence: hasFiniteScore && numericScore < 60
+        };
+    }
+
+    function createEffectElement(context) {
+        const effect = createElement('div', 'effect');
+        effect.dataset.slot = String(context.slot);
+        effect.dataset.image = context.imageNameLower;
+        effect.dataset.pred = context.predictionLower;
+        effect.dataset.predictionValue = context.predictionText;
+        effect.dataset.raw = context.rawLower;
+        effect.dataset.recordIndex = String(context.recordIndex);
+        effect.dataset.preserveOriginalLevel = context.preserveOriginalLevel ? 'true' : 'false';
+        effect.dataset.level = context.displayLevelLower;
+        effect.dataset.levelOriginal = context.levelValueLower;
+        effect.dataset.levelOriginalValue = context.levelValue;
+        effect.dataset.levelOptions = context.levelOptionsLower.join('|');
+        effect.dataset.levelOptionsDisplay = context.levelOptionsDisplay;
+        effect.dataset.levelOptionsBase = context.levelOptionsDisplay;
+        effect.dataset.levelCorrection = context.levelCorrectionLower;
+        effect.dataset.levelCorrectionValue = context.levelCorrection;
+        effect.dataset.correction = context.correctionValueLower;
+        if (context.lowConfidence) {
             effect.classList.add('low-confidence');
             effect.dataset.lowConfidence = 'true';
         }
+        return effect;
+    }
 
+    function createEffectPredictionLine(context) {
+        const predictionLine = createElement('div', 'prediction');
+        const predictionLabel = createElement('span', 'prediction-label', '推定:');
+        const predictionValueNode = createElement('span', 'prediction-value', context.predictionText || '--');
+        predictionLine.appendChild(predictionLabel);
+        predictionLine.appendChild(predictionValueNode);
+        predictionLine.style.display = state.showOcr ? '' : 'none';
+        return predictionLine;
+    }
+
+    function createEffectRawLine(context) {
+        const rawLine = createElement('div', 'raw', `OCR: ${context.ocrDisplay} / 一致度 ${context.scoreDisplay}`);
+        rawLine.style.display = state.showOcr ? '' : 'none';
+        return rawLine;
+    }
+
+    function createEffectDecision(effect, context) {
         const decision = createElement('div', 'decision');
         const decisionRow = createElement('div', 'decision-row');
         const passButton = createElement('button', 'review-button pass', '合致');
         passButton.type = 'button';
         passButton.dataset.value = 'pass';
 
-        const levelInputId = `level-input-${recordIndex}-${slot}`;
+        const correctionInput = createCorrectionInput(context.correctionValue, context.predictionText);
+
         const levelInput = document.createElement('select');
-        levelInput.id = levelInputId;
+        levelInput.id = `level-input-${context.recordIndex}-${context.slot}`;
         levelInput.className = 'level-input';
 
+        populateEffectLevelOptions(effect, levelInput, context);
+
+        decisionRow.appendChild(passButton);
+        decisionRow.appendChild(correctionInput);
+        decisionRow.appendChild(levelInput);
+        decision.appendChild(decisionRow);
+
+        return {
+            container: decision,
+            passButton,
+            correctionInput,
+            levelInput
+        };
+    }
+
+    function populateEffectLevelOptions(effect, levelInput, context) {
+        const sortedLevelChoices = buildEffectLevelChoices(context);
+
+        const emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = '';
+        levelInput.appendChild(emptyOption);
+
+        sortedLevelChoices.forEach((option) => {
+            const optionNode = document.createElement('option');
+            optionNode.value = option;
+            optionNode.textContent = option;
+            levelInput.appendChild(optionNode);
+        });
+
+        effect.dataset.levelOptionsBaseJson = JSON.stringify(sortedLevelChoices);
+
+        const initialLevelValue = context.levelCorrection || (context.preserveOriginalLevel ? context.levelValue : '') || '';
+        levelInput.value = initialLevelValue;
+        updateLevelInputAvailability(levelInput, sortedLevelChoices);
+    }
+
+    function buildEffectLevelChoices(context) {
         const levelChoices = [];
         const seenLevels = new Set();
+
         const pushLevelChoice = (value) => {
             if (value == null) {
                 return;
@@ -1972,9 +2101,9 @@
             levelChoices.push(text);
         };
 
-        const originalLevelLower = levelValue ? levelValue.toLowerCase() : '';
+        const originalLevelLower = context.levelValueLower;
         let originalInOptions = false;
-        levelOptions.forEach((option) => {
+        context.levelOptions.forEach((option) => {
             const text = option == null ? '' : String(option).trim();
             if (!text) {
                 return;
@@ -1982,7 +2111,7 @@
             const lower = text.toLowerCase();
             if (originalLevelLower && lower === originalLevelLower) {
                 originalInOptions = true;
-                if (preserveOriginalLevel) {
+                if (context.preserveOriginalLevel) {
                     pushLevelChoice(text);
                 }
                 return;
@@ -1990,64 +2119,19 @@
             pushLevelChoice(text);
         });
 
-        if (levelValue) {
-            if (preserveOriginalLevel) {
-                pushLevelChoice(levelValue);
+        if (context.levelValue) {
+            if (context.preserveOriginalLevel) {
+                pushLevelChoice(context.levelValue);
             } else if (originalInOptions && levelChoices.length) {
-                pushLevelChoice(levelValue);
+                pushLevelChoice(context.levelValue);
             }
         }
 
-        pushLevelChoice(levelCorrection);
+        pushLevelChoice(context.levelCorrection);
 
-        const sortedLevelChoices = sortLevelsAscending(levelChoices);
-
-        const emptyOption = document.createElement('option');
-        emptyOption.value = '';
-        emptyOption.textContent = '';
-        levelInput.appendChild(emptyOption);
-
-        sortedLevelChoices.forEach((option) => {
-            const optionNode = document.createElement('option');
-            optionNode.value = option;
-            optionNode.textContent = option;
-            levelInput.appendChild(optionNode);
-        });
-
-        effect.dataset.levelOptionsBaseJson = JSON.stringify(sortedLevelChoices);
-
-        const initialLevelValue = levelCorrection || (preserveOriginalLevel ? levelValue : '') || '';
-        levelInput.value = initialLevelValue;
-        updateLevelInputAvailability(levelInput, sortedLevelChoices);
-
-        const effectNameForLevels = levelCorrection || correctionValue || predictionText;
-        const correctionInput = createCorrectionInput(correctionValue, predictionText);
-
-        decisionRow.appendChild(passButton);
-        decisionRow.appendChild(correctionInput);
-        decisionRow.appendChild(levelInput);
-        decision.appendChild(decisionRow);
-
-        effect.appendChild(rawLine);
-        effect.appendChild(decision);
-
-        applyMasterLevelOptions(effect, levelInput, effectNameForLevels);
-
-        if (datasetState.kind === 'merged') {
-            passButton.disabled = true;
-            correctionInput.disabled = true;
-            levelInput.disabled = true;
-        }
-
-        updateEffectStatus(effect, statusValue);
-
-        correctionInput.addEventListener('change', correctionChangeHandler(effect, correctionInput));
-
-        const onLevelChange = levelChangeHandler(effect, levelInput);
-        levelInput.addEventListener('change', onLevelChange);
-
-        return effect;
+        return sortLevelsAscending(levelChoices);
     }
+
     function updateLevelBadge(effect) {
         const predictionLine = effect.querySelector('.prediction');
         if (!predictionLine) {
