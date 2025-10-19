@@ -8,6 +8,18 @@
             .filter((value) => value !== '');
     }
 
+    function normalizeEffectName(value) {
+        if (value == null) {
+            return '';
+        }
+        return String(value).trim();
+    }
+
+    function effectKey(value) {
+        const normalized = normalizeEffectName(value);
+        return normalized ? normalized.toLowerCase() : '';
+    }
+
     function normalizeLevelNumericValue(value) {
         if (value == null) {
             return null;
@@ -65,9 +77,161 @@
             .map((entry) => entry.raw);
     }
 
+    function parseLevelTokens(raw) {
+        if (raw == null) {
+            return [];
+        }
+        if (Array.isArray(raw)) {
+            return raw.slice();
+        }
+        const text = String(raw).trim();
+        if (!text) {
+            return [];
+        }
+        const lower = text.toLowerCase();
+        if (lower === 'false' || lower === 'なし' || lower === 'null') {
+            return [];
+        }
+        return text
+            .split(/[|,]/)
+            .map((value) => value.trim())
+            .filter((value) => value !== '');
+    }
+
+    function parseMasterOptions(source) {
+        let list = source;
+        if (typeof source === 'string') {
+            const text = source.trim();
+            if (!text) {
+                return [];
+            }
+            try {
+                list = JSON.parse(text);
+            } catch (_error) {
+                return sanitizeLevelList(text.split(/[|,]/));
+            }
+        }
+
+        if (!Array.isArray(list)) {
+            return [];
+        }
+
+        const normalized = list
+            .map((entry) => {
+                if (entry == null) {
+                    return '';
+                }
+                if (typeof entry === 'object') {
+                    const raw =
+                        entry.EffectBase ||
+                        entry.effect ||
+                        entry.name ||
+                        entry.value ||
+                        entry.label ||
+                        '';
+                    return typeof raw === 'string' ? raw.trim() : '';
+                }
+                return String(entry).trim();
+            })
+            .filter((value) => value !== '');
+
+        return Array.from(new Set(normalized));
+    }
+
+    function parseMasterLevels(source) {
+        if (!source) {
+            return new Map();
+        }
+
+        let data = source;
+        if (typeof source === 'string') {
+            const text = source.trim();
+            if (!text) {
+                return new Map();
+            }
+            try {
+                data = JSON.parse(text);
+            } catch (error) {
+                console.warn('master levelsの解析に失敗しました:', error);
+                return new Map();
+            }
+        }
+
+        const result = new Map();
+
+        const assignLevels = (name, levels) => {
+            const key = effectKey(name);
+            if (!key) {
+                return;
+            }
+            const tokens = Array.isArray(levels) ? levels : parseLevelTokens(levels);
+            const sanitized = sanitizeLevelList(tokens);
+            const unique = Array.from(new Set(sanitized));
+            if (!unique.length) {
+                return;
+            }
+            const sorted = sortLevelsAscending(unique);
+            if (result.has(key)) {
+                const merged = Array.from(new Set(result.get(key).concat(sorted)));
+                result.set(key, sortLevelsAscending(merged));
+                return;
+            }
+            result.set(key, sorted);
+        };
+
+        if (data instanceof Map) {
+            data.forEach((value, key) => {
+                assignLevels(key, value);
+            });
+            return result;
+        }
+
+        if (Array.isArray(data)) {
+            data.forEach((entry) => {
+                if (!entry) {
+                    return;
+                }
+                if (typeof entry === 'object') {
+                    const name =
+                        entry.EffectBase ||
+                        entry.effect ||
+                        entry.name ||
+                        entry.label ||
+                        entry.key ||
+                        '';
+                    const levels =
+                        entry.Levels ||
+                        entry.levels ||
+                        entry.values ||
+                        entry.options ||
+                        entry.candidates ||
+                        entry.list ||
+                        null;
+                    assignLevels(name, levels);
+                } else {
+                    assignLevels(entry, []);
+                }
+            });
+            return result;
+        }
+
+        if (typeof data === 'object') {
+            Object.keys(data).forEach((key) => {
+                assignLevels(key, data[key]);
+            });
+        }
+
+        return result;
+    }
+
     window.galleryDataUtils = {
         sanitizeLevelList,
+        normalizeEffectName,
+        effectKey,
         normalizeLevelNumericValue,
-        sortLevelsAscending
+        sortLevelsAscending,
+        parseLevelTokens,
+        parseMasterOptions,
+        parseMasterLevels
     };
 })();

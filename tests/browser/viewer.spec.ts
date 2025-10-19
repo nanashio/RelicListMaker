@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 
 test.describe('Relic viewer', () => {
   test('index にビューワへのリンクが表示される', async ({ page }) => {
@@ -79,10 +81,14 @@ test.describe('Relic viewer', () => {
       await colorControl.selectOption('');
     }).not.toThrow();
 
+    const screenshotPath = path.resolve('test-results', `viewer-${Date.now()}.png`);
+    await fs.mkdir(path.dirname(screenshotPath), { recursive: true });
     await page.screenshot({
-      path: `test-results/viewer-${Date.now()}.png`,
+      path: screenshotPath,
       fullPage: true
     });
+    const stats = await fs.stat(screenshotPath);
+    expect(stats.size).toBeGreaterThan(0);
 
     expect(consoleErrors, consoleErrors.join('\n')).toHaveLength(0);
 

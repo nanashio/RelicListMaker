@@ -620,8 +620,13 @@
 
     let {
         sanitizeLevelList = null,
+        normalizeEffectName = null,
+        effectKey = null,
         normalizeLevelNumericValue = null,
-        sortLevelsAscending = null
+        sortLevelsAscending = null,
+        parseLevelTokens = null,
+        parseMasterOptions = null,
+        parseMasterLevels = null
     } = dataUtils;
 
     if (!sanitizeLevelList) {
@@ -632,6 +637,22 @@
             return values
                 .map((value) => (value == null ? '' : String(value).trim()))
                 .filter((value) => value !== '');
+        };
+    }
+
+    if (!normalizeEffectName) {
+        normalizeEffectName = (value) => {
+            if (value == null) {
+                return '';
+            }
+            return String(value).trim();
+        };
+    }
+
+    if (!effectKey) {
+        effectKey = (value) => {
+            const normalized = normalizeEffectName(value);
+            return normalized ? normalized.toLowerCase() : '';
         };
     }
 
@@ -694,6 +715,390 @@
                 })
                 .map((entry) => entry.raw);
         };
+    }
+
+    if (!parseLevelTokens) {
+        parseLevelTokens = (raw) => {
+            if (raw == null) {
+                return [];
+            }
+            if (Array.isArray(raw)) {
+                return raw.slice();
+            }
+            const text = String(raw).trim();
+            if (!text) {
+                return [];
+            }
+            const lower = text.toLowerCase();
+            if (lower === 'false' || lower === 'なし' || lower === 'null') {
+                return [];
+            }
+            return text
+                .split(/[|,]/)
+                .map((value) => value.trim())
+                .filter((value) => value !== '');
+        };
+    }
+
+    if (!parseMasterOptions) {
+        parseMasterOptions = (source) => {
+            let list = source;
+            if (typeof source === 'string') {
+                const text = source.trim();
+                if (!text) {
+                    return [];
+                }
+                try {
+                    list = JSON.parse(text);
+                } catch (_error) {
+                    return sanitizeLevelList(text.split(/[|,]/));
+                }
+            }
+
+            if (!Array.isArray(list)) {
+                return [];
+            }
+
+            const normalized = list
+                .map((entry) => {
+                    if (entry == null) {
+                        return '';
+                    }
+                    if (typeof entry === 'object') {
+                        const raw =
+                            entry.EffectBase ||
+                            entry.effect ||
+                            entry.name ||
+                            entry.value ||
+                            entry.label ||
+                            '';
+                        return typeof raw === 'string' ? raw.trim() : '';
+                    }
+                    return String(entry).trim();
+                })
+                .filter((value) => value !== '');
+
+            return Array.from(new Set(normalized));
+        };
+    }
+
+    function normalizeStatus(value) {
+        const text = (value || '').toString().trim().toLowerCase();
+        if (text === 'pass') {
+            return 'pass';
+        }
+        if (text === 'corrected') {
+            return 'corrected';
+        }
+        return 'pending';
+    }
+
+    function statusLabel(status) {
+        if (status === 'pass') {
+            return '確認済み';
+        }
+        if (status === 'corrected') {
+            return '修正済み';
+        }
+        return '未レビュー';
+    }
+
+    if (!parseMasterLevels) {
+        parseMasterLevels = (source) => {
+            if (!source) {
+                return new Map();
+            }
+
+            let data = source;
+            if (typeof source === 'string') {
+                const text = source.trim();
+                if (!text) {
+                    return new Map();
+                }
+                try {
+                    data = JSON.parse(text);
+                } catch (error) {
+                    console.warn('master levelsの解析に失敗しました:', error);
+                    return new Map();
+                }
+            }
+
+            const result = new Map();
+
+            const assignLevels = (name, levels) => {
+                const key = effectKey(name);
+                if (!key) {
+                    return;
+                }
+                const tokens = Array.isArray(levels) ? levels : parseLevelTokens(levels);
+                const sanitized = sanitizeLevelList(tokens);
+                if (!sanitized.length) {
+                    return;
+                }
+                const sorted = sortLevelsAscending(sanitized);
+                if (result.has(key)) {
+                    const merged = sanitizeLevelList(result.get(key).concat(sorted));
+                    result.set(key, sortLevelsAscending(merged));
+                    return;
+                }
+                result.set(key, sorted);
+            };
+
+            if (data instanceof Map) {
+                data.forEach((value, key) => {
+                    assignLevels(key, value);
+                });
+                return result;
+            }
+
+            if (Array.isArray(data)) {
+                data.forEach((entry) => {
+                    if (!entry) {
+                        return;
+                    }
+                    if (typeof entry === 'object') {
+                        const name =
+                            entry.EffectBase ||
+                            entry.effect ||
+                            entry.name ||
+                            entry.label ||
+                            entry.key ||
+                            '';
+                        const levels =
+                            entry.Levels ||
+                            entry.levels ||
+                            entry.values ||
+                            entry.options ||
+                            entry.candidates ||
+                            entry.list ||
+                            null;
+                        assignLevels(name, levels);
+                    } else {
+                        assignLevels(entry, []);
+                    }
+                });
+                return result;
+            }
+
+            if (typeof data === 'object') {
+                Object.keys(data).forEach((key) => {
+                    assignLevels(key, data[key]);
+                });
+            }
+
+            return result;
+        };
+    }
+
+    function parseMasterLevelsCsv(text) {
+        const map = new Map();
+        if (!text) {
+            return map;
+        }
+        const records = parseCsvRecords(text);
+        if (!Array.isArray(records)) {
+            return map;
+        }
+        records.forEach((record) => {
+            if (!record || typeof record !== 'object') {
+                return;
+            }
+            const name =
+                record.EffectBase ||
+                record.effect ||
+                record.Name ||
+                record.name ||
+                record.label ||
+                '';
+            const key = effectKey(name);
+            if (!key) {
+                return;
+            }
+            const levelsSource =
+                record.Levels ||
+                record.levels ||
+                record.Values ||
+                record.values ||
+                record.options ||
+                record.candidates ||
+                '';
+            const tokens = parseLevelTokens(levelsSource);
+            const sanitized = sanitizeLevelList(tokens);
+            if (!sanitized.length) {
+                return;
+            }
+            const existing = map.get(key) || [];
+            const merged = Array.from(new Set(existing.concat(sanitized)));
+            if (merged.length) {
+                map.set(key, sortLevelsAscending(merged));
+            }
+        });
+        return map;
+    }
+
+    function setupMasterOptions() {
+        if (!Array.isArray(state.masterOptions)) {
+            state.masterOptions = [];
+            return;
+        }
+        const normalized = state.masterOptions
+            .map((value) => normalizeEffectName(value))
+            .filter((value) => value);
+        const unique = Array.from(new Set(normalized));
+        unique.sort((a, b) => a.localeCompare(b, 'ja'));
+        state.masterOptions = unique;
+    }
+
+    function ensureMasterDatalist() {
+        if (typeof document === 'undefined') {
+            return;
+        }
+        let datalist = document.getElementById(MASTER_DATALIST_ID);
+        if (!datalist) {
+            datalist = document.createElement('datalist');
+            datalist.id = MASTER_DATALIST_ID;
+            document.body.appendChild(datalist);
+        }
+        datalist.textContent = '';
+        state.masterOptions.forEach((option) => {
+            const optionNode = document.createElement('option');
+            optionNode.value = option;
+            datalist.appendChild(optionNode);
+        });
+        state.masterDatalistPrepared = true;
+    }
+
+    async function ensureMasterOptions() {
+        if (state.masterDatalistPrepared) {
+            return;
+        }
+        if (!state.masterJsonPath) {
+            setupMasterOptions();
+            ensureMasterDatalist();
+            return;
+        }
+        try {
+            const response = await fetch(state.masterJsonPath, { cache: 'no-cache' });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            state.masterOptions = parseMasterOptions(data);
+        } catch (error) {
+            console.error('マスターデータの読み込みに失敗しました:', error);
+            setStorageStatus(`マスターデータの読み込みに失敗しました: ${error.message || error}`, true);
+            state.masterOptions = [];
+        }
+        setupMasterOptions();
+        ensureMasterDatalist();
+    }
+
+    async function ensureMasterLevels() {
+        if (state.masterLevelsLoaded) {
+            return;
+        }
+        if (state.masterLevelsPromise) {
+            await state.masterLevelsPromise;
+            return;
+        }
+        state.masterLevelsPromise = (async () => {
+            const csvPath = state.masterCsvPath;
+            if (!csvPath) {
+                state.masterLevels = null;
+                state.masterLevelsLoaded = true;
+                state.masterLevelsPromise = null;
+                return;
+            }
+            try {
+                const response = await fetch(csvPath, { cache: 'no-cache' });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const csvText = await response.text();
+                state.masterLevels = parseMasterLevelsCsv(csvText);
+            } catch (error) {
+                console.warn('レベル候補の読み込みに失敗しました:', error);
+                state.masterLevels = null;
+            } finally {
+                state.masterLevelsLoaded = true;
+                state.masterLevelsPromise = null;
+            }
+        })();
+        await state.masterLevelsPromise;
+    }
+
+    function applyMasterLevelOptions(effect, select, effectName, helpers = {}) {
+        if (!effect || !select) {
+            return;
+        }
+        const {
+            setCorrectionLevelCandidates: setCandidatesHelper,
+            rebuildLevelSelectOptions: rebuildOptionsHelper
+        } = helpers || {};
+
+        const setCandidates =
+            typeof setCandidatesHelper === 'function'
+                ? setCandidatesHelper
+                : (targetEffect, candidates) => {
+                      const sanitized = sanitizeLevelList(candidates);
+                      if (targetEffect) {
+                          targetEffect.dataset.levelOptionsBaseJson = JSON.stringify(sanitized);
+                      }
+                      return sanitized;
+                  };
+
+        const rebuildOptions =
+            typeof rebuildOptionsHelper === 'function'
+                ? rebuildOptionsHelper
+                : (targetEffect, targetSelect, baseOptions) => {
+                      const values = Array.isArray(baseOptions) ? baseOptions : [];
+                      targetSelect.textContent = '';
+                      const emptyOption = document.createElement('option');
+                      emptyOption.value = '';
+                      emptyOption.textContent = '';
+                      targetSelect.appendChild(emptyOption);
+                      values.forEach((value) => {
+                          const optionNode = document.createElement('option');
+                          optionNode.value = value;
+                          optionNode.textContent = value;
+                          targetSelect.appendChild(optionNode);
+                      });
+                      if (targetEffect) {
+                          targetEffect.dataset.levelOptionsDisplay = values.join('|');
+                      }
+                  };
+
+        const normalizedName = normalizeEffectName(effectName);
+        if (!state.masterLevelsLoaded) {
+            setCandidates(effect, []);
+            void ensureMasterLevels().then(() => {
+                applyMasterLevelOptions(effect, select, normalizedName, helpers);
+            });
+            return;
+        }
+
+        const levelsMap = state.masterLevels instanceof Map ? state.masterLevels : null;
+        if (!levelsMap) {
+            setCandidates(effect, []);
+            rebuildOptions(effect, select);
+            return;
+        }
+
+        const key = effectKey(normalizedName);
+        if (!key) {
+            setCandidates(effect, []);
+            rebuildOptions(effect, select);
+            return;
+        }
+
+        const candidates = levelsMap.get(key) || [];
+        const applied = setCandidates(effect, candidates);
+        if (applied.length) {
+            effect.dataset.levelOptionsBaseJson = JSON.stringify(applied);
+            rebuildOptions(effect, select, applied);
+        } else {
+            rebuildOptions(effect, select);
+        }
     }
 
     const datasets = parseDatasets(datasetsJson);
@@ -995,6 +1400,11 @@
 
     const { core: state, dataset: datasetState } = stateStore.getState();
 
+    setupMasterOptions();
+    if (!state.masterJsonPath && state.masterOptions.length) {
+        ensureMasterDatalist();
+    }
+
     function handleStateChange() {
         updateDatasetIndicator();
         updateSaveAvailability();
@@ -1239,6 +1649,136 @@
     });
 
     const renderFactory = window.galleryRenderFactory || null;
+
+    const effectModule =
+        renderFactory && typeof renderFactory.createEffectFactory === 'function'
+            ? renderFactory.createEffectFactory({
+                  state,
+                  datasetState,
+                  masterDatalistId: MASTER_DATALIST_ID,
+                  createElement,
+                  sanitizeLevelList,
+                  sortLevelsAscending,
+                  applyMasterLevelOptions,
+                  normalizeStatus,
+                  statusLabel
+              })
+            : null;
+
+    if (!effectModule) {
+        throw new Error('gallery effect factory is not available');
+    }
+
+    const {
+        createEffect,
+        updateEffectStatus,
+        updateLevelBadge,
+        rebuildLevelSelectOptions,
+        setCorrectionLevelCandidates,
+        getEffectIndexes,
+        createCorrectionInput,
+        updateInputValueAttribute,
+        updateLevelInputAvailability
+    } = effectModule;
+
+
+    function collectCsvHeaders(records) {
+        const seen = new Set();
+        const headers = [];
+        const register = (key) => {
+            if (!key || seen.has(key)) {
+                return;
+            }
+            seen.add(key);
+            headers.push(key);
+        };
+
+        records.forEach((record) => {
+            if (!record || typeof record !== 'object') {
+                return;
+            }
+            Object.keys(record).forEach(register);
+        });
+
+        return headers.length ? headers : ['Image'];
+    }
+
+    function csvEscape(value) {
+        const text = value == null ? '' : String(value);
+        if (!/[",\n]/.test(text)) {
+            return text;
+        }
+        return '"' + text.replace(/"/g, '""') + '"';
+    }
+
+    function generateCsv(records) {
+        if (!Array.isArray(records) || !records.length) {
+            return '';
+        }
+        const headers = collectCsvHeaders(records);
+        const lines = [headers.map(csvEscape).join(',')];
+
+        records.forEach((record) => {
+            const row = headers.map((key) => {
+                if (!record || typeof record !== 'object') {
+                    return csvEscape('');
+                }
+                const value = Object.prototype.hasOwnProperty.call(record, key) ? record[key] : '';
+                return csvEscape(value);
+            });
+            lines.push(row.join(','));
+        });
+
+        return lines.join('\n');
+    }
+
+    function csvFileName() {
+        const baseName = getFileName(state.csvPath) || 'results.csv';
+        const converted = baseName.replace(/\.csv$/i, '_review.csv');
+        if (converted !== baseName) {
+            return converted;
+        }
+        if (!baseName) {
+            return 'results_review.csv';
+        }
+        return `${baseName.replace(/\.csv$/i, '')}_review.csv`;
+    }
+
+    const eventsFactory = window.galleryEventsFactory || null;
+    const galleryEvents =
+        eventsFactory && typeof eventsFactory.createGalleryEvents === 'function'
+            ? eventsFactory.createGalleryEvents({
+                  dom,
+                  state,
+                  datasetState,
+                  duplicates,
+                  showStatus,
+                  clearStatus,
+                  setStorageStatus,
+                  parseCsvRecords,
+                  loadRecordsArray,
+                  generateCsv,
+                  csvFileName,
+                  sanitizeLevelList,
+                  sortLevelsAscending,
+                  updateEffectStatus,
+                  setCorrectionLevelCandidates,
+                  rebuildLevelSelectOptions,
+                  createCorrectionInput,
+                  updateLevelBadge,
+                  getEffectIndexes,
+                  updateInputValueAttribute,
+                  updateLevelInputAvailability,
+                  applyMasterLevelOptions
+              })
+            : null;
+
+    if (!galleryEvents) {
+        throw new Error('gallery events factory is not available');
+    }
+
+    const { bindImage, attachEventHandlers } = galleryEvents;
+
     const galleryView =
         renderFactory && typeof renderFactory.createGalleryView === 'function'
             ? renderFactory.createGalleryView({
@@ -1277,6 +1817,31 @@
         normalizeItemColor,
         refreshItemCaches
     } = galleryView;
+
+    attachEventHandlers({
+        switchDataset,
+        buildGallery,
+        applyFilters,
+        setOcrVisibility,
+        getOcrToggleState,
+        getItemContext,
+        updateFavoriteVisuals,
+        updateDuplicateVisuals,
+        applyItemColor,
+        normalizeItemColor,
+        refreshItemCaches,
+        getRecordByIndex,
+        isRecordDuplicate,
+        isRecordFavorite,
+        setRecordDuplicate,
+        setRecordFavorite,
+        setRecordItemColor,
+        recordStatusChange,
+        updateRecordCorrection,
+        updateRecordLevelCorrection,
+        updateRecordLevelSuppressed,
+        scheduleSave: () => storage.scheduleSave()
+    });
 
     const appController = createAppController({
         attachEventHandlers,
@@ -1474,14 +2039,6 @@
         summary.style.textAlign = 'center';
     }
 
-    function updateInputValueAttribute(input) {
-        if (!input) {
-            return;
-        }
-        const current = input.value == null ? '' : String(input.value);
-        input.setAttribute('value', current);
-    }
-
     function createElement(tag, className, text) {
         const element = document.createElement(tag);
         if (className) {
@@ -1498,1025 +2055,6 @@
 
 
 
-
-    function setCorrectionLevelCandidates(effect, candidates) {
-        const sanitized = sanitizeLevelList(candidates);
-        const sorted = sortLevelsAscending(sanitized);
-        if (!effect) {
-            return sorted;
-        }
-        const input = effect.querySelector ? effect.querySelector('.correction-input') : null;
-        if (input) {
-            input.dataset.levelCandidates = JSON.stringify(sorted);
-        }
-        return sorted;
-    }
-
-    function updateLevelInputAvailability(select, options) {
-        if (!select) {
-            return;
-        }
-        const hasUsableOption = Array.isArray(options) && options.some((value) => {
-            if (value == null) {
-                return false;
-            }
-            return String(value).trim() !== '';
-        });
-        select.disabled = !hasUsableOption;
-        if (!hasUsableOption) {
-            select.value = '';
-        }
-    }
-
-    function getBaseLevelOptions(effect) {
-        if (!effect) {
-            return [];
-        }
-        const json = effect.dataset.levelOptionsBaseJson;
-        if (json) {
-            try {
-                const parsed = JSON.parse(json);
-                return sanitizeLevelList(parsed);
-            } catch (error) {
-                console.warn('レベル候補(base json)の解析に失敗しました:', error);
-            }
-        }
-        const legacyBase = effect.dataset.levelOptionsBase;
-        if (legacyBase != null) {
-            return sanitizeLevelList(legacyBase.split('|'));
-        }
-        const display = effect.dataset.levelOptionsDisplay;
-        if (display != null) {
-            return sanitizeLevelList(display.split('|'));
-        }
-        return [];
-    }
-
-    function parseLevelOptions(raw) {
-        if (raw == null) {
-            return [];
-        }
-        if (Array.isArray(raw)) {
-            return raw
-                .map((entry) => (entry == null ? '' : String(entry).trim()))
-                .filter((entry) => entry !== '');
-        }
-        const text = String(raw).trim();
-        if (!text) {
-            return [];
-        }
-        return text
-            .split('|')
-            .map((entry) => entry.trim())
-            .filter((entry) => entry !== '');
-    }
-
-    function normalizeEffectName(value) {
-        if (value == null) {
-            return '';
-        }
-        return String(value).trim();
-    }
-
-    function effectKey(value) {
-        const normalized = normalizeEffectName(value);
-        return normalized ? normalized.toLowerCase() : '';
-    }
-
-    function parseLevelTokens(raw) {
-        if (raw == null) {
-            return [];
-        }
-        const text = String(raw).trim();
-        if (!text) {
-            return [];
-        }
-        const lower = text.toLowerCase();
-        if (lower === 'false' || lower === 'no' || lower === 'none') {
-            return [];
-        }
-        return text
-            .split(',')
-            .map((token) => token.trim())
-            .filter((token) => token && token !== '-');
-    }
-
-    function parseMasterLevelsCsv(csvText) {
-        const records = parseCsvRecords(csvText);
-        const map = new Map();
-        records.forEach((record) => {
-            if (!record || typeof record !== 'object') {
-                return;
-            }
-            const effectName = normalizeEffectName(
-                record.EffectBase || record.effect || record.name || record.value
-            );
-            if (!effectName || effectName === '-') {
-                return;
-            }
-            const levels = parseLevelTokens(record.Levels);
-            if (!levels.length) {
-                return;
-            }
-            const key = effectKey(effectName);
-            const existing = map.get(key) || [];
-            levels.forEach((level) => {
-                const normalizedLevel = String(level).trim();
-                if (!normalizedLevel) {
-                    return;
-                }
-                const lower = normalizedLevel.toLowerCase();
-                if (existing.some((value) => value.toLowerCase() === lower)) {
-                    return;
-                }
-                existing.push(normalizedLevel);
-            });
-            if (existing.length) {
-                map.set(key, existing);
-            }
-        });
-        return map;
-    }
-
-    async function ensureMasterLevels() {
-        if (state.masterLevelsLoaded) {
-            return;
-        }
-        if (state.masterLevelsPromise) {
-            await state.masterLevelsPromise;
-            return;
-        }
-        state.masterLevelsPromise = (async () => {
-            const csvPath = state.masterCsvPath;
-            if (!csvPath) {
-                state.masterLevels = null;
-                state.masterLevelsLoaded = true;
-                state.masterLevelsPromise = null;
-                return;
-            }
-            try {
-                const response = await fetch(csvPath, { cache: 'no-cache' });
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                const csvText = await response.text();
-                state.masterLevels = parseMasterLevelsCsv(csvText);
-            } catch (error) {
-                console.warn('レベル候補の読み込みに失敗しました:', error);
-                state.masterLevels = null;
-            } finally {
-                state.masterLevelsLoaded = true;
-                state.masterLevelsPromise = null;
-            }
-        })();
-        await state.masterLevelsPromise;
-    }
-
-    function getMasterLevelOptions(effectName) {
-        const key = effectKey(effectName);
-        if (!key) {
-            return null;
-        }
-        const map = state.masterLevels;
-        if (!(map instanceof Map)) {
-            return null;
-        }
-        const values = map.get(key);
-        return Array.isArray(values) && values.length ? values.slice() : [];
-    }
-
-    function applyMasterLevelOptions(effect, select, effectName) {
-        if (!effect || !select) {
-            return;
-        }
-
-        const applyCandidates = (candidates, overrideBase = true) => {
-            const sortedCandidates = setCorrectionLevelCandidates(effect, candidates);
-            if (overrideBase) {
-                effect.dataset.levelOptionsBaseJson = JSON.stringify(sortedCandidates);
-                rebuildLevelSelectOptions(effect, select, sortedCandidates);
-            } else {
-                rebuildLevelSelectOptions(effect, select);
-            }
-        };
-
-        const normalized = normalizeEffectName(effectName);
-        if (!state.masterLevelsLoaded) {
-            applyCandidates([], false);
-            void ensureMasterLevels().then(() => {
-                applyMasterLevelOptions(effect, select, normalized);
-            });
-            return;
-        }
-
-        if (!normalized) {
-            applyCandidates([], false);
-            return;
-        }
-
-        const options = getMasterLevelOptions(normalized);
-        if (options && options.length) {
-            applyCandidates(options);
-        } else {
-            applyCandidates([]);
-        }
-    }
-
-    function parseMasterOptions(source) {
-        let list = source;
-        if (typeof source === 'string') {
-            if (!source) {
-                return [];
-            }
-            try {
-                list = JSON.parse(source);
-            } catch (error) {
-                console.warn('master optionsの解析に失敗しました:', error);
-                return [];
-            }
-        }
-
-        if (!Array.isArray(list)) {
-            return [];
-        }
-
-        return list
-            .map((entry) => {
-                if (entry == null) {
-                    return '';
-                }
-                if (typeof entry === 'object') {
-                    const raw =
-                        entry.EffectBase || entry.effect || entry.name || entry.value || '';
-                    return typeof raw === 'string' ? raw.trim() : '';
-                }
-                return String(entry).trim();
-            })
-            .filter((value) => value !== '');
-    }
-
-
-    function parseMasterLevels(source) {
-        const map = new Map();
-        if (!source) {
-            return map;
-        }
-        let payload = source;
-        if (typeof source === 'string') {
-            const text = source.trim();
-            if (!text) {
-                return map;
-            }
-            try {
-                payload = JSON.parse(text);
-            } catch (error) {
-                console.warn('master levelsの解析に失敗しました:', error);
-                return map;
-            }
-        }
-
-        if (!payload || typeof payload !== 'object') {
-            return map;
-        }
-        const entries = Array.isArray(payload) ? payload : Object.entries(payload);
-        const normalizeEntry = (entry) => {
-            if (!entry) {
-                return null;
-            }
-            if (Array.isArray(entry)) {
-                return entry;
-            }
-            if (typeof entry === 'object' && 'key' in entry && 'value' in entry) {
-                return [entry.key, entry.value];
-            }
-            return null;
-        };
-        entries.forEach((entry) => {
-            let key;
-            let value;
-            if (Array.isArray(entry) && entry.length >= 2) {
-                [key, value] = entry;
-            } else {
-                const normalizedEntry = normalizeEntry(entry);
-                if (!normalizedEntry) {
-                    return;
-                }
-                [key, value] = normalizedEntry;
-            }
-            const effect = effectKey(key);
-            if (!effect) {
-                return;
-            }
-            const list = Array.isArray(value) ? value : [value];
-            const sanitized = sanitizeLevelList(list);
-            if (!sanitized.length) {
-                return;
-            }
-            map.set(effect, sanitized);
-        });
-        return map;
-    }
-
-    function setupMasterOptions() {
-        state.masterDatalistPrepared = false;
-    }
-
-    function ensureMasterDatalist() {
-        if (state.masterDatalistPrepared) {
-            return;
-        }
-        let datalist = document.getElementById(MASTER_DATALIST_ID);
-        if (!datalist) {
-            datalist = document.createElement('datalist');
-            datalist.id = MASTER_DATALIST_ID;
-            document.body.appendChild(datalist);
-        } else {
-            clearElementChildren(datalist);
-        }
-
-        state.masterOptions.forEach((value) => {
-            const option = document.createElement('option');
-            option.value = value;
-            datalist.appendChild(option);
-        });
-
-        state.masterDatalistPrepared = true;
-    }
-
-    async function ensureMasterOptions() {
-        if (state.masterOptions.length) {
-            setupMasterOptions();
-            ensureMasterDatalist();
-            return;
-        }
-
-        if (!state.masterJsonPath) {
-            setupMasterOptions();
-            ensureMasterDatalist();
-            return;
-        }
-
-        try {
-            const response = await fetch(state.masterJsonPath, { cache: 'no-cache' });
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            const data = await response.json();
-            state.masterOptions = parseMasterOptions(data);
-        } catch (error) {
-            console.error('マスターデータの読み込みに失敗しました:', error);
-            setStorageStatus(`マスターデータの読み込みに失敗しました: ${error.message || error}`, true);
-            state.masterOptions = [];
-        }
-
-        setupMasterOptions();
-        ensureMasterDatalist();
-    }
-
-    function csvFileName() {
-        const baseName = storage.fileName || getFileName(state.csvPath) || 'results.csv';
-        const converted = baseName.replace(/\.csv$/i, '_review.csv');
-        if (converted !== baseName) {
-            return converted;
-        }
-        if (!baseName) {
-            return 'results_review.csv';
-        }
-        return `${baseName.replace(/\.csv$/i, '')}_review.csv`;
-    }
-
-    function joinPath(base, leaf) {
-        if (!leaf) {
-            return base || '';
-        }
-        if (!base) {
-            return leaf;
-        }
-        const cleanBase = base.replace(/[\/]+$/, '');
-        const cleanLeaf = leaf.replace(/^[\/]+/, '');
-        return `${cleanBase}/${cleanLeaf}`;
-    }
-
-    function normalizeStatus(value) {
-        const text = (value || '').toString().toLowerCase();
-        if (text === 'pass') {
-            return 'pass';
-        }
-        if (text === 'corrected') {
-            return 'corrected';
-        }
-        if (text === 'fail') {
-            return 'pending';
-        }
-        return 'pending';
-    }
-
-    function statusLabel(status) {
-        if (status === 'pass') {
-            return '確認済み';
-        }
-        if (status === 'corrected') {
-            return '修正済み';
-        }
-        return '未レビュー';
-    }
-
-    function ensureLabelCoverage(records) {
-        let maxSlot = state.labelSymbols.length;
-        records.forEach((record) => {
-            if (!record || typeof record !== 'object') {
-                return;
-            }
-            Object.keys(record).forEach((key) => {
-                const match = /^Effect(\d+)$/.exec(key);
-                if (match) {
-                    const slot = parseInt(match[1], 10);
-                    if (!Number.isNaN(slot) && slot > maxSlot) {
-                        maxSlot = slot;
-                    }
-                }
-            });
-        });
-        for (let slot = state.labelSymbols.length + 1; slot <= maxSlot; slot += 1) {
-            state.labelSymbols.push(`Slot ${slot}`);
-        }
-    }
-
-    function createEffect(record, slot, symbol, imageName, recordIndex) {
-        const context = createEffectContext(record, slot, symbol, imageName, recordIndex);
-        if (!context) {
-            return null;
-        }
-
-        const effect = createEffectElement(context);
-
-        const predictionLine = createEffectPredictionLine(context);
-        effect.appendChild(predictionLine);
-        updateLevelBadge(effect);
-
-        const rawLine = createEffectRawLine(context);
-        effect.appendChild(rawLine);
-
-        const decisionElements = createEffectDecision(effect, context);
-        effect.appendChild(decisionElements.container);
-
-        applyMasterLevelOptions(effect, decisionElements.levelInput, context.effectNameForLevels);
-
-        if (datasetState.kind === 'merged') {
-            decisionElements.passButton.disabled = true;
-            decisionElements.correctionInput.disabled = true;
-            decisionElements.levelInput.disabled = true;
-        }
-
-        updateEffectStatus(effect, context.statusValue);
-
-        decisionElements.correctionInput.addEventListener('change', correctionChangeHandler(effect, decisionElements.correctionInput));
-
-        const onLevelChange = levelChangeHandler(effect, decisionElements.levelInput);
-        decisionElements.levelInput.addEventListener('change', onLevelChange);
-
-        return effect;
-    }
-
-    function createEffectContext(record, slot, symbol, imageName, recordIndex) {
-        if (!record || typeof record !== 'object') {
-            return null;
-        }
-
-        const prediction = record[`Effect${slot}`];
-        const raw = record[`RawText${slot}`];
-        const score = record[`Effect${slot}Score`];
-
-        const predictionText = prediction == null ? '' : String(prediction);
-        const rawText = raw == null ? '' : String(raw);
-        const hasScoreValue = score != null && !Number.isNaN(Number(score));
-        if (!predictionText && !rawText && !hasScoreValue) {
-            return null;
-        }
-
-        const numericScore = Number(score);
-        const hasFiniteScore = Number.isFinite(numericScore);
-        const scoreDisplay = hasFiniteScore ? `${numericScore.toFixed(1)}%` : '--';
-        const ocrDisplay = rawText || '--';
-
-        const levelValueRaw = record[`Effect${slot}Level`];
-        const levelValue = levelValueRaw == null ? '' : String(levelValueRaw).trim();
-        const levelOptionsRaw = record[`Effect${slot}LevelOptions`];
-        const levelOptions = parseLevelOptions(levelOptionsRaw);
-        const levelOptionsLower = levelOptions.map((value) => (value == null ? '' : String(value).toLowerCase()));
-        const levelCorrectionKey = `Effect${slot}LevelCorrection`;
-        const levelCorrectionRaw = record[levelCorrectionKey];
-        const levelCorrection = levelCorrectionRaw == null ? '' : String(levelCorrectionRaw).trim();
-        const levelSuppressedRaw = record[`Effect${slot}LevelSuppressed`];
-        const levelSuppressed =
-            typeof levelSuppressedRaw === 'boolean'
-                ? levelSuppressedRaw
-                : String(levelSuppressedRaw || '').trim().toLowerCase() === 'true';
-        const preserveOriginalLevel = !levelSuppressed;
-        const levelOptionsDisplay = levelOptions.join('|');
-        const displayLevel = levelCorrection || (preserveOriginalLevel ? levelValue : '');
-
-        const correctionKey = `Effect${slot}Correction`;
-        const correctionValue = record[correctionKey] == null ? '' : String(record[correctionKey]);
-
-        const initialStatus = normalizeStatus(record[`Effect${slot}Status`]);
-        const statusValue = correctionValue && initialStatus !== 'pass' ? 'corrected' : initialStatus;
-
-        const predictionLower = predictionText.toLowerCase();
-        const rawLower = rawText.toLowerCase();
-        const levelValueLower = levelValue ? levelValue.toLowerCase() : '';
-        const displayLevelLower = displayLevel ? displayLevel.toLowerCase() : '';
-        const levelCorrectionLower = levelCorrection ? levelCorrection.toLowerCase() : '';
-        const correctionValueLower = correctionValue.toLowerCase();
-
-        const normalizedImageName = imageName == null ? '' : String(imageName);
-        const imageNameLower = normalizedImageName.toLowerCase();
-
-        return {
-            record,
-            slot,
-            symbol,
-            imageName: normalizedImageName,
-            imageNameLower,
-            recordIndex,
-            predictionText,
-            predictionLower,
-            rawText,
-            rawLower,
-            numericScore,
-            hasFiniteScore,
-            scoreDisplay,
-            ocrDisplay,
-            statusValue,
-            levelValue,
-            levelValueLower,
-            levelOptions,
-            levelOptionsLower,
-            levelOptionsDisplay,
-            levelCorrection,
-            levelCorrectionLower,
-            preserveOriginalLevel,
-            displayLevel,
-            displayLevelLower,
-            correctionValue,
-            correctionValueLower,
-            effectNameForLevels: levelCorrection || correctionValue || predictionText,
-            lowConfidence: hasFiniteScore && numericScore < 60
-        };
-    }
-
-    function createEffectElement(context) {
-        const effect = createElement('div', 'effect');
-        effect.dataset.slot = String(context.slot);
-        effect.dataset.image = context.imageNameLower;
-        effect.dataset.pred = context.predictionLower;
-        effect.dataset.predictionValue = context.predictionText;
-        effect.dataset.raw = context.rawLower;
-        effect.dataset.recordIndex = String(context.recordIndex);
-        effect.dataset.preserveOriginalLevel = context.preserveOriginalLevel ? 'true' : 'false';
-        effect.dataset.level = context.displayLevelLower;
-        effect.dataset.levelOriginal = context.levelValueLower;
-        effect.dataset.levelOriginalValue = context.levelValue;
-        effect.dataset.levelOptions = context.levelOptionsLower.join('|');
-        effect.dataset.levelOptionsDisplay = context.levelOptionsDisplay;
-        effect.dataset.levelOptionsBase = context.levelOptionsDisplay;
-        effect.dataset.levelCorrection = context.levelCorrectionLower;
-        effect.dataset.levelCorrectionValue = context.levelCorrection;
-        effect.dataset.correction = context.correctionValueLower;
-        if (context.lowConfidence) {
-            effect.classList.add('low-confidence');
-            effect.dataset.lowConfidence = 'true';
-        }
-        return effect;
-    }
-
-    function createEffectPredictionLine(context) {
-        const predictionLine = createElement('div', 'prediction');
-        const predictionLabel = createElement('span', 'prediction-label', '推定:');
-        const predictionValueNode = createElement('span', 'prediction-value', context.predictionText || '--');
-        predictionLine.appendChild(predictionLabel);
-        predictionLine.appendChild(predictionValueNode);
-        predictionLine.style.display = state.showOcr ? '' : 'none';
-        return predictionLine;
-    }
-
-    function createEffectRawLine(context) {
-        const rawLine = createElement('div', 'raw', `OCR: ${context.ocrDisplay} / 一致度 ${context.scoreDisplay}`);
-        rawLine.style.display = state.showOcr ? '' : 'none';
-        return rawLine;
-    }
-
-    function createEffectDecision(effect, context) {
-        const decision = createElement('div', 'decision');
-        const decisionRow = createElement('div', 'decision-row');
-        const passButton = createElement('button', 'review-button pass', '合致');
-        passButton.type = 'button';
-        passButton.dataset.value = 'pass';
-
-        const correctionInput = createCorrectionInput(context.correctionValue, context.predictionText);
-
-        const levelInput = document.createElement('select');
-        levelInput.id = `level-input-${context.recordIndex}-${context.slot}`;
-        levelInput.className = 'level-input';
-
-        populateEffectLevelOptions(effect, levelInput, context);
-
-        decisionRow.appendChild(passButton);
-        decisionRow.appendChild(correctionInput);
-        decisionRow.appendChild(levelInput);
-        decision.appendChild(decisionRow);
-
-        return {
-            container: decision,
-            passButton,
-            correctionInput,
-            levelInput
-        };
-    }
-
-    function populateEffectLevelOptions(effect, levelInput, context) {
-        const sortedLevelChoices = buildEffectLevelChoices(context);
-
-        const emptyOption = document.createElement('option');
-        emptyOption.value = '';
-        emptyOption.textContent = '';
-        levelInput.appendChild(emptyOption);
-
-        sortedLevelChoices.forEach((option) => {
-            const optionNode = document.createElement('option');
-            optionNode.value = option;
-            optionNode.textContent = option;
-            levelInput.appendChild(optionNode);
-        });
-
-        effect.dataset.levelOptionsBaseJson = JSON.stringify(sortedLevelChoices);
-
-        const initialLevelValue = context.levelCorrection || (context.preserveOriginalLevel ? context.levelValue : '') || '';
-        levelInput.value = initialLevelValue;
-        updateLevelInputAvailability(levelInput, sortedLevelChoices);
-    }
-
-    function buildEffectLevelChoices(context) {
-        const levelChoices = [];
-        const seenLevels = new Set();
-
-        const pushLevelChoice = (value) => {
-            if (value == null) {
-                return;
-            }
-            const text = String(value).trim();
-            if (!text) {
-                return;
-            }
-            const key = text.toLowerCase();
-            if (seenLevels.has(key)) {
-                return;
-            }
-            seenLevels.add(key);
-            levelChoices.push(text);
-        };
-
-        const originalLevelLower = context.levelValueLower;
-        let originalInOptions = false;
-        context.levelOptions.forEach((option) => {
-            const text = option == null ? '' : String(option).trim();
-            if (!text) {
-                return;
-            }
-            const lower = text.toLowerCase();
-            if (originalLevelLower && lower === originalLevelLower) {
-                originalInOptions = true;
-                if (context.preserveOriginalLevel) {
-                    pushLevelChoice(text);
-                }
-                return;
-            }
-            pushLevelChoice(text);
-        });
-
-        if (context.levelValue) {
-            if (context.preserveOriginalLevel) {
-                pushLevelChoice(context.levelValue);
-            } else if (originalInOptions && levelChoices.length) {
-                pushLevelChoice(context.levelValue);
-            }
-        }
-
-        pushLevelChoice(context.levelCorrection);
-
-        return sortLevelsAscending(levelChoices);
-    }
-
-    function updateLevelBadge(effect) {
-        const predictionLine = effect.querySelector('.prediction');
-        if (!predictionLine) {
-            return;
-        }
-        let badge = predictionLine.querySelector('.level-badge');
-        const originalValue = effect.dataset.levelOriginalValue || '';
-        const preserveOriginalLevel = effect.dataset.preserveOriginalLevel !== 'false';
-        const correctionValue = effect.dataset.levelCorrectionValue || '';
-        const optionsDisplay = effect.dataset.levelOptionsDisplay || '';
-        const optionsList = optionsDisplay ? optionsDisplay.split('|').map((value) => value.trim()).filter((value) => value) : [];
-
-        if (correctionValue) {
-            if (!badge) {
-                badge = createElement('span', 'level-badge level-badge--corrected');
-                predictionLine.appendChild(badge);
-            }
-            badge.textContent = correctionValue;
-            badge.className = 'level-badge level-badge--corrected';
-            badge.title = originalValue ? `OCR: ${originalValue}` : '';
-            return;
-        }
-
-        if (originalValue && preserveOriginalLevel) {
-            if (!badge) {
-                badge = createElement('span', 'level-badge');
-                predictionLine.appendChild(badge);
-            }
-            badge.textContent = originalValue;
-            badge.className = 'level-badge';
-            badge.title = '';
-            return;
-        }
-
-        if (optionsList.length) {
-            const primaryOption = optionsList[0];
-            if (!badge) {
-                badge = createElement('span', 'level-badge level-badge--missing');
-                predictionLine.appendChild(badge);
-            }
-            badge.textContent = primaryOption;
-            badge.className = 'level-badge level-badge--missing';
-            if (optionsList.length > 1) {
-                const tooltipText = optionsList.join(' / ');
-                badge.title = `候補: ${tooltipText}`;
-            } else {
-                badge.title = `候補: ${primaryOption}`;
-            }
-            return;
-        }
-
-        if (badge) {
-            badge.remove();
-        }
-    }
-
-
-    function updateEffectStatus(effect, status) {
-        const normalized = normalizeStatus(status);
-        effect.dataset.status = normalized;
-        effect.classList.toggle('pending', normalized === 'pending');
-
-        const indicator = effect.querySelector('.status-indicator');
-        if (indicator) {
-            indicator.textContent = statusLabel(normalized);
-        }
-
-        effect.querySelectorAll('.review-button').forEach((button) => {
-            button.classList.toggle('selected', button.dataset.value === normalized);
-        });
-    }
-
-    function createCorrectionInput(selectedValue, fallbackValue) {
-        const input = document.createElement('input');
-        input.type = 'search';
-        input.className = 'correction-input';
-        if (state.masterOptions.length) {
-            input.setAttribute('list', MASTER_DATALIST_ID);
-            input.placeholder = 'master_relicsから選択';
-        } else {
-            input.placeholder = 'マスターデータ未設定';
-            input.disabled = true;
-        }
-        const initialValue = selectedValue || fallbackValue || '';
-        input.value = initialValue;
-        updateInputValueAttribute(input);
-        return input;
-    }
-
-    function rebuildLevelSelectOptions(effect, select, baseOptionsOverride, extraOptions) {
-        if (!effect || !select) {
-            return;
-        }
-
-        const previousValue = select.value == null ? '' : String(select.value);
-        const baseOptions = Array.isArray(baseOptionsOverride)
-            ? sanitizeLevelList(baseOptionsOverride)
-            : getBaseLevelOptions(effect);
-
-        const extrasSource = Array.isArray(extraOptions)
-            ? extraOptions
-            : extraOptions == null
-                ? []
-                : [extraOptions];
-        const extras = sanitizeLevelList(extrasSource);
-
-        const finalValues = [];
-        const seen = new Set();
-
-        const pushOption = (value) => {
-            if (value == null) {
-                return;
-            }
-            const text = String(value).trim();
-            if (!text) {
-                return;
-            }
-            const lower = text.toLowerCase();
-            if (seen.has(lower)) {
-                return;
-            }
-            seen.add(lower);
-            finalValues.push(text);
-        };
-
-        const originalValue = effect.dataset.levelOriginalValue || '';
-        const preserveOriginalLevel = effect.dataset.preserveOriginalLevel !== 'false';
-        const originalLower = originalValue ? originalValue.toLowerCase() : '';
-        let originalEncountered = false;
-
-        const addCandidate = (candidate) => {
-            const text = candidate == null ? '' : String(candidate).trim();
-            if (!text) {
-                return;
-            }
-            const lower = text.toLowerCase();
-            if (originalLower && lower === originalLower) {
-                originalEncountered = true;
-                if (preserveOriginalLevel) {
-                    pushOption(text);
-                }
-                return;
-            }
-            pushOption(text);
-        };
-
-        baseOptions.forEach(addCandidate);
-        extras.forEach(addCandidate);
-
-        if (originalValue) {
-            if (preserveOriginalLevel) {
-                pushOption(originalValue);
-            } else if (originalEncountered && finalValues.length) {
-                pushOption(originalValue);
-            }
-        }
-
-        const levelCorrectionValue = effect.dataset.levelCorrectionValue || '';
-        pushOption(levelCorrectionValue);
-
-        const sortedFinalValues = sortLevelsAscending(finalValues);
-
-        select.textContent = '';
-
-        const emptyOption = document.createElement('option');
-        emptyOption.value = '';
-        emptyOption.textContent = '';
-        select.appendChild(emptyOption);
-
-        sortedFinalValues.forEach((value) => {
-            const optionNode = document.createElement('option');
-            optionNode.value = value;
-            optionNode.textContent = value;
-            select.appendChild(optionNode);
-        });
-
-        const candidates = [previousValue, levelCorrectionValue, originalValue, baseOptions[0], extras[0]];
-        let applied = '';
-        for (let index = 0; index < candidates.length; index += 1) {
-            const candidate = candidates[index];
-            if (!candidate) {
-                continue;
-            }
-            const lower = candidate.toLowerCase();
-            if (sortedFinalValues.some((value) => value.toLowerCase() === lower)) {
-                applied = candidate;
-                break;
-            }
-        }
-        if (!applied && sortedFinalValues.length) {
-            applied = sortedFinalValues[0];
-        }
-        select.value = applied || '';
-        updateLevelInputAvailability(select, sortedFinalValues);
-
-        effect.dataset.levelOptionsDisplay = sortedFinalValues.join('|');
-        effect.dataset.levelOptions = sortedFinalValues.map((value) => value.toLowerCase()).join('|');
-        updateLevelBadge(effect);
-    }
-
-    function correctionChangeHandler(effect, input) {
-        return () => {
-            updateInputValueAttribute(input);
-            const selected = input.value.trim();
-            const indexes = getEffectIndexes(effect);
-            if (!indexes) {
-                return;
-            }
-            const nextStatus = selected ? 'corrected' : 'pending';
-            const statusChanged = recordStatusChange(effect, nextStatus);
-            const correctionChanged = updateRecordCorrection(indexes.recordIndex, indexes.slotIndex, selected);
-            effect.dataset.correction = selected ? selected.toLowerCase() : '';
-            effect.dataset.preserveOriginalLevel = selected ? 'false' : 'true';
-            updateEffectStatus(effect, nextStatus);
-
-            const suppressLevel = Boolean(selected);
-            const suppressedChanged = updateRecordLevelSuppressed(indexes.recordIndex, indexes.slotIndex, suppressLevel);
-            if (suppressLevel) {
-                effect.dataset.levelOptionsBaseJson = JSON.stringify([]);
-            } else {
-                const baseString = effect.dataset.levelOptionsBase || '';
-                const restored = baseString ? sanitizeLevelList(baseString.split('|')) : [];
-                const restoredSorted = sortLevelsAscending(restored);
-                effect.dataset.levelOptionsBaseJson = JSON.stringify(restoredSorted);
-            }
-
-            let levelCleared = false;
-            const levelSelect = effect.querySelector('.level-input');
-            if (levelSelect) {
-                if (updateRecordLevelCorrection(indexes.recordIndex, indexes.slotIndex, '')) {
-                    levelCleared = true;
-                }
-                effect.dataset.levelCorrection = '';
-                effect.dataset.levelCorrectionValue = '';
-                const originalLevelValue = effect.dataset.levelOriginalValue || '';
-                const preserveOriginalLevel = effect.dataset.preserveOriginalLevel !== 'false';
-                const effectiveLevel = preserveOriginalLevel ? originalLevelValue : '';
-                effect.dataset.level = effectiveLevel ? effectiveLevel.toLowerCase() : '';
-                levelSelect.value = '';
-                updateLevelInputAvailability(levelSelect, []);
-                applyMasterLevelOptions(effect, levelSelect, selected);
-            }
-
-            refreshItemCaches(effect.closest('.item'));
-            if (!statusChanged && (correctionChanged || levelCleared || suppressedChanged)) {
-                storage.scheduleSave();
-            }
-            applyFilters();
-        };
-    }
-    function levelChangeHandler(effect, input) {
-        return () => {
-            const selected = input.value.trim();
-            const previous = effect.dataset.levelCorrectionValue || '';
-            if (selected === previous) {
-                return;
-            }
-            const indexes = getEffectIndexes(effect);
-            if (!indexes) {
-                return;
-            }
-
-            const levelChanged = updateRecordLevelCorrection(indexes.recordIndex, indexes.slotIndex, selected);
-            effect.dataset.levelCorrection = selected ? selected.toLowerCase() : '';
-            effect.dataset.levelCorrectionValue = selected;
-
-            const originalValue = effect.dataset.levelOriginalValue || '';
-            const finalLevel = selected || originalValue;
-            effect.dataset.level = finalLevel ? finalLevel.toLowerCase() : '';
-
-            updateLevelBadge(effect);
-            const item = effect.closest('.item');
-            if (item) {
-                refreshItemCaches(item);
-            }
-
-            const hasEffectCorrection = Boolean(effect.dataset.correction);
-            const currentStatus = effect.dataset.status || 'pending';
-            let nextStatus = currentStatus;
-            if (selected) {
-                nextStatus = 'corrected';
-            } else if (!hasEffectCorrection && currentStatus === 'corrected') {
-                nextStatus = 'pending';
-            }
-
-            let statusChanged = false;
-            if (nextStatus !== currentStatus) {
-                statusChanged = recordStatusChange(effect, nextStatus);
-                if (statusChanged) {
-                    updateEffectStatus(effect, nextStatus);
-                }
-            }
-
-            if (!statusChanged && levelChanged) {
-                storage.scheduleSave();
-            }
-
-            applyFilters();
-        };
-    }
-
-
-    function getEffectIndexes(effect) {
-        const recordIndex = Number(effect.dataset.recordIndex);
-        const slotIndex = Number(effect.dataset.slot);
-        if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
-            return null;
-        }
-        return { recordIndex, slotIndex };
-    }
 
     function updateRecordCorrection(recordIndex, slotIndex, value) {
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
@@ -2559,172 +2097,35 @@
         return false;
     }
 
-    function handleDuplicateToggle(button) {
-        if (!button) {
-            return;
+
+    function ensureLabelCoverage(records) {
+        let maxSlot = state.labelSymbols.length;
+        records.forEach((record) => {
+            if (!record || typeof record !== 'object') {
+                return;
+            }
+            Object.keys(record).forEach((key) => {
+                const match = /^Effect(\d+)$/.exec(key);
+                if (match) {
+                    const slot = parseInt(match[1], 10);
+                    if (!Number.isNaN(slot) && slot > maxSlot) {
+                        maxSlot = slot;
+                    }
+                }
+            });
+        });
+        for (let slot = state.labelSymbols.length + 1; slot <= maxSlot; slot += 1) {
+            state.labelSymbols.push(`Slot ${slot}`);
         }
-        const context = getItemContext(button);
-        if (!context) {
-            return;
-        }
-        const { item, record, recordIndex } = context;
-        const imageName = button.dataset.image || item.dataset.imageName || '';
-        const currentState = isRecordDuplicate(record) || item.dataset.duplicate === 'true';
-        const nextState = !currentState;
-        if (imageName) {
-            button.dataset.image = imageName;
-            duplicates.set(imageName, nextState);
-        }
-        const recordChanged = setRecordDuplicate(recordIndex, nextState);
-        updateDuplicateVisuals(item, nextState);
-        if (recordChanged) {
-            storage.scheduleSave();
-        }
+    }
+
+    function loadRecordsArray(data) {
+        const records = Array.isArray(data) ? data.slice() : data && typeof data === 'object' ? [data] : [];
+        ensureLabelCoverage(records);
+        state.records = records;
+        duplicates.prepare();
         buildGallery();
     }
-
-    function handleFavoriteToggle(button) {
-        if (!button) {
-            return;
-        }
-        const context = getItemContext(button);
-        if (!context) {
-            return;
-        }
-        const { item, record, recordIndex } = context;
-        const nextState = !isRecordFavorite(record);
-        const recordChanged = setRecordFavorite(recordIndex, nextState);
-        updateFavoriteVisuals(item, nextState);
-        if (recordChanged) {
-            storage.scheduleSave();
-        }
-        applyFilters();
-    }
-
-    function handleItemColorToggle(button) {
-        if (!button) {
-            return;
-        }
-        const context = getItemContext(button);
-        if (!context) {
-            return;
-        }
-        const { item, record, recordIndex } = context;
-        const targetColor = (button.value || '').trim().toLowerCase();
-        const currentColor = normalizeItemColor(record.ItemColor);
-        const nextColor = currentColor === targetColor ? '' : targetColor;
-        const recordChanged = setRecordItemColor(recordIndex, nextColor);
-        if (recordChanged) {
-            storage.scheduleSave();
-        }
-        applyItemColor(item, nextColor);
-        applyFilters();
-    }
-
-    function bindImage(img) {
-        if (!img) {
-            return;
-        }
-        img.addEventListener('click', () => openLightbox(img));
-        img.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' || event.key === ' ' || event.keyCode === 13 || event.keyCode === 32) {
-                event.preventDefault();
-                openLightbox(img);
-            }
-        });
-    }
-
-    function openLightbox(img) {
-        if (!img || !dom.lightbox || !dom.lightboxImg) {
-            return;
-        }
-        dom.lightboxImg.src = img.dataset.full || img.src;
-        dom.lightboxImg.alt = img.alt || '';
-        dom.lightbox.classList.add('show');
-        dom.lightbox.setAttribute('aria-hidden', 'false');
-        if (dom.lightboxClose) {
-            dom.lightboxClose.focus();
-        }
-    }
-
-    function closeLightbox() {
-        if (!dom.lightbox || !dom.lightboxImg) {
-            return;
-        }
-        dom.lightbox.classList.remove('show');
-        dom.lightbox.setAttribute('aria-hidden', 'true');
-        dom.lightboxImg.src = '';
-        dom.lightboxImg.alt = '';
-    }
-
-    function collectCsvHeaders(records) {
-        const seen = new Set();
-        records.forEach((record) => {
-            if (record && typeof record === 'object') {
-                Object.keys(record).forEach((key) => {
-                    if (!seen.has(key)) {
-                        seen.add(key);
-                    }
-                });
-            }
-        });
-
-        if (!seen.size) {
-            return [];
-        }
-
-        const headers = [];
-        if (seen.delete('Image')) {
-            headers.push('Image');
-        }
-        headers.push(...Array.from(seen).sort());
-        return headers;
-    }
-
-    function csvEscape(value) {
-        const text = value == null ? '' : String(value);
-        return '"' + text.replace(/"/g, '""') + '"';
-    }
-
-    function generateCsv(records) {
-        const headers = collectCsvHeaders(records);
-        if (!headers.length) {
-            return '';
-        }
-
-        const lines = [];
-        lines.push(headers.map(csvEscape).join(','));
-
-        records.forEach((record) => {
-            const row = headers.map((key) => {
-                if (!record || typeof record !== 'object') {
-                    return csvEscape('');
-                }
-                const value = Object.prototype.hasOwnProperty.call(record, key) ? record[key] : '';
-                return csvEscape(value);
-            });
-            lines.push(row.join(','));
-        });
-
-        return lines.join('\n');
-    }
-
-
-
-
-
-    async function handleCsvImportFile(file) {
-        if (!file) {
-            return;
-        }
-        setStorageStatus('ローカルファイルからのインポートは無効化されています。結果フォルダ内のCSVを直接編集してください。', true);
-        return;
-        if (dom.uploadCsvInput) {
-            dom.uploadCsvInput.value = '';
-        }
-    }
-
-
 
     async function loadInitialData() {
         const preferredName = getFileName(state.csvPath) || 'results.csv';
@@ -2741,22 +2142,24 @@
             console.warn('ブラウザからの読み込みに失敗しました:', error);
         }
 
-        const isMerged = datasetState.kind === 'merged' && Array.isArray(datasetState.sources) && datasetState.sources.length > 0;
+        const isMerged =
+            datasetState.kind === 'merged' &&
+            Array.isArray(datasetState.sources) &&
+            datasetState.sources.length > 0;
         if (isMerged) {
             try {
                 showStatus('読み込み中...', false);
                 const mergedRecords = await loadMergedRecords(datasetState.sources);
                 loadRecordsArray(mergedRecords);
                 clearStatus();
-        } catch (error) {
-            console.error('結合データセットのロードに失敗しました:', error);
-            showStatus(`結合データセットの読み込みに失敗しました: ${error.message || error}`, true);
-        }
-        return;
+            } catch (error) {
+                console.error('結合データセットのロードに失敗しました:', error);
+                showStatus(`結合データセットの読み込みに失敗しました: ${error.message || error}`, true);
+            }
+            return;
         }
 
         if (!state.csvPath) {
-            showStatus('CSVファイルのパスが指定されていません。', true);
             return;
         }
 
@@ -2776,157 +2179,17 @@
         }
     }
 
-    function loadRecordsArray(data) {
-        const records = Array.isArray(data) ? data.slice() : data && typeof data === 'object' ? [data] : [];
-        ensureLabelCoverage(records);
-        state.records = records;
-        duplicates.prepare();
-        buildGallery();
-    }
 
-    function attachEventHandlers() {
-        if (dom.datasetSelect) {
-            dom.datasetSelect.addEventListener('change', (event) => {
-                const value = Number.parseInt(event.target.value, 10);
-                if (Number.isNaN(value)) {
-                    return;
-                }
-                void switchDataset(value);
-            });
+    function joinPath(base, leaf) {
+        if (!leaf) {
+            return base || '';
         }
-
-        dom.gallery.addEventListener('click', (event) => {
-            const duplicateButton = event.target.closest('.duplicate-toggle');
-            if (duplicateButton) {
-                event.preventDefault();
-                handleDuplicateToggle(duplicateButton);
-                return;
-            }
-
-            const favoriteButton = event.target.closest('.favorite-toggle');
-            if (favoriteButton) {
-                event.preventDefault();
-                handleFavoriteToggle(favoriteButton);
-                return;
-            }
-
-            const colorSelect = event.target.closest('.item-color-select');
-            if (colorSelect) {
-                event.preventDefault();
-                handleItemColorToggle(colorSelect);
-                return;
-            }
-
-            const button = event.target.closest('.review-button');
-            if (!button) {
-                return;
-            }
-            const effect = button.closest('.effect');
-            if (!effect) {
-                return;
-            }
-            const item = effect.closest('.item');
-            const current = effect.dataset.status || 'pending';
-            const targetValue = button.dataset.value || 'pass';
-            const next = current === targetValue ? 'pending' : targetValue;
-            updateEffectStatus(effect, next);
-            const statusChanged = recordStatusChange(effect, next);
-            if (next === 'pass') {
-                const indexes = getEffectIndexes(effect);
-                if (indexes) {
-                    const correctionChanged = updateRecordCorrection(indexes.recordIndex, indexes.slotIndex, '');
-                    let levelChanged = updateRecordLevelCorrection(indexes.recordIndex, indexes.slotIndex, '');
-                    effect.dataset.correction = '';
-                    effect.dataset.levelCorrection = '';
-                    effect.dataset.levelCorrectionValue = '';
-                    effect.dataset.preserveOriginalLevel = 'true';
-                    const originalLevelValue = effect.dataset.levelOriginalValue || '';
-                    effect.dataset.level = originalLevelValue ? originalLevelValue.toLowerCase() : '';
-
-                    const baseString = effect.dataset.levelOptionsBase || '';
-                    const restoredBase = baseString ? sanitizeLevelList(baseString.split('|')) : [];
-                    const restoredBaseSorted = sortLevelsAscending(restoredBase);
-                    effect.dataset.levelOptionsBaseJson = JSON.stringify(restoredBaseSorted);
-
-                    const input = effect.querySelector('.correction-input');
-                    if (input) {
-                        const predictionDefault = effect.dataset.predictionValue || '';
-                        const replacement = createCorrectionInput('', predictionDefault);
-                        input.replaceWith(replacement);
-                        replacement.addEventListener('change', correctionChangeHandler(effect, replacement));
-                    }
-
-                    const suppressRecordChanged = updateRecordLevelSuppressed(indexes.recordIndex, indexes.slotIndex, false);
-
-                    const levelInput = effect.querySelector('.level-input');
-                    if (levelInput) {
-                        levelInput.value = '';
-                        rebuildLevelSelectOptions(effect, levelInput);
-                    }
-                    setCorrectionLevelCandidates(effect, []);
-                    updateLevelBadge(effect);
-
-                    if (!statusChanged && (correctionChanged || levelChanged || suppressRecordChanged)) {
-                        storage.scheduleSave();
-                    }
-                }
-            }
-            if (item) {
-                refreshItemCaches(item);
-            }
-            applyFilters();
-        });
-
-        if (dom.searchInput) {
-            dom.searchInput.addEventListener('input', applyFilters);
+        if (!base) {
+            return leaf;
         }
-        if (dom.filterSelect) {
-            dom.filterSelect.addEventListener('change', applyFilters);
-        }
-        if (dom.colorFilter) {
-            dom.colorFilter.addEventListener('change', applyFilters);
-        }
-        if (dom.showDuplicatesToggle) {
-            dom.showDuplicatesToggle.addEventListener('change', () => {
-                buildGallery();
-            });
-        }
-        if (dom.showOcrToggle) {
-            dom.showOcrToggle.addEventListener('change', () => {
-                setOcrVisibility(getOcrToggleState());
-            });
-        }
-        if (dom.downloadCsvButton) {
-            dom.downloadCsvButton.addEventListener('click', handleCsvExport);
-        }
-        if (dom.uploadCsvButton && dom.uploadCsvInput) {
-            dom.uploadCsvButton.addEventListener('click', () => {
-                dom.uploadCsvInput.value = '';
-                dom.uploadCsvInput.click();
-            });
-            dom.uploadCsvInput.addEventListener('change', () => {
-                const files = dom.uploadCsvInput.files || [];
-                const file = files.length ? files[0] : null;
-                if (file) {
-                    void handleCsvImportFile(file);
-                }
-            });
-        }
-        if (dom.lightboxClose) {
-            dom.lightboxClose.addEventListener('click', closeLightbox);
-        }
-        if (dom.lightbox) {
-            dom.lightbox.addEventListener('click', (event) => {
-                if (event.target === dom.lightbox) {
-                    closeLightbox();
-                }
-            });
-        }
-        document.addEventListener('keydown', (event) => {
-            if ((event.key === 'Escape' || event.keyCode === 27) && dom.lightbox && dom.lightbox.classList.contains('show')) {
-                closeLightbox();
-            }
-        });
+        const cleanBase = base.replace(/[\/]+$/, '');
+        const cleanLeaf = leaf.replace(/^[\/]+/, '');
+        return `${cleanBase}/${cleanLeaf}`;
     }
 
     function getFileName(path) {
@@ -2935,30 +2198,6 @@
         }
         const parts = path.split(/[\\/]/);
         return parts[parts.length - 1] || '';
-    }
-
-    function handleCsvExport() {
-        if (!state.records.length) {
-            setStorageStatus('エクスポート可能なデータがありません。', true);
-            return;
-        }
-
-        const csvText = generateCsv(state.records);
-        if (!csvText) {
-            setStorageStatus('エクスポート失敗: CSVを生成できませんでした。', true);
-            return;
-        }
-
-        const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = csvFileName();
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        setStorageStatus('CSVをダウンロードしました。', false);
     }
 
     function createDuplicateManager(getResultsPath) {

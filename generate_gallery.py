@@ -25,7 +25,9 @@ ADDITIONAL_GALLERY_SCRIPTS = [
     "gallery/dataset/manager.js",
     "gallery/storage/utils.js",
     "gallery/app/controller.js",
-    "gallery/render/galleryView.js"
+    "gallery/render/effectFactory.js",
+    "gallery/render/galleryView.js",
+    "gallery/events/galleryEvents.js"
 ]
 
 

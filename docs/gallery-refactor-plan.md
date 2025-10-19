@@ -19,32 +19,32 @@
 - [x] ステップ4: DOM ユーティリティと CSV/保存処理を外部モジュール (`utils/`, `storage/`) に切り出し。
 - [x] ステップ5: 状態ストア・データセット切替をモジュール (`state/store.js`, `dataset/manager.js`) に分離。
 - [x] ステップ6: アプリ初期化シーケンスを `app/controller.js` へ分離し、`gallery.js` から呼び出し。
+- [x] ステップ7: 描画ファクトリ (`render/effectFactory.js`, `render/galleryView.js`) とイベントレイヤ (`events/galleryEvents.js`) を分離し、テンプレート・ビルドスクリプト・テストに反映。Playwright テストでコンソールエラー検知とスクリーンショット検証を実装。
 
 ### 次のステップ
-1. **初期化フロー・モジュール構造の下準備**（現在のステップ）  
-   - 設計ドキュメント整備（本資料）  
-   - ビルド／読み込み方法の確認（`viewer_server.py` のテンプレート読み込みを調査）  
+1. **初期化フロー・モジュール構造の下準備**  
+   - ビルド／読み込み方法の確認（`viewer_server.py` のテンプレート読み込みを調査）【済】  
+   - 新モジュールを `generate_gallery.py` / `serve_fixture.py` / テンプレートへ反映【済】  
 2. **ギャラリー描画の分割（`createItem` 周辺）**  
    - DOM 生成と状態同期を別関数へ分け、`render/` 配下を整備。  
    - 可能であれば `DocumentFragment` の組み立てを専用モジュールへ移す。  
-3. **効果表示の分割（`createEffect` 周辺）**  
-   - レベルバッジ／補正入力など UI 部品の生成とイベント取り回しを整理。  
-   - ステータス更新ロジックを純粋関数として抽出しテスト対象にする。  
-4. **共通ユーティリティの抽出**  
+3. **効果表示のさらなる最適化**  
+   - `effectFactory` で抽出済みのロジックを部品単位で整理し、UI 更新と状態変換を分離。  
+   - テストを追加し、効果スロット追加時の回帰を防止。  
+4. **共通ユーティリティの追加整理**  
    - DOM 操作・正規化ロジック・CSV パースなどを `utils/` へ移動。  
    - 重複コードを統合しテスト追加。  
 5. **状態／データセット／永続化レイヤの独立**  
    - `state` を用途別に分割し、イベントハンドラから直接 `state` を操作しない API を提供。  
    - データセット切替や保存処理を別モジュールから呼び出す形に改修。  
 6. **最終統合・エントリポイントの刷新**  
-   - `index.js` で各モジュールを組み合わせ、`<script type="module">` で読み込むようテンプレート更新。  
+   - `index.js` で各モジュールを組み合わせ、`<script type='module'>` で読み込むようテンプレート更新。  
    - 回帰テスト（ブラウザ UI 動作・CSV 入出力・レビュー保存）を実施。
 
 ### 直近のタスク
-1. 新設モジュールに対するユニットテスト／スナップショットテストを追加し、回帰防止策を整備する。
-2. `buildGallery`〜`createItem` を `render/galleryView.js`（既存 or 新設）へ移動し、`{ state, datasetState, dom, duplicates, favoriteFlags }` などの依存を引数で受け取る純粋なファクトリにする。
-3. `createEffect` 周辺とレベル補助関数を `render/effectFactory.js` として独立させ、`sanitizeLevelList` / `sortLevelsAscending` / `applyMasterLevelOptions` を外部注入する設計に整える。
-4. `attachEventHandlers` と個別ハンドラを `events/galleryEvents.js` へ移し、`switchDataset` / `recordStatusChange` / `updateRecordCorrection` などのコールバックを DI することでテスト容易性と責務分離を実現する。
+1. effectFactory/events モジュールのテスト拡充と既存テストの維持管理を継続。
+2. `buildGallery`〜`createItem` の純化を進め、描画ファクトリ内の責務分離とテスト追加を検討。
+3. 既存 `gallery.js` に残るイベント／描画ロジックを段階的に分割し、`render/`・`events/` へ集約。
 
 ## 設計ポリシー
 ### 基本方針
@@ -106,21 +106,12 @@
 - `templates/gallery.js:342` 以降の DOM / データフォールバックは `window.galleryDomUtils` / `window.galleryDataUtils` が未登録の場合に備えているが、モジュール化後は依存を明示して注入する構造に切り替えられる。
 
 ## テスト戦略
-### 基本方針
-- 詳細な実行手順や推奨コマンドは `docs/testing-guide.md` に集約しているため、常に同ドキュメントを参照する。
-- モジュール分割に合わせてテスト階層を維持し、ユニットテスト／統合テスト／ブラウザテストの責務を明確に切り分ける。
-
-### ユニットテスト
-- 新設モジュールは `tests/` 配下から直接 import 可能な構成にし、`pytest` で自動化する（詳細手順: `docs/testing-guide.md` の「Python ユニットテスト」節）。
-- 特に以下の純粋ロジックを対象にケースを追加する。
-  - データセット解決（例: `normalizeDatasetEntry`）。
-  - 文字列正規化やレベル候補処理。
-  - ステータス更新／補正値の適用。
-- Node 側の補助モジュールは `node --test` ベースのテストを維持し、必要に応じて `tests/js/gallery_modules.test.mjs` を拡張する。
-
-### ブラウザテスト
-- UI の回帰確認は Playwright テストで実施し、各シナリオは `npm run test:browser` を通じて検証する（起動方法やフィクスチャ生成は `docs/testing-guide.md` を参照）。
-- 追加で必要な手動確認がある場合は README などに手順を追記し、Playwright テストで再現できる部分は自動化を優先する。
+- ロジック切り出し後に `tests/` 以下でユニットテストを追加。特に以下を対象とする。  
+  - データセット解決（`normalizeDatasetEntry` など）。  
+  - 文字列正規化／レベル候補処理。  
+  - ステータス更新／補正値の適用。  
+- DOM 組み立ては Jest + JSDOM などを導入可能な場合、簡易的なスナップショットテストを検討。
+- ブラウザ挙動は Playwright による自動テスト（`npm run test:browser`）で主要操作をカバーする。フィクスチャ生成とサーバ起動は `tests/browser/serve_fixture.py` が担い、CI（`.github/workflows/tests.yml`）でも同コマンドを実行する。手動確認が必要なシナリオは README などに追記して補足する。
 
 ## リスクと対応
 - **ES Modules 化による互換性**: HTML テンプレートとビルドパイプラインを確認し、`type="module"` への切り替えが可能か事前検証する。難しい場合はバンドラ導入（Vite 等）も検討。

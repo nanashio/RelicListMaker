@@ -33,7 +33,9 @@ def _build_fixture_tree(base_dir: Path) -> None:
         Path('gallery/dataset/manager.js'),
         Path('gallery/storage/utils.js'),
         Path('gallery/app/controller.js'),
-        Path('gallery/render/galleryView.js')
+        Path('gallery/render/effectFactory.js'),
+        Path('gallery/render/galleryView.js'),
+        Path('gallery/events/galleryEvents.js')
     ]
     for relative in additional_scripts:
         source = templates_dir / relative

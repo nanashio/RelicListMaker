@@ -16,6 +16,160 @@ function runScript(relativePath, contextOverrides = {}) {
   vm.runInThisContext(code, { filename: absolutePath });
 }
 
+class MockElement {
+  constructor(tagName = 'div', className = '', text = '') {
+    this.tagName = String(tagName).toUpperCase();
+    this._classes = new Set(
+      typeof className === 'string' && className.trim() ? className.trim().split(/\s+/) : []
+    );
+    this.className = Array.from(this._classes).join(' ');
+    this.textContent = text || '';
+    this.children = [];
+    this.parentNode = null;
+    this.dataset = {};
+    this.style = {};
+    this.attributes = {};
+    this.eventListeners = {};
+    this.value = '';
+    this.disabled = false;
+    this.id = '';
+    this.classList = {
+      add: (cls) => {
+        this._classes.add(cls);
+        this.className = Array.from(this._classes).join(' ');
+      },
+      remove: (cls) => {
+        this._classes.delete(cls);
+        this.className = Array.from(this._classes).join(' ');
+      },
+      toggle: (cls, force) => {
+        if (force === undefined) {
+          if (this._classes.has(cls)) {
+            this._classes.delete(cls);
+          } else {
+            this._classes.add(cls);
+          }
+        } else if (force) {
+          this._classes.add(cls);
+        } else {
+          this._classes.delete(cls);
+        }
+        this.className = Array.from(this._classes).join(' ');
+      },
+      contains: (cls) => this._classes.has(cls)
+    };
+  }
+
+  matches(selector) {
+    if (!selector) {
+      return false;
+    }
+    if (selector.startsWith('.')) {
+      return this._classes.has(selector.slice(1));
+    }
+    if (selector.startsWith('#')) {
+      return this.id === selector.slice(1);
+    }
+    return this.tagName === selector.toUpperCase();
+  }
+
+  appendChild(child) {
+    if (!child) {
+      return child;
+    }
+    if (child.parentNode) {
+      const index = child.parentNode.children.indexOf(child);
+      if (index >= 0) {
+        child.parentNode.children.splice(index, 1);
+      }
+    }
+    child.parentNode = this;
+    this.children.push(child);
+    return child;
+  }
+
+  replaceWith(replacement) {
+    if (!this.parentNode) {
+      return;
+    }
+    const siblings = this.parentNode.children;
+    const index = siblings.indexOf(this);
+    if (index >= 0) {
+      if (replacement.parentNode) {
+        const idx = replacement.parentNode.children.indexOf(replacement);
+        if (idx >= 0) {
+          replacement.parentNode.children.splice(idx, 1);
+        }
+      }
+      replacement.parentNode = this.parentNode;
+      siblings.splice(index, 1, replacement);
+    }
+    this.parentNode = null;
+  }
+
+  setAttribute(name, value) {
+    this.attributes[name] = value;
+    if (name === 'id') {
+      this.id = value;
+    }
+  }
+
+  addEventListener(type, handler) {
+    if (!this.eventListeners[type]) {
+      this.eventListeners[type] = [];
+    }
+    this.eventListeners[type].push(handler);
+  }
+
+  dispatchEvent(type, event) {
+    (this.eventListeners[type] || []).forEach((handler) => handler(event));
+  }
+
+  querySelector(selector) {
+    for (const child of this.children) {
+      if (child.matches(selector)) {
+        return child;
+      }
+      const nested = child.querySelector(selector);
+      if (nested) {
+        return nested;
+      }
+    }
+    return null;
+  }
+
+  querySelectorAll(selector, accumulator = []) {
+    for (const child of this.children) {
+      if (child.matches(selector)) {
+        accumulator.push(child);
+      }
+      child.querySelectorAll(selector, accumulator);
+    }
+    return accumulator;
+  }
+
+  closest(selector) {
+    let current = this;
+    while (current) {
+      if (current.matches(selector)) {
+        return current;
+      }
+      current = current.parentNode;
+    }
+    return null;
+  }
+}
+
+function createMockDocument() {
+  const body = new MockElement('body');
+  return {
+    createElement: (tagName) => new MockElement(tagName),
+    createDocumentFragment: () => new MockElement('#fragment'),
+    body,
+    addEventListener: () => {}
+  };
+}
+
 describe('gallery state store', () => {
   beforeEach(() => {
     global.window = {};
@@ -204,6 +358,23 @@ describe('gallery data utils', () => {
     const values = ['Flat', ' +2 ', '-1', 'A', '10', 'beta'];
     const sorted = dataUtils.sortLevelsAscending(values);
     assert.deepEqual(sorted, ['-1', ' +2 ', '10', 'A', 'beta', 'Flat']);
+  });
+  test('parseMasterOptions normalizes unique entries', () => {
+    const parsed = dataUtils.parseMasterOptions([' Foo ', { name: 'Bar' }, '', null, 'Foo']);
+    assert.deepEqual(parsed, ['Foo', 'Bar']);
+    const parsedFromString = dataUtils.parseMasterOptions('Alpha,Beta');
+    assert.deepEqual(parsedFromString, ['Alpha', 'Beta']);
+  });
+
+  test('parseMasterLevels creates normalized map', () => {
+    const source = {
+      ' EffectA ': ['＋１', '＋２', '＋２'],
+      effectB: 'low|high'
+    };
+    const result = dataUtils.parseMasterLevels(source);
+    assert.ok(result instanceof Map);
+    assert.deepEqual(result.get('effecta'), ['＋１', '＋２']);
+    assert.deepEqual(result.get('effectb'), ['high', 'low']);
   });
 });
 
@@ -659,5 +830,294 @@ describe('gallery app controller', () => {
 
     await controller.initialize();
     assert.deepEqual(steps, ['attach', 'prepare', 'setup', 'levels', 'options', 'switch']);
+  });
+});
+describe('gallery effect factory', () => {
+  let effectFactory;
+  let applyCalls;
+
+  beforeEach(() => {
+    global.window = {};
+    global.document = createMockDocument();
+    applyCalls = [];
+    runScript('templates/gallery/render/effectFactory.js');
+    const factory = global.window.galleryRenderFactory;
+    effectFactory = factory.createEffectFactory({
+      state: { showOcr: true, masterOptions: [], labelSymbols: ['Ⅰ'] },
+      datasetState: { kind: 'normal' },
+      masterDatalistId: 'master-id',
+      createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+      applyMasterLevelOptions: (...args) => applyCalls.push(args),
+      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+    });
+  });
+
+  afterEach(() => {
+    delete global.document;
+    delete global.window;
+  });
+
+  test('createEffect builds element and applies master options', () => {
+    const record = {
+      Effect1: 'Power',
+      RawText1: 'Raw',
+      Effect1Score: 95,
+      Effect1Level: 'L1',
+      Effect1LevelOptions: 'L1|L2',
+      Effect1LevelCorrection: '',
+      Effect1LevelSuppressed: '',
+      Effect1Correction: '',
+      Effect1Status: 'pending',
+      BaseImage: 'base.png'
+    };
+    const effect = effectFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0);
+    assert.ok(effect, 'effect should be created');
+    assert.equal(effect.dataset.slot, '1');
+    assert.equal(effect.dataset.predictionValue, 'Power');
+    assert.ok(applyCalls.length === 1, 'applyMasterLevelOptions should be invoked');
+    const [, levelInput, effectName, helpers] = applyCalls[0];
+    assert.equal(levelInput.tagName, 'SELECT');
+    assert.equal(effectName, 'Power');
+    assert.equal(typeof helpers.setCorrectionLevelCandidates, 'function');
+    assert.equal(typeof helpers.rebuildLevelSelectOptions, 'function');
+  });
+
+  test('updateEffectStatus updates dataset and button selection', () => {
+    const effect = new MockElement('div', 'effect pending');
+    const indicator = new MockElement('span', 'status-indicator');
+    const passButton = new MockElement('button', 'review-button');
+    passButton.dataset.value = 'pass';
+    effect.appendChild(indicator);
+    effect.appendChild(passButton);
+    effectFactory.updateEffectStatus(effect, 'pass');
+    assert.equal(effect.dataset.status, 'pass');
+    assert.equal(effect.classList.contains('pending'), false);
+    assert.equal(indicator.textContent, '確認済み');
+    assert.equal(passButton.classList.contains('selected'), true);
+  });
+});
+
+describe('gallery events', () => {
+  let galleryEvents;
+  let dom;
+  let duplicates;
+  let state;
+  let datasetState;
+
+  beforeEach(() => {
+    global.window = {};
+    global.document = createMockDocument();
+    state = { records: [] };
+    datasetState = { kind: 'normal' };
+    duplicates = {
+      setCalls: [],
+      set(name, value) {
+        this.setCalls.push([name, value]);
+        return true;
+      },
+      prepare: () => {}
+    };
+    dom = {
+      datasetSelect: null,
+      gallery: new MockElement('div', 'gallery'),
+      searchInput: null,
+      filterSelect: null,
+      colorFilter: null,
+      showDuplicatesToggle: null,
+      showOcrToggle: null,
+      downloadCsvButton: null,
+      uploadCsvButton: null,
+      uploadCsvInput: null,
+      lightboxClose: null,
+      lightbox: new MockElement('div', 'lightbox'),
+      lightboxImg: new MockElement('img', 'lightbox-img')
+    };
+    dom.lightboxImg.src = '';
+    runScript('templates/gallery/events/galleryEvents.js');
+    galleryEvents = global.window.galleryEventsFactory.createGalleryEvents({
+      dom,
+      state,
+      datasetState,
+      duplicates,
+      showStatus: () => {},
+      clearStatus: () => {},
+      setStorageStatus: () => {},
+      parseCsvRecords: () => [],
+      loadRecordsArray: () => {},
+      generateCsv: () => '',
+      csvFileName: () => 'out.csv',
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+      updateEffectStatus: (effect, status) => {
+        effect.dataset.status = status;
+      },
+      setCorrectionLevelCandidates: (effect, candidates) => {
+        effect.dataset.candidates = JSON.stringify(candidates);
+        return candidates;
+      },
+      rebuildLevelSelectOptions: () => {},
+      createCorrectionInput: (value) => {
+        const input = new MockElement('input', 'correction-input');
+        input.value = value || '';
+        return input;
+      },
+      updateLevelBadge: () => {},
+      getEffectIndexes: (effect) => ({
+        recordIndex: Number(effect.dataset.recordIndex),
+        slotIndex: Number(effect.dataset.slot)
+      }),
+      updateInputValueAttribute: () => {},
+      updateLevelInputAvailability: () => {},
+      applyMasterLevelOptions: () => {}
+    });
+  });
+
+  afterEach(() => {
+    delete global.document;
+    delete global.window;
+  });
+
+  test('bindImage registers click handler that toggles lightbox', () => {
+    const img = new MockElement('img');
+    img.dataset.full = 'full.png';
+    galleryEvents.bindImage(img);
+    assert.equal(Array.isArray(img.eventListeners.click), true);
+    assert.equal(img.eventListeners.click.length > 0, true);
+    img.eventListeners.click[0]({});
+    assert.equal(dom.lightbox.classList.contains('show'), true);
+    assert.equal(dom.lightboxImg.src, 'full.png');
+  });
+
+  test('duplicate toggle triggers record update and save scheduling', () => {
+    const record = {};
+    const item = new MockElement('div', 'item');
+    const effect = new MockElement('div', 'effect');
+    effect.dataset.recordIndex = '0';
+    effect.dataset.slot = '1';
+    item.appendChild(effect);
+    const duplicateButton = new MockElement('button', 'duplicate-toggle');
+    duplicateButton.dataset.image = 'image.png';
+    effect.appendChild(duplicateButton);
+
+    const buildGalleryCalls = [];
+    const updateDuplicateVisualsCalls = [];
+    const scheduleSaveCalls = [];
+
+    galleryEvents.attachEventHandlers({
+      switchDataset: () => {},
+      buildGallery: () => buildGalleryCalls.push(null),
+      applyFilters: () => {},
+      setOcrVisibility: () => {},
+      getOcrToggleState: () => false,
+      getItemContext: () => ({ item, record, recordIndex: 0 }),
+      updateFavoriteVisuals: () => {},
+      updateDuplicateVisuals: (target, state) => updateDuplicateVisualsCalls.push([target, state]),
+      applyItemColor: () => {},
+      normalizeItemColor: (value) => value || '',
+      refreshItemCaches: () => {},
+      getRecordByIndex: () => record,
+      isRecordDuplicate: () => Boolean(record.Duplicate),
+      isRecordFavorite: () => false,
+      setRecordDuplicate: (index, next) => {
+        record.Duplicate = next ? 'true' : '';
+        return true;
+      },
+      setRecordFavorite: () => false,
+      setRecordItemColor: () => false,
+      recordStatusChange: () => false,
+      updateRecordCorrection: () => false,
+      updateRecordLevelCorrection: () => false,
+      updateRecordLevelSuppressed: () => false,
+      scheduleSave: () => scheduleSaveCalls.push(null)
+    });
+
+    const clickHandlers = dom.gallery.eventListeners.click || [];
+    assert.equal(clickHandlers.length > 0, true);
+    const event = {
+      target: duplicateButton,
+      preventDefault: () => {
+        event.prevented = true;
+      }
+    };
+    clickHandlers[0](event);
+    assert.equal(event.prevented, true);
+    assert.equal(record.Duplicate, 'true');
+    assert.deepEqual(updateDuplicateVisualsCalls, [[item, true]]);
+    assert.equal(buildGalleryCalls.length, 1);
+    assert.equal(scheduleSaveCalls.length, 1);
+    assert.deepEqual(duplicates.setCalls, [['image.png', true]]);
+  });
+
+  test('correction input change updates record state', () => {
+    const record = {};
+    const item = new MockElement('div', 'item');
+    const effect = new MockElement('div', 'effect');
+    effect.dataset.recordIndex = '0';
+    effect.dataset.slot = '1';
+    effect.dataset.levelOriginalValue = 'Base';
+    effect.dataset.levelOptionsBase = 'Base|Alt';
+    effect.dataset.levelOptionsBaseJson = JSON.stringify(['Base', 'Alt']);
+    effect.dataset.predictionValue = 'Skill';
+    item.appendChild(effect);
+    const correctionInput = new MockElement('input', 'correction-input');
+    correctionInput.value = 'NewValue';
+    effect.appendChild(correctionInput);
+    const levelInput = new MockElement('select', 'level-input');
+    effect.appendChild(levelInput);
+
+    const recordStatusCalls = [];
+    const updateRecordCorrectionCalls = [];
+    const updateLevelSuppressedCalls = [];
+    const scheduleSaveCalls = [];
+    const refreshCalls = [];
+    const applyFilterCalls = [];
+
+    galleryEvents.attachEventHandlers({
+      switchDataset: () => {},
+      buildGallery: () => {},
+      applyFilters: () => applyFilterCalls.push(null),
+      setOcrVisibility: () => {},
+      getOcrToggleState: () => false,
+      getItemContext: () => ({ item, record, recordIndex: 0 }),
+      updateFavoriteVisuals: () => {},
+      updateDuplicateVisuals: () => {},
+      applyItemColor: () => {},
+      normalizeItemColor: (value) => value || '',
+      refreshItemCaches: () => refreshCalls.push(null),
+      getRecordByIndex: () => record,
+      isRecordDuplicate: () => false,
+      isRecordFavorite: () => false,
+      setRecordDuplicate: () => false,
+      setRecordFavorite: () => false,
+      setRecordItemColor: () => false,
+      recordStatusChange: (effectEl, status) => {
+        recordStatusCalls.push(status);
+        return false;
+      },
+      updateRecordCorrection: (idx, slot, value) => {
+        updateRecordCorrectionCalls.push(value);
+        return true;
+      },
+      updateRecordLevelCorrection: () => false,
+      updateRecordLevelSuppressed: (idx, slot, suppress) => {
+        updateLevelSuppressedCalls.push(suppress);
+        return true;
+      },
+      scheduleSave: () => scheduleSaveCalls.push(null)
+    });
+
+    const changeHandlers = dom.gallery.eventListeners.change || [];
+    assert.equal(changeHandlers.length > 0, true);
+    changeHandlers[0]({ target: correctionInput });
+    assert.deepEqual(recordStatusCalls, ['corrected']);
+    assert.deepEqual(updateRecordCorrectionCalls, ['NewValue']);
+    assert.deepEqual(updateLevelSuppressedCalls, [true]);
+    assert.equal(scheduleSaveCalls.length, 1);
+    assert.equal(refreshCalls.length, 1);
+    assert.equal(applyFilterCalls.length, 1);
+    assert.equal(effect.dataset.correction, 'newvalue');
   });
 });
