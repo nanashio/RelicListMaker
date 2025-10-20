@@ -142,6 +142,13 @@
         }
 
         function attachEventHandlers(handlers = {}) {
+            if (dom.gallery && dom.gallery.dataset.eventsBound === 'true') {
+                return;
+            }
+            if (dom.gallery) {
+                dom.gallery.dataset.eventsBound = 'true';
+            }
+
             const {
                 switchDataset = () => {},
                 buildGallery = () => {},

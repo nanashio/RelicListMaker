@@ -413,16 +413,33 @@ describe('gallery view', () => {
       set(value) {
         textContentValue = value == null ? '' : String(value);
         element.children.length = 0;
+        element.firstChild = null;
       }
     });
 
-    element.tagName = tag.toUpperCase();
+    Object.defineProperty(element, 'id', {
+      get() {
+        return element.attributes.id || '';
+      },
+      set(value) {
+        if (value == null) {
+          delete element.attributes.id;
+        } else {
+          element.attributes.id = String(value);
+        }
+      }
+    });
+
+    element.tagName = String(tag || '').toUpperCase();
     element.children = [];
     element.dataset = {};
     element.style = {};
     element.attributes = {};
     element.parentNode = null;
     element.nodeType = 1;
+    element.isConnected = false;
+    element.firstChild = null;
+    element.ownerDocument = null;
 
     element.classList = {
       add(className) {
@@ -461,24 +478,72 @@ describe('gallery view', () => {
 
     element.setAttribute = (name, value) => {
       element.attributes[name] = String(value);
+      if (name === 'id') {
+        element.id = value;
+      }
     };
 
     element.getAttribute = (name) => element.attributes[name];
+
+    const attachChild = (child, index = element.children.length) => {
+      if (!child) {
+        return null;
+      }
+      if (child.parentNode && child.parentNode !== element && typeof child.parentNode.removeChild === 'function') {
+        child.parentNode.removeChild(child);
+      }
+      child.parentNode = element;
+      child.isConnected = element.isConnected;
+      element.children.splice(index, 0, child);
+      element.firstChild = element.children[0] || null;
+      return child;
+    };
 
     element.appendChild = (child) => {
       if (!child) {
         return null;
       }
-      if (child.nodeType === 11) {
+      if (child.nodeType === 11 && Array.isArray(child.childNodes)) {
         child.childNodes.slice().forEach((node) => {
-          element.appendChild(node);
+          attachChild(node);
         });
         child.childNodes.length = 0;
+        child.firstChild = null;
         return child;
       }
-      child.parentNode = element;
-      element.children.push(child);
+      return attachChild(child);
+    };
+
+    element.insertBefore = (child, reference) => {
+      if (!child) {
+        return null;
+      }
+      if (!reference) {
+        return element.appendChild(child);
+      }
+      const index = element.children.indexOf(reference);
+      if (index === -1) {
+        return element.appendChild(child);
+      }
+      return attachChild(child, index);
+    };
+
+    element.removeChild = (child) => {
+      const index = element.children.indexOf(child);
+      if (index === -1) {
+        return null;
+      }
+      element.children.splice(index, 1);
+      child.parentNode = null;
+      child.isConnected = false;
+      element.firstChild = element.children[0] || null;
       return child;
+    };
+
+    element.remove = () => {
+      if (element.parentNode && typeof element.parentNode.removeChild === 'function') {
+        element.parentNode.removeChild(element);
+      }
     };
 
     element.querySelectorAll = (selector) => {
@@ -486,17 +551,24 @@ describe('gallery view', () => {
       if (!selectors.length) {
         return [];
       }
+      const matchers = selectors.map((sel) => {
+        if (sel.startsWith('.')) {
+          const className = sel.slice(1);
+          return (node) => node.classList && node.classList.contains(className);
+        }
+        if (sel.startsWith('#')) {
+          const id = sel.slice(1);
+          return (node) => (node.attributes && node.attributes.id === id) || node.id === id;
+        }
+        const tagName = sel.toUpperCase();
+        return (node) => node.tagName === tagName;
+      });
       const results = [];
       const traverse = (node) => {
         node.children.forEach((child) => {
-          selectors.forEach((sel) => {
-            if (sel.startsWith('.')) {
-              const className = sel.slice(1);
-              if (child.classList.contains && child.classList.contains(className)) {
-                results.push(child);
-              }
-            }
-          });
+          if (matchers.some((fn) => fn(child))) {
+            results.push(child);
+          }
           if (child.children && child.children.length) {
             traverse(child);
           }
@@ -527,19 +599,86 @@ describe('gallery view', () => {
   }
 
   function createDocumentStub() {
-    return {
-      createElement: (tag) => createStubElement(tag),
-      createDocumentFragment: () => ({
-        nodeType: 11,
-        childNodes: [],
-        appendChild(node) {
-          this.childNodes.push(node);
+    const docObject = {};
+
+    const createElement = (tag) => {
+      const element = createStubElement(tag);
+      element.ownerDocument = docObject;
+      return element;
+    };
+
+    const createDocumentFragment = () => ({
+      nodeType: 11,
+      childNodes: [],
+      firstChild: null,
+      appendChild(node) {
+        if (!node) {
+          return null;
+        }
+        if (node.nodeType === 11 && Array.isArray(node.childNodes)) {
+          node.childNodes.slice().forEach((child) => this.appendChild(child));
+          node.childNodes.length = 0;
+          node.firstChild = null;
           return node;
         }
-      }),
-      querySelector: () => null,
-      getElementById: () => null
+        this.childNodes.push(node);
+        if (!this.firstChild) {
+          this.firstChild = node;
+        }
+        return node;
+      }
+    });
+
+    const body = createElement('body');
+    body.isConnected = true;
+
+    const collectMatches = (selector) => {
+      if (!selector) {
+        return [];
+      }
+      const selectors = selector.split(',').map((part) => part.trim()).filter(Boolean);
+      if (!selectors.length) {
+        return [];
+      }
+      const matchers = selectors.map((sel) => {
+        if (sel.startsWith('.')) {
+          const className = sel.slice(1);
+          return (node) => node.classList && node.classList.contains(className);
+        }
+        if (sel.startsWith('#')) {
+          const id = sel.slice(1);
+          return (node) => (node.attributes && node.attributes.id === id) || node.id === id;
+        }
+        const tagName = sel.toUpperCase();
+        return (node) => node.tagName === tagName;
+      });
+      const results = [];
+      const traverse = (node) => {
+        node.children.forEach((child) => {
+          if (matchers.some((fn) => fn(child))) {
+            results.push(child);
+          }
+          if (child.children && child.children.length) {
+            traverse(child);
+          }
+        });
+      };
+      traverse(body);
+      return results;
     };
+
+    Object.assign(docObject, {
+      createElement,
+      createDocumentFragment,
+      querySelector: (selector) => collectMatches(selector)[0] || null,
+      querySelectorAll: (selector) => collectMatches(selector),
+      getElementById: (id) => collectMatches(`#${id}`)[0] || null,
+      body
+    });
+
+    body.ownerDocument = docObject;
+
+    return docObject;
   }
 
   function defaultCreateElement(tag, className, text) {
@@ -579,8 +718,13 @@ describe('gallery view', () => {
     };
     const datasetState = { kind: 'normal', list: [], activeIndex: 0 };
     const galleryElement = createStubElement('div');
+    global.document.body.appendChild(galleryElement);
+    const statusElement = createStubElement('div');
+    global.document.body.appendChild(statusElement);
     const dom = {
       gallery: galleryElement,
+      galleryStatus: statusElement,
+      summary: null,
       showDuplicatesToggle: { checked: false },
       showOcrToggle: { checked: false },
       searchInput: { value: '' },
@@ -601,7 +745,6 @@ describe('gallery view', () => {
         }
       }
     };
-    const summaryCalls = [];
     const statusCalls = [];
 
     const galleryView = galleryFactory.createGalleryView({
@@ -629,7 +772,8 @@ describe('gallery view', () => {
         if (!path) {
           return '';
         }
-        const parts = String(path).split(/\\|\//);
+        const textValue = String(path);
+        const parts = textValue.split(/[\\/]/);
         return parts[parts.length - 1] || '';
       },
       showStatus: (message) => {
@@ -637,9 +781,6 @@ describe('gallery view', () => {
       },
       clearStatus: () => {
         statusCalls.push('clear');
-      },
-      updateSummary: () => {
-        summaryCalls.push('summary');
       },
       getRecordByIndex: (index) => state.records[index] || null,
       isRecordDuplicate: (record) => Boolean(record && record.Duplicate),
@@ -649,19 +790,24 @@ describe('gallery view', () => {
     galleryView.buildGallery();
     assert.equal(state.items.length, 1);
     assert.equal(dom.gallery.children.length, 1);
+    assert.ok(dom.summary, 'summary element should exist after initial build');
+    assert.equal(dom.summary.textContent, '全体 1 件 / 確認済み 0 件 / 未レビュー 1 件');
 
     dom.showDuplicatesToggle.checked = true;
     galleryView.buildGallery();
     assert.equal(state.items.length, 2);
     assert.equal(dom.gallery.children.length, 2);
+    assert.equal(dom.summary.textContent, '全体 2 件 / 確認済み 0 件 / 未レビュー 2 件');
 
     galleryView.applyFilters();
-    assert.ok(summaryCalls.length >= 1);
+    assert.equal(dom.summary.textContent, '全体 2 件 / 確認済み 0 件 / 未レビュー 2 件');
 
     galleryView.setOcrVisibility(true);
     assert.equal(state.showOcr, true);
     assert.equal(dom.showOcrToggle.checked, true);
+    assert.ok(statusCalls.includes('clear'), 'clearStatus should be invoked when items render');
   });
+
 });
 
 
@@ -898,6 +1044,90 @@ describe('gallery effect factory', () => {
     assert.equal(indicator.textContent, '確認済み');
     assert.equal(passButton.classList.contains('selected'), true);
   });
+
+  test('setCorrectionLevelCandidates sanitizes and stores candidates', () => {
+    const effect = new MockElement('div', 'effect');
+    const input = new MockElement('input', 'correction-input');
+    effect.appendChild(input);
+    const result = effectFactory.setCorrectionLevelCandidates(effect, [' 2 ', '', null, '1']);
+    assert.deepEqual(result, ['1', '2']);
+    assert.equal(input.dataset.levelCandidates, JSON.stringify(['1', '2']));
+  });
+
+  test('rebuildLevelSelectOptions merges base and extra options', () => {
+    const effect = new MockElement('div', 'effect');
+    effect.dataset.levelOriginalValue = 'Base';
+    effect.dataset.preserveOriginalLevel = 'true';
+    effect.dataset.levelOptionsBaseJson = JSON.stringify(['Base', 'Alt']);
+    const select = new MockElement('select', 'level-input');
+    effectFactory.rebuildLevelSelectOptions(effect, select, null, ['Extra']);
+    assert.equal(select.children.length, 4);
+    const optionValues = select.children.map((child) => child.textContent);
+    assert.deepEqual(optionValues, ['', 'Alt', 'Base', 'Extra']);
+    assert.equal(select.value, 'Base');
+    assert.equal(effect.dataset.levelOptionsDisplay, 'Alt|Base|Extra');
+    assert.equal(effect.dataset.levelOptions, 'alt|base|extra');
+  });
+
+  test('createCorrectionInput toggles availability based on master options', () => {
+    const disabledInput = effectFactory.createCorrectionInput('', 'Fallback');
+    assert.equal(disabledInput.disabled, true);
+    assert.equal(disabledInput.placeholder, 'マスターデータ未設定');
+
+    const customFactory = global.window.galleryRenderFactory.createEffectFactory({
+      state: { showOcr: true, masterOptions: ['Alpha'], labelSymbols: ['Ⅰ'] },
+      datasetState: { kind: 'normal' },
+      masterDatalistId: 'master-id',
+      createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+      applyMasterLevelOptions: () => {},
+      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+    });
+    const enabledInput = customFactory.createCorrectionInput('Chosen', 'Fallback');
+    assert.equal(enabledInput.disabled, false);
+    assert.equal(enabledInput.placeholder, 'master_relicsから選択');
+    assert.equal(enabledInput.attributes.list, 'master-id');
+    assert.equal(enabledInput.value, 'Chosen');
+  });
+
+  test('updateLevelBadge prioritizes correction and available options', () => {
+    const effect = new MockElement('div', 'effect');
+    const predictionLine = new MockElement('div', 'prediction');
+    effect.appendChild(predictionLine);
+    effect.dataset.levelOriginalValue = 'Base';
+    effect.dataset.preserveOriginalLevel = 'true';
+    effect.dataset.levelOptionsDisplay = 'Base|Alt';
+    effect.dataset.levelCorrectionValue = '';
+    effectFactory.updateLevelBadge(effect);
+    let badge = predictionLine.querySelector('.level-badge');
+    assert.ok(badge, 'badge should exist after initial render');
+    assert.equal(badge.textContent, 'Base');
+    assert.equal(badge.className.includes('level-badge--corrected'), false);
+
+    effect.dataset.levelCorrectionValue = 'Custom';
+    effectFactory.updateLevelBadge(effect);
+    badge = predictionLine.querySelector('.level-badge');
+    assert.equal(badge.textContent, 'Custom');
+    assert.ok(badge.className.includes('level-badge--corrected'));
+
+    effect.dataset.levelCorrectionValue = '';
+    effect.dataset.preserveOriginalLevel = 'false';
+    effect.dataset.levelOptionsDisplay = 'Alt|Beta';
+    effectFactory.updateLevelBadge(effect);
+    badge = predictionLine.querySelector('.level-badge');
+    assert.equal(badge.textContent, 'Alt');
+    assert.ok(badge.className.includes('level-badge--missing'));
+    assert.equal(badge.title, '候補: Alt / Beta');
+  });
+
+  test('parseLevelOptions normalizes string and array sources', () => {
+    assert.deepEqual(effectFactory.parseLevelOptions('A| B |'), ['A', 'B']);
+    assert.deepEqual(effectFactory.parseLevelOptions(['', 'C', null, 'D']), ['C', 'D']);
+    assert.deepEqual(effectFactory.parseLevelOptions(null), []);
+  });
+
 });
 
 describe('gallery events', () => {
@@ -1119,5 +1349,190 @@ describe('gallery events', () => {
     assert.equal(refreshCalls.length, 1);
     assert.equal(applyFilterCalls.length, 1);
     assert.equal(effect.dataset.correction, 'newvalue');
+
+  });
+
+  test('favorite toggle updates record and triggers save', () => {
+    const record = {};
+    const item = new MockElement('div', 'item');
+    const favoriteButton = new MockElement('button', 'favorite-toggle');
+    item.appendChild(favoriteButton);
+    dom.gallery.appendChild(item);
+
+    const updateFavoriteVisualsCalls = [];
+    const applyFilterCalls = [];
+    const scheduleSaveCalls = [];
+
+    galleryEvents.attachEventHandlers({
+      switchDataset: () => {},
+      buildGallery: () => {},
+      applyFilters: () => applyFilterCalls.push(null),
+      setOcrVisibility: () => {},
+      getOcrToggleState: () => false,
+      getItemContext: () => ({ item, record, recordIndex: 0 }),
+      updateFavoriteVisuals: (target, state) => updateFavoriteVisualsCalls.push([target, state]),
+      updateDuplicateVisuals: () => {},
+      applyItemColor: () => {},
+      normalizeItemColor: (value) => value || '',
+      refreshItemCaches: () => {},
+      getRecordByIndex: () => record,
+      isRecordDuplicate: () => false,
+      isRecordFavorite: () => Boolean(record.Favorite),
+      setRecordDuplicate: () => false,
+      setRecordFavorite: (index, next) => {
+        record.Favorite = next ? 'true' : '';
+        return true;
+      },
+      setRecordItemColor: () => false,
+      recordStatusChange: () => false,
+      updateRecordCorrection: () => false,
+      updateRecordLevelCorrection: () => false,
+      updateRecordLevelSuppressed: () => false,
+      scheduleSave: () => scheduleSaveCalls.push(null)
+    });
+
+    const clickHandlers = dom.gallery.eventListeners.click || [];
+    assert.ok(clickHandlers.length > 0, 'click handler should be registered');
+    const event = {
+      target: favoriteButton,
+      preventDefault: () => {
+        event.prevented = true;
+      }
+    };
+    clickHandlers[0](event);
+    assert.equal(event.prevented, true);
+    assert.equal(record.Favorite, 'true');
+    assert.deepEqual(updateFavoriteVisualsCalls, [[item, true]]);
+    assert.equal(scheduleSaveCalls.length, 1);
+    assert.equal(applyFilterCalls.length, 1);
+  });
+
+  test('level change updates record correction and status', () => {
+    const record = {};
+    const item = new MockElement('div', 'item');
+    const effect = new MockElement('div', 'effect');
+    effect.dataset.recordIndex = '0';
+    effect.dataset.slot = '1';
+    effect.dataset.status = 'pending';
+    effect.dataset.correction = '';
+    effect.dataset.levelOriginalValue = 'Base';
+    effect.dataset.levelOptionsDisplay = 'Base|Alt';
+    item.appendChild(effect);
+    dom.gallery.appendChild(item);
+
+    const levelInput = new MockElement('select', 'level-input');
+    levelInput.value = 'High';
+    effect.appendChild(levelInput);
+
+    const statusChanges = [];
+    const levelCorrectionCalls = [];
+    const scheduleSaveCalls = [];
+    const refreshCalls = [];
+    const applyFilterCalls = [];
+
+    galleryEvents.attachEventHandlers({
+      switchDataset: () => {},
+      buildGallery: () => {},
+      applyFilters: () => applyFilterCalls.push(null),
+      setOcrVisibility: () => {},
+      getOcrToggleState: () => false,
+      getItemContext: () => ({ item, record, recordIndex: 0 }),
+      updateFavoriteVisuals: () => {},
+      updateDuplicateVisuals: () => {},
+      applyItemColor: () => {},
+      normalizeItemColor: (value) => value || '',
+      refreshItemCaches: () => refreshCalls.push(null),
+      getRecordByIndex: () => record,
+      isRecordDuplicate: () => false,
+      isRecordFavorite: () => false,
+      setRecordDuplicate: () => false,
+      setRecordFavorite: () => false,
+      setRecordItemColor: () => false,
+      recordStatusChange: (effectElement, status) => {
+        statusChanges.push(status);
+        effectElement.dataset.status = status;
+        return true;
+      },
+      updateRecordCorrection: () => false,
+      updateRecordLevelCorrection: (index, slot, value) => {
+        levelCorrectionCalls.push(value);
+        return true;
+      },
+      updateRecordLevelSuppressed: () => false,
+      scheduleSave: () => scheduleSaveCalls.push(null)
+    });
+
+    const changeHandlers = dom.gallery.eventListeners.change || [];
+    assert.ok(changeHandlers.length > 0, 'change handler should be registered');
+    changeHandlers[0]({ target: levelInput });
+
+    assert.deepEqual(levelCorrectionCalls, ['High']);
+    assert.deepEqual(statusChanges, ['corrected']);
+    assert.equal(effect.dataset.status, 'corrected');
+    assert.equal(effect.dataset.levelCorrectionValue, 'High');
+    assert.equal(effect.dataset.levelCorrection, 'high');
+    assert.equal(effect.dataset.level, 'high');
+    assert.equal(scheduleSaveCalls.length, 0);
+    assert.equal(refreshCalls.length, 1);
+    assert.equal(applyFilterCalls.length, 1);
+  });
+
+  test('attachEventHandlers only binds listeners once', () => {
+    const record = {};
+    state.records = [record];
+    const item = new MockElement('div', 'item');
+    item.dataset.recordIndex = '0';
+    const effect = new MockElement('div', 'effect pending');
+    effect.dataset.recordIndex = '0';
+    effect.dataset.slot = '1';
+    effect.dataset.status = 'pending';
+    const passButton = new MockElement('button', 'review-button pass');
+    passButton.dataset.value = 'pass';
+    effect.appendChild(passButton);
+    item.appendChild(effect);
+    dom.gallery.appendChild(item);
+
+    const statusCalls = [];
+    const recordStatusCalls = [];
+    const handlers = {
+      switchDataset: () => {},
+      buildGallery: () => {},
+      applyFilters: () => {},
+      setOcrVisibility: () => {},
+      getOcrToggleState: () => false,
+      getItemContext: () => ({ item, record, recordIndex: 0 }),
+      updateFavoriteVisuals: () => {},
+      updateDuplicateVisuals: () => {},
+      applyItemColor: () => {},
+      normalizeItemColor: () => '',
+      refreshItemCaches: () => {},
+      getRecordByIndex: () => record,
+      isRecordDuplicate: () => false,
+      isRecordFavorite: () => false,
+      setRecordDuplicate: () => false,
+      setRecordFavorite: () => false,
+      setRecordItemColor: () => false,
+      recordStatusChange: (_effect, status) => {
+        recordStatusCalls.push(status);
+        record[`Effect1Status`] = status;
+        return true;
+      },
+      updateRecordCorrection: () => false,
+      updateRecordLevelCorrection: () => false,
+      updateRecordLevelSuppressed: () => false,
+      scheduleSave: () => statusCalls.push('save')
+    };
+
+    galleryEvents.attachEventHandlers(handlers);
+    assert.equal(dom.gallery.dataset.eventsBound, 'true');
+
+    galleryEvents.attachEventHandlers(handlers);
+
+    const clickHandlers = dom.gallery.eventListeners.click || [];
+    assert.equal(clickHandlers.length, 1);
+
+    clickHandlers[0]({ target: passButton, preventDefault: () => {} });
+    assert.equal(effect.dataset.status, 'pass');
+    assert.deepEqual(recordStatusCalls, ['pass']);
   });
 });

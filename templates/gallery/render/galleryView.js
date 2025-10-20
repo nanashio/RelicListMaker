@@ -8,12 +8,15 @@
             itemColorOptions = [],
             createEffect,
             bindImage,
-            createElement,
+            createElement: createElementConfig,
+            createFragment: createFragmentConfig,
             joinPath,
             getFileName,
             showStatus = () => {},
             clearStatus = () => {},
-            updateSummary = () => {},
+            ensureDomElement: ensureDomElementConfig,
+            applyInlineStyles: applyInlineStylesConfig,
+            normalizeStatus: normalizeStatusConfig,
             getRecordByIndex,
             isRecordDuplicate,
             isRecordFavorite
@@ -27,9 +30,6 @@
         }
         if (typeof bindImage !== 'function') {
             throw new Error('createGalleryView: bindImage function is required');
-        }
-        if (typeof createElement !== 'function') {
-            throw new Error('createGalleryView: createElement helper is required');
         }
         if (typeof joinPath !== 'function' || typeof getFileName !== 'function') {
             throw new Error('createGalleryView: joinPath and getFileName helpers are required');
@@ -45,6 +45,205 @@
         }
 
         const colorOptions = Array.isArray(itemColorOptions) ? itemColorOptions.slice() : [];
+        const hasDocument = typeof document !== 'undefined' && document;
+
+        if (!hasDocument && typeof createElementConfig !== 'function') {
+            throw new Error('createGalleryView: createElement helper is required when document is unavailable');
+        }
+        if (!hasDocument && typeof createFragmentConfig !== 'function') {
+            throw new Error('createGalleryView: createFragment helper is required when document is unavailable');
+        }
+
+        const createElement =
+            typeof createElementConfig === 'function'
+                ? createElementConfig
+                : (tagName, className = '', text = '') => {
+                      const element = document.createElement(tagName);
+                      if (className) {
+                          element.className = className;
+                      }
+                      if (text != null) {
+                          element.textContent = text;
+                      }
+                      return element;
+                  };
+
+        const createDocumentFragment =
+            typeof createFragmentConfig === 'function'
+                ? createFragmentConfig
+                : () => document.createDocumentFragment();
+
+        const ensureElement =
+            typeof ensureDomElementConfig === 'function'
+                ? ensureDomElementConfig
+                : (current, options = {}) => {
+                      const { selector = '', id = '', tagName = 'div', classNames = [], create } = options;
+                      let element = current || null;
+
+                      if (hasDocument) {
+                          if (!element || !element.isConnected) {
+                              if (selector) {
+                                  const foundBySelector = document.querySelector(selector);
+                                  if (foundBySelector) {
+                                      element = foundBySelector;
+                                  }
+                              }
+                              if (!element && id) {
+                                  const foundById = document.getElementById(id);
+                                  if (foundById) {
+                                      element = foundById;
+                                  }
+                              }
+                          }
+                          if (!element) {
+                              element = typeof create === 'function' ? create() : document.createElement(tagName);
+                          }
+                      } else if (typeof create === 'function') {
+                          element = create();
+                      }
+
+                      if (!element) {
+                          return null;
+                      }
+
+                      if (id && !element.id) {
+                          element.id = id;
+                      }
+
+                      if (element.classList) {
+                          classNames
+                              .filter((className) => typeof className === 'string' && className.length > 0)
+                              .forEach((className) => {
+                                  element.classList.add(className);
+                              });
+                      }
+
+                      return element;
+                  };
+
+        const applyInlineStyles =
+            typeof applyInlineStylesConfig === 'function'
+                ? applyInlineStylesConfig
+                : (element, styles = {}) => {
+                      if (!element || !styles || typeof styles !== 'object') {
+                          return;
+                      }
+                      if (!element.style) {
+                          return;
+                      }
+                      Object.keys(styles).forEach((key) => {
+                          const value = styles[key];
+                          if (value != null) {
+                              element.style[key] = value;
+                          }
+                      });
+                  };
+
+        const normalizeStatus =
+            typeof normalizeStatusConfig === 'function'
+                ? normalizeStatusConfig
+                : (value) => {
+                      const text = (value || '').toString().trim().toLowerCase();
+                      if (text === 'pass') {
+                          return 'pass';
+                      }
+                      if (text === 'corrected') {
+                          return 'corrected';
+                      }
+                      return 'pending';
+                  };
+
+        const SUMMARY_INLINE_STYLE = {
+            textAlign: 'center',
+            color: '#333',
+            fontSize: '14px',
+            margin: '0 auto 12px',
+            width: '100%'
+        };
+
+        function ensureSummaryElement() {
+            if (!dom) {
+                return null;
+            }
+            const summary = ensureElement(dom.summary, {
+                selector: '#gallery-summary',
+                id: 'gallery-summary',
+                tagName: 'p',
+                classNames: ['gallery-summary']
+            });
+            if (!summary) {
+                return null;
+            }
+            applyInlineStyles(summary, SUMMARY_INLINE_STYLE);
+            if (!summary.parentNode && hasDocument) {
+                const reference = dom.galleryStatus && dom.galleryStatus.parentNode ? dom.galleryStatus : dom.gallery;
+                if (reference && reference.parentNode) {
+                    reference.parentNode.insertBefore(summary, reference);
+                } else if (document.body) {
+                    document.body.insertBefore(summary, document.body.firstChild || null);
+                }
+            }
+            dom.summary = summary;
+            return summary;
+        }
+
+        function updateSummary() {
+            const summary = ensureSummaryElement();
+            if (!summary) {
+                return;
+            }
+            const items = Array.isArray(state.items) ? state.items : [];
+            const totalCount = items.length;
+            let fullyConfirmedCount = 0;
+            let pendingCount = 0;
+
+            items.forEach((item) => {
+                if (!item) {
+                    return;
+                }
+                const effects = item.querySelectorAll ? Array.from(item.querySelectorAll('.effect')) : [];
+                if (!effects.length) {
+                    pendingCount += 1;
+                    return;
+                }
+                const slotStatuses = new Map();
+                let hasPending = false;
+                effects.forEach((effect) => {
+                    const status = normalizeStatus(effect && effect.dataset ? effect.dataset.status : '');
+                    if (status === 'pending') {
+                        hasPending = true;
+                    }
+                    const slot = effect && effect.dataset ? Number(effect.dataset.slot) : Number.NaN;
+                    if (!Number.isNaN(slot)) {
+                        slotStatuses.set(slot, status);
+                    }
+                });
+                if (hasPending) {
+                    pendingCount += 1;
+                }
+                const targetSlots = [1, 2, 3];
+                const allSlotsPresent = targetSlots.every((slot) => slotStatuses.has(slot));
+                if (allSlotsPresent) {
+                    const allReviewed = targetSlots.every((slot) => {
+                        const status = slotStatuses.get(slot);
+                        return status && status !== 'pending';
+                    });
+                    if (allReviewed) {
+                        fullyConfirmedCount += 1;
+                    }
+                }
+            });
+
+            const datasetName = datasetState.label || '';
+            const prefix = datasetName ? `[${datasetName}] ` : '';
+            const summaryText = `${prefix}全体 ${totalCount} 件 / 確認済み ${fullyConfirmedCount} 件 / 未レビュー ${pendingCount} 件`;
+            summary.textContent = summaryText;
+            if (summary.style) {
+                summary.style.display = 'flex';
+                summary.style.justifyContent = 'center';
+                summary.style.textAlign = 'center';
+            }
+        }
 
         function includeDuplicatesNow() {
             return Boolean(dom.showDuplicatesToggle && dom.showDuplicatesToggle.checked);
@@ -52,6 +251,72 @@
 
         function ocrToggleState() {
             return Boolean(dom.showOcrToggle && dom.showOcrToggle.checked);
+        }
+
+        function fragmentHasContent(fragment) {
+            if (!fragment) {
+                return false;
+            }
+            if (typeof fragment.childNodes !== 'undefined' && fragment.childNodes !== null) {
+                return fragment.childNodes.length > 0;
+            }
+            if (typeof fragment.children !== 'undefined' && fragment.children !== null) {
+                return fragment.children.length > 0;
+            }
+            return Boolean(fragment.firstChild);
+        }
+
+        function deriveRenderEntries(includeDuplicates) {
+            if (!Array.isArray(state.records)) {
+                return [];
+            }
+
+            const visibleTotal = state.records.reduce((count, currentRecord) => {
+                if (!currentRecord || typeof currentRecord !== 'object') {
+                    return count;
+                }
+                return isRecordDuplicate(currentRecord) ? count : count + 1;
+            }, 0);
+
+            const entries = [];
+            let visibleCounter = 0;
+
+            state.records.forEach((record, index) => {
+                if (!record || typeof record !== 'object') {
+                    return;
+                }
+                const duplicateRecord = isRecordDuplicate(record);
+                if (!duplicateRecord) {
+                    visibleCounter += 1;
+                }
+                if (duplicateRecord && !includeDuplicates) {
+                    return;
+                }
+                const visibleIndex = duplicateRecord ? (visibleCounter > 0 ? visibleCounter : 0) : visibleCounter;
+                entries.push({
+                    record,
+                    recordIndex: index,
+                    visibleIndex,
+                    visibleTotal
+                });
+            });
+
+            return entries;
+        }
+
+        function renderEntriesToFragment(entries) {
+            const fragment = createDocumentFragment();
+            const items = [];
+
+            entries.forEach(({ record, recordIndex, visibleIndex, visibleTotal }) => {
+                const item = createItem(record, recordIndex, visibleIndex, visibleTotal);
+                if (item) {
+                    fragment.appendChild(item);
+                    items.push(item);
+                }
+            });
+
+            return { fragment, items };
         }
 
         function setOcrVisibility(show) {
@@ -70,34 +335,13 @@
         function buildGallery() {
             const includeDuplicates = includeDuplicatesNow();
             clearGalleryElement();
-            state.items = [];
 
-            const fragment = document.createDocumentFragment();
-            const visibleTotal = state.records.reduce((count, currentRecord) => {
-                if (!currentRecord || typeof currentRecord !== 'object') {
-                    return count;
-                }
-                return isRecordDuplicate(currentRecord) ? count : count + 1;
-            }, 0);
-            let visibleCounter = 0;
+            const entries = deriveRenderEntries(includeDuplicates);
+            const { fragment, items } = renderEntriesToFragment(entries);
 
-            state.records.forEach((record, index) => {
-                const duplicateRecord = isRecordDuplicate(record);
-                if (!duplicateRecord) {
-                    visibleCounter += 1;
-                }
-                if (duplicateRecord && !includeDuplicates) {
-                    return;
-                }
-                const effectiveIndex = duplicateRecord ? (visibleCounter > 0 ? visibleCounter : 0) : visibleCounter;
-                const item = createItem(record, index, effectiveIndex, visibleTotal);
-                if (item) {
-                    fragment.appendChild(item);
-                    state.items.push(item);
-                }
-            });
+            state.items = items;
 
-            if (fragment.childNodes.length && dom.gallery) {
+            if (fragmentHasContent(fragment) && dom.gallery) {
                 dom.gallery.appendChild(fragment);
             }
 
@@ -174,8 +418,7 @@
         }
 
         function createItemStructure(context) {
-            const item = document.createElement('div');
-            item.className = 'item';
+            const item = createElement('div', 'item');
             item.dataset.image = context.imageName.toLowerCase();
             item.dataset.imageName = context.imageName;
             item.dataset.recordIndex = String(context.recordIndex);

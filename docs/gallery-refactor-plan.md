@@ -20,6 +20,7 @@
 - [x] ステップ5: 状態ストア・データセット切替をモジュール (`state/store.js`, `dataset/manager.js`) に分離。
 - [x] ステップ6: アプリ初期化シーケンスを `app/controller.js` へ分離し、`gallery.js` から呼び出し。
 - [x] ステップ7: 描画ファクトリ (`render/effectFactory.js`, `render/galleryView.js`) とイベントレイヤ (`events/galleryEvents.js`) を分離し、テンプレート・ビルドスクリプト・テストに反映。Playwright テストでコンソールエラー検知とスクリーンショット検証を実装。
+- [x] ステップ8: `gallery.js` に残っていたギャラリー要約・描画依存を `render/galleryView.js` へ集約し、`buildGallery`/`updateSummary` を純化。Node テストを拡充して描画／イベント双方の回帰をカバー。
 
 ### 次のステップ
 1. **初期化フロー・モジュール構造の下準備**  
@@ -42,9 +43,9 @@
    - 回帰テスト（ブラウザ UI 動作・CSV 入出力・レビュー保存）を実施。
 
 ### 直近のタスク
-1. effectFactory/events モジュールのテスト拡充と既存テストの維持管理を継続。
-2. `buildGallery`〜`createItem` の純化を進め、描画ファクトリ内の責務分離とテスト追加を検討。
-3. 既存 `gallery.js` に残るイベント／描画ロジックを段階的に分割し、`render/`・`events/` へ集約。
+1. `applyFilters` と検索キャッシュ生成を純関数として `utils/` に切り出し、フィルタ条件の追加に備えたテストベースを整備する。
+2. `render/galleryView.js` の `createItem` 周辺で列ごとのコンポーネント分割（画像列・操作列）を行い、Fragment 生成と差し替えをテスト可能な形に整理する。
+3. `events/galleryEvents.js` のお気に入り／色分け／レビュー操作をイベントハンドラ単位に切り出し、ビューとの API 境界を明文化して並列開発しやすい構造を作る。
 
 ## 設計ポリシー
 ### 基本方針
