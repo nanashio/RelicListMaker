@@ -14,6 +14,7 @@
 ## テストと検証
 - 各ステップでの修正が完了したら必ず `npm run test:all` を実行し、Python・Node・Playwright の一括テストが全て成功することを確認する。
 - 個別調査が必要な場合のみ `pytest` / `npm run test:node` / `npm run test:browser` を使い分ける。
+- Playwright が未セットアップの環境では、回帰確認のために `pytest` と `node --test tests/js/gallery_modules.test.mjs` を個別に実行する。
 
 ## 実行計画
 ### 完了済み
@@ -37,9 +38,10 @@
 3. **効果表示のさらなる最適化**【完了】
    - `effectFactory` からデータ整形ロジックを `render/effectViewModel.js` へ切り出し、DOM 操作と状態変換の境界を明確化。
    - ビューモデル専用のユニットテストを追加し、効果スロット追加時の回帰を防止。
-4. **共通ユーティリティの追加整理**  
-   - DOM 操作・正規化ロジック・CSV パースなどを `utils/` へ移動。  
-   - 重複コードを統合しテスト追加。  
+4. **共通ユーティリティの追加整理**
+   - DOM 操作・正規化ロジック・CSV パースなどを `utils/` へ移動。
+   - データセット正規化ロジック（`parseDatasets` / `resolveDatasetState` など）を `templates/gallery/dataset/utils.js` に集約し、`gallery.js` からはフォールバックファクトリ経由で参照する。【完了】
+   - 重複コードを統合しテスト追加。
 5. **状態／データセット／永続化レイヤの独立**  
    - `state` を用途別に分割し、イベントハンドラから直接 `state` を操作しない API を提供。  
    - データセット切替や保存処理を別モジュールから呼び出す形に改修。  
@@ -57,6 +59,7 @@
 7. 【完了】`itemEnhancers` を独立モジュール化し、`galleryView` からも差し替え可能にした。`render/itemEnhancers.js` を新設し、フォールバック付き DI ポイントを整理。ユニットテストで差し替えパスと追加エンハンサの実行順序を検証済み。
 8. 【完了】効果レベル／補正更新のイベントテストを `recordActionHandlers` 側でも拡充し、CSV 永続化・レベル候補復元までを網羅するモック戦略を定義する。`tests/js/gallery_modules.test.mjs` にレベル選択／解除およびレビュー完了処理のシナリオを追加し、保存トリガーや候補リセットの分岐を検証済み。
 9. 【完了】`render/effectViewModel.js` を新設し、`effectFactory` の純粋ロジックを委譲。ビューとビューモデル双方のユニットテストを追加し、依存注入経由で `parseLevelOptions` を共有化。
+10. 【完了】データセット解析ユーティリティを `dataset/utils.js` に切り出し、`gallery.js` 側はフォールバックファクトリ経由で利用する構造に変更。テンプレート・生成スクリプト・ブラウザフィクスチャを更新し、Node テストにデータセットユーティリティの検証ケースを追加。
 
 ## 設計ポリシー
 ### 基本方針
@@ -86,6 +89,7 @@
 | エントリ | `templates/gallery/index.js` | 初期化フロー、依存モジュールの組み上げ、起動。 |
 | 状態 | `templates/gallery/state/store.js` | データセット情報、フィルタ、重複フラグなどアプリ状態の読み書き。 |
 | データセット | `templates/gallery/dataset/manager.js` | `parseDatasets`・`switchDataset` に相当するデータセット解決ロジック。 |
+| データセット | `templates/gallery/dataset/utils.js` | データセット一覧の正規化・ソース比較ユーティリティ。 |
 | 永続化 | `templates/gallery/storage/csvPersistence.js` | CSV 読込／保存、OPFS・fetch 連携。 |
 | UI 构築 | `templates/gallery/render/galleryView.js` | `buildGallery` の分割版。 |
 | UI 部品 | `templates/gallery/render/itemFactory.js` | `createItem` の DOM 組み立て部分（副作用を限定）。 |
@@ -115,7 +119,7 @@
 - 各イベントハンドラは DOM クエリ (`closest`) と `state` 更新 (`setRecordDuplicate` 等) を組み合わせており、副作用を持つコールバックを注入できる構造が必要。
 
 #### 状態・データユーティリティ
-- `templates/gallery.js:200` 付近の `datasetUtils` は `parseDatasets` / `resolveDatasetState` / `areSourcesEqual` を内包し、`templates/gallery/dataset/manager.js` のファクトリと重複機能を持つ。
+- `templates/gallery/dataset/utils.js` で `parseDatasets` / `resolveDatasetState` / `areSourcesEqual` を提供し、`templates/gallery.js` は `window.galleryDatasetUtils` フォールバックを介して参照する構造に更新した。
 - `templates/gallery.js:342` 以降の DOM / データフォールバックは `window.galleryDomUtils` / `window.galleryDataUtils` が未登録の場合に備えているが、モジュール化後は依存を明示して注入する構造に切り替えられる。
 
 ## テスト戦略

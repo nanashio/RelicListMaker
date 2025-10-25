@@ -1058,6 +1058,104 @@ describe('item enhancers factory', () => {
 });
 
 
+describe('gallery dataset utils', () => {
+  let datasetUtils;
+
+  beforeEach(() => {
+    global.window = {};
+    runScript('templates/gallery/dataset/utils.js');
+    datasetUtils = global.window.galleryDatasetUtils;
+  });
+
+  afterEach(() => {
+    delete global.window;
+  });
+
+  test('parseDatasets normalizes entries and filters invalid', () => {
+    const json = JSON.stringify([
+      'alpha.csv',
+      { csv: 'beta.csv', imgDir: ' images ', label: ' Beta ', folder: ' sub ' },
+      { kind: 'merged', sources: [{ csv: 'child.csv', imgDir: 'child', label: ' Child ' }] },
+      null,
+      { csv: '' }
+    ]);
+
+    const list = datasetUtils.parseDatasets(json);
+    assert.equal(list.length, 3);
+    assert.deepEqual(list[0], {
+      label: '',
+      csv: 'alpha.csv',
+      imgDir: '',
+      folder: '',
+      index: 0,
+      kind: '',
+      sources: []
+    });
+    assert.deepEqual(list[1], {
+      label: 'Beta',
+      csv: 'beta.csv',
+      imgDir: 'images',
+      folder: 'sub',
+      index: 1,
+      kind: '',
+      sources: []
+    });
+    assert.equal(list[2].kind, 'merged');
+    assert.deepEqual(list[2].sources, [
+      { label: 'Child', csv: 'child.csv', imgDir: 'child', folder: '', index: 0 }
+    ]);
+  });
+
+  test('resolveDatasetState derives merged descriptors', () => {
+    const dataset = {
+      label: 'Merged',
+      folder: 'datasets',
+      kind: 'merged',
+      csv: '',
+      imgDir: 'ignored',
+      sources: [
+        { label: 'Left', csv: 'left.csv', imgDir: 'left', folder: 'a' },
+        { label: 'Right', csv: 'right.csv', imgDir: 'right', folder: 'b' }
+      ]
+    };
+
+    const descriptor = datasetUtils.resolveDatasetState(dataset);
+    assert.equal(descriptor.label, 'Merged');
+    assert.equal(descriptor.csvPath, 'merged-dataset.csv');
+    assert.equal(descriptor.imageDir, '');
+    assert.equal(descriptor.kind, 'merged');
+    assert.deepEqual(descriptor.sources, [
+      { label: 'Left', csv: 'left.csv', imgDir: 'left', folder: 'a', index: 0 },
+      { label: 'Right', csv: 'right.csv', imgDir: 'right', folder: 'b', index: 1 }
+    ]);
+  });
+
+  test('parseDatasetIndex clamps values to range', () => {
+    assert.equal(datasetUtils.parseDatasetIndex('3', 5), 3);
+    assert.equal(datasetUtils.parseDatasetIndex('-1', 4), 0);
+    assert.equal(datasetUtils.parseDatasetIndex('10', 4), 3);
+    assert.equal(datasetUtils.parseDatasetIndex('NaN', 0), -1);
+  });
+
+  test('areSourcesEqual detects index differences', () => {
+    const base = [
+      { label: 'Left', csv: 'left.csv', imgDir: 'left', folder: 'a', index: 0 },
+      { label: 'Right', csv: 'right.csv', imgDir: 'right', folder: 'b', index: 1 }
+    ];
+    const clone = datasetUtils.cloneDatasetSources(base);
+    assert.ok(datasetUtils.areSourcesEqual(base, clone));
+
+    const reordered = datasetUtils.cloneDatasetSources(base);
+    reordered.reverse();
+    assert.equal(datasetUtils.areSourcesEqual(base, reordered), false);
+
+    const changedIndex = datasetUtils.cloneDatasetSources(base);
+    changedIndex[1].index = 2;
+    assert.equal(datasetUtils.areSourcesEqual(base, changedIndex), false);
+  });
+});
+
+
 describe('gallery dataset manager', () => {
   beforeEach(() => {
     global.window = {};
