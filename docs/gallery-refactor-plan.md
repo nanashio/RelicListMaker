@@ -51,7 +51,7 @@
 5. 【完了】`galleryView` から `itemFactory` へ渡す状態同期コールバック（重複・お気に入り・色・キャッシュ再計算）を `itemEnhancers` として集約。`render/itemFactory.js` で副作用を後処理化し、API を単一エントリポイントに整理した。
 6. 【完了】`events/recordActionHandlers.js` 向けの単体テスト整備と依存モジュールのモック方針を整理。Node テスト（`tests/js/gallery_modules.test.mjs`）で重複／お気に入り／色操作の回帰を検出できるようにした。
 7. 【完了】`itemEnhancers` を独立モジュール化し、`galleryView` からも差し替え可能にした。`render/itemEnhancers.js` を新設し、フォールバック付き DI ポイントを整理。ユニットテストで差し替えパスと追加エンハンサの実行順序を検証済み。
-8. 効果レベル／補正更新のイベントテストを `recordActionHandlers` 側でも拡充し、CSV 永続化・レベル候補復元までを網羅するモック戦略を定義する。
+8. 【完了】効果レベル／補正更新のイベントテストを `recordActionHandlers` 側でも拡充し、CSV 永続化・レベル候補復元までを網羅するモック戦略を定義する。`tests/js/gallery_modules.test.mjs` にレベル選択／解除およびレビュー完了処理のシナリオを追加し、保存トリガーや候補リセットの分岐を検証済み。
 
 ## 設計ポリシー
 ### 基本方針
