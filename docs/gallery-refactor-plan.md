@@ -26,10 +26,11 @@
 1. **初期化フロー・モジュール構造の下準備**  
    - ビルド／読み込み方法の確認（`viewer_server.py` のテンプレート読み込みを調査）【済】  
    - 新モジュールを `generate_gallery.py` / `serve_fixture.py` / テンプレートへ反映【済】  
-2. **ギャラリー描画の分割（`createItem` 周辺）**  
-   - DOM 生成と状態同期を別関数へ分け、`render/` 配下を整備。  
-   - 可能であれば `DocumentFragment` の組み立てを専用モジュールへ移す。  
-3. **効果表示のさらなる最適化**  
+2. **ギャラリー描画の分割（`createItem` 周辺）**【完了】
+   - DOM 生成と状態同期を別関数へ分け、`render/` 配下を整備。【完了】
+   - 可能であれば `DocumentFragment` の組み立てを専用モジュールへ移す。【完了】
+   - `render/itemFactory.js` を新設し、左右カラムの要素構築とプレースホルダー生成を委譲。`galleryView` からはファクトリ経由で項目を生成し、副作用（重複・お気に入り・色の同期）は呼び出し元でまとめて処理。
+3. **効果表示のさらなる最適化**
    - `effectFactory` で抽出済みのロジックを部品単位で整理し、UI 更新と状態変換を分離。  
    - テストを追加し、効果スロット追加時の回帰を防止。  
 4. **共通ユーティリティの追加整理**  
@@ -44,9 +45,10 @@
 
 ### 直近のタスク
 1. 【完了】`applyFilters` と検索キャッシュ生成を純関数として `utils/filter.js` に切り出し。`render/galleryView.js` は新ユーティリティを優先利用するフォールバック構造に変更し、`tests/js/gallery_modules.test.mjs` へフィルタユニットテストを追加済み。
-2. `render/galleryView.js` の `createItem` 周辺で列ごとのコンポーネント分割（画像列・操作列）を行い、Fragment 生成と差し替えをテスト可能な形に整理する。
+2. 【完了】`render/galleryView.js` の `createItem` 周辺で列ごとのコンポーネント分割（画像列・操作列）を行い、`render/itemFactory.js` へ委譲。単体テストで左右カラムとプレースホルダーの挙動を検証済み。
 3. `events/galleryEvents.js` のお気に入り／色分け／レビュー操作をイベントハンドラ単位に切り出し、ビューとの API 境界を明文化して並列開発しやすい構造を作る。
 4. レベル抑制時に CSV 上のレベルフィールドをクリアする実装を `events/galleryEvents.js` に追加済み。後続として `storage`／`dataset` 層への影響確認と E2E シナリオの追跡メモを整理する。
+5. `galleryView` から `itemFactory` へ渡す状態同期コールバック（重複・お気に入り・色の反映）を整理し、将来的に `itemFactory` 自体を純粋関数モードに切り替えられるよう API の最小化を検討する。
 
 ## 設計ポリシー
 ### 基本方針
