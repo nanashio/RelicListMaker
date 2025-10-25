@@ -375,6 +375,17 @@
             : (records) => records;
     const storageUtils = window.galleryStorageUtils || {};
 
+    const createDuplicateManager =
+        typeof storageUtils.createDuplicateManager === 'function'
+            ? storageUtils.createDuplicateManager
+            : () => ({
+                  set: () => false,
+                  toggle: () => false,
+                  has: () => false,
+                  prepare: () => {},
+                  clearAll: () => {}
+              });
+
     const parseCsvRows =
         storageUtils.parseCsvRows ||
         function parseCsvRowsFallback(text) {
@@ -1337,100 +1348,16 @@
         masterLevels: preloadedMasterLevels,
         masterLevelsLoaded: hasPreloadedMasterLevels
     });
-    const recordUtils = (() => {
-        function ensureRecords(recordsOrProvider) {
-            if (typeof recordsOrProvider === 'function') {
-                return ensureRecords(recordsOrProvider());
-            }
-            return Array.isArray(recordsOrProvider) ? recordsOrProvider : [];
-        }
 
-        function getRecordByIndex(recordsOrProvider, index) {
-            const records = ensureRecords(recordsOrProvider);
-            if (Number.isNaN(index) || index < 0 || index >= records.length) {
-                return null;
-            }
-            const record = records[index];
-            return record && typeof record === 'object' ? record : null;
-        }
+    const recordUtilsFactory = window.galleryRecordUtilsFactory || null;
+    const recordUtils =
+        (recordUtilsFactory && typeof recordUtilsFactory.createRecordUtils === 'function'
+            ? recordUtilsFactory.createRecordUtils()
+            : window.galleryRecordUtils) || null;
 
-        function updateRecordField(recordsOrProvider, recordIndex, key, value) {
-            const record = getRecordByIndex(recordsOrProvider, recordIndex);
-            if (!record) {
-                return false;
-            }
-            if (value) {
-                if (record[key] === value) {
-                    return false;
-                }
-                record[key] = value;
-                return true;
-            }
-            if (Object.prototype.hasOwnProperty.call(record, key)) {
-                delete record[key];
-                return true;
-            }
-            return false;
-        }
-
-        function createFlagManager(recordsOrProvider, key, truthyTokens) {
-            const normalizedTokens = new Set(
-                (truthyTokens || []).map((token) => (token || '').toString().toLowerCase())
-            );
-
-            const normalize = (value) => {
-                if (value === true) {
-                    return true;
-                }
-                if (value === false || value == null) {
-                    return false;
-                }
-                if (typeof value === 'number') {
-                    return value === 1;
-                }
-                if (typeof value === 'string') {
-                    const text = value.trim().toLowerCase();
-                    return normalizedTokens.has(text);
-                }
-                return false;
-            };
-
-            const isSet = (record) => {
-                if (!record || typeof record !== 'object') {
-                    return false;
-                }
-                return normalize(record[key]);
-            };
-
-            const set = (recordIndex, nextState) => {
-                const record = getRecordByIndex(recordsOrProvider, recordIndex);
-                if (!record) {
-                    return false;
-                }
-                if (nextState) {
-                    if (isSet(record)) {
-                        return false;
-                    }
-                    record[key] = true;
-                    return true;
-                }
-                if (Object.prototype.hasOwnProperty.call(record, key)) {
-                    delete record[key];
-                    return true;
-                }
-                return false;
-            };
-
-            return { normalize, isSet, set };
-        }
-
-        return { getRecordByIndex, updateRecordField, createFlagManager };
-    })();
-
-    if (typeof window !== 'undefined') {
-        window.galleryRecordUtils = recordUtils;
+    if (!recordUtils) {
+        throw new Error('gallery record utilities are not available');
     }
-
     const { core: state, dataset: datasetState } = stateStore.getState();
 
     setupMasterOptions();
@@ -2166,161 +2093,6 @@
         return parts[parts.length - 1] || '';
     }
 
-    function createDuplicateManager(getResultsPath) {
-        const storagePrefix = 'relic-gallery-duplicates:';
-        let cache = new Map();
-        let loadedKey = '';
-        let hasLoaded = false;
-
-        function normalizeName(name) {
-            return (name == null ? '' : String(name)).trim().toLowerCase();
-        }
-
-        function deriveBaseName() {
-            const source = typeof getResultsPath === 'function' ? getResultsPath() : '';
-            const text = source == null ? '' : String(source);
-            if (!text) {
-                return 'results.csv';
-            }
-            const parts = text.split(/[\\/]/).filter(Boolean);
-            if (!parts.length) {
-                return text || 'results.csv';
-            }
-            return parts[parts.length - 1];
-        }
-
-        function storageKey() {
-            return `${storagePrefix}${deriveBaseName()}`;
-        }
-
-        function getStorage() {
-            try {
-                if (typeof window === 'undefined' || !window.localStorage) {
-                    return null;
-                }
-                return window.localStorage;
-            } catch (error) {
-                console.warn('localStorageへのアクセスに失敗しました:', error);
-                return null;
-            }
-        }
-
-        function ensureLoaded() {
-            const key = storageKey();
-            if (hasLoaded && key === loadedKey) {
-                return;
-            }
-
-            hasLoaded = true;
-            loadedKey = key;
-            cache = new Map();
-
-            const storage = getStorage();
-            if (!storage) {
-                return;
-            }
-
-            try {
-                const raw = storage.getItem(key);
-                if (!raw) {
-                    return;
-                }
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) {
-                    parsed.forEach((value) => {
-                        if (typeof value === 'string' && value.trim()) {
-                            const original = value.trim();
-                            cache.set(normalizeName(original), original);
-                        }
-                    });
-                }
-            } catch (error) {
-                console.warn('重複状態の読み込みに失敗しました:', error);
-            }
-        }
-
-        function persist() {
-            const storage = getStorage();
-            if (!storage) {
-                return;
-            }
-            const key = storageKey();
-            try {
-                const values = Array.from(cache.values()).sort((a, b) => a.localeCompare(b));
-                storage.setItem(key, JSON.stringify(values));
-            } catch (error) {
-                console.warn('重複状態の保存に失敗しました:', error);
-            }
-        }
-
-        function set(name, shouldMark) {
-            if (!name) {
-                return false;
-            }
-            ensureLoaded();
-            const normalized = normalizeName(name);
-            if (!normalized) {
-                return false;
-            }
-            const original = (name == null ? '' : String(name)).trim();
-            if (!original) {
-                return false;
-            }
-            if (shouldMark) {
-                const already = cache.has(normalized);
-                cache.set(normalized, original);
-                if (!already) {
-                    persist();
-                }
-                return true;
-            }
-            const existed = cache.delete(normalized);
-            if (existed) {
-                persist();
-            }
-            return false;
-        }
-
-        function toggle(name) {
-            if (!name) {
-                return false;
-            }
-            ensureLoaded();
-            const normalized = normalizeName(name);
-            if (!normalized) {
-                return false;
-            }
-            const original = (name == null ? '' : String(name)).trim();
-            if (!original) {
-                cache.delete(normalized);
-                persist();
-                return false;
-            }
-            if (cache.has(normalized)) {
-                cache.delete(normalized);
-                persist();
-                return false;
-            }
-            cache.set(normalized, original);
-            persist();
-            return true;
-        }
-
-        function has(name) {
-            if (!name) {
-                return false;
-            }
-            ensureLoaded();
-            return cache.has(normalizeName(name));
-        }
-
-        return {
-            prepare: ensureLoaded,
-            has,
-            set,
-            toggle
-        };
-    }
 
 
 

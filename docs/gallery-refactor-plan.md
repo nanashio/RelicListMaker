@@ -17,49 +17,37 @@
 - Playwright が未セットアップの環境では、回帰確認のために `pytest` と `node --test tests/js/gallery_modules.test.mjs` を個別に実行する。
 
 ## 実行計画
-### 完了済み
-- [x] ステップ1: 設計ドキュメントの整備とビルド手順の確認。
-- [x] ステップ2: `createItem` 周辺の描画ロジックをヘルパーへ分割。
-- [x] ステップ3: `createEffect` 周辺の描画ロジックをヘルパーへ分割。
-- [x] ステップ4: DOM ユーティリティと CSV/保存処理を外部モジュール (`utils/`, `storage/`) に切り出し。
-- [x] ステップ5: 状態ストア・データセット切替をモジュール (`state/store.js`, `dataset/manager.js`) に分離。
-- [x] ステップ6: アプリ初期化シーケンスを `app/controller.js` へ分離し、`gallery.js` から呼び出し。
-- [x] ステップ7: 描画ファクトリ (`render/effectFactory.js`, `render/galleryView.js`) とイベントレイヤ (`events/galleryEvents.js`) を分離し、テンプレート・ビルドスクリプト・テストに反映。Playwright テストでコンソールエラー検知とスクリーンショット検証を実装。
-- [x] ステップ8: `gallery.js` に残っていたギャラリー要約・描画依存を `render/galleryView.js` へ集約し、`buildGallery`/`updateSummary` を純化。Node テストを拡充して描画／イベント双方の回帰をカバー。
 
-### 次のステップ
-1. **初期化フロー・モジュール構造の下準備**  
-   - ビルド／読み込み方法の確認（`viewer_server.py` のテンプレート読み込みを調査）【済】  
-   - 新モジュールを `generate_gallery.py` / `serve_fixture.py` / テンプレートへ反映【済】  
-2. **ギャラリー描画の分割（`createItem` 周辺）**【完了】
-   - DOM 生成と状態同期を別関数へ分け、`render/` 配下を整備。【完了】
-   - 可能であれば `DocumentFragment` の組み立てを専用モジュールへ移す。【完了】
-   - `render/itemFactory.js` を新設し、左右カラムの要素構築とプレースホルダー生成を委譲。`galleryView` からはファクトリ経由で項目を生成し、副作用（重複・お気に入り・色の同期）は呼び出し元でまとめて処理。
-3. **効果表示のさらなる最適化**【完了】
-   - `effectFactory` からデータ整形ロジックを `render/effectViewModel.js` へ切り出し、DOM 操作と状態変換の境界を明確化。
-   - ビューモデル専用のユニットテストを追加し、効果スロット追加時の回帰を防止。
-4. **共通ユーティリティの追加整理**
-   - DOM 操作・正規化ロジック・CSV パースなどを `utils/` へ移動。
-   - データセット正規化ロジック（`parseDatasets` / `resolveDatasetState` など）を `templates/gallery/dataset/utils.js` に集約し、`gallery.js` からはフォールバックファクトリ経由で参照する。【完了】
-   - 重複コードを統合しテスト追加。
-5. **状態／データセット／永続化レイヤの独立**  
-   - `state` を用途別に分割し、イベントハンドラから直接 `state` を操作しない API を提供。  
-   - データセット切替や保存処理を別モジュールから呼び出す形に改修。  
-6. **最終統合・エントリポイントの刷新**  
-   - `index.js` で各モジュールを組み合わせ、`<script type='module'>` で読み込むようテンプレート更新。  
-   - 回帰テスト（ブラウザ UI 動作・CSV 入出力・レビュー保存）を実施。
+### ロードマップ概要
+| ステップ | 状態 | 主な内容 |
+| --- | --- | --- |
+| 1 | ✅ 完了 | 設計ドキュメントの整備とビルド手順の検証。 |
+| 2 | ✅ 完了 | `createItem` 周辺の描画ロジック分割とヘルパー化。 |
+| 3 | ✅ 完了 | `createEffect` 周辺の描画ロジック分割とビューモデル導入。 |
+| 4 | 🔄 進行中 | DOM/データ処理ユーティリティの再編とレコード管理ヘルパーの共有化。 |
+| 5 | ⏳ 未着手 | 状態・データセット・永続化レイヤの完全分離と API 化。 |
+| 6 | ⏳ 未着手 | エントリポイント刷新とモジュール読込方式の最終統合。 |
 
-### 直近のタスク
-1. 【完了】`applyFilters` と検索キャッシュ生成を純関数として `utils/filter.js` に切り出し。`render/galleryView.js` は新ユーティリティを優先利用するフォールバック構造に変更し、`tests/js/gallery_modules.test.mjs` へフィルタユニットテストを追加済み。
-2. 【完了】`render/galleryView.js` の `createItem` 周辺で列ごとのコンポーネント分割（画像列・操作列）を行い、`render/itemFactory.js` へ委譲。単体テストで左右カラムとプレースホルダーの挙動を検証済み。
-3. 【完了】`events/galleryEvents.js` のお気に入り／色分け／レビュー操作をイベントハンドラ単位に切り出し、ビューとの API 境界を明文化して並列開発しやすい構造を作る。`events/recordActionHandlers.js` を新設し、アイテム操作と効果操作の責務を関数単位で集約。`galleryEvents` ではファクトリを注入する構造にして既存テストを維持。
-4. 【完了】レベル抑制時に CSV 上のレベルフィールドをクリアする実装を `events/galleryEvents.js` に追加済み。後続として `storage`／`dataset` 層への影響確認と E2E シナリオの追跡メモを整理する。`utils/data.js` に抑制フラグ正規化ヘルパー（`normalizeSuppressedLevels`）を追加し、`loadRecordsArray` から読み込み直後に適用することで旧 CSV/OPFS データのレベル値・候補を自動消去。Node テストへ抑制ロジックのユニットケースを追加し、E2E では差分確認のみ必要になったためブラウザテスト項の手順メモを更新不要と判断。
-5. 【完了】`galleryView` から `itemFactory` へ渡す状態同期コールバック（重複・お気に入り・色・キャッシュ再計算）を `itemEnhancers` として集約。`render/itemFactory.js` で副作用を後処理化し、API を単一エントリポイントに整理した。
-6. 【完了】`events/recordActionHandlers.js` 向けの単体テスト整備と依存モジュールのモック方針を整理。Node テスト（`tests/js/gallery_modules.test.mjs`）で重複／お気に入り／色操作の回帰を検出できるようにした。
-7. 【完了】`itemEnhancers` を独立モジュール化し、`galleryView` からも差し替え可能にした。`render/itemEnhancers.js` を新設し、フォールバック付き DI ポイントを整理。ユニットテストで差し替えパスと追加エンハンサの実行順序を検証済み。
-8. 【完了】効果レベル／補正更新のイベントテストを `recordActionHandlers` 側でも拡充し、CSV 永続化・レベル候補復元までを網羅するモック戦略を定義する。`tests/js/gallery_modules.test.mjs` にレベル選択／解除およびレビュー完了処理のシナリオを追加し、保存トリガーや候補リセットの分岐を検証済み。
-9. 【完了】`render/effectViewModel.js` を新設し、`effectFactory` の純粋ロジックを委譲。ビューとビューモデル双方のユニットテストを追加し、依存注入経由で `parseLevelOptions` を共有化。
-10. 【完了】データセット解析ユーティリティを `dataset/utils.js` に切り出し、`gallery.js` 側はフォールバックファクトリ経由で利用する構造に変更。テンプレート・生成スクリプト・ブラウザフィクスチャを更新し、Node テストにデータセットユーティリティの検証ケースを追加。
+### フォーカスすべき次アクション
+1. **共通ユーティリティ整備（ステップ4継続）**: DOM 操作・正規化ロジック・CSV パースの重複を洗い出し、`templates/gallery/utils/` および `templates/gallery/storage/` に集約する。未統合の重複コードは順次統一し、ユニットテストを増補する。
+2. **状態／データセット／永続化レイヤの独立（ステップ5）**: `state` の直接操作を廃し、専用 API を導入。データセット切替と保存処理を疎結合なモジュールとして呼び出す構造に改修する。
+3. **最終統合と ES Modules 化（ステップ6）**: `index.js` をエントリポイントに据え、`<script type="module">` で読み込む構成へ更新。ブラウザ UI・CSV 入出力・レビュー保存の回帰テストを完走させる。
+
+### 完了済みハイライト
+- **初期化と基盤整備**: `viewer_server.py` を含む読み込み経路を確認し、新規モジュールを `generate_gallery.py` やブラウザフィクスチャへ反映。
+- **描画レイヤの再構成**: `render/galleryView.js` から `itemFactory`・`itemEnhancers`・`effectFactory` へ責務を分割し、左右カラムやエフェクト表示を純粋関数へ移行。
+- **フィルタ／検索の純化**: `applyFilters` と検索キャッシュを `utils/filter.js` へ切り出し、Node テストを追加して回帰を抑止。
+- **イベントとアクション処理の整理**: `events/galleryEvents.js` をハンドラ単位へ再編し、`events/recordActionHandlers.js` に操作ロジックを集約。お気に入り・色分け・レビュー操作のテストを強化。
+- **レコード・重複管理の共有化**: `templates/gallery/utils/records.js` と `templates/gallery/storage/utils.js` を新設し、ギャラリー本体からヘルパーを排除。フォールバックスタブを明示して依存を整理。
+- **データ正規化の拡充**: `utils/data.js` に抑制レベル正規化を追加し、旧 CSV/OPFS データの互換性を担保。データセット解析ユーティリティを `dataset/utils.js` へ集約しテストを整備。
+- **テスト体制の強化**: `tests/js/gallery_modules.test.mjs` でフィルタ・アイテム生成・効果レベル処理などのシナリオを網羅し、保存トリガーや候補リセットを検証。
+
+### 参考メモ（完了タスク詳細）
+- `render/itemFactory.js` で画像列・操作列をコンポーネント分割し、プレースホルダー生成を委譲。
+- `render/itemEnhancers.js` を独立モジュール化し、副作用の実行順制御と差し替え容易性を確保。
+- `render/effectViewModel.js` を導入して `effectFactory` の純粋ロジックを委譲、レベル候補処理を共有化。
+- `events/recordActionHandlers.js` に効果レベル／補正更新のテストシナリオを追加し、CSV 永続化のモック戦略を整理。
+- `utils/filter.js`・`dataset/utils.js` の導入に合わせ、テンプレート・生成スクリプト・ブラウザフィクスチャを更新済み。
 
 ## 設計ポリシー
 ### 基本方針

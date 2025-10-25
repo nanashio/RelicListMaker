@@ -404,6 +404,48 @@ describe('gallery data utils', () => {
   });
 });
 
+describe('gallery record utils', () => {
+  let recordUtils;
+
+  beforeEach(() => {
+    global.window = {};
+    runScript('templates/gallery/utils/records.js');
+    const factory = global.window.galleryRecordUtilsFactory;
+    if (factory && typeof factory.createRecordUtils === 'function') {
+      recordUtils = factory.createRecordUtils();
+    } else {
+      recordUtils = global.window.galleryRecordUtils;
+    }
+  });
+
+  test('getRecordByIndex safely resolves entries', () => {
+    const records = [{ name: 'alpha' }, { name: 'beta' }];
+    assert.strictEqual(recordUtils.getRecordByIndex(records, 0).name, 'alpha');
+    assert.strictEqual(recordUtils.getRecordByIndex(records, 5), null);
+    assert.strictEqual(recordUtils.getRecordByIndex(null, 0), null);
+  });
+
+  test('updateRecordField sets and clears values', () => {
+    const records = [{ value: 'keep' }];
+    assert.equal(recordUtils.updateRecordField(records, 0, 'value', 'next'), true);
+    assert.equal(records[0].value, 'next');
+    assert.equal(recordUtils.updateRecordField(records, 0, 'value', ''), true);
+    assert.equal(Object.prototype.hasOwnProperty.call(records[0], 'value'), false);
+    assert.equal(recordUtils.updateRecordField(records, 3, 'value', 'x'), false);
+  });
+
+  test('createFlagManager normalizes tokens', () => {
+    const records = [{ Flag: 'YES' }, { Flag: '' }];
+    const manager = recordUtils.createFlagManager(records, 'Flag', ['yes', 'true', '1']);
+    assert.equal(manager.isSet(records[0]), true);
+    assert.equal(manager.isSet(records[1]), false);
+    assert.equal(manager.set(1, true), true);
+    assert.equal(records[1].Flag, true);
+    assert.equal(manager.set(1, false), true);
+    assert.equal(Object.prototype.hasOwnProperty.call(records[1], 'Flag'), false);
+  });
+});
+
 describe('gallery filter utils', () => {
   let filterUtils;
 

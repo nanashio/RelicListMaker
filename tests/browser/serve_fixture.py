@@ -29,6 +29,7 @@ def _build_fixture_tree(base_dir: Path) -> None:
     additional_scripts = [
         Path('gallery/utils/dom.js'),
         Path('gallery/utils/data.js'),
+        Path('gallery/utils/records.js'),
         Path('gallery/dataset/utils.js'),
         Path('gallery/utils/filter.js'),
         Path('gallery/state/store.js'),

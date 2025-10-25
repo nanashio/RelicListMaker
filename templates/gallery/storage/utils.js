@@ -158,6 +158,178 @@
         return combined;
     }
 
+    function createDuplicateManager(getResultsPath) {
+        const storagePrefix = 'relic-gallery-duplicates:';
+        let cache = new Map();
+        let loadedKey = '';
+        let hasLoaded = false;
+
+        function normalizeName(name) {
+            return (name == null ? '' : String(name)).trim().toLowerCase();
+        }
+
+        function deriveBaseName() {
+            const source = typeof getResultsPath === 'function' ? getResultsPath() : '';
+            const text = source == null ? '' : String(source);
+            if (!text) {
+                return 'results.csv';
+            }
+            const parts = text.split(/[\\/]/).filter(Boolean);
+            if (!parts.length) {
+                return text || 'results.csv';
+            }
+            return parts[parts.length - 1];
+        }
+
+        function storageKey() {
+            return `${storagePrefix}${deriveBaseName()}`;
+        }
+
+        function getStorage() {
+            try {
+                if (typeof window === 'undefined' || !window.localStorage) {
+                    return null;
+                }
+                return window.localStorage;
+            } catch (error) {
+                console.warn('localStorageへのアクセスに失敗しました:', error);
+                return null;
+            }
+        }
+
+        function ensureLoaded() {
+            const key = storageKey();
+            if (hasLoaded && key === loadedKey) {
+                return;
+            }
+
+            hasLoaded = true;
+            loadedKey = key;
+            cache = new Map();
+
+            const storage = getStorage();
+            if (!storage) {
+                return;
+            }
+
+            try {
+                const raw = storage.getItem(key);
+                if (!raw) {
+                    return;
+                }
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    parsed.forEach((value) => {
+                        if (typeof value === 'string' && value.trim()) {
+                            const original = value.trim();
+                            cache.set(normalizeName(original), original);
+                        }
+                    });
+                }
+            } catch (error) {
+                console.warn('重複状態の読み込みに失敗しました:', error);
+            }
+        }
+
+        function persist() {
+            const storage = getStorage();
+            if (!storage) {
+                return;
+            }
+            const key = storageKey();
+            try {
+                const values = Array.from(cache.values()).sort((a, b) => a.localeCompare(b));
+                storage.setItem(key, JSON.stringify(values));
+            } catch (error) {
+                console.warn('重複状態の保存に失敗しました:', error);
+            }
+        }
+
+        function set(name, shouldMark) {
+            if (!name) {
+                return false;
+            }
+            ensureLoaded();
+            const normalized = normalizeName(name);
+            if (!normalized) {
+                return false;
+            }
+            const original = (name == null ? '' : String(name)).trim();
+            if (!original) {
+                return false;
+            }
+            if (shouldMark) {
+                const already = cache.has(normalized);
+                cache.set(normalized, original);
+                if (!already) {
+                    persist();
+                }
+                return true;
+            }
+            const existed = cache.delete(normalized);
+            if (existed) {
+                persist();
+            }
+            return false;
+        }
+
+        function toggle(name) {
+            if (!name) {
+                return false;
+            }
+            ensureLoaded();
+            const normalized = normalizeName(name);
+            if (!normalized) {
+                return false;
+            }
+            const original = (name == null ? '' : String(name)).trim();
+            if (!original) {
+                cache.delete(normalized);
+                persist();
+                return false;
+            }
+            if (cache.has(normalized)) {
+                cache.delete(normalized);
+                persist();
+                return false;
+            }
+            cache.set(normalized, original);
+            persist();
+            return true;
+        }
+
+        function has(name) {
+            if (!name) {
+                return false;
+            }
+            ensureLoaded();
+            const normalized = normalizeName(name);
+            if (!normalized) {
+                return false;
+            }
+            return cache.has(normalized);
+        }
+
+        function clearAll() {
+            cache.clear();
+            persist();
+        }
+
+        return {
+            set,
+            toggle,
+            has,
+            clearAll,
+            prepare: ensureLoaded,
+            /** @internal テスト用 */
+            _debug: {
+                storageKey,
+                ensureLoaded,
+                persist
+            }
+        };
+    }
+
     function createOpfsManager(config = {}) {
         const {
             getRecords = () => [],
@@ -281,6 +453,7 @@
         parseCsvRows,
         parseCsvRecords,
         loadMergedRecords,
+        createDuplicateManager,
         createOpfsManager
     });
 })();
