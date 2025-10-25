@@ -187,6 +187,28 @@
             throw new Error('createGalleryView: createItemFactory helper is required');
         }
 
+        function createItemEnhancers() {
+            const enhancers = [];
+            const addEnhancer = (fn) => {
+                if (typeof fn === 'function') {
+                    enhancers.push((item, context) => {
+                        if (fn.length >= 2) {
+                            fn(item, context);
+                            return;
+                        }
+                        fn(item);
+                    });
+                }
+            };
+
+            addEnhancer(syncDuplicateState);
+            addEnhancer(syncFavoriteState);
+            addEnhancer(syncItemColorState);
+            addEnhancer(refreshItemCaches);
+
+            return enhancers;
+        }
+
         const itemFactory = createItemFactoryFn({
             datasetState,
             createElement,
@@ -196,7 +218,8 @@
             colorOptions,
             getImagePath: (imageName) => joinPath(state.imageDir || '.', imageName),
             getDisplayName: (imageName) => getFileName(imageName),
-            getLabelSymbols: () => (Array.isArray(state.labelSymbols) ? state.labelSymbols.slice() : [])
+            getLabelSymbols: () => (Array.isArray(state.labelSymbols) ? state.labelSymbols.slice() : []),
+            itemEnhancers: createItemEnhancers()
         });
 
         if (!itemFactory || typeof itemFactory.createItem !== 'function') {
@@ -363,10 +386,6 @@
             entries.forEach(({ record, recordIndex, visibleIndex, visibleTotal }) => {
                 const item = createItem(record, recordIndex, visibleIndex, visibleTotal);
                 if (item) {
-                    syncDuplicateState(item);
-                    syncFavoriteState(item);
-                    syncItemColorState(item);
-                    refreshItemCaches(item);
                     fragment.appendChild(item);
                     items.push(item);
                 }

@@ -48,8 +48,10 @@
 2. 【完了】`render/galleryView.js` の `createItem` 周辺で列ごとのコンポーネント分割（画像列・操作列）を行い、`render/itemFactory.js` へ委譲。単体テストで左右カラムとプレースホルダーの挙動を検証済み。
 3. 【完了】`events/galleryEvents.js` のお気に入り／色分け／レビュー操作をイベントハンドラ単位に切り出し、ビューとの API 境界を明文化して並列開発しやすい構造を作る。`events/recordActionHandlers.js` を新設し、アイテム操作と効果操作の責務を関数単位で集約。`galleryEvents` ではファクトリを注入する構造にして既存テストを維持。
 4. レベル抑制時に CSV 上のレベルフィールドをクリアする実装を `events/galleryEvents.js` に追加済み。後続として `storage`／`dataset` 層への影響確認と E2E シナリオの追跡メモを整理する。
-5. `galleryView` から `itemFactory` へ渡す状態同期コールバック（重複・お気に入り・色の反映）を整理し、将来的に `itemFactory` 自体を純粋関数モードに切り替えられるよう API の最小化を検討する。
-6. `events/recordActionHandlers.js` 向けの単体テスト整備と依存モジュールのモック方針を整理し、イベント層の回帰検出を強化する。
+5. 【完了】`galleryView` から `itemFactory` へ渡す状態同期コールバック（重複・お気に入り・色・キャッシュ再計算）を `itemEnhancers` として集約。`render/itemFactory.js` で副作用を後処理化し、API を単一エントリポイントに整理した。
+6. 【完了】`events/recordActionHandlers.js` 向けの単体テスト整備と依存モジュールのモック方針を整理。Node テスト（`tests/js/gallery_modules.test.mjs`）で重複／お気に入り／色操作の回帰を検出できるようにした。
+7. `itemEnhancers` を独立モジュール化し、`galleryView` からも差し替え可能にする。将来的な SSR / headless 実行時に純粋関数版 `itemFactory` へ切り替えられるよう DI ポイントを整理する。
+8. 効果レベル／補正更新のイベントテストを `recordActionHandlers` 側でも拡充し、CSV 永続化・レベル候補復元までを網羅するモック戦略を定義する。
 
 ## 設計ポリシー
 ### 基本方針

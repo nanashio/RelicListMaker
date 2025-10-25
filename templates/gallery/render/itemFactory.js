@@ -9,7 +9,8 @@
             colorOptions = [],
             getImagePath = (imageName) => imageName,
             getDisplayName = (imageName) => imageName,
-            getLabelSymbols = () => []
+            getLabelSymbols = () => [],
+            itemEnhancers: itemEnhancersConfig = []
         } = config;
 
         if (typeof createElement !== 'function') {
@@ -38,6 +39,24 @@
 
         const normalizedColorOptions = Array.isArray(colorOptions) ? colorOptions.slice() : [];
         const resolvedDatasetState = datasetState && typeof datasetState === 'object' ? datasetState : {};
+        const itemEnhancers = Array.isArray(itemEnhancersConfig)
+            ? itemEnhancersConfig.filter((fn) => typeof fn === 'function')
+            : [];
+
+        function runItemEnhancers(item, context) {
+            if (!item || !itemEnhancers.length) {
+                return;
+            }
+            itemEnhancers.forEach((enhancer) => {
+                try {
+                    enhancer(item, context);
+                } catch (error) {
+                    if (typeof console !== 'undefined' && console && typeof console.error === 'function') {
+                        console.error('createItemFactory: item enhancer failed', error);
+                    }
+                }
+            });
+        }
 
         function createItem(record, recordIndex, visibleIndex, visibleTotal) {
             const context = createItemContext(record, recordIndex, visibleIndex, visibleTotal);
@@ -55,6 +74,8 @@
 
             const rightResult = buildRightColumn(context);
             commitColumnContent(rightColumn, rightResult);
+
+            runItemEnhancers(item, context);
 
             return item;
         }
