@@ -24,13 +24,13 @@
 | 1 | ✅ 完了 | 設計ドキュメントの整備とビルド手順の検証。 |
 | 2 | ✅ 完了 | `createItem` 周辺の描画ロジック分割とヘルパー化。 |
 | 3 | ✅ 完了 | `createEffect` 周辺の描画ロジック分割とビューモデル導入。 |
-| 4 | 🔄 進行中 | DOM/データ処理ユーティリティの再編とレコード管理ヘルパーの共有化。 |
+| 4 | ✅ 完了 | DOM/データ処理ユーティリティの再編とレコード管理ヘルパーの共有化。 |
 | 5 | ⏳ 未着手 | 状態・データセット・永続化レイヤの完全分離と API 化。 |
 | 6 | ⏳ 未着手 | エントリポイント刷新とモジュール読込方式の最終統合。 |
 
 ### フォーカスすべき次アクション
-1. **共通ユーティリティ整備（ステップ4継続）**: DOM 操作・正規化ロジック・CSV パースの重複を洗い出し、`templates/gallery/utils/` および `templates/gallery/storage/` に集約する。未統合の重複コードは順次統一し、ユニットテストを増補する。
-2. **状態／データセット／永続化レイヤの独立（ステップ5）**: `state` の直接操作を廃し、専用 API を導入。データセット切替と保存処理を疎結合なモジュールとして呼び出す構造に改修する。
+1. **状態／データセット／永続化レイヤの独立（ステップ5）**: `state` の直接操作を廃し、専用 API を導入。データセット切替と保存処理を疎結合なモジュールとして呼び出す構造に改修する。
+2. **保存 API とローダーの抽象化（ステップ5継続）**: OPFS・ローカルバックアップを切り替え可能なストレージ境界を定義し、`createOpfsManager` などの実装差し替えを前提にした呼び出し層を整備する。
 3. **最終統合と ES Modules 化（ステップ6）**: `index.js` をエントリポイントに据え、`<script type="module">` で読み込む構成へ更新。ブラウザ UI・CSV 入出力・レビュー保存の回帰テストを完走させる。
 
 ### 完了済みハイライト
@@ -39,6 +39,7 @@
 - **フィルタ／検索の純化**: `applyFilters` と検索キャッシュを `utils/filter.js` へ切り出し、Node テストを追加して回帰を抑止。
 - **イベントとアクション処理の整理**: `events/galleryEvents.js` をハンドラ単位へ再編し、`events/recordActionHandlers.js` に操作ロジックを集約。お気に入り・色分け・レビュー操作のテストを強化。
 - **レコード・重複管理の共有化**: `templates/gallery/utils/records.js` と `templates/gallery/storage/utils.js` を新設し、ギャラリー本体からヘルパーを排除。フォールバックスタブを明示して依存を整理。
+- **DOM/ストレージユーティリティの統合**: `templates/gallery/utils/dom.js` にファクトリを導入し、`templates/gallery.js` からのフォールバック実装を撤廃。`window.galleryStorageUtils` の API を必須依存として扱い、Node テストで依存注入経路を検証。
 - **データ正規化の拡充**: `utils/data.js` に抑制レベル正規化を追加し、旧 CSV/OPFS データの互換性を担保。データセット解析ユーティリティを `dataset/utils.js` へ集約しテストを整備。
 - **テスト体制の強化**: `tests/js/gallery_modules.test.mjs` でフィルタ・アイテム生成・効果レベル処理などのシナリオを網羅し、保存トリガーや候補リセットを検証。
 
@@ -60,9 +61,9 @@
 ### DOM / 状態ユーティリティ統合
 - 初期化シーケンスを `templates/gallery/app/controller.js` で受け持ち、ギャラリー側ではファクトリ経由で起動（フォールバックあり）。
 - データセット切替ロジックを `templates/gallery/dataset/manager.js` に切り出し、ギャラリー側ではファクトリ経由 + フォールバックで利用。
-- CSV 読み込み・結合ローダー・保存マネージャを `templates/gallery/storage/utils.js` として分離し、ギャラリー側ではフォールバックを保持。
+- CSV 読み込み・結合ローダー・保存マネージャを `templates/gallery/storage/utils.js` として分離し、ギャラリー側では `window.galleryStorageUtils` を必須依存として注入する。
 - 状態管理を `templates/gallery/state/store.js` に切り出し、`window.galleryStateStoreFactory` 経由で `createStateStore` を利用できるようにした（ギャラリー本体ではフォールバックを維持）。
-- DOM ユーティリティを `templates/gallery/utils/dom.js` と `templates/gallery/domUtils.js` に分離し、ブラウザ側では `window.galleryDomUtils` を通して利用する（フォールバック関数を残して段階的に移行）。
+- DOM ユーティリティを `templates/gallery/utils/dom.js` に集約し、`window.galleryDomUtilsFactory` から生成して利用する構造へ更新（フォールバックを廃して明示的な依存注入に移行）。
 - **DOM ヘルパー再編**: `ensureElement` / `clearChildren` / `applyInlineStyles` などの DOM 操作関数を `templates/gallery/utils/dom.js` に集約し、返り値と副作用を明示的にする。要素の生成 (`createElement`) と属性付与を小さな純粋関数として切り出し、描画モジュールから利用。
 - **イベント依存の排除**: DOM ユーティリティはイベント登録を内包しない。イベントモジュールにてユーティリティを組み合わせ、テスト時は仮想 DOM 上で独立検証できるようにする。
 - **状態ストア設計**: `state`, `datasetState`, `duplicates`, `favorites` などの管理を `state/store.js` に集約し、読み取り/書き込み API (`getState`, `updateState`, `subscribe`) を提供。直接プロパティへアクセスしないよう呼び出し側を段階的に移行。

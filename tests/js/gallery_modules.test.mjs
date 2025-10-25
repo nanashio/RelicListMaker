@@ -330,6 +330,42 @@ describe('gallery dom utils', () => {
     assert.equal(created.classList.contains('made'), true);
     assert.equal(created.isConnected, false);
   });
+
+  test('factory createDomUtils accepts explicit document override', () => {
+    const factory = global.window.galleryDomUtilsFactory;
+    assert.ok(factory && typeof factory.createDomUtils === 'function');
+
+    const externalElement = createMockElement();
+    externalElement.isConnected = true;
+
+    const customDocument = {
+      querySelector: (selector) => (selector === '#custom' ? externalElement : null),
+      getElementById: () => null,
+      createElement: (tagName) => {
+        const element = createMockElement();
+        element.createdTagName = tagName;
+        element.createdByFactory = true;
+        return element;
+      }
+    };
+
+    const customUtils = factory.createDomUtils({ document: customDocument });
+
+    const resolved = customUtils.ensureElement(null, {
+      selector: '#custom',
+      id: 'from-factory'
+    });
+    assert.strictEqual(resolved, externalElement);
+    assert.equal(resolved.id, 'from-factory');
+
+    const created = customUtils.ensureElement(null, {
+      tagName: 'article',
+      classNames: ['factory-product']
+    });
+    assert.equal(created.createdTagName, 'article');
+    assert.equal(created.classList.contains('factory-product'), true);
+    assert.equal(created.createdByFactory, true);
+  });
 });
 
 describe('gallery data utils', () => {
