@@ -213,6 +213,11 @@
             const normalizedImageName = imageName == null ? '' : String(imageName);
             const imageNameLower = normalizedImageName.toLowerCase();
 
+            const effectNameForLevels =
+                correctionValue ||
+                predictionText ||
+                rawText;
+
             return {
                 record,
                 slot,
@@ -241,7 +246,7 @@
                 displayLevelLower,
                 correctionValue,
                 correctionValueLower,
-                effectNameForLevels: levelCorrection || correctionValue || predictionText,
+                effectNameForLevels,
                 lowConfidence: hasFiniteScore && numericScore < 60
             };
         }

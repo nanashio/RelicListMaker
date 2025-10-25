@@ -1278,6 +1278,26 @@ describe('gallery effect factory', () => {
     assert.equal(typeof helpers.rebuildLevelSelectOptions, 'function');
   });
 
+  test('level correction does not override master lookup key', () => {
+    const record = {
+      Effect1: '炎攻撃力上昇',
+      RawText1: 'Raw',
+      Effect1Score: 80,
+      Effect1Level: 'L1',
+      Effect1LevelOptions: 'L1|L2|L3',
+      Effect1LevelCorrection: 'L3',
+      Effect1LevelSuppressed: '',
+      Effect1Correction: '',
+      Effect1Status: 'pending',
+      BaseImage: 'base.png'
+    };
+    const effect = effectFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0);
+    assert.ok(effect, 'effect should be created with level correction');
+    assert.ok(applyCalls.length === 1, 'applyMasterLevelOptions should be invoked');
+    const [, , effectName] = applyCalls[0];
+    assert.equal(effectName, '炎攻撃力上昇');
+  });
+
   test('updateEffectStatus updates dataset and button selection', () => {
     const effect = new MockElement('div', 'effect pending');
     const indicator = new MockElement('span', 'status-indicator');
