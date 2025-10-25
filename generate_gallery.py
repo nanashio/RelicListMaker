@@ -21,6 +21,7 @@ TEMPLATE_JS_PATH = str(templates_path("gallery.js"))
 ADDITIONAL_GALLERY_SCRIPTS = [
     "gallery/utils/dom.js",
     "gallery/utils/data.js",
+    "gallery/utils/records.js",
     "gallery/dataset/utils.js",
     "gallery/utils/filter.js",
     "gallery/state/store.js",
