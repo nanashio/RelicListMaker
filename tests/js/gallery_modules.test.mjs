@@ -376,6 +376,32 @@ describe('gallery data utils', () => {
     assert.deepEqual(result.get('effecta'), ['＋１', '＋２']);
     assert.deepEqual(result.get('effectb'), ['high', 'low']);
   });
+
+  test('normalizeSuppressedLevels clears legacy level values', () => {
+    const records = [
+      {
+        Image: 'sample.png',
+        Effect1Level: 'Base',
+        Effect1LevelOptions: 'Base|High',
+        Effect1LevelCorrection: '',
+        Effect1LevelSuppressed: 'TRUE'
+      },
+      {
+        Image: 'keep.png',
+        Effect2Level: 'Remain',
+        Effect2LevelSuppressed: 'false'
+      }
+    ];
+
+    const normalized = dataUtils.normalizeSuppressedLevels(records);
+    assert.equal(Array.isArray(normalized), true);
+    assert.equal(normalized[0].Effect1LevelSuppressed, 'true');
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized[0], 'Effect1Level'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized[0], 'Effect1LevelOptions'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized[0], 'Effect1LevelCorrection'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized[1], 'Effect2LevelSuppressed'), false);
+    assert.equal(normalized[1].Effect2Level, 'Remain');
+  });
 });
 
 describe('gallery filter utils', () => {
