@@ -29,14 +29,17 @@ def _build_fixture_tree(base_dir: Path) -> None:
     additional_scripts = [
         Path('gallery/utils/dom.js'),
         Path('gallery/utils/data.js'),
+        Path('gallery/utils/filter.js'),
         Path('gallery/state/store.js'),
         Path('gallery/dataset/manager.js'),
         Path('gallery/storage/utils.js'),
         Path('gallery/app/controller.js'),
+        Path('gallery/render/effectViewModel.js'),
         Path('gallery/render/effectFactory.js'),
         Path('gallery/render/itemEnhancers.js'),
         Path('gallery/render/itemFactory.js'),
         Path('gallery/render/galleryView.js'),
+        Path('gallery/events/recordActionHandlers.js'),
         Path('gallery/events/galleryEvents.js')
     ]
     for relative in additional_scripts:

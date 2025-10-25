@@ -21,10 +21,12 @@ TEMPLATE_JS_PATH = str(templates_path("gallery.js"))
 ADDITIONAL_GALLERY_SCRIPTS = [
     "gallery/utils/dom.js",
     "gallery/utils/data.js",
+    "gallery/utils/filter.js",
     "gallery/state/store.js",
     "gallery/dataset/manager.js",
     "gallery/storage/utils.js",
     "gallery/app/controller.js",
+    "gallery/render/effectViewModel.js",
     "gallery/render/effectFactory.js",
     "gallery/render/itemEnhancers.js",
     "gallery/render/itemFactory.js",

@@ -11,6 +11,10 @@
 - `buildGallery` / `createItem` / `createEffect` などが 100 行以上となりテストが難しい。
 - ユーティリティ関数が散在し、重複処理や似た命名が混在。
 
+## テストと検証
+- 各ステップでの修正が完了したら必ず `npm run test:all` を実行し、Python・Node・Playwright の一括テストが全て成功することを確認する。
+- 個別調査が必要な場合のみ `pytest` / `npm run test:node` / `npm run test:browser` を使い分ける。
+
 ## 実行計画
 ### 完了済み
 - [x] ステップ1: 設計ドキュメントの整備とビルド手順の確認。

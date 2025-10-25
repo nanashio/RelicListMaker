@@ -2,8 +2,10 @@
   "name": "nightreign-relic",
   "private": true,
   "scripts": {
+    "test:node": "node --test tests/js/gallery_modules.test.mjs",
     "test:browser": "playwright test",
-    "test:browser:headed": "playwright test --headed"
+    "test:browser:headed": "playwright test --headed",
+    "test:all": "pytest && npm run test:node && npm run test:browser"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0"
