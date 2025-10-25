@@ -1225,6 +1225,83 @@ describe('gallery app controller', () => {
     assert.deepEqual(steps, ['attach', 'prepare', 'setup', 'levels', 'options', 'switch']);
   });
 });
+
+
+describe('gallery effect view model', () => {
+  let viewModel;
+
+  beforeEach(() => {
+    global.window = {};
+    runScript('templates/gallery/render/effectViewModel.js');
+    viewModel = global.window.galleryRenderFactory.effectViewModel;
+  });
+
+  afterEach(() => {
+    delete global.window;
+  });
+
+  test('createEffectContext returns null when record has no displayable data', () => {
+    const record = {
+      Effect1: '',
+      RawText1: '',
+      Effect1Score: null
+    };
+    const context = viewModel.createEffectContext(record, 1, 'Ⅰ', 'image.png', 0, {
+      normalizeStatus: () => 'pending'
+    });
+    assert.equal(context, null);
+  });
+
+  test('createEffectContext normalizes fields and derives status', () => {
+    const record = {
+      Effect1: 'Power Boost',
+      RawText1: 'Raw Effect',
+      Effect1Score: '72.4',
+      Effect1Level: 'L1',
+      Effect1LevelOptions: 'L1| L2 |',
+      Effect1LevelCorrection: '',
+      Effect1LevelSuppressed: 'true',
+      Effect1Correction: 'Fix',
+      Effect1Status: 'pending'
+    };
+
+    const context = viewModel.createEffectContext(record, 1, 'Ⅰ', 'Image.PNG', 5, {
+      normalizeStatus: (value) => (value === 'pending' ? 'pending' : 'pass')
+    });
+
+    assert.equal(context.recordIndex, 5);
+    assert.equal(context.imageNameLower, 'image.png');
+    assert.equal(context.predictionText, 'Power Boost');
+    assert.equal(context.scoreDisplay, '72.4%');
+    assert.deepEqual(context.levelOptions, ['L1', 'L2']);
+    assert.equal(context.statusValue, 'corrected');
+    assert.equal(context.displayLevel, '');
+    assert.equal(context.correctionValue, 'Fix');
+  });
+
+  test('buildLevelChoices merges original and correction values', () => {
+    const context = {
+      levelOptions: ['High', 'Low', 'High'],
+      levelValue: 'Base',
+      levelValueLower: 'base',
+      preserveOriginalLevel: false,
+      levelCorrection: 'Expert'
+    };
+
+    const result = viewModel.buildLevelChoices(context, {
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : [])
+    });
+
+    assert.deepEqual(result, ['Expert', 'High', 'Low']);
+  });
+
+  test('parseLevelOptions normalizes string and array sources', () => {
+    assert.deepEqual(viewModel.parseLevelOptions('A| B |'), ['A', 'B']);
+    assert.deepEqual(viewModel.parseLevelOptions(['', 'C', null, 'D']), ['C', 'D']);
+    assert.deepEqual(viewModel.parseLevelOptions(null), []);
+  });
+});
+
 describe('gallery effect factory', () => {
   let effectFactory;
   let applyCalls;
@@ -1233,6 +1310,7 @@ describe('gallery effect factory', () => {
     global.window = {};
     global.document = createMockDocument();
     applyCalls = [];
+    runScript('templates/gallery/render/effectViewModel.js');
     runScript('templates/gallery/render/effectFactory.js');
     const factory = global.window.galleryRenderFactory;
     effectFactory = factory.createEffectFactory({
@@ -1389,10 +1467,9 @@ describe('gallery effect factory', () => {
     assert.equal(badge.title, '候補: Alt / Beta');
   });
 
-  test('parseLevelOptions normalizes string and array sources', () => {
-    assert.deepEqual(effectFactory.parseLevelOptions('A| B |'), ['A', 'B']);
-    assert.deepEqual(effectFactory.parseLevelOptions(['', 'C', null, 'D']), ['C', 'D']);
-    assert.deepEqual(effectFactory.parseLevelOptions(null), []);
+  test('parseLevelOptions is delegated to effect view model', () => {
+    const viewModel = global.window.galleryRenderFactory.effectViewModel;
+    assert.strictEqual(effectFactory.parseLevelOptions, viewModel.parseLevelOptions);
   });
 
 });

@@ -9,7 +9,8 @@
             sortLevelsAscending,
             applyMasterLevelOptions,
             normalizeStatus,
-            statusLabel
+            statusLabel,
+            effectViewModel: effectViewModelConfig
         } = config;
 
         if (!state || typeof state !== 'object') {
@@ -35,6 +36,27 @@
         }
         if (typeof statusLabel !== 'function') {
             throw new Error('createEffectFactory: statusLabel helper is required');
+        }
+
+        const resolvedViewModel =
+            effectViewModelConfig && typeof effectViewModelConfig === 'object'
+                ? effectViewModelConfig
+                : window.galleryRenderFactory && window.galleryRenderFactory.effectViewModel;
+
+        const {
+            createEffectContext,
+            buildLevelChoices,
+            parseLevelOptions: parseLevelOptionsImpl
+        } = resolvedViewModel || {};
+
+        if (typeof createEffectContext !== 'function') {
+            throw new Error('createEffectFactory: effectViewModel.createEffectContext is required');
+        }
+        if (typeof buildLevelChoices !== 'function') {
+            throw new Error('createEffectFactory: effectViewModel.buildLevelChoices is required');
+        }
+        if (typeof parseLevelOptionsImpl !== 'function') {
+            throw new Error('createEffectFactory: effectViewModel.parseLevelOptions is required');
         }
 
         function updateInputValueAttribute(input) {
@@ -100,29 +122,11 @@
             return [];
         }
 
-        function parseLevelOptions(raw) {
-            if (raw == null) {
-                return [];
-            }
-            if (Array.isArray(raw)) {
-                return raw
-                    .map((value) => (value == null ? '' : String(value).trim()))
-                    .filter((value) => value !== '');
-            }
-            if (typeof raw === 'string') {
-                if (!raw.includes('|')) {
-                    return raw ? [raw.trim()] : [];
-                }
-                return raw
-                    .split('|')
-                    .map((value) => value.trim())
-                    .filter((value) => value !== '');
-            }
-            return [];
-        }
-
         function createEffect(record, slot, symbol, imageName, recordIndex) {
-            const context = createEffectContext(record, slot, symbol, imageName, recordIndex);
+            const context = createEffectContext(record, slot, symbol, imageName, recordIndex, {
+                normalizeStatus,
+                parseLevelOptions: parseLevelOptionsImpl
+            });
             if (!context) {
                 return null;
             }
@@ -155,100 +159,6 @@
             updateEffectStatus(effect, context.statusValue);
 
             return effect;
-        }
-
-        function createEffectContext(record, slot, symbol, imageName, recordIndex) {
-            if (!record || typeof record !== 'object') {
-                return null;
-            }
-
-            const prediction = record[`Effect${slot}`];
-            const raw = record[`RawText${slot}`];
-            const score = record[`Effect${slot}Score`];
-
-            const predictionText = prediction == null ? '' : String(prediction);
-            const rawText = raw == null ? '' : String(raw);
-            const hasScoreValue = score != null && !Number.isNaN(Number(score));
-            if (!predictionText && !rawText && !hasScoreValue) {
-                return null;
-            }
-
-            const numericScore = Number(score);
-            const hasFiniteScore = Number.isFinite(numericScore);
-            const scoreDisplay = hasFiniteScore ? `${numericScore.toFixed(1)}%` : '--';
-            const ocrDisplay = rawText || '--';
-
-            const levelValueRaw = record[`Effect${slot}Level`];
-            const levelValue = levelValueRaw == null ? '' : String(levelValueRaw).trim();
-            const levelOptionsRaw = record[`Effect${slot}LevelOptions`];
-            const levelOptions = parseLevelOptions(levelOptionsRaw);
-            const levelOptionsLower = levelOptions.map((value) =>
-                value == null ? '' : String(value).toLowerCase()
-            );
-            const levelCorrectionKey = `Effect${slot}LevelCorrection`;
-            const levelCorrectionRaw = record[levelCorrectionKey];
-            const levelCorrection = levelCorrectionRaw == null ? '' : String(levelCorrectionRaw).trim();
-            const levelSuppressedRaw = record[`Effect${slot}LevelSuppressed`];
-            const levelSuppressed =
-                typeof levelSuppressedRaw === 'boolean'
-                    ? levelSuppressedRaw
-                    : String(levelSuppressedRaw || '').trim().toLowerCase() === 'true';
-            const preserveOriginalLevel = !levelSuppressed;
-            const levelOptionsDisplay = levelOptions.join('|');
-            const displayLevel = levelCorrection || (preserveOriginalLevel ? levelValue : '');
-
-            const correctionKey = `Effect${slot}Correction`;
-            const correctionValue = record[correctionKey] == null ? '' : String(record[correctionKey]);
-
-            const initialStatus = normalizeStatus(record[`Effect${slot}Status`]);
-            const statusValue = correctionValue && initialStatus !== 'pass' ? 'corrected' : initialStatus;
-
-            const predictionLower = predictionText.toLowerCase();
-            const rawLower = rawText.toLowerCase();
-            const levelValueLower = levelValue ? levelValue.toLowerCase() : '';
-            const displayLevelLower = displayLevel ? displayLevel.toLowerCase() : '';
-            const levelCorrectionLower = levelCorrection ? levelCorrection.toLowerCase() : '';
-            const correctionValueLower = correctionValue.toLowerCase();
-
-            const normalizedImageName = imageName == null ? '' : String(imageName);
-            const imageNameLower = normalizedImageName.toLowerCase();
-
-            const effectNameForLevels =
-                correctionValue ||
-                predictionText ||
-                rawText;
-
-            return {
-                record,
-                slot,
-                symbol,
-                imageName: normalizedImageName,
-                imageNameLower,
-                recordIndex,
-                predictionText,
-                predictionLower,
-                rawText,
-                rawLower,
-                numericScore,
-                hasFiniteScore,
-                scoreDisplay,
-                ocrDisplay,
-                statusValue,
-                levelValue,
-                levelValueLower,
-                levelOptions,
-                levelOptionsLower,
-                levelOptionsDisplay,
-                levelCorrection,
-                levelCorrectionLower,
-                preserveOriginalLevel,
-                displayLevel,
-                displayLevelLower,
-                correctionValue,
-                correctionValueLower,
-                effectNameForLevels,
-                lowConfidence: hasFiniteScore && numericScore < 60
-            };
         }
 
         function createEffectElement(context) {
@@ -329,7 +239,7 @@
         }
 
         function populateEffectLevelOptions(effect, levelInput, context) {
-            const sortedLevelChoices = buildEffectLevelChoices(context);
+            const sortedLevelChoices = buildLevelChoices(context, { sortLevelsAscending });
 
             const emptyOption = document.createElement('option');
             emptyOption.value = '';
@@ -349,57 +259,6 @@
                 context.levelCorrection || (context.preserveOriginalLevel ? context.levelValue : '') || '';
             levelInput.value = initialLevelValue;
             updateLevelInputAvailability(levelInput, sortedLevelChoices);
-        }
-
-        function buildEffectLevelChoices(context) {
-            const levelChoices = [];
-            const seenLevels = new Set();
-
-            const pushLevelChoice = (value) => {
-                if (value == null) {
-                    return;
-                }
-                const text = String(value).trim();
-                if (!text) {
-                    return;
-                }
-                const key = text.toLowerCase();
-                if (seenLevels.has(key)) {
-                    return;
-                }
-                seenLevels.add(key);
-                levelChoices.push(text);
-            };
-
-            const originalLevelLower = context.levelValueLower;
-            let originalInOptions = false;
-            context.levelOptions.forEach((option) => {
-                const text = option == null ? '' : String(option).trim();
-                if (!text) {
-                    return;
-                }
-                const lower = text.toLowerCase();
-                if (originalLevelLower && lower === originalLevelLower) {
-                    originalInOptions = true;
-                    if (context.preserveOriginalLevel) {
-                        pushLevelChoice(text);
-                    }
-                    return;
-                }
-                pushLevelChoice(text);
-            });
-
-            if (context.levelValue) {
-                if (context.preserveOriginalLevel) {
-                    pushLevelChoice(context.levelValue);
-                } else if (originalInOptions && levelChoices.length) {
-                    pushLevelChoice(context.levelValue);
-                }
-            }
-
-            pushLevelChoice(context.levelCorrection);
-
-            return sortLevelsAscending(levelChoices);
         }
 
         function updateLevelBadge(effect) {
@@ -625,7 +484,7 @@
             createCorrectionInput,
             updateInputValueAttribute,
             updateLevelInputAvailability,
-            parseLevelOptions
+            parseLevelOptions: parseLevelOptionsImpl
         };
     }
 
