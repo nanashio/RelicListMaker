@@ -175,6 +175,36 @@
                       return 'pending';
                   };
 
+        const renderNamespace = typeof window !== 'undefined' && window ? window.galleryRenderFactory : null;
+        const createItemFactoryFn =
+            typeof config.createItemFactory === 'function'
+                ? config.createItemFactory
+                : renderNamespace && typeof renderNamespace.createItemFactory === 'function'
+                  ? renderNamespace.createItemFactory
+                  : null;
+
+        if (typeof createItemFactoryFn !== 'function') {
+            throw new Error('createGalleryView: createItemFactory helper is required');
+        }
+
+        const itemFactory = createItemFactoryFn({
+            datasetState,
+            createElement,
+            createFragment: createDocumentFragment,
+            bindImage,
+            createEffect,
+            colorOptions,
+            getImagePath: (imageName) => joinPath(state.imageDir || '.', imageName),
+            getDisplayName: (imageName) => getFileName(imageName),
+            getLabelSymbols: () => (Array.isArray(state.labelSymbols) ? state.labelSymbols.slice() : [])
+        });
+
+        if (!itemFactory || typeof itemFactory.createItem !== 'function') {
+            throw new Error('createGalleryView: itemFactory did not provide createItem');
+        }
+
+        const { createItem } = itemFactory;
+
         const SUMMARY_INLINE_STYLE = {
             textAlign: 'center',
             color: '#333',
@@ -333,6 +363,10 @@
             entries.forEach(({ record, recordIndex, visibleIndex, visibleTotal }) => {
                 const item = createItem(record, recordIndex, visibleIndex, visibleTotal);
                 if (item) {
+                    syncDuplicateState(item);
+                    syncFavoriteState(item);
+                    syncItemColorState(item);
+                    refreshItemCaches(item);
                     fragment.appendChild(item);
                     items.push(item);
                 }
@@ -383,200 +417,6 @@
                 return;
             }
             dom.gallery.textContent = '';
-        }
-
-        function createItem(record, recordIndex, visibleIndex, visibleTotal) {
-            const context = createItemContext(record, recordIndex, visibleIndex, visibleTotal);
-            if (!context) {
-                return null;
-            }
-
-            const { item, leftColumn, rightColumn } = createItemStructure(context);
-
-            const imageElement = createItemImage(context);
-            if (imageElement) {
-                leftColumn.appendChild(imageElement);
-                bindImage(imageElement);
-            }
-
-            leftColumn.appendChild(createItemControls(context));
-
-            const hasEffect = appendItemEffects(context, rightColumn);
-            if (!hasEffect) {
-                rightColumn.appendChild(createNoEffectPlaceholder());
-            }
-
-            syncDuplicateState(item);
-            syncFavoriteState(item);
-            syncItemColorState(item);
-            refreshItemCaches(item);
-            return item;
-        }
-
-        function createItemContext(record, recordIndex, visibleIndex, visibleTotal) {
-            if (!record || typeof record !== 'object') {
-                return null;
-            }
-            const imageName = record.Image == null ? '' : String(record.Image);
-            const baseImageName = record.BaseImage == null ? '' : String(record.BaseImage);
-            const displayName = baseImageName || getFileName(imageName) || imageName;
-            const isMerged = datasetState.kind === 'merged';
-            const datasetName = isMerged ? (record.Dataset == null ? '' : String(record.Dataset)) : '';
-            const datasetFolder = isMerged ? (record.DatasetFolder == null ? '' : String(record.DatasetFolder)) : '';
-            const imagePath = joinPath(state.imageDir, imageName);
-
-            return {
-                record,
-                recordIndex,
-                visibleIndex,
-                visibleTotal,
-                imageName,
-                baseImageName,
-                displayName,
-                datasetName,
-                datasetFolder,
-                imagePath
-            };
-        }
-
-        function createItemStructure(context) {
-            const item = createElement('div', 'item');
-            item.dataset.image = context.imageName.toLowerCase();
-            item.dataset.imageName = context.imageName;
-            item.dataset.recordIndex = String(context.recordIndex);
-            if (context.baseImageName) {
-                item.dataset.baseImage = context.baseImageName.toLowerCase();
-            }
-            if (context.datasetName) {
-                item.dataset.datasetLabel = context.datasetName.toLowerCase();
-            }
-
-            const leftColumn = createElement('div', 'item-left');
-            const rightColumn = createElement('div', 'item-right');
-            item.appendChild(leftColumn);
-            item.appendChild(rightColumn);
-
-            return { item, leftColumn, rightColumn };
-        }
-
-        function createItemImage(context) {
-            const img = createElement('img');
-            img.src = context.imagePath;
-            img.alt = context.displayName || context.imageName;
-            img.dataset.full = context.imagePath;
-            img.tabIndex = 0;
-            return img;
-        }
-
-        function createItemControls(context) {
-            const controls = createElement('div', 'item-controls');
-            controls.appendChild(createDuplicateButton(context.imageName));
-            controls.appendChild(createFavoriteButton(context.imageName));
-            controls.appendChild(createColorControls(context.recordIndex));
-            controls.appendChild(createItemMetaInfo(context));
-            return controls;
-        }
-
-        function createDuplicateButton(imageName) {
-            const button = createElement('button', 'duplicate-toggle');
-            button.type = 'button';
-            button.dataset.image = imageName;
-            button.dataset.action = 'toggle-duplicate';
-            button.setAttribute('aria-pressed', 'false');
-            return button;
-        }
-
-        function createFavoriteButton(imageName) {
-            const button = createElement('button', 'favorite-toggle', 'お気に入り');
-            button.type = 'button';
-            button.dataset.image = imageName;
-            button.dataset.action = 'toggle-favorite';
-            button.setAttribute('aria-pressed', 'false');
-            return button;
-        }
-
-        function createColorControls(recordIndex) {
-            const container = createElement('div', 'item-color-controls');
-            const label = createElement('label', 'item-color-label', '色');
-            const selectId = `item-color-${recordIndex}`;
-            label.setAttribute('for', selectId);
-
-            const select = createElement('select', 'item-color-select');
-            select.id = selectId;
-            select.dataset.action = 'set-item-color';
-            select.dataset.recordIndex = String(recordIndex);
-
-            const emptyOption = createElement('option');
-            emptyOption.value = '';
-            emptyOption.textContent = 'なし';
-            select.appendChild(emptyOption);
-
-            colorOptions.forEach((option) => {
-                const colorOption = createElement('option');
-                colorOption.value = option.key;
-                colorOption.textContent = option.label;
-                select.appendChild(colorOption);
-            });
-
-            container.appendChild(label);
-            container.appendChild(select);
-            return container;
-        }
-
-        function createItemMetaInfo(context) {
-            const metaInfo = createElement('div', 'item-meta');
-            metaInfo.appendChild(createItemPosition(context.visibleIndex, context.visibleTotal));
-
-            if (datasetState.kind === 'merged' && context.datasetName) {
-                const datasetBadge = createElement('span', 'dataset-label', context.datasetName);
-                const badgeTitle = context.datasetFolder
-                    ? `${context.datasetName} (${context.datasetFolder})`
-                    : context.datasetName;
-                datasetBadge.setAttribute('title', badgeTitle);
-                metaInfo.appendChild(datasetBadge);
-            }
-
-            const filenameText = context.displayName || context.imageName;
-            const filename = createElement('span', 'filename', filenameText);
-            filename.setAttribute('title', context.imageName || filenameText || '');
-            metaInfo.appendChild(filename);
-
-            return metaInfo;
-        }
-
-        function createItemPosition(visibleIndex, visibleTotal) {
-            if (visibleTotal <= 0) {
-                return createElement('span', 'item-position', '- / 0');
-            }
-            let displayIndex = visibleIndex;
-            if (displayIndex <= 0) {
-                displayIndex = 1;
-            } else if (displayIndex > visibleTotal) {
-                displayIndex = visibleTotal;
-            }
-            return createElement('span', 'item-position', `${displayIndex} / ${visibleTotal}`);
-        }
-
-        function appendItemEffects(context, rightColumn) {
-            let hasEffect = false;
-            state.labelSymbols.forEach((symbol, index) => {
-                const effect = createEffect(
-                    context.record,
-                    index + 1,
-                    symbol || `Slot ${index + 1}`,
-                    context.imageName,
-                    context.recordIndex
-                );
-                if (effect) {
-                    rightColumn.appendChild(effect);
-                    hasEffect = true;
-                }
-            });
-            return hasEffect;
-        }
-
-        function createNoEffectPlaceholder() {
-            return createElement('p', 'no-effect', '効果情報がありません。');
         }
 
         function resolveItemElement(element) {

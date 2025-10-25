@@ -787,6 +787,7 @@ describe('gallery view', () => {
     global.window = {};
     global.document = createDocumentStub();
     runScript('templates/gallery/utils/filter.js');
+    runScript('templates/gallery/render/itemFactory.js');
     runScript('templates/gallery/render/galleryView.js');
     galleryFactory = global.window.galleryRenderFactory;
   });
@@ -1218,6 +1219,132 @@ describe('gallery effect factory', () => {
     assert.deepEqual(effectFactory.parseLevelOptions(null), []);
   });
 
+});
+
+describe('gallery item factory', () => {
+  let createElement;
+  let bindCalls;
+  let effectCalls;
+  let itemFactoryNamespace;
+  let itemFactory;
+
+  beforeEach(() => {
+    global.window = {};
+    global.document = createMockDocument();
+    runScript('templates/gallery/render/itemFactory.js');
+    itemFactoryNamespace = global.window.galleryRenderFactory;
+    bindCalls = [];
+    effectCalls = [];
+    createElement = (tagName, className = '', text = '') => new MockElement(tagName, className, text);
+    itemFactory = itemFactoryNamespace.createItemFactory({
+      datasetState: { kind: 'merged' },
+      createElement,
+      createFragment: () => new MockElement('#fragment'),
+      bindImage: (image) => {
+        bindCalls.push(image);
+        image.dataset.bound = 'true';
+      },
+      createEffect: (record, slot, symbol, imageName, recordIndex) => {
+        effectCalls.push({ record, slot, symbol, imageName, recordIndex });
+        const element = new MockElement('section', `effect slot-${slot}`);
+        element.dataset.slot = String(slot);
+        return element;
+      },
+      colorOptions: [
+        { key: 'red', label: '赤', className: 'item-color-red' },
+        { key: 'blue', label: '青', className: 'item-color-blue' }
+      ],
+      getImagePath: (imageName) => `images/${imageName}`,
+      getDisplayName: (imageName) => imageName.toUpperCase(),
+      getLabelSymbols: () => ['Ⅰ', 'Ⅱ']
+    });
+  });
+
+  afterEach(() => {
+    delete global.document;
+    delete global.window;
+  });
+
+  test('createItem assembles both columns with effects and metadata', () => {
+    const record = {
+      Image: 'alpha.png',
+      BaseImage: '',
+      Dataset: 'Merged A',
+      DatasetFolder: 'runs/a',
+      Effect1: 'Power',
+      Effect2: 'Guard'
+    };
+    const item = itemFactory.createItem(record, 0, 1, 5);
+    assert.ok(item, 'item should be created');
+    assert.equal(item.dataset.imageName, 'alpha.png');
+    assert.equal(effectCalls.length, 2, 'effects should be requested for each symbol');
+    assert.deepEqual(
+      effectCalls.map((entry) => ({ symbol: entry.symbol, slot: entry.slot, imageName: entry.imageName })),
+      [
+        { symbol: 'Ⅰ', slot: 1, imageName: 'alpha.png' },
+        { symbol: 'Ⅱ', slot: 2, imageName: 'alpha.png' }
+      ]
+    );
+
+    const leftColumn = item.children[0];
+    assert.equal(leftColumn.className.includes('item-left'), true);
+    const image = leftColumn.children[0];
+    assert.equal(image.tagName, 'IMG');
+    assert.equal(image.dataset.full, 'images/alpha.png');
+    assert.equal(image.dataset.bound, 'true');
+    assert.equal(bindCalls.length, 1, 'bindImage should be called once');
+
+    const controls = leftColumn.children[1];
+    const metaInfo = controls.children[3];
+    const datasetBadge = metaInfo.querySelector('.dataset-label');
+    assert.ok(datasetBadge, 'dataset badge should exist for merged dataset');
+    assert.equal(datasetBadge.textContent, 'Merged A');
+    assert.equal(datasetBadge.attributes.title, 'Merged A (runs/a)');
+
+    const rightColumn = item.children[1];
+    assert.equal(rightColumn.children.length, 2, 'two effects should be appended');
+    assert.ok(rightColumn.children.every((child) => child.tagName === 'SECTION'));
+  });
+
+  test('createItem falls back to placeholder when no effect is returned', () => {
+    const placeholderFactory = itemFactoryNamespace.createItemFactory({
+      datasetState: { kind: 'normal' },
+      createElement,
+      createFragment: () => new MockElement('#fragment'),
+      bindImage: () => {},
+      createEffect: () => null,
+      colorOptions: [],
+      getImagePath: (imageName) => imageName,
+      getDisplayName: (imageName) => imageName,
+      getLabelSymbols: () => ['Ⅰ']
+    });
+    const item = placeholderFactory.createItem({ Image: 'beta.png' }, 2, 0, 0);
+    const rightColumn = item.children[1];
+    assert.equal(rightColumn.children.length, 1);
+    const placeholder = rightColumn.children[0];
+    assert.equal(placeholder.className.includes('no-effect'), true);
+    assert.equal(placeholder.textContent, '効果情報がありません。');
+  });
+
+  test('createItemContext exposes dataset metadata and resolved paths', () => {
+    const context = itemFactory.createItemContext(
+      {
+        Image: 'gamma.png',
+        BaseImage: 'gamma_base.png',
+        Dataset: 'Merged B',
+        DatasetFolder: 'runs/b'
+      },
+      5,
+      3,
+      10
+    );
+    assert.equal(context.imagePath, 'images/gamma.png');
+    assert.equal(context.displayName, 'gamma_base.png');
+    assert.equal(context.datasetName, 'Merged B');
+    assert.equal(context.datasetFolder, 'runs/b');
+    assert.equal(context.visibleIndex, 3);
+    assert.equal(context.visibleTotal, 10);
+  });
 });
 
 describe('gallery events', () => {
