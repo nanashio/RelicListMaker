@@ -1687,6 +1687,212 @@ describe('record action handlers', () => {
     assert.equal(scheduleCalls.length, 1);
     assert.equal(filterCalls.length, 1);
   });
+
+  test('changeEffectLevel applies level correction and updates status', () => {
+    const record = {};
+    const item = new MockElement('div', 'item');
+    const effect = new MockElement('div', 'effect');
+    effect.dataset.status = 'pending';
+    effect.dataset.levelOriginalValue = 'Base';
+    item.appendChild(effect);
+
+    const levelInput = new MockElement('select', 'level-input');
+    levelInput.value = 'Expert';
+    effect.appendChild(levelInput);
+
+    const levelCorrectionCalls = [];
+    const statusCalls = [];
+    const effectStatusCalls = [];
+    const badgeCalls = [];
+    const refreshCalls = [];
+    const filterCalls = [];
+    const scheduleCalls = [];
+    const deps = buildBaseDeps(record, item, {
+      scheduleSave: () => scheduleCalls.push(null),
+      applyFilters: () => filterCalls.push(null),
+      refreshItemCaches: () => refreshCalls.push(null),
+      updateRecordLevelCorrection: (recordIndex, slotIndex, value) => {
+        levelCorrectionCalls.push([recordIndex, slotIndex, value]);
+        return true;
+      },
+      recordStatusChange: (_effect, status) => {
+        statusCalls.push(status);
+        effect.dataset.status = status;
+        return true;
+      },
+      updateEffectStatus: (_effect, status) => effectStatusCalls.push(status),
+      updateLevelBadge: (target) => badgeCalls.push(target),
+      getEffectIndexes: () => ({ recordIndex: 2, slotIndex: 1 })
+    });
+
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.changeEffectLevel(effect, levelInput);
+
+    assert.deepEqual(levelCorrectionCalls, [[2, 1, 'Expert']]);
+    assert.deepEqual(statusCalls, ['corrected']);
+    assert.deepEqual(effectStatusCalls, ['corrected']);
+    assert.equal(badgeCalls.length, 1);
+    assert.equal(refreshCalls.length, 1);
+    assert.equal(filterCalls.length, 1);
+    assert.equal(scheduleCalls.length, 0);
+    assert.equal(effect.dataset.levelCorrection, 'expert');
+    assert.equal(effect.dataset.levelCorrectionValue, 'Expert');
+    assert.equal(effect.dataset.level, 'expert');
+    assert.equal(levelInput.value, 'Expert');
+    assert.equal(effect.dataset.status, 'corrected');
+  });
+
+  test('changeEffectLevel clears level while preserving status when correction exists', () => {
+    const record = {};
+    const item = new MockElement('div', 'item');
+    const effect = new MockElement('div', 'effect');
+    effect.dataset.status = 'corrected';
+    effect.dataset.correction = 'manual-fix';
+    effect.dataset.levelOriginalValue = 'Base';
+    effect.dataset.levelCorrectionValue = 'Expert';
+    effect.dataset.level = 'expert';
+    item.appendChild(effect);
+
+    const levelInput = new MockElement('select', 'level-input');
+    levelInput.value = '';
+    effect.appendChild(levelInput);
+
+    const levelCorrectionCalls = [];
+    const badgeCalls = [];
+    const refreshCalls = [];
+    const filterCalls = [];
+    const scheduleCalls = [];
+    const statusCalls = [];
+
+    const deps = buildBaseDeps(record, item, {
+      scheduleSave: () => scheduleCalls.push(null),
+      applyFilters: () => filterCalls.push(null),
+      refreshItemCaches: () => refreshCalls.push(null),
+      updateRecordLevelCorrection: (recordIndex, slotIndex, value) => {
+        levelCorrectionCalls.push([recordIndex, slotIndex, value]);
+        return true;
+      },
+      recordStatusChange: (_effect, status) => {
+        statusCalls.push(status);
+        return true;
+      },
+      updateLevelBadge: (target) => badgeCalls.push(target),
+      getEffectIndexes: () => ({ recordIndex: 1, slotIndex: 3 })
+    });
+
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.changeEffectLevel(effect, levelInput);
+
+    assert.deepEqual(levelCorrectionCalls, [[1, 3, '']]);
+    assert.equal(badgeCalls.length, 1);
+    assert.equal(refreshCalls.length, 1);
+    assert.equal(filterCalls.length, 1);
+    assert.equal(scheduleCalls.length, 1);
+    assert.equal(effect.dataset.levelCorrection, '');
+    assert.equal(effect.dataset.levelCorrectionValue, '');
+    assert.equal(effect.dataset.level, 'base');
+    assert.deepEqual(statusCalls, []);
+  });
+
+  test('toggleReviewStatus clears correction and level data when marking as pass', () => {
+    const record = {};
+    const item = new MockElement('div', 'item');
+    const effect = new MockElement('div', 'effect');
+    effect.dataset.status = 'pending';
+    effect.dataset.correction = 'manual';
+    effect.dataset.levelOriginalValue = 'Base';
+    effect.dataset.levelCorrectionValue = 'Expert';
+    effect.dataset.levelCorrection = 'expert';
+    effect.dataset.level = 'expert';
+    effect.dataset.levelOptionsBase = 'Base|Expert';
+    effect.dataset.predictionValue = 'Prediction';
+    item.appendChild(effect);
+
+    const correctionInput = new MockElement('input', 'correction-input');
+    correctionInput.value = 'manual';
+    effect.appendChild(correctionInput);
+
+    const levelInput = new MockElement('select', 'level-input');
+    levelInput.value = 'Expert';
+    effect.appendChild(levelInput);
+
+    const button = new MockElement('button');
+    button.dataset.value = 'pass';
+
+    const correctionCalls = [];
+    const levelCorrectionCalls = [];
+    const levelSuppressedCalls = [];
+    const rebuildCalls = [];
+    const candidateCalls = [];
+    const badgeCalls = [];
+    const refreshCalls = [];
+    const filterCalls = [];
+    const scheduleCalls = [];
+    const statusCalls = [];
+    const effectStatusCalls = [];
+    const createCorrectionCalls = [];
+
+    const replacementInput = new MockElement('input', 'correction-input');
+
+    const deps = buildBaseDeps(record, item, {
+      scheduleSave: () => scheduleCalls.push(null),
+      applyFilters: () => filterCalls.push(null),
+      refreshItemCaches: () => refreshCalls.push(null),
+      updateRecordCorrection: (recordIndex, slotIndex, value) => {
+        correctionCalls.push([recordIndex, slotIndex, value]);
+        return true;
+      },
+      updateRecordLevelCorrection: (recordIndex, slotIndex, value) => {
+        levelCorrectionCalls.push([recordIndex, slotIndex, value]);
+        return true;
+      },
+      updateRecordLevelSuppressed: (recordIndex, slotIndex, suppressed) => {
+        levelSuppressedCalls.push([recordIndex, slotIndex, suppressed]);
+        return true;
+      },
+      recordStatusChange: (_effect, status) => {
+        statusCalls.push(status);
+        return false;
+      },
+      updateEffectStatus: (_effect, status) => {
+        effectStatusCalls.push(status);
+        effect.dataset.status = status;
+      },
+      rebuildLevelSelectOptions: (_effect, selectEl) => rebuildCalls.push(selectEl),
+      setCorrectionLevelCandidates: (_effect, candidates) => candidateCalls.push(candidates),
+      updateLevelBadge: (target) => badgeCalls.push(target),
+      createCorrectionInput: (value, predictionDefault) => {
+        createCorrectionCalls.push([value, predictionDefault]);
+        return replacementInput;
+      },
+      getEffectIndexes: () => ({ recordIndex: 4, slotIndex: 2 })
+    });
+
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.toggleReviewStatus(effect, button);
+
+    assert.deepEqual(effectStatusCalls, ['pass']);
+    assert.deepEqual(statusCalls, ['pass']);
+    assert.deepEqual(correctionCalls, [[4, 2, '']]);
+    assert.deepEqual(levelCorrectionCalls, [[4, 2, '']]);
+    assert.deepEqual(levelSuppressedCalls, [[4, 2, false]]);
+    assert.equal(effect.dataset.correction, '');
+    assert.equal(effect.dataset.levelCorrection, '');
+    assert.equal(effect.dataset.levelCorrectionValue, '');
+    assert.equal(effect.dataset.preserveOriginalLevel, 'true');
+    assert.equal(effect.dataset.level, 'base');
+    assert.equal(levelInput.value, '');
+    assert.deepEqual(candidateCalls, [[]]);
+    assert.deepEqual(rebuildCalls, [levelInput]);
+    assert.equal(badgeCalls.length, 1);
+    assert.equal(refreshCalls.length, 1);
+    assert.equal(filterCalls.length, 1);
+    assert.equal(scheduleCalls.length, 1);
+    assert.deepEqual(createCorrectionCalls, [['', 'Prediction']]);
+    assert.strictEqual(effect.querySelector('.correction-input'), replacementInput);
+    assert.strictEqual(correctionInput.parentNode, null);
+    assert.equal(effect.dataset.levelOptionsBaseJson, JSON.stringify(['Base', 'Expert']));
+  });
 });
 
 describe('gallery events', () => {
