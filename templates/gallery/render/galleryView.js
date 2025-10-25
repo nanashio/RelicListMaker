@@ -182,22 +182,37 @@
                 : renderNamespace && typeof renderNamespace.createItemFactory === 'function'
                   ? renderNamespace.createItemFactory
                   : null;
+        const createItemEnhancersFn =
+            typeof config.createItemEnhancers === 'function'
+                ? config.createItemEnhancers
+                : renderNamespace && typeof renderNamespace.createItemEnhancers === 'function'
+                  ? renderNamespace.createItemEnhancers
+                  : null;
 
         if (typeof createItemFactoryFn !== 'function') {
             throw new Error('createGalleryView: createItemFactory helper is required');
         }
 
-        function createItemEnhancers() {
+        const additionalItemEnhancers = Array.isArray(config.itemEnhancers) ? config.itemEnhancers.slice() : [];
+
+        function normalizeItemEnhancer(fn) {
+            if (typeof fn !== 'function') {
+                return null;
+            }
+            if (fn.length >= 2) {
+                return fn;
+            }
+            return (item) => {
+                fn(item);
+            };
+        }
+
+        function createFallbackItemEnhancers(additionalEnhancers = []) {
             const enhancers = [];
             const addEnhancer = (fn) => {
-                if (typeof fn === 'function') {
-                    enhancers.push((item, context) => {
-                        if (fn.length >= 2) {
-                            fn(item, context);
-                            return;
-                        }
-                        fn(item);
-                    });
+                const normalized = normalizeItemEnhancer(fn);
+                if (normalized) {
+                    enhancers.push(normalized);
                 }
             };
 
@@ -206,7 +221,32 @@
             addEnhancer(syncItemColorState);
             addEnhancer(refreshItemCaches);
 
+            if (Array.isArray(additionalEnhancers)) {
+                additionalEnhancers.forEach(addEnhancer);
+            }
+
             return enhancers;
+        }
+
+        let itemEnhancers = null;
+
+        if (typeof createItemEnhancersFn === 'function') {
+            const producedEnhancers = createItemEnhancersFn({
+                syncDuplicateState,
+                syncFavoriteState,
+                syncItemColorState,
+                refreshItemCaches,
+                additionalEnhancers: additionalItemEnhancers
+            });
+            if (Array.isArray(producedEnhancers)) {
+                itemEnhancers = producedEnhancers
+                    .map((enhancer) => normalizeItemEnhancer(enhancer))
+                    .filter(Boolean);
+            }
+        }
+
+        if (!Array.isArray(itemEnhancers)) {
+            itemEnhancers = createFallbackItemEnhancers(additionalItemEnhancers);
         }
 
         const itemFactory = createItemFactoryFn({
@@ -219,7 +259,7 @@
             getImagePath: (imageName) => joinPath(state.imageDir || '.', imageName),
             getDisplayName: (imageName) => getFileName(imageName),
             getLabelSymbols: () => (Array.isArray(state.labelSymbols) ? state.labelSymbols.slice() : []),
-            itemEnhancers: createItemEnhancers()
+            itemEnhancers
         });
 
         if (!itemFactory || typeof itemFactory.createItem !== 'function') {

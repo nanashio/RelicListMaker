@@ -787,6 +787,7 @@ describe('gallery view', () => {
     global.window = {};
     global.document = createDocumentStub();
     runScript('templates/gallery/utils/filter.js');
+    runScript('templates/gallery/render/itemEnhancers.js');
     runScript('templates/gallery/render/itemFactory.js');
     runScript('templates/gallery/render/galleryView.js');
     galleryFactory = global.window.galleryRenderFactory;
@@ -899,6 +900,161 @@ describe('gallery view', () => {
     assert.ok(statusCalls.includes('clear'), 'clearStatus should be invoked when items render');
   });
 
+  test('gallery view allows injecting custom item enhancer factory', () => {
+    const state = {
+      records: [{ Image: 'alpha.png' }],
+      items: [],
+      labelSymbols: [],
+      imageDir: 'images',
+      showOcr: false
+    };
+    const datasetState = { kind: 'normal', list: [], activeIndex: 0 };
+    const galleryElement = createStubElement('div');
+    global.document.body.appendChild(galleryElement);
+    const statusElement = createStubElement('div');
+    global.document.body.appendChild(statusElement);
+    const dom = {
+      gallery: galleryElement,
+      galleryStatus: statusElement,
+      summary: null,
+      showDuplicatesToggle: { checked: false },
+      showOcrToggle: { checked: false },
+      searchInput: { value: '' },
+      filterSelect: { value: 'all' },
+      colorFilter: { value: 'all' }
+    };
+    const duplicateStore = new Map();
+    const duplicates = {
+      has: (key) => duplicateStore.get(key) === true,
+      set: (key, value) => {
+        if (!key) {
+          return;
+        }
+        if (value) {
+          duplicateStore.set(key, true);
+        } else {
+          duplicateStore.delete(key);
+        }
+      }
+    };
+
+    const receivedFactoryConfig = [];
+    const extraCalls = [];
+
+    const galleryView = galleryFactory.createGalleryView({
+      state,
+      datasetState,
+      dom,
+      duplicates,
+      itemColorOptions: [],
+      createEffect: () => null,
+      bindImage: () => {},
+      createElement: defaultCreateElement,
+      joinPath: (base, leaf) => {
+        if (!base) {
+          return leaf || '';
+        }
+        if (!leaf) {
+          return base;
+        }
+        return `${base}/${leaf}`;
+      },
+      getFileName: (path) => String(path || ''),
+      showStatus: () => {},
+      clearStatus: () => {},
+      getRecordByIndex: (index) => state.records[index] || null,
+      isRecordDuplicate: (record) => Boolean(record && record.Duplicate),
+      isRecordFavorite: (record) => Boolean(record && record.Favorite),
+      createItemEnhancers: (config) => {
+        receivedFactoryConfig.push(config);
+        const additionals = Array.isArray(config.additionalEnhancers)
+          ? config.additionalEnhancers.slice()
+          : [];
+        return [
+          (item, context) => {
+            item.dataset.fromFactory = String(context.recordIndex);
+          },
+          ...additionals
+        ];
+      },
+      itemEnhancers: [
+        (item) => {
+          extraCalls.push(item);
+          item.dataset.extra = 'true';
+        }
+      ]
+    });
+
+    galleryView.buildGallery();
+
+    assert.equal(receivedFactoryConfig.length, 1);
+    assert.equal(typeof receivedFactoryConfig[0].syncDuplicateState, 'function');
+    assert.equal(receivedFactoryConfig[0].additionalEnhancers.length, 1);
+
+    assert.equal(state.items.length, 1);
+    const item = state.items[0];
+    assert.equal(item.dataset.fromFactory, '0');
+    assert.equal(item.dataset.extra, 'true');
+    assert.equal(extraCalls.length, 1);
+  });
+
+});
+
+describe('item enhancers factory', () => {
+  beforeEach(() => {
+    global.window = {};
+    runScript('templates/gallery/render/itemEnhancers.js');
+  });
+
+  afterEach(() => {
+    delete global.window;
+  });
+
+  test('createItemEnhancers composes defaults and additionals', () => {
+    const calls = [];
+    const enhancerFactory = global.window.galleryRenderFactory;
+    const enhancers = enhancerFactory.createItemEnhancers({
+      syncDuplicateState: () => calls.push('duplicate'),
+      syncFavoriteState: (item, context) => calls.push(`favorite-${context.recordIndex}`),
+      syncItemColorState: () => calls.push('color'),
+      refreshItemCaches: () => calls.push('caches'),
+      additionalEnhancers: [
+        (item) => {
+          calls.push(`extra-${item.id}`);
+        }
+      ]
+    });
+
+    const item = { id: 'item-1' };
+    const context = { recordIndex: 5 };
+    enhancers.forEach((fn) => fn(item, context));
+
+    assert.deepEqual(calls, ['duplicate', 'favorite-5', 'color', 'caches', 'extra-item-1']);
+  });
+
+  test('createItemEnhancers honors includeDefaultEnhancers flag', () => {
+    const calls = [];
+    const enhancerFactory = global.window.galleryRenderFactory;
+    const enhancers = enhancerFactory.createItemEnhancers({
+      includeDefaultEnhancers: false,
+      baseEnhancers: [
+        (item, context) => {
+          calls.push(`base-${context.visibleIndex}`);
+        }
+      ],
+      additionalEnhancers: [
+        () => {
+          calls.push('addon');
+        }
+      ]
+    });
+
+    const item = { id: 'item-2' };
+    const context = { visibleIndex: 2 };
+    enhancers.forEach((fn) => fn(item, context));
+
+    assert.deepEqual(calls, ['base-2', 'addon']);
+  });
 });
 
 

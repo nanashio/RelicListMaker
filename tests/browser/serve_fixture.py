@@ -34,6 +34,7 @@ def _build_fixture_tree(base_dir: Path) -> None:
         Path('gallery/storage/utils.js'),
         Path('gallery/app/controller.js'),
         Path('gallery/render/effectFactory.js'),
+        Path('gallery/render/itemEnhancers.js'),
         Path('gallery/render/itemFactory.js'),
         Path('gallery/render/galleryView.js'),
         Path('gallery/events/galleryEvents.js')

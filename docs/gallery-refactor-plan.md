@@ -50,7 +50,7 @@
 4. レベル抑制時に CSV 上のレベルフィールドをクリアする実装を `events/galleryEvents.js` に追加済み。後続として `storage`／`dataset` 層への影響確認と E2E シナリオの追跡メモを整理する。
 5. 【完了】`galleryView` から `itemFactory` へ渡す状態同期コールバック（重複・お気に入り・色・キャッシュ再計算）を `itemEnhancers` として集約。`render/itemFactory.js` で副作用を後処理化し、API を単一エントリポイントに整理した。
 6. 【完了】`events/recordActionHandlers.js` 向けの単体テスト整備と依存モジュールのモック方針を整理。Node テスト（`tests/js/gallery_modules.test.mjs`）で重複／お気に入り／色操作の回帰を検出できるようにした。
-7. `itemEnhancers` を独立モジュール化し、`galleryView` からも差し替え可能にする。将来的な SSR / headless 実行時に純粋関数版 `itemFactory` へ切り替えられるよう DI ポイントを整理する。
+7. 【完了】`itemEnhancers` を独立モジュール化し、`galleryView` からも差し替え可能にした。`render/itemEnhancers.js` を新設し、フォールバック付き DI ポイントを整理。ユニットテストで差し替えパスと追加エンハンサの実行順序を検証済み。
 8. 効果レベル／補正更新のイベントテストを `recordActionHandlers` 側でも拡充し、CSV 永続化・レベル候補復元までを網羅するモック戦略を定義する。
 
 ## 設計ポリシー
@@ -85,6 +85,7 @@
 | UI 构築 | `templates/gallery/render/galleryView.js` | `buildGallery` の分割版。 |
 | UI 部品 | `templates/gallery/render/itemFactory.js` | `createItem` の DOM 組み立て部分（副作用を限定）。 |
 | UI 部品 | `templates/gallery/render/effectFactory.js` | `createEffect` の DOM 組み立て部分。 |
+| UI 部品 | `templates/gallery/render/itemEnhancers.js` | アイテム生成後の副作用を順序制御するエンハンサ配列の構築。 |
 | イベント | `templates/gallery/events/galleryEvents.js`, `templates/gallery/events/recordActionHandlers.js` | クリック・入力イベントの登録とレコード操作ハンドラの委譲。 |
 | ユーティリティ | `templates/gallery/utils/dom.js` | DOM 系共通関数（`ensureElement` など）。 |
 | ユーティリティ | `templates/gallery/utils/data.js` | 正規化・補助ロジック（`sanitizeLevelList` 等）。 |
