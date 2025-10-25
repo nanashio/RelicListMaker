@@ -1326,6 +1326,37 @@ describe('gallery item factory', () => {
     assert.equal(placeholder.textContent, '効果情報がありません。');
   });
 
+  test('item enhancers run after item creation', () => {
+    const enhancerCalls = [];
+    const enhancerFactory = itemFactoryNamespace.createItemFactory({
+      datasetState: { kind: 'normal' },
+      createElement,
+      createFragment: () => new MockElement('#fragment'),
+      bindImage: () => {},
+      createEffect: () => null,
+      colorOptions: [],
+      getImagePath: (imageName) => imageName,
+      getDisplayName: (imageName) => imageName,
+      getLabelSymbols: () => [],
+      itemEnhancers: [
+        (item, context) => {
+          enhancerCalls.push({ item, context });
+          if (item) {
+            item.dataset.enhanced = 'true';
+          }
+        }
+      ]
+    });
+
+    const record = { Image: 'delta.png' };
+    const item = enhancerFactory.createItem(record, 3, 2, 6);
+    assert.equal(item.dataset.enhanced, 'true');
+    assert.equal(enhancerCalls.length, 1);
+    assert.equal(enhancerCalls[0].context.recordIndex, 3);
+    assert.equal(enhancerCalls[0].context.visibleIndex, 2);
+    assert.equal(enhancerCalls[0].context.visibleTotal, 6);
+  });
+
   test('createItemContext exposes dataset metadata and resolved paths', () => {
     const context = itemFactory.createItemContext(
       {
@@ -1344,6 +1375,141 @@ describe('gallery item factory', () => {
     assert.equal(context.datasetFolder, 'runs/b');
     assert.equal(context.visibleIndex, 3);
     assert.equal(context.visibleTotal, 10);
+  });
+});
+
+describe('record action handlers', () => {
+  let handlerFactory;
+
+  beforeEach(() => {
+    global.window = {};
+    runScript('templates/gallery/events/recordActionHandlers.js');
+    handlerFactory = global.window.galleryEventHandlersFactory;
+  });
+
+  afterEach(() => {
+    delete global.window;
+  });
+
+  function buildBaseDeps(record, item, extra = {}) {
+    return {
+      duplicates: { set: () => true },
+      scheduleSave: () => {},
+      applyFilters: () => {},
+      buildGallery: () => {},
+      applyItemColor: () => {},
+      updateFavoriteVisuals: () => {},
+      updateDuplicateVisuals: () => {},
+      refreshItemCaches: () => {},
+      getItemContext: () => ({ item, record, recordIndex: 0 }),
+      normalizeItemColor: (value) => (value ? value.toLowerCase() : ''),
+      isRecordDuplicate: (targetRecord) => Boolean(targetRecord.__duplicate),
+      isRecordFavorite: (targetRecord) => Boolean(targetRecord.__favorite),
+      setRecordDuplicate: (_index, next) => {
+        const changed = record.__duplicate !== next;
+        record.__duplicate = next;
+        return changed;
+      },
+      setRecordFavorite: (_index, next) => {
+        const changed = record.__favorite !== next;
+        record.__favorite = next;
+        return changed;
+      },
+      setRecordItemColor: (_index, nextColor) => {
+        const current = record.ItemColor || '';
+        const changed = current !== nextColor;
+        record.ItemColor = nextColor;
+        return changed;
+      },
+      recordStatusChange: () => false,
+      updateRecordCorrection: () => false,
+      updateRecordLevelCorrection: () => false,
+      updateRecordLevelValue: () => false,
+      updateRecordLevelOptions: () => false,
+      updateRecordLevelSuppressed: () => false,
+      updateEffectStatus: () => {},
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values] : []),
+      createCorrectionInput: () => new MockElement('input'),
+      setCorrectionLevelCandidates: () => {},
+      rebuildLevelSelectOptions: () => {},
+      updateLevelBadge: () => {},
+      getEffectIndexes: () => ({ recordIndex: 0, slotIndex: 0 }),
+      updateInputValueAttribute: () => {},
+      updateLevelInputAvailability: () => {},
+      applyMasterLevelOptions: () => {},
+      ...extra
+    };
+  }
+
+  test('toggleDuplicate updates record and schedules rebuild', () => {
+    const record = {};
+    const item = new MockElement('div', 'item');
+    const button = new MockElement('button', 'duplicate-toggle');
+    button.dataset.image = 'alpha.png';
+    const duplicatesMap = new Map();
+    const scheduleCalls = [];
+    const buildCalls = [];
+    const visualCalls = [];
+    const deps = buildBaseDeps(record, item, {
+      duplicates: {
+        set: (name, value) => {
+          duplicatesMap.set(name, value);
+          return true;
+        }
+      },
+      scheduleSave: () => scheduleCalls.push(null),
+      buildGallery: () => buildCalls.push(null),
+      updateDuplicateVisuals: (target, value) => visualCalls.push([target, value])
+    });
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.toggleDuplicate(button);
+    assert.equal(record.__duplicate, true);
+    assert.equal(duplicatesMap.get('alpha.png'), true);
+    assert.equal(scheduleCalls.length, 1);
+    assert.equal(buildCalls.length, 1);
+    assert.deepEqual(visualCalls, [[item, true]]);
+  });
+
+  test('toggleItemColor normalizes value and toggles selection', () => {
+    const record = { ItemColor: 'red' };
+    const item = new MockElement('div', 'item');
+    const select = new MockElement('select');
+    select.value = 'RED';
+    const scheduleCalls = [];
+    const filterCalls = [];
+    const colorCalls = [];
+    const deps = buildBaseDeps(record, item, {
+      scheduleSave: () => scheduleCalls.push(null),
+      applyFilters: () => filterCalls.push(null),
+      applyItemColor: (target, color) => colorCalls.push([target, color])
+    });
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.toggleItemColor(select);
+    assert.equal(record.ItemColor, '');
+    assert.deepEqual(colorCalls, [[item, '']]);
+    assert.equal(scheduleCalls.length, 1);
+    assert.equal(filterCalls.length, 1);
+  });
+
+  test('toggleFavorite updates visuals and schedules save', () => {
+    const record = {};
+    const item = new MockElement('div', 'item');
+    const button = new MockElement('button', 'favorite-toggle');
+    const scheduleCalls = [];
+    const filterCalls = [];
+    const favoriteVisuals = [];
+    const deps = buildBaseDeps(record, item, {
+      scheduleSave: () => scheduleCalls.push(null),
+      applyFilters: () => filterCalls.push(null),
+      updateFavoriteVisuals: (target, value) => favoriteVisuals.push([target, value])
+    });
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.toggleFavorite(button);
+    assert.equal(record.__favorite, true);
+    assert.deepEqual(favoriteVisuals, [[item, true]]);
+    assert.equal(scheduleCalls.length, 1);
+    assert.equal(filterCalls.length, 1);
   });
 });
 
