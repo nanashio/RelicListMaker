@@ -43,9 +43,10 @@
    - 回帰テスト（ブラウザ UI 動作・CSV 入出力・レビュー保存）を実施。
 
 ### 直近のタスク
-1. `applyFilters` と検索キャッシュ生成を純関数として `utils/` に切り出し、フィルタ条件の追加に備えたテストベースを整備する。
+1. 【完了】`applyFilters` と検索キャッシュ生成を純関数として `utils/filter.js` に切り出し。`render/galleryView.js` は新ユーティリティを優先利用するフォールバック構造に変更し、`tests/js/gallery_modules.test.mjs` へフィルタユニットテストを追加済み。
 2. `render/galleryView.js` の `createItem` 周辺で列ごとのコンポーネント分割（画像列・操作列）を行い、Fragment 生成と差し替えをテスト可能な形に整理する。
 3. `events/galleryEvents.js` のお気に入り／色分け／レビュー操作をイベントハンドラ単位に切り出し、ビューとの API 境界を明文化して並列開発しやすい構造を作る。
+4. レベル抑制時に CSV 上のレベルフィールドをクリアする実装を `events/galleryEvents.js` に追加済み。後続として `storage`／`dataset` 層への影響確認と E2E シナリオの追跡メモを整理する。
 
 ## 設計ポリシー
 ### 基本方針

@@ -46,6 +46,28 @@
 
         const colorOptions = Array.isArray(itemColorOptions) ? itemColorOptions.slice() : [];
         const hasDocument = typeof document !== 'undefined' && document;
+        const filterNamespace = typeof window !== 'undefined' && window ? window.galleryFilterUtils : null;
+
+        const buildItemSearchCaches =
+            typeof config.buildItemSearchCaches === 'function'
+                ? config.buildItemSearchCaches
+                : filterNamespace && typeof filterNamespace.buildItemSearchCaches === 'function'
+                  ? filterNamespace.buildItemSearchCaches
+                  : null;
+
+        const filterItemsFn =
+            typeof config.filterItems === 'function'
+                ? config.filterItems
+                : filterNamespace && typeof filterNamespace.filterItems === 'function'
+                  ? filterNamespace.filterItems
+                  : null;
+
+        const evaluateItemVisibilityFn =
+            typeof config.evaluateItemVisibility === 'function'
+                ? config.evaluateItemVisibility
+                : filterNamespace && typeof filterNamespace.evaluateItemVisibility === 'function'
+                  ? filterNamespace.evaluateItemVisibility
+                  : null;
 
         if (!hasDocument && typeof createElementConfig !== 'function') {
             throw new Error('createGalleryView: createElement helper is required when document is unavailable');
@@ -677,25 +699,75 @@
             applyItemColor(item, colorKey);
         }
 
+        function legacyBuildItemCaches(baseTokens, effectEntries) {
+            const tokens = [];
+            const statuses = new Set();
+            const effectStates = [];
+
+            const addToken = (value) => {
+                if (!value) {
+                    return;
+                }
+                const text = String(value).trim();
+                if (text) {
+                    tokens.push(text);
+                }
+            };
+
+            baseTokens.forEach(addToken);
+
+            effectEntries.forEach((entry) => {
+                if (!entry || typeof entry !== 'object') {
+                    return;
+                }
+                addToken(entry.prediction);
+                addToken(entry.raw);
+                addToken(entry.correction);
+                addToken(entry.level);
+                addToken(entry.levelOptions);
+                addToken(entry.levelCorrection);
+                const statusValue = entry.status || 'pending';
+                statuses.add(statusValue);
+                effectStates.push(statusValue || 'pending');
+            });
+
+            if (!statuses.size) {
+                statuses.add('pending');
+            }
+
+            const combined = tokens
+                .filter((token) => token && token.trim() !== '')
+                .join(' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            return {
+                searchCache: combined ? ` ${combined} ` : '',
+                statusCache: `|${Array.from(statuses).join('|')}|`,
+                effectStates
+            };
+        }
+
         function refreshItemCaches(item) {
             if (!item) {
                 return;
             }
-            const tokens = [];
-            const statuses = new Set();
+            const baseTokens = [];
 
             const imageToken = item.dataset.image;
             if (imageToken) {
-                tokens.push(imageToken);
+                baseTokens.push(imageToken);
             }
             const baseImageToken = item.dataset.baseImage;
             if (baseImageToken) {
-                tokens.push(baseImageToken);
+                baseTokens.push(baseImageToken);
             }
             const datasetToken = item.dataset.datasetLabel;
             if (datasetToken) {
-                tokens.push(datasetToken);
+                baseTokens.push(datasetToken);
             }
+
+            const effectEntries = [];
 
             item.querySelectorAll('.effect').forEach((effect) => {
                 const {
@@ -707,53 +779,39 @@
                     levelOptions = '',
                     levelCorrection = ''
                 } = effect.dataset;
-                if (pred) {
-                    tokens.push(pred);
-                }
-                if (raw) {
-                    tokens.push(raw);
-                }
-                if (correction) {
-                    tokens.push(correction);
-                }
-                if (level) {
-                    tokens.push(level);
-                }
-                if (levelCorrection) {
-                    tokens.push(levelCorrection);
-                }
-                if (levelOptions) {
-                    tokens.push(levelOptions);
-                }
-                statuses.add(status || 'pending');
+                effectEntries.push({
+                    prediction: pred,
+                    raw,
+                    correction,
+                    status,
+                    level,
+                    levelOptions,
+                    levelCorrection
+                });
             });
 
-            const combined = tokens
-                .filter((token) => token && token.trim() !== '')
-                .join(' ')
-                .replace(/\s+/g, ' ')
-                .trim();
+            const caches =
+                typeof buildItemSearchCaches === 'function'
+                    ? buildItemSearchCaches({ baseTokens, effects: effectEntries })
+                    : legacyBuildItemCaches(baseTokens, effectEntries);
 
-            item.dataset.searchCache = combined ? ` ${combined} ` : '';
-
-            const statusValues = statuses.size ? Array.from(statuses) : ['pending'];
-            item.dataset.statusCache = `|${statusValues.join('|')}|`;
-            const effectStates = [];
-            item.querySelectorAll('.effect').forEach((effect) => {
-                const status = effect.dataset.status || 'pending';
-                effectStates.push(status);
-            });
-            item.dataset.effectStates = effectStates.join(',');
+            const { searchCache = '', statusCache = '', effectStates = [] } = caches || {};
+            item.dataset.searchCache = searchCache || '';
+            item.dataset.statusCache = statusCache || '';
+            const effectStateList = Array.isArray(effectStates)
+                ? effectStates
+                : typeof effectStates === 'string'
+                  ? effectStates.split(',').map((value) => value.trim()).filter((value) => value !== '')
+                  : [];
+            item.dataset.effectStates = effectStateList
+                .filter((value) => value != null && value !== '')
+                .join(',');
         }
 
-        function applyFilters() {
-            const term = (dom.searchInput && dom.searchInput.value ? dom.searchInput.value : '').trim().toLowerCase();
-            const filter = dom.filterSelect ? dom.filterSelect.value : 'all';
-            const colorFilter = dom.colorFilter ? dom.colorFilter.value : 'all';
+        function legacyApplyFilters(term, filter, colorFilter, showDuplicates) {
             const includePending = filter === 'with-pending';
             const resolvedOnly = filter === 'resolved';
             const favoriteOnly = filter === 'favorite';
-            const showDuplicates = includeDuplicatesNow();
 
             state.items.forEach((item) => {
                 if (!item) {
@@ -773,12 +831,14 @@
                     const statuses = item.dataset.statusCache || '';
                     if (resolvedOnly) {
                         const effectStates = (item.dataset.effectStates || '').split(',').filter(Boolean);
-                        matchesFilter = effectStates.length >= 3 && effectStates.every((stateValue, idx) => {
-                            if (idx < 3) {
-                                return stateValue === 'pass' || stateValue === 'corrected';
-                            }
-                            return true;
-                        });
+                        matchesFilter =
+                            effectStates.length >= 3 &&
+                            effectStates.every((stateValue, idx) => {
+                                if (idx < 3) {
+                                    return stateValue === 'pass' || stateValue === 'corrected';
+                                }
+                                return true;
+                            });
                     } else if (includePending) {
                         matchesFilter = statuses.includes('|pending|');
                     } else if (favoriteOnly) {
@@ -797,6 +857,66 @@
 
                 item.style.display = matchesSearch && matchesFilter ? '' : 'none';
             });
+        }
+
+        function applyFilters() {
+            const searchInputValue = dom.searchInput && dom.searchInput.value ? dom.searchInput.value : '';
+            const term = searchInputValue.trim().toLowerCase();
+            const filter = dom.filterSelect ? dom.filterSelect.value : 'all';
+            const colorFilter = dom.colorFilter ? dom.colorFilter.value : 'all';
+            const showDuplicates = includeDuplicatesNow();
+
+            const shouldUseFilterUtils =
+                typeof filterItemsFn === 'function' || typeof evaluateItemVisibilityFn === 'function';
+
+            if (shouldUseFilterUtils) {
+                const itemStates = state.items.map((item) => {
+                    if (!item) {
+                        return {
+                            duplicate: false,
+                            searchCache: '',
+                            statusCache: '',
+                            effectStates: [],
+                            favorite: false,
+                            itemColor: ''
+                        };
+                    }
+                    return {
+                        duplicate: item.dataset.duplicate === 'true',
+                        searchCache: item.dataset.searchCache || '',
+                        statusCache: item.dataset.statusCache || '',
+                        effectStates: (item.dataset.effectStates || '').split(',').filter(Boolean),
+                        favorite: item.dataset.favorite === 'true',
+                        itemColor: normalizeItemColor(item.dataset.itemColor || '')
+                    };
+                });
+
+                const options = {
+                    term,
+                    filter,
+                    colorFilter,
+                    includeDuplicates: showDuplicates
+                };
+
+                const visibility = typeof filterItemsFn === 'function' ? filterItemsFn(itemStates, options) : null;
+
+                state.items.forEach((item, index) => {
+                    if (!item) {
+                        return;
+                    }
+                    let visible = true;
+                    if (Array.isArray(visibility) && index < visibility.length) {
+                        visible = Boolean(visibility[index]);
+                    } else if (typeof evaluateItemVisibilityFn === 'function') {
+                        visible = Boolean(evaluateItemVisibilityFn(itemStates[index], options));
+                    }
+                    item.style.display = visible ? '' : 'none';
+                });
+                updateSummary();
+                return;
+            }
+
+            legacyApplyFilters(term, filter, colorFilter, showDuplicates);
             updateSummary();
         }
 

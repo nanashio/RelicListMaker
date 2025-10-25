@@ -171,6 +171,8 @@
                 updateRecordCorrection = () => false,
                 updateRecordLevelCorrection = () => false,
                 updateRecordLevelSuppressed = () => false,
+                updateRecordLevelValue = () => false,
+                updateRecordLevelOptions = () => false,
                 scheduleSave = () => {}
             } = handlers;
 
@@ -255,6 +257,12 @@
 
                 const suppressLevel = Boolean(selected);
                 const suppressedChanged = updateRecordLevelSuppressed(indexes.recordIndex, indexes.slotIndex, suppressLevel);
+                let levelDataCleared = false;
+                if (suppressLevel) {
+                    const clearedLevelValue = updateRecordLevelValue(indexes.recordIndex, indexes.slotIndex, '');
+                    const clearedLevelOptions = updateRecordLevelOptions(indexes.recordIndex, indexes.slotIndex, '');
+                    levelDataCleared = Boolean(clearedLevelValue || clearedLevelOptions);
+                }
                 if (suppressLevel) {
                     effect.dataset.levelOptionsBaseJson = JSON.stringify([]);
                 } else {
@@ -288,7 +296,7 @@
                 if (item) {
                     refreshItemCaches(item);
                 }
-                if (!statusChanged && (correctionChanged || levelCleared || suppressedChanged)) {
+                if (!statusChanged && (correctionChanged || levelCleared || suppressedChanged || levelDataCleared)) {
                     scheduleSave();
                 }
                 applyFilters();

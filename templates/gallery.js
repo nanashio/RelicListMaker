@@ -1841,6 +1841,8 @@
         recordStatusChange,
         updateRecordCorrection,
         updateRecordLevelCorrection,
+        updateRecordLevelValue,
+        updateRecordLevelOptions,
         updateRecordLevelSuppressed,
         scheduleSave: () => storage.scheduleSave()
     });
@@ -1981,6 +1983,20 @@
             return false;
         }
         const key = `Effect${slotIndex}LevelCorrection`;
+        return updateRecordField(recordIndex, key, value);
+    }
+    function updateRecordLevelValue(recordIndex, slotIndex, value) {
+        if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
+            return false;
+        }
+        const key = `Effect${slotIndex}Level`;
+        return updateRecordField(recordIndex, key, value);
+    }
+    function updateRecordLevelOptions(recordIndex, slotIndex, value) {
+        if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
+            return false;
+        }
+        const key = `Effect${slotIndex}LevelOptions`;
         return updateRecordField(recordIndex, key, value);
     }
     function updateRecordLevelSuppressed(recordIndex, slotIndex, suppressed) {

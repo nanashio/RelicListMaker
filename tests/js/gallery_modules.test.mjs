@@ -378,6 +378,95 @@ describe('gallery data utils', () => {
   });
 });
 
+describe('gallery filter utils', () => {
+  let filterUtils;
+
+  beforeEach(() => {
+    global.window = {};
+    runScript('templates/gallery/utils/filter.js');
+    filterUtils = global.window.galleryFilterUtils;
+  });
+
+  test('buildItemSearchCaches aggregates tokens and statuses', () => {
+    const caches = filterUtils.buildItemSearchCaches({
+      baseTokens: ['Alpha', 'beta'],
+      effects: [
+        {
+          prediction: '炎上',
+          raw: 'RawText',
+          correction: 'Correction',
+          status: 'pass',
+          level: 'L1',
+          levelOptions: 'L1|L2',
+          levelCorrection: 'L2'
+        },
+        {
+          prediction: '',
+          raw: '',
+          correction: '',
+          status: '',
+          level: '',
+          levelOptions: '',
+          levelCorrection: ''
+        }
+      ]
+    });
+    assert.ok(caches.searchCache.includes('alpha'));
+    assert.ok(caches.searchCache.includes('beta'));
+    assert.equal(caches.statusCache.includes('|pass|'), true);
+    assert.equal(caches.statusCache.includes('|pending|'), true);
+    assert.deepEqual(caches.effectStates, ['pass', 'pending']);
+  });
+
+  test('filterItems evaluates visibility rules', () => {
+    const items = [
+      {
+        duplicate: true,
+        searchCache: ' alpha relic ',
+        statusCache: '|pending|',
+        effectStates: ['pending', 'pending', 'pending'],
+        favorite: false,
+        itemColor: 'red'
+      },
+      {
+        duplicate: false,
+        searchCache: ' alpha relic ',
+        statusCache: '|pass|corrected|',
+        effectStates: ['pass', 'corrected', 'pass'],
+        favorite: true,
+        itemColor: 'red'
+      },
+      {
+        duplicate: false,
+        searchCache: ' beta relic ',
+        statusCache: '|pending|',
+        effectStates: ['pending', 'pending', 'pending'],
+        favorite: true,
+        itemColor: ''
+      }
+    ];
+    const baseFilters = { term: 'alpha', filter: 'all', colorFilter: 'all', includeDuplicates: false };
+    const allResults = filterUtils.filterItems(items, baseFilters);
+    assert.deepEqual(allResults, [false, true, false]);
+
+    const resolvedResults = filterUtils.filterItems(items, {
+      term: '',
+      filter: 'resolved',
+      colorFilter: 'red',
+      includeDuplicates: true
+    });
+    assert.deepEqual(resolvedResults, [false, true, false]);
+
+    const favoritesOnly = filterUtils.filterItems(items, {
+      term: '',
+      filter: 'favorite',
+      colorFilter: 'none',
+      includeDuplicates: true
+    });
+    assert.deepEqual(favoritesOnly, [false, false, true]);
+  });
+});
+
 
 describe('gallery view', () => {
   function createStubElement(tag) {
@@ -697,6 +786,7 @@ describe('gallery view', () => {
   beforeEach(() => {
     global.window = {};
     global.document = createDocumentStub();
+    runScript('templates/gallery/utils/filter.js');
     runScript('templates/gallery/render/galleryView.js');
     galleryFactory = global.window.galleryRenderFactory;
   });
@@ -1350,6 +1440,89 @@ describe('gallery events', () => {
     assert.equal(applyFilterCalls.length, 1);
     assert.equal(effect.dataset.correction, 'newvalue');
 
+  });
+
+  test('correction change clears legacy level data when suppressed', () => {
+    const record = {
+      Effect1: 'Initial',
+      Effect1Level: 'Base',
+      Effect1LevelOptions: 'Base|Alt'
+    };
+    const item = new MockElement('div', 'item');
+    const effect = new MockElement('div', 'effect');
+    effect.dataset.recordIndex = '0';
+    effect.dataset.slot = '1';
+    effect.dataset.levelOriginalValue = 'Base';
+    effect.dataset.levelOptionsBase = 'Base|Alt';
+    effect.dataset.levelOptionsBaseJson = JSON.stringify(['Base', 'Alt']);
+    effect.dataset.predictionValue = 'Initial';
+    item.appendChild(effect);
+
+    const correctionInput = new MockElement('input', 'correction-input');
+    correctionInput.value = 'Replacement';
+    effect.appendChild(correctionInput);
+
+    const levelInput = new MockElement('select', 'level-input');
+    effect.appendChild(levelInput);
+
+    const levelValueCalls = [];
+    const levelOptionsCalls = [];
+    const scheduleSaveCalls = [];
+
+    galleryEvents.attachEventHandlers({
+      switchDataset: () => {},
+      buildGallery: () => {},
+      applyFilters: () => {},
+      setOcrVisibility: () => {},
+      getOcrToggleState: () => false,
+      getItemContext: () => ({ item, record, recordIndex: 0 }),
+      updateFavoriteVisuals: () => {},
+      updateDuplicateVisuals: () => {},
+      applyItemColor: () => {},
+      normalizeItemColor: (value) => value || '',
+      refreshItemCaches: () => {},
+      getRecordByIndex: () => record,
+      isRecordDuplicate: () => false,
+      isRecordFavorite: () => false,
+      setRecordDuplicate: () => false,
+      setRecordFavorite: () => false,
+      setRecordItemColor: () => false,
+      recordStatusChange: () => false,
+      updateRecordCorrection: () => true,
+      updateRecordLevelCorrection: () => false,
+      updateRecordLevelSuppressed: () => true,
+      updateRecordLevelValue: (idx, slot, value) => {
+        levelValueCalls.push(value);
+        const key = `Effect${slot}Level`;
+        if (value) {
+          record[key] = value;
+        } else {
+          delete record[key];
+        }
+        return true;
+      },
+      updateRecordLevelOptions: (idx, slot, value) => {
+        levelOptionsCalls.push(value);
+        const key = `Effect${slot}LevelOptions`;
+        if (value) {
+          record[key] = value;
+        } else {
+          delete record[key];
+        }
+        return true;
+      },
+      scheduleSave: () => scheduleSaveCalls.push(null)
+    });
+
+    const changeHandlers = dom.gallery.eventListeners.change || [];
+    assert.ok(changeHandlers.length > 0, 'change handler should exist for correction input');
+    changeHandlers[0]({ target: correctionInput });
+
+    assert.deepEqual(levelValueCalls, ['']);
+    assert.deepEqual(levelOptionsCalls, ['']);
+    assert.equal(Object.prototype.hasOwnProperty.call(record, 'Effect1Level'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(record, 'Effect1LevelOptions'), false);
+    assert.equal(scheduleSaveCalls.length >= 1, true);
   });
 
   test('favorite toggle updates record and triggers save', () => {
