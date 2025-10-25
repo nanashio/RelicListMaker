@@ -1383,6 +1383,7 @@ describe('gallery events', () => {
       lightboxImg: new MockElement('img', 'lightbox-img')
     };
     dom.lightboxImg.src = '';
+    runScript('templates/gallery/events/recordActionHandlers.js');
     runScript('templates/gallery/events/galleryEvents.js');
     galleryEvents = global.window.galleryEventsFactory.createGalleryEvents({
       dom,

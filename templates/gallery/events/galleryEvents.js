@@ -22,7 +22,8 @@
             getEffectIndexes,
             updateInputValueAttribute,
             updateLevelInputAvailability,
-            applyMasterLevelOptions
+            applyMasterLevelOptions,
+            createRecordActionHandlers: createRecordActionHandlersConfig
         } = config;
 
         if (!dom || typeof dom !== 'object') {
@@ -69,6 +70,18 @@
         }
         if (typeof applyMasterLevelOptions !== 'function') {
             throw new Error('createGalleryEvents: applyMasterLevelOptions helper is required');
+        }
+
+        const handlersNamespace = typeof window !== 'undefined' && window ? window.galleryEventHandlersFactory : null;
+        const createRecordActionHandlersFn =
+            typeof createRecordActionHandlersConfig === 'function'
+                ? createRecordActionHandlersConfig
+                : handlersNamespace && typeof handlersNamespace.createRecordActionHandlers === 'function'
+                  ? handlersNamespace.createRecordActionHandlers
+                  : null;
+
+        if (typeof createRecordActionHandlersFn !== 'function') {
+            throw new Error('createGalleryEvents: createRecordActionHandlers helper is required');
         }
 
         function openLightbox(img) {
@@ -161,7 +174,6 @@
                 applyItemColor = () => {},
                 normalizeItemColor = (value) => value,
                 refreshItemCaches = () => {},
-                getRecordByIndex = () => null,
                 isRecordDuplicate = () => false,
                 isRecordFavorite = () => false,
                 setRecordDuplicate = () => false,
@@ -176,182 +188,49 @@
                 scheduleSave = () => {}
             } = handlers;
 
-            function handleDuplicateToggle(button) {
-                if (!button) {
-                    return;
-                }
-                const context = getItemContext(button);
-                if (!context) {
-                    return;
-                }
-                const { item, record, recordIndex } = context;
-                const imageName = button.dataset.image || item.dataset.imageName || '';
-                const currentState = isRecordDuplicate(record) || item.dataset.duplicate === 'true';
-                const nextState = !currentState;
-                if (imageName) {
-                    button.dataset.image = imageName;
-                    duplicates.set(imageName, nextState);
-                }
-                const recordChanged = setRecordDuplicate(recordIndex, nextState);
-                updateDuplicateVisuals(item, nextState);
-                if (recordChanged) {
-                    scheduleSave();
-                }
-                buildGallery();
-            }
+            const recordActions = createRecordActionHandlersFn({
+                duplicates,
+                scheduleSave,
+                applyFilters,
+                buildGallery,
+                applyItemColor,
+                updateFavoriteVisuals,
+                updateDuplicateVisuals,
+                refreshItemCaches,
+                getItemContext,
+                normalizeItemColor,
+                isRecordDuplicate,
+                isRecordFavorite,
+                setRecordDuplicate,
+                setRecordFavorite,
+                setRecordItemColor,
+                recordStatusChange,
+                updateRecordCorrection,
+                updateRecordLevelCorrection,
+                updateRecordLevelValue,
+                updateRecordLevelOptions,
+                updateRecordLevelSuppressed,
+                updateEffectStatus,
+                sanitizeLevelList,
+                sortLevelsAscending,
+                createCorrectionInput,
+                setCorrectionLevelCandidates,
+                rebuildLevelSelectOptions,
+                updateLevelBadge,
+                getEffectIndexes,
+                updateInputValueAttribute,
+                updateLevelInputAvailability,
+                applyMasterLevelOptions
+            });
 
-            function handleFavoriteToggle(button) {
-                if (!button) {
-                    return;
-                }
-                const context = getItemContext(button);
-                if (!context) {
-                    return;
-                }
-                const { item, record, recordIndex } = context;
-                const nextState = !isRecordFavorite(record);
-                const recordChanged = setRecordFavorite(recordIndex, nextState);
-                updateFavoriteVisuals(item, nextState);
-                if (recordChanged) {
-                    scheduleSave();
-                }
-                applyFilters();
-            }
-
-            function handleItemColorToggle(button) {
-                if (!button) {
-                    return;
-                }
-                const context = getItemContext(button);
-                if (!context) {
-                    return;
-                }
-                const { item, record, recordIndex } = context;
-                const targetColor = (button.value || '').trim().toLowerCase();
-                const currentColor = normalizeItemColor(record.ItemColor);
-                const nextColor = currentColor === targetColor ? '' : targetColor;
-                const recordChanged = setRecordItemColor(recordIndex, nextColor);
-                if (recordChanged) {
-                    scheduleSave();
-                }
-                applyItemColor(item, nextColor);
-                applyFilters();
-            }
-
-            function handleCorrectionChange(effect, input) {
-                if (!effect || !input) {
-                    return;
-                }
-                updateInputValueAttribute(input);
-                const selected = input.value.trim();
-                const indexes = getEffectIndexes(effect);
-                if (!indexes) {
-                    return;
-                }
-                const nextStatus = selected ? 'corrected' : 'pending';
-                const statusChanged = recordStatusChange(effect, nextStatus);
-                const correctionChanged = updateRecordCorrection(indexes.recordIndex, indexes.slotIndex, selected);
-                effect.dataset.correction = selected ? selected.toLowerCase() : '';
-                effect.dataset.preserveOriginalLevel = selected ? 'false' : 'true';
-                updateEffectStatus(effect, nextStatus);
-
-                const suppressLevel = Boolean(selected);
-                const suppressedChanged = updateRecordLevelSuppressed(indexes.recordIndex, indexes.slotIndex, suppressLevel);
-                let levelDataCleared = false;
-                if (suppressLevel) {
-                    const clearedLevelValue = updateRecordLevelValue(indexes.recordIndex, indexes.slotIndex, '');
-                    const clearedLevelOptions = updateRecordLevelOptions(indexes.recordIndex, indexes.slotIndex, '');
-                    levelDataCleared = Boolean(clearedLevelValue || clearedLevelOptions);
-                }
-                if (suppressLevel) {
-                    effect.dataset.levelOptionsBaseJson = JSON.stringify([]);
-                } else {
-                    const baseString = effect.dataset.levelOptionsBase || '';
-                    const restored = baseString ? sanitizeLevelList(baseString.split('|')) : [];
-                    const restoredSorted = sortLevelsAscending(restored);
-                    effect.dataset.levelOptionsBaseJson = JSON.stringify(restoredSorted);
-                }
-
-                let levelCleared = false;
-                const levelSelect = effect.querySelector('.level-input');
-                if (levelSelect) {
-                    if (updateRecordLevelCorrection(indexes.recordIndex, indexes.slotIndex, '')) {
-                        levelCleared = true;
-                    }
-                    effect.dataset.levelCorrection = '';
-                    effect.dataset.levelCorrectionValue = '';
-                    const originalLevelValue = effect.dataset.levelOriginalValue || '';
-                    const preserveOriginalLevel = effect.dataset.preserveOriginalLevel !== 'false';
-                    const effectiveLevel = preserveOriginalLevel ? originalLevelValue : '';
-                    effect.dataset.level = effectiveLevel ? effectiveLevel.toLowerCase() : '';
-                    levelSelect.value = '';
-                    updateLevelInputAvailability(levelSelect, []);
-                    applyMasterLevelOptions(effect, levelSelect, selected, {
-                        setCorrectionLevelCandidates,
-                        rebuildLevelSelectOptions
-                    });
-                }
-
-                const item = effect.closest('.item');
-                if (item) {
-                    refreshItemCaches(item);
-                }
-                if (!statusChanged && (correctionChanged || levelCleared || suppressedChanged || levelDataCleared)) {
-                    scheduleSave();
-                }
-                applyFilters();
-            }
-
-            function handleLevelChange(effect, input) {
-                if (!effect || !input) {
-                    return;
-                }
-                const selected = input.value.trim();
-                const previous = effect.dataset.levelCorrectionValue || '';
-                if (selected === previous) {
-                    return;
-                }
-                const indexes = getEffectIndexes(effect);
-                if (!indexes) {
-                    return;
-                }
-
-                const levelChanged = updateRecordLevelCorrection(indexes.recordIndex, indexes.slotIndex, selected);
-                effect.dataset.levelCorrection = selected ? selected.toLowerCase() : '';
-                effect.dataset.levelCorrectionValue = selected;
-
-                const originalValue = effect.dataset.levelOriginalValue || '';
-                const finalLevel = selected || originalValue;
-                effect.dataset.level = finalLevel ? finalLevel.toLowerCase() : '';
-
-                updateLevelBadge(effect);
-                const item = effect.closest('.item');
-                if (item) {
-                    refreshItemCaches(item);
-                }
-
-                const hasEffectCorrection = Boolean(effect.dataset.correction);
-                const currentStatus = effect.dataset.status || 'pending';
-                let nextStatus = currentStatus;
-                if (selected) {
-                    nextStatus = 'corrected';
-                } else if (!hasEffectCorrection && currentStatus === 'corrected') {
-                    nextStatus = 'pending';
-                }
-
-                let statusChanged = false;
-                if (nextStatus !== currentStatus) {
-                    statusChanged = recordStatusChange(effect, nextStatus);
-                    if (statusChanged) {
-                        updateEffectStatus(effect, nextStatus);
-                    }
-                }
-
-                if (!statusChanged && levelChanged) {
-                    scheduleSave();
-                }
-                applyFilters();
-            }
+            const {
+                toggleDuplicate,
+                toggleFavorite,
+                toggleItemColor,
+                changeEffectCorrection,
+                changeEffectLevel,
+                toggleReviewStatus
+            } = recordActions;
 
             if (dom.datasetSelect) {
                 dom.datasetSelect.addEventListener('change', (event) => {
@@ -368,21 +247,21 @@
                     const duplicateButton = event.target.closest('.duplicate-toggle');
                     if (duplicateButton) {
                         event.preventDefault();
-                        handleDuplicateToggle(duplicateButton);
+                        toggleDuplicate(duplicateButton);
                         return;
                     }
 
                     const favoriteButton = event.target.closest('.favorite-toggle');
                     if (favoriteButton) {
                         event.preventDefault();
-                        handleFavoriteToggle(favoriteButton);
+                        toggleFavorite(favoriteButton);
                         return;
                     }
 
                     const colorSelect = event.target.closest('.item-color-select');
                     if (colorSelect) {
                         event.preventDefault();
-                        handleItemColorToggle(colorSelect);
+                        toggleItemColor(colorSelect);
                         return;
                     }
 
@@ -394,55 +273,7 @@
                     if (!effect) {
                         return;
                     }
-                    const item = effect.closest('.item');
-                    const current = effect.dataset.status || 'pending';
-                    const targetValue = button.dataset.value || 'pass';
-                    const next = current === targetValue ? 'pending' : targetValue;
-                    updateEffectStatus(effect, next);
-                    const statusChanged = recordStatusChange(effect, next);
-                    if (next === 'pass') {
-                        const indexes = getEffectIndexes(effect);
-                        if (indexes) {
-                            const correctionChanged = updateRecordCorrection(indexes.recordIndex, indexes.slotIndex, '');
-                            let levelChanged = updateRecordLevelCorrection(indexes.recordIndex, indexes.slotIndex, '');
-                            effect.dataset.correction = '';
-                            effect.dataset.levelCorrection = '';
-                            effect.dataset.levelCorrectionValue = '';
-                            effect.dataset.preserveOriginalLevel = 'true';
-                            const originalLevelValue = effect.dataset.levelOriginalValue || '';
-                            effect.dataset.level = originalLevelValue ? originalLevelValue.toLowerCase() : '';
-
-                            const baseString = effect.dataset.levelOptionsBase || '';
-                            const restoredBase = baseString ? sanitizeLevelList(baseString.split('|')) : [];
-                            const restoredBaseSorted = sortLevelsAscending(restoredBase);
-                            effect.dataset.levelOptionsBaseJson = JSON.stringify(restoredBaseSorted);
-
-                            const input = effect.querySelector('.correction-input');
-                            if (input) {
-                                const predictionDefault = effect.dataset.predictionValue || '';
-                                const replacement = createCorrectionInput('', predictionDefault);
-                                input.replaceWith(replacement);
-                            }
-
-                            const suppressRecordChanged = updateRecordLevelSuppressed(indexes.recordIndex, indexes.slotIndex, false);
-
-                            const levelInput = effect.querySelector('.level-input');
-                            if (levelInput) {
-                                levelInput.value = '';
-                                rebuildLevelSelectOptions(effect, levelInput);
-                            }
-                            setCorrectionLevelCandidates(effect, []);
-                            updateLevelBadge(effect);
-
-                            if (!statusChanged && (correctionChanged || levelChanged || suppressRecordChanged)) {
-                                scheduleSave();
-                            }
-                        }
-                    }
-                    if (item) {
-                        refreshItemCaches(item);
-                    }
-                    applyFilters();
+                    toggleReviewStatus(effect, button);
                 });
 
                 dom.gallery.addEventListener('change', (event) => {
@@ -450,7 +281,7 @@
                     if (correctionInput) {
                         const effect = correctionInput.closest('.effect');
                         if (effect) {
-                            handleCorrectionChange(effect, correctionInput);
+                            changeEffectCorrection(effect, correctionInput);
                         }
                         return;
                     }
@@ -458,7 +289,7 @@
                     if (levelInput) {
                         const effect = levelInput.closest('.effect');
                         if (effect) {
-                            handleLevelChange(effect, levelInput);
+                            changeEffectLevel(effect, levelInput);
                         }
                     }
                 });

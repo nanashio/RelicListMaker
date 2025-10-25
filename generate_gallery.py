@@ -28,6 +28,7 @@ ADDITIONAL_GALLERY_SCRIPTS = [
     "gallery/render/effectFactory.js",
     "gallery/render/itemFactory.js",
     "gallery/render/galleryView.js",
+    "gallery/events/recordActionHandlers.js",
     "gallery/events/galleryEvents.js"
 ]
 

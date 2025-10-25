@@ -46,9 +46,10 @@
 ### 直近のタスク
 1. 【完了】`applyFilters` と検索キャッシュ生成を純関数として `utils/filter.js` に切り出し。`render/galleryView.js` は新ユーティリティを優先利用するフォールバック構造に変更し、`tests/js/gallery_modules.test.mjs` へフィルタユニットテストを追加済み。
 2. 【完了】`render/galleryView.js` の `createItem` 周辺で列ごとのコンポーネント分割（画像列・操作列）を行い、`render/itemFactory.js` へ委譲。単体テストで左右カラムとプレースホルダーの挙動を検証済み。
-3. `events/galleryEvents.js` のお気に入り／色分け／レビュー操作をイベントハンドラ単位に切り出し、ビューとの API 境界を明文化して並列開発しやすい構造を作る。
+3. 【完了】`events/galleryEvents.js` のお気に入り／色分け／レビュー操作をイベントハンドラ単位に切り出し、ビューとの API 境界を明文化して並列開発しやすい構造を作る。`events/recordActionHandlers.js` を新設し、アイテム操作と効果操作の責務を関数単位で集約。`galleryEvents` ではファクトリを注入する構造にして既存テストを維持。
 4. レベル抑制時に CSV 上のレベルフィールドをクリアする実装を `events/galleryEvents.js` に追加済み。後続として `storage`／`dataset` 層への影響確認と E2E シナリオの追跡メモを整理する。
 5. `galleryView` から `itemFactory` へ渡す状態同期コールバック（重複・お気に入り・色の反映）を整理し、将来的に `itemFactory` 自体を純粋関数モードに切り替えられるよう API の最小化を検討する。
+6. `events/recordActionHandlers.js` 向けの単体テスト整備と依存モジュールのモック方針を整理し、イベント層の回帰検出を強化する。
 
 ## 設計ポリシー
 ### 基本方針
@@ -82,7 +83,7 @@
 | UI 构築 | `templates/gallery/render/galleryView.js` | `buildGallery` の分割版。 |
 | UI 部品 | `templates/gallery/render/itemFactory.js` | `createItem` の DOM 組み立て部分（副作用を限定）。 |
 | UI 部品 | `templates/gallery/render/effectFactory.js` | `createEffect` の DOM 組み立て部分。 |
-| イベント | `templates/gallery/events/galleryEvents.js` | クリック・入力イベントの登録とハンドラ。 |
+| イベント | `templates/gallery/events/galleryEvents.js`, `templates/gallery/events/recordActionHandlers.js` | クリック・入力イベントの登録とレコード操作ハンドラの委譲。 |
 | ユーティリティ | `templates/gallery/utils/dom.js` | DOM 系共通関数（`ensureElement` など）。 |
 | ユーティリティ | `templates/gallery/utils/data.js` | 正規化・補助ロジック（`sanitizeLevelList` 等）。 |
 
