@@ -224,6 +224,85 @@
         return result;
     }
 
+    function parseSuppressedFlag(value) {
+        if (value === true) {
+            return true;
+        }
+        if (value === false || value == null) {
+            return false;
+        }
+        if (typeof value === 'number') {
+            return value !== 0;
+        }
+        if (typeof value === 'string') {
+            const text = value.trim().toLowerCase();
+            if (!text) {
+                return false;
+            }
+            if (text === 'true' || text === '1' || text === 'yes') {
+                return true;
+            }
+            if (text === 'false' || text === '0' || text === 'no') {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    function normalizeRecordLevelSuppression(record) {
+        if (!record || typeof record !== 'object') {
+            return record;
+        }
+
+        Object.keys(record).forEach((key) => {
+            const match = /^Effect(\d+)LevelSuppressed$/i.exec(key);
+            if (!match) {
+                return;
+            }
+            const slot = Number.parseInt(match[1], 10);
+            if (!Number.isFinite(slot)) {
+                return;
+            }
+
+            const suppressed = parseSuppressedFlag(record[key]);
+            const normalizedKey = `Effect${slot}LevelSuppressed`;
+
+            if (!suppressed) {
+                if (Object.prototype.hasOwnProperty.call(record, normalizedKey)) {
+                    delete record[normalizedKey];
+                }
+                return;
+            }
+
+            record[normalizedKey] = 'true';
+
+            const levelKey = `Effect${slot}Level`;
+            if (Object.prototype.hasOwnProperty.call(record, levelKey)) {
+                delete record[levelKey];
+            }
+
+            const levelOptionsKey = `Effect${slot}LevelOptions`;
+            if (Object.prototype.hasOwnProperty.call(record, levelOptionsKey)) {
+                delete record[levelOptionsKey];
+            }
+
+            const levelCorrectionKey = `Effect${slot}LevelCorrection`;
+            const correctionValue = record[levelCorrectionKey];
+            if (typeof correctionValue === 'string' && !correctionValue.trim()) {
+                delete record[levelCorrectionKey];
+            }
+        });
+
+        return record;
+    }
+
+    function normalizeSuppressedLevels(records) {
+        if (!Array.isArray(records)) {
+            return [];
+        }
+        return records.map((record) => normalizeRecordLevelSuppression(record));
+    }
+
     window.galleryDataUtils = {
         sanitizeLevelList,
         normalizeEffectName,
@@ -232,6 +311,8 @@
         sortLevelsAscending,
         parseLevelTokens,
         parseMasterOptions,
-        parseMasterLevels
+        parseMasterLevels,
+        normalizeSuppressedLevels,
+        normalizeRecordLevelSuppression
     };
 })();

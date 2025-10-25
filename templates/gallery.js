@@ -368,6 +368,11 @@
     const ensureDomElement = domEnsureElement || ensureDomElementFallback;
 
     const dataUtils = window.galleryDataUtils || {};
+    const normalizeSuppressedLevelsFromUtils = dataUtils.normalizeSuppressedLevels;
+    const normalizeSuppressedRecords =
+        typeof normalizeSuppressedLevelsFromUtils === 'function'
+            ? (records) => normalizeSuppressedLevelsFromUtils(records)
+            : (records) => records;
     const storageUtils = window.galleryStorageUtils || {};
 
     const parseCsvRows =
@@ -2077,7 +2082,11 @@
     }
 
     function loadRecordsArray(data) {
-        const records = Array.isArray(data) ? data.slice() : data && typeof data === 'object' ? [data] : [];
+        let records = Array.isArray(data) ? data.slice() : data && typeof data === 'object' ? [data] : [];
+        const normalized = normalizeSuppressedRecords(records);
+        if (Array.isArray(normalized)) {
+            records = normalized;
+        }
         ensureLabelCoverage(records);
         state.records = records;
         duplicates.prepare();
