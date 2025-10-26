@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    WSL 上のプロジェクトを同期しながら Windows で NightReign Relic をビルドします。
+    WSL 上のプロジェクトを同期しながら Windows で RelicListMaker をビルドします。
 
 .DESCRIPTION
     指定された WSL パスからプロジェクト一式を現在の Windows ワークスペースにコピーし、
@@ -16,7 +16,7 @@
     情報メッセージの多くを非表示にします。
 
 .PARAMETER WslPath
-    コピー元となる WSL 側のプロジェクトディレクトリのパス (既定値: ~/nightreign-relic)。
+    コピー元となる WSL 側のプロジェクトディレクトリのパス (既定値: ~/RelicListMaker)。
 #>
 
 
@@ -24,7 +24,7 @@ Param(
     [switch]$SkipVenv,
     [switch]$SkipRequirements,
     [switch]$Quiet,
-    [string]$WslPath = '~/nightreign-relic'
+    [string]$WslPath = '~/RelicListMaker'
 )
 
 if (-not $env:BUILD_WINDOWS_EXEC_POLICY_BYPASS) {
@@ -169,14 +169,14 @@ try {
     Write-Info ("Running PyInstaller: pyinstaller {0}" -f ($pyinstallerArgs -join ' '))
     pyinstaller @pyinstallerArgs
 
-    $distPath = Join-Path $repoRoot 'dist/nightreign-relic'
+    $distPath = Join-Path $repoRoot 'dist/RelicListMaker'
     Write-Info "Build completed: $distPath"
     Write-Host "
 [RESULT] Distribution folder: $distPath" -ForegroundColor Green
     if ($copyReport) {
         & $copyReport
     }
-    Write-Host "  - nightreign-relic.exe (GUI launcher)" -ForegroundColor Green
+    Write-Host "  - RelicListMaker.exe (GUI launcher)" -ForegroundColor Green
     Write-Host "  - videos/ keeps previous contents" -ForegroundColor Green
 }
 catch {

@@ -17,7 +17,7 @@
 
 ## 例: Windows x64 向け
 ```
-nightreign-relic/
+RelicListMaker/
   tesseract/
     windows-x64/
       tesseract.exe
@@ -28,7 +28,7 @@ nightreign-relic/
 
 ## 例: 共通 tessdata を使う場合
 ```
-nightreign-relic/
+RelicListMaker/
   tesseract/
     linux-x64/
       bin/

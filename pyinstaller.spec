@@ -49,7 +49,7 @@ if not videos_placeholder.exists():
     videos_placeholder.write_text("", encoding="utf-8")
 datas.append((str(videos_placeholder), "videos/.placeholder"))
 
-dist_root = project_dir / 'dist' / 'nightreign-relic'
+dist_root = project_dir / 'dist' / 'RelicListMaker'
 legacy_videos_dir = dist_root / 'videos'
 backup_videos_dir = placeholder_root / "videos_backup"
 if backup_videos_dir.exists():
@@ -90,7 +90,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='nightreign-relic',
+    name='RelicListMaker',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -113,7 +113,7 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='nightreign-relic',
+    name='RelicListMaker',
 )
 
 # dist 出力に videos ディレクトリを確保

@@ -1,5 +1,5 @@
 {
-  "name": "nightreign-relic",
+  "name": "relic-list-maker",
   "private": true,
   "scripts": {
     "test:node": "node --test tests/js/gallery_modules.test.mjs",
