@@ -32,6 +32,7 @@
 1. **回帰テストの継続**: `npm run test:all` を定期的に実行し、ES Modules 化後のリグレッションを監視する。
 2. **ブラウザフィクスチャの確認**: Playwright フィクスチャが新しいエントリポイント (`gallery/index.js`) を正しく取り込めているかを今後の変更時にもチェックする。
 3. **配布バンドルの最適化検討**: モジュール統合が完了したため、必要であればビルド／バンドル戦略（Vite 等）の導入可否を評価する。
+4. **旧テンプレートの洗い出し**: `gallery.js` を直接読み込むレガシー HTML が残っていないか確認し、新依存構成への移行手順を整理する。
 
 ### 完了済みハイライト
 - **初期化と基盤整備**: `viewer_server.py` を含む読み込み経路を確認し、新規モジュールを `generate_gallery.py` やブラウザフィクスチャへ反映。
@@ -41,6 +42,7 @@
 - **レコード・重複管理の共有化**: `templates/gallery/utils/records.js` と `templates/gallery/storage/utils.js` を新設し、ギャラリー本体からヘルパーを排除。フォールバックスタブを明示して依存を整理。
 - **DOM/ストレージユーティリティの統合**: `templates/gallery/utils/dom.js` にファクトリを導入し、`templates/gallery.js` からのフォールバック実装を撤廃。`window.galleryStorageUtils` の API を必須依存として扱い、Node テストで依存注入経路を検証。
 - **データ正規化の拡充**: `utils/data.js` に抑制レベル正規化を追加し、旧 CSV/OPFS データの互換性を担保。データセット解析ユーティリティを `dataset/utils.js` へ集約しテストを整備。
+- **データセット依存の一本化**: `templates/gallery.js` のデータセットユーティリティ内蔵フォールバックを廃止し、`galleryDatasetUtilsFactory` 提供モジュールを必須依存として採用。重複実装を削除して整合性を向上。
 - **テスト体制の強化**: `tests/js/gallery_modules.test.mjs` でフィルタ・アイテム生成・効果レベル処理などのシナリオを網羅し、保存トリガーや候補リセットを検証。
 - **状態管理と永続化の抽象化**: `app/stateApi.js` と `storage/manager.js` を導入し、`gallery.js` から直接状態や OPFS 実装へアクセスしない構造に更新。描画・イベント層へ API を注入し、Node テストでモック差し替えが容易な設計に整えた。
 - **ES Modules エントリポイントの整備**: `templates/gallery/index.js` を追加し、HTML テンプレートを `<script type="module">` で読み込む構成に更新。動的 import で `gallery.js` を初期化しつつ依存モジュールの読み込み順序を保証し、`generate_gallery.py` と Playwright フィクスチャを新構成に合わせて更新した。
