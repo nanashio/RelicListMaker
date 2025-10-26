@@ -25,6 +25,8 @@ def _build_fixture_tree(base_dir: Path) -> None:
     templates_dir = _repo_root() / "templates"
     shutil.copy2(templates_dir / "gallery.css", base_dir / "gallery.css")
     shutil.copy2(templates_dir / "gallery.js", base_dir / "gallery.js")
+    (base_dir / "gallery").mkdir(parents=True, exist_ok=True)
+    shutil.copy2(templates_dir / "gallery" / "index.js", base_dir / "gallery" / "index.js")
 
     additional_scripts = [
         Path('gallery/utils/dom.js'),
@@ -67,7 +69,8 @@ def _build_fixture_tree(base_dir: Path) -> None:
     viewer_html = (
         template
         .replace("__CSS_FILE__", "gallery.css")
-        .replace("__JS_FILE__", "gallery.js")
+        .replace("__JS_FILE__", "gallery/index.js")
+        .replace("__CORE_JS__", "gallery.js")
         .replace("__RESULTS_CSV__", "sample.csv")
         .replace("__IMAGE_DIR__", "crops")
         .replace("__LABEL_SYMBOLS__", "[\"①\", \"②\", \"③\"]")

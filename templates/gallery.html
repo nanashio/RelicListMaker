@@ -6,7 +6,7 @@
     <link rel="stylesheet" href="__CSS_FILE__">
     <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==">
 </head>
-<body data-results-csv="__RESULTS_CSV__" data-img-dir="__IMAGE_DIR__" data-label-symbols="__LABEL_SYMBOLS__" data-master-csv="__MASTER_CSV__" data-master-json="__MASTER_JSON__" data-master-options="__MASTER_OPTIONS__" data-master-levels="__MASTER_LEVELS__" data-datasets="__DATASETS__" data-active-dataset="__ACTIVE_DATASET__">
+<body data-results-csv="__RESULTS_CSV__" data-img-dir="__IMAGE_DIR__" data-label-symbols="__LABEL_SYMBOLS__" data-master-csv="__MASTER_CSV__" data-master-json="__MASTER_JSON__" data-master-options="__MASTER_OPTIONS__" data-master-levels="__MASTER_LEVELS__" data-datasets="__DATASETS__" data-active-dataset="__ACTIVE_DATASET__" data-core-script="__CORE_JS__">
     <h1>OCR結果ギャラリー</h1>
     <div class="toolbar">
         <div class="dataset-selector" id="dataset-selector">
@@ -52,24 +52,6 @@
         <img src="" alt="">
     </div>
 
-    <script src="gallery/utils/dom.js" defer></script>
-    <script src="gallery/utils/data.js" defer></script>
-    <script src="gallery/utils/records.js" defer></script>
-    <script src="gallery/dataset/utils.js" defer></script>
-    <script src="gallery/utils/filter.js" defer></script>
-    <script src="gallery/state/store.js" defer></script>
-    <script src="gallery/app/stateApi.js" defer></script>
-    <script src="gallery/dataset/manager.js" defer></script>
-    <script src="gallery/storage/utils.js" defer></script>
-    <script src="gallery/storage/manager.js" defer></script>
-    <script src="gallery/app/controller.js" defer></script>
-    <script src="gallery/render/effectViewModel.js" defer></script>
-    <script src="gallery/render/effectFactory.js" defer></script>
-    <script src="gallery/render/itemEnhancers.js" defer></script>
-    <script src="gallery/render/itemFactory.js" defer></script>
-    <script src="gallery/render/galleryView.js" defer></script>
-    <script src="gallery/events/recordActionHandlers.js" defer></script>
-    <script src="gallery/events/galleryEvents.js" defer></script>
-    <script src="__JS_FILE__" defer></script>
+    <script type="module" src="__JS_FILE__"></script>
 </body>
 </html>

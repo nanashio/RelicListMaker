@@ -107,6 +107,7 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
         "__MASTER_LEVELS__\n"
         "__CSS_FILE__\n"
         "__JS_FILE__\n"
+        "__CORE_JS__\n"
         "__DATASETS__\n"
         "__ACTIVE_DATASET__"
     )
@@ -150,10 +151,11 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
     assert parts[1] == "a/images"
     assert "★" in html.unescape(parts[2])
     assert "A" in html.unescape(parts[5])
-    datasets_json = json.loads(html.unescape(parts[9]))
+    datasets_json = json.loads(html.unescape(parts[10]))
     assert datasets_json[0]["label"] == "全データセット（統合）"
     assert datasets_json[0]["kind"] == "merged"
     assert datasets_json[0]["sources"][0]["label"] == "A"
-    assert json.loads(parts[10]) == 1
+    assert json.loads(parts[11]) == 1
     assert "?v=" in parts[7]
     assert "?v=" in parts[8]
+    assert "?v=" in parts[9]
