@@ -69,6 +69,13 @@ Nightreign Relic は、動画内の遺物情報を自動で抽出・整理し、
 ├── videos/              # 入力動画を配置
 ├── results/             # 処理結果 (frames/crops/CSV/HTML)
 ├── templates/           # ギャラリー用テンプレートと辞書
+│   ├── gallery/         # `index.js` をエントリとしてモジュール化されたギャラリー本体
+│   │   ├── render/      # DOM 構築やビュー更新を司る純粋関数群
+│   │   ├── events/      # クリック・入力などのイベントハンドラ
+│   │   ├── state/       # フィルタや選択状態を扱うストア API
+│   │   ├── storage/     # CSV/OPFS 永続化の抽象化とユーティリティ
+│   │   ├── dataset/     # データセット解決と正規化ロジック
+│   │   └── utils/       # DOM・データ処理の共有ユーティリティ
 │   └── master_relics.csv  # 遺物名のマスターデータ
 ├── tesseract/           # バンドル済み Tesseract (同梱環境向け)
 ├── docs/                # テスト手順やリファクタリング方針などのドキュメント
