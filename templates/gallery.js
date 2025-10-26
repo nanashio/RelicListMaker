@@ -109,6 +109,29 @@
 
     const normalizeSuppressedRecords = (records) => normalizeSuppressedLevelsFromUtils(records);
 
+    const storageUtils = window.galleryStorageUtils || null;
+
+    if (!storageUtils) {
+        throw new Error('gallery storage utilities are not available');
+    }
+
+    const {
+        parseCsvRecords,
+        loadMergedRecords,
+        createDuplicateManager
+    } = storageUtils;
+
+    const storageUtilsMissing = [
+        ['parseCsvRecords', parseCsvRecords],
+        ['loadMergedRecords', loadMergedRecords],
+        ['createDuplicateManager', createDuplicateManager]
+    ].filter(([, value]) => typeof value !== 'function');
+
+    if (storageUtilsMissing.length) {
+        const missingNames = storageUtilsMissing.map(([name]) => name).join(', ');
+        throw new Error(`gallery storage utilities are incomplete: missing ${missingNames}`);
+    }
+
     function normalizeStatus(value) {
         const text = (value || '').toString().trim().toLowerCase();
         if (text === 'pass') {
