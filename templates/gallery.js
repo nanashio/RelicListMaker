@@ -311,20 +311,13 @@
         throw new Error('gallery storage utilities are not available');
     }
 
-    const {
-        createDuplicateManager,
-        parseCsvRows,
-        parseCsvRecords,
-        loadMergedRecords,
-        createOpfsManager
-    } = storageUtils;
+    const { createDuplicateManager, parseCsvRows, parseCsvRecords, loadMergedRecords } = storageUtils;
 
     if (
         typeof createDuplicateManager !== 'function' ||
         typeof parseCsvRows !== 'function' ||
         typeof parseCsvRecords !== 'function' ||
-        typeof loadMergedRecords !== 'function' ||
-        typeof createOpfsManager !== 'function'
+        typeof loadMergedRecords !== 'function'
     ) {
         throw new Error('gallery storage utilities are incomplete');
     }
@@ -648,16 +641,13 @@
     }
 
     function setupMasterOptions() {
-        if (!Array.isArray(state.masterOptions)) {
-            state.masterOptions = [];
-            return;
-        }
-        const normalized = state.masterOptions
+        const current = Array.isArray(state.masterOptions) ? state.masterOptions : [];
+        const normalized = current
             .map((value) => normalizeEffectName(value))
             .filter((value) => value);
         const unique = Array.from(new Set(normalized));
         unique.sort((a, b) => a.localeCompare(b, 'ja'));
-        state.masterOptions = unique;
+        stateApi.setMasterOptions(unique);
     }
 
     function ensureMasterDatalist() {
@@ -676,7 +666,7 @@
             optionNode.value = option;
             datalist.appendChild(optionNode);
         });
-        state.masterDatalistPrepared = true;
+        stateApi.markMasterDatalistPrepared(true);
     }
 
     async function ensureMasterOptions() {
@@ -694,11 +684,11 @@
                 throw new Error(`HTTP ${response.status}`);
             }
             const data = await response.json();
-            state.masterOptions = parseMasterOptions(data);
+            stateApi.setMasterOptions(parseMasterOptions(data));
         } catch (error) {
             console.error('マスターデータの読み込みに失敗しました:', error);
             setStorageStatus(`マスターデータの読み込みに失敗しました: ${error.message || error}`, true);
-            state.masterOptions = [];
+            stateApi.setMasterOptions([]);
         }
         setupMasterOptions();
         ensureMasterDatalist();
@@ -712,30 +702,31 @@
             await state.masterLevelsPromise;
             return;
         }
-        state.masterLevelsPromise = (async () => {
-            const csvPath = state.masterCsvPath;
-            if (!csvPath) {
-                state.masterLevels = null;
-                state.masterLevelsLoaded = true;
-                state.masterLevelsPromise = null;
-                return;
-            }
+
+        const loader = (async () => {
             try {
+                const csvPath = state.masterCsvPath;
+                if (!csvPath) {
+                    stateApi.setMasterLevels(null);
+                    return;
+                }
                 const response = await fetch(csvPath, { cache: 'no-cache' });
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
                 }
                 const csvText = await response.text();
-                state.masterLevels = parseMasterLevelsCsv(csvText);
+                stateApi.setMasterLevels(parseMasterLevelsCsv(csvText));
             } catch (error) {
                 console.warn('レベル候補の読み込みに失敗しました:', error);
-                state.masterLevels = null;
+                stateApi.setMasterLevels(null);
             } finally {
-                state.masterLevelsLoaded = true;
-                state.masterLevelsPromise = null;
+                stateApi.setMasterLevelsLoaded(true);
+                stateApi.clearMasterLevelsPromise();
             }
         })();
-        await state.masterLevelsPromise;
+
+        stateApi.setMasterLevelsPromise(loader);
+        await loader;
     }
 
     function applyMasterLevelOptions(effect, select, effectName, helpers = {}) {
@@ -847,162 +838,11 @@
     }
 
     const stateStoreFactory = window.galleryStateStoreFactory || null;
+    if (!stateStoreFactory || typeof stateStoreFactory.createStateStore !== 'function') {
+        throw new Error('gallery state store factory is not available');
+    }
 
-    const createStateStore =
-        stateStoreFactory && typeof stateStoreFactory.createStateStore === 'function'
-            ? stateStoreFactory.createStateStore
-            : function createStateStoreFallback(initialState = {}) {
-                  const listeners = new Set();
-                  const core = {
-                      records: [],
-                      items: [],
-                      labelSymbols: initialState.labelSymbols || [],
-                      imageDir: initialState.imageDir || '.',
-                      csvPath: initialState.csvPath || '',
-                      masterCsvPath: initialState.masterCsvPath || '',
-                      masterJsonPath: initialState.masterJsonPath || '',
-                      masterOptions: Array.isArray(initialState.masterOptions) ? initialState.masterOptions.slice() : [],
-                      masterDatalistPrepared: false,
-                      masterLevels: initialState.masterLevels,
-                      masterLevelsLoaded: Boolean(initialState.masterLevelsLoaded),
-                      masterLevelsPromise: null,
-                      showOcr: false
-                  };
-                  const dataset = {
-                      list: [],
-                      activeIndex: -1,
-                      label: '',
-                      folder: '',
-                      kind: '',
-                      sources: []
-                  };
-
-                  let suppressNotifications = false;
-
-                  function emitChange() {
-                      if (suppressNotifications) {
-                          return;
-                      }
-                      listeners.forEach((listener) => {
-                          try {
-                              listener({ core, dataset });
-                          } catch (error) {
-                              console.error('state listener error', error);
-                          }
-                      });
-                  }
-
-                  function subscribe(listener) {
-                      if (typeof listener !== 'function') {
-                          return () => undefined;
-                      }
-                      listeners.add(listener);
-                      return () => {
-                          listeners.delete(listener);
-                      };
-                  }
-
-                  function getState() {
-                      return { core, dataset };
-                  }
-
-                  function update(updater) {
-                      if (typeof updater === 'function') {
-                          updater({ core, dataset });
-                      } else if (updater && typeof updater === 'object') {
-                          if (updater.core && typeof updater.core === 'object') {
-                              Object.assign(core, updater.core);
-                          }
-                          if (updater.dataset && typeof updater.dataset === 'object') {
-                              Object.assign(dataset, updater.dataset);
-                          }
-                      }
-                      emitChange();
-                  }
-
-                  function setDatasetsInternal(nextDatasets) {
-                      dataset.list = Array.isArray(nextDatasets) ? nextDatasets.slice() : [];
-                      if (!dataset.list.length) {
-                          dataset.activeIndex = -1;
-                          return;
-                      }
-                      if (dataset.activeIndex < 0 || dataset.activeIndex >= dataset.list.length) {
-                          dataset.activeIndex = 0;
-                      }
-                  }
-
-                  function clampIndex(index) {
-                      if (!dataset.list.length) {
-                          return -1;
-                      }
-                      const parsed = Number.parseInt(index, 10);
-                      if (Number.isNaN(parsed) || parsed < 0) {
-                          return 0;
-                      }
-                      if (parsed >= dataset.list.length) {
-                          return dataset.list.length - 1;
-                      }
-                      return parsed;
-                  }
-
-                  function setActiveDatasetIndex(nextIndex) {
-                      const clamped = clampIndex(nextIndex);
-                      if (clamped === dataset.activeIndex) {
-                          return dataset.activeIndex;
-                      }
-                      dataset.activeIndex = clamped;
-                      emitChange();
-                      return dataset.activeIndex;
-                  }
-
-                  function updateDescriptor(descriptor) {
-                      const next = descriptor || {};
-                      dataset.label = next.label || '';
-                      dataset.folder = next.folder || '';
-                      dataset.kind = next.kind || '';
-                      dataset.sources = cloneDatasetSources(next.sources);
-                      if (dataset.kind === 'merged') {
-                          core.csvPath = next.csvPath || 'merged-dataset.csv';
-                          core.imageDir = '';
-                      } else {
-                          core.csvPath = next.csvPath || '';
-                          core.imageDir = next.imageDir ? next.imageDir : '.';
-                      }
-                      emitChange();
-                  }
-
-                  suppressNotifications = true;
-                  try {
-                      setDatasetsInternal(initialState.datasets);
-                      setActiveDatasetIndex(initialState.activeDatasetIndex);
-                  } finally {
-                      suppressNotifications = false;
-                  }
-
-                  return {
-                      core,
-                      dataset,
-                      getState,
-                      subscribe,
-                      update,
-                      setDatasets(nextDatasets) {
-                          suppressNotifications = true;
-                          try {
-                              setDatasetsInternal(nextDatasets);
-                              if (dataset.activeIndex >= dataset.list.length) {
-                                  dataset.activeIndex = dataset.list.length ? dataset.list.length - 1 : -1;
-                              }
-                          } finally {
-                              suppressNotifications = false;
-                          }
-                          emitChange();
-                      },
-                      setActiveDatasetIndex,
-                      clampIndex,
-                      updateDescriptor
-                  };
-              };
-    const stateStore = createStateStore({
+    const stateStore = stateStoreFactory.createStateStore({
 
         datasets: Array.isArray(datasets) ? datasets.slice() : [],
         activeDatasetIndex: activeDatasetIndex,
@@ -1016,6 +856,14 @@
         masterLevelsLoaded: hasPreloadedMasterLevels
     });
 
+    const appStateFactory = window.galleryAppStateFactory || null;
+    if (!appStateFactory || typeof appStateFactory.createStateApi !== 'function') {
+        throw new Error('gallery app state factory is not available');
+    }
+
+    const stateApi = appStateFactory.createStateApi({ stateStore });
+    const { state, datasetState } = stateApi;
+
     const recordUtilsFactory = window.galleryRecordUtilsFactory || null;
     const recordUtils =
         (recordUtilsFactory && typeof recordUtilsFactory.createRecordUtils === 'function'
@@ -1025,8 +873,6 @@
     if (!recordUtils) {
         throw new Error('gallery record utilities are not available');
     }
-    const { core: state, dataset: datasetState } = stateStore.getState();
-
     setupMasterOptions();
     if (!state.masterJsonPath && state.masterOptions.length) {
         ensureMasterDatalist();
@@ -1038,100 +884,16 @@
     }
 
     const datasetManagerFactory = window.galleryDatasetManagerFactory || null;
-
-    const createDatasetManager =
-        datasetManagerFactory && typeof datasetManagerFactory.createDatasetManager === 'function'
-            ? datasetManagerFactory.createDatasetManager
-            : function createDatasetManagerFallback(config = {}) {
-                  const {
-                      stateStore: store,
-                      datasetState: dsState,
-                      state: coreState,
-                      resolveDatasetState: resolveState,
-                      areSourcesEqual: compareSources,
-                      applyDatasetState: applyState,
-                      clearForReload,
-                      loadInitialData: loadData
-                  } = config;
-
-                  const clampIndex = (index) => store.clampIndex(index);
-
-                  const getCurrentDataset = () => {
-                      if (!dsState.list.length) {
-                          return null;
-                      }
-                      const idx = clampIndex(dsState.activeIndex);
-                      if (idx < 0) {
-                          return null;
-                      }
-                      return dsState.list[idx] || null;
-                  };
-
-                  const prepareInitialDataset = () => {
-                      if (!dsState.list.length) {
-                          return;
-                      }
-                      const dataset = getCurrentDataset();
-                      if (!dataset) {
-                          store.setActiveDatasetIndex(dsState.list.length ? 0 : -1);
-                          return;
-                      }
-                      store.setActiveDatasetIndex(dsState.activeIndex);
-                      const descriptor = resolveState(dataset);
-                      applyState(descriptor);
-                  };
-
-                  const switchDataset = async (index, options = {}) => {
-                      if (!dsState.list.length) {
-                          return;
-                      }
-                      const nextIndex = clampIndex(index);
-                      const dataset = dsState.list[nextIndex];
-                      if (!dataset) {
-                          return;
-                      }
-
-                      const descriptor = resolveState(dataset);
-                      const expectedImageDir = descriptor.kind === 'merged' ? '' : descriptor.imageDir || '.';
-                      const forceReload = Boolean(options.forceReload);
-                      const shouldReload =
-                          forceReload ||
-                          dsState.activeIndex !== nextIndex ||
-                          coreState.csvPath !== descriptor.csvPath ||
-                          coreState.imageDir !== expectedImageDir ||
-                          dsState.kind !== descriptor.kind ||
-                          !compareSources(dsState.sources, descriptor.sources);
-
-                      store.setActiveDatasetIndex(nextIndex);
-                      applyState(descriptor);
-
-                      if (!shouldReload) {
-                          return;
-                      }
-
-                      if (typeof clearForReload === 'function') {
-                          clearForReload();
-                      }
-                      if (typeof loadData === 'function') {
-                          await loadData();
-                      }
-                  };
-
-                  return {
-                      clampDatasetIndex: clampIndex,
-                      getCurrentDataset,
-                      prepareInitialDataset,
-                      switchDataset
-                  };
-              };
+    if (!datasetManagerFactory || typeof datasetManagerFactory.createDatasetManager !== 'function') {
+        throw new Error('gallery dataset manager factory is not available');
+    }
 
     const clearGalleryForReload = () => {
         clearElementChildren(dom.gallery);
-        state.records = [];
-        state.items = [];
+        stateApi.clearRecordsAndItems();
     };
 
-    const datasetManager = createDatasetManager({
+    const datasetManager = datasetManagerFactory.createDatasetManager({
         stateStore,
         datasetState,
         state,
@@ -1267,7 +1029,13 @@
 
     const duplicates = createDuplicateManager(() => state.csvPath);
 
-    const storage = createOpfsManager({
+    const storageManagerFactory = window.galleryStorageManagerFactory || null;
+    if (!storageManagerFactory || typeof storageManagerFactory.createStorageManager !== 'function') {
+        throw new Error('gallery storage manager factory is not available');
+    }
+
+    const storageManager = storageManagerFactory.createStorageManager({
+        storageUtils,
         getRecords: () => state.records,
         getDatasetState: () => datasetState,
         getCsvPath: () => state.csvPath,
@@ -1411,6 +1179,7 @@
             ? renderFactory.createGalleryView({
                   state,
                   datasetState,
+                  stateApi,
                   dom,
                   duplicates,
                   itemColorOptions: ITEM_COLOR_OPTIONS,
@@ -1471,7 +1240,7 @@
         updateRecordLevelValue,
         updateRecordLevelOptions,
         updateRecordLevelSuppressed,
-        scheduleSave: () => storage.scheduleSave()
+        scheduleSave: () => storageManager.scheduleSave()
     });
 
     const appController = createAppController({
@@ -1647,7 +1416,7 @@
         const key = `Effect${indexes.slotIndex}Status`;
         if (record[key] !== status) {
             record[key] = status;
-            storage.scheduleSave();
+            storageManager.scheduleSave();
             return true;
         }
         return false;
@@ -1670,9 +1439,7 @@
                 }
             });
         });
-        for (let slot = state.labelSymbols.length + 1; slot <= maxSlot; slot += 1) {
-            state.labelSymbols.push(`Slot ${slot}`);
-        }
+        stateApi.ensureLabelSymbolsLength(maxSlot, (slot) => `Slot ${slot}`);
     }
 
     function loadRecordsArray(data) {
@@ -1682,7 +1449,7 @@
             records = normalized;
         }
         ensureLabelCoverage(records);
-        state.records = records;
+        stateApi.setRecords(records);
         duplicates.prepare();
         buildGallery();
     }
@@ -1691,7 +1458,7 @@
         const preferredName = getFileName(state.csvPath) || 'results.csv';
 
         try {
-            const text = await storage.tryLoad(preferredName);
+            const text = await storageManager.tryLoad(preferredName);
             if (text) {
                 loadRecordsArray(JSON.parse(text));
                 clearStatus();

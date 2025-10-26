@@ -3,6 +3,7 @@
         const {
             state,
             datasetState,
+            stateApi,
             dom,
             duplicates,
             itemColorOptions = [],
@@ -47,6 +48,23 @@
         const colorOptions = Array.isArray(itemColorOptions) ? itemColorOptions.slice() : [];
         const hasDocument = typeof document !== 'undefined' && document;
         const filterNamespace = typeof window !== 'undefined' && window ? window.galleryFilterUtils : null;
+
+        const stateControls = {
+            setShowOcr(value) {
+                if (stateApi && typeof stateApi.setShowOcr === 'function') {
+                    stateApi.setShowOcr(value);
+                    return;
+                }
+                state.showOcr = Boolean(value);
+            },
+            setItems(items) {
+                if (stateApi && typeof stateApi.setItems === 'function') {
+                    stateApi.setItems(items);
+                    return;
+                }
+                state.items = Array.isArray(items) ? items : [];
+            }
+        };
 
         const buildItemSearchCaches =
             typeof config.buildItemSearchCaches === 'function'
@@ -435,7 +453,7 @@
         }
 
         function setOcrVisibility(show) {
-            state.showOcr = Boolean(show);
+            stateControls.setShowOcr(Boolean(show));
             if (dom.showOcrToggle) {
                 dom.showOcrToggle.checked = state.showOcr;
             }
@@ -454,7 +472,7 @@
             const entries = deriveRenderEntries(includeDuplicates);
             const { fragment, items } = renderEntriesToFragment(entries);
 
-            state.items = items;
+            stateControls.setItems(items);
 
             if (fragmentHasContent(fragment) && dom.gallery) {
                 dom.gallery.appendChild(fragment);

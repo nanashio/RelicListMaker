@@ -216,6 +216,64 @@ describe('gallery state store', () => {
   });
 });
 
+describe('gallery app state api', () => {
+  beforeEach(() => {
+    global.window = {};
+  });
+
+  test('provides helpers for manipulating core state', () => {
+    runScript('templates/gallery/state/store.js');
+    runScript('templates/gallery/app/stateApi.js');
+
+    const storeFactory = global.window.galleryStateStoreFactory;
+    const apiFactory = global.window.galleryAppStateFactory;
+
+    const store = storeFactory.createStateStore({
+      labelSymbols: ['Ⅰ'],
+      masterOptions: ['Alpha'],
+      datasets: [],
+      activeDatasetIndex: 0
+    });
+
+    const api = apiFactory.createStateApi({ stateStore: store });
+
+    api.clearRecordsAndItems();
+    assert.deepEqual(api.state.records, []);
+    assert.deepEqual(api.state.items, []);
+
+    api.setRecords([{ Image: 'first.png' }]);
+    assert.equal(api.state.records.length, 1);
+    api.setItems(['item-node']);
+    assert.deepEqual(api.state.items, ['item-node']);
+
+    api.setMasterOptions(['Beta', 'Gamma']);
+    assert.deepEqual(api.state.masterOptions, ['Beta', 'Gamma']);
+
+    api.markMasterDatalistPrepared(true);
+    assert.equal(api.state.masterDatalistPrepared, true);
+
+    const levelMap = new Map([['A', ['1']]]);
+    api.setMasterLevels(levelMap);
+    assert.strictEqual(api.state.masterLevels, levelMap);
+
+    api.setMasterLevelsLoaded(true);
+    assert.equal(api.state.masterLevelsLoaded, true);
+
+    const pending = Promise.resolve();
+    api.setMasterLevelsPromise(pending);
+    assert.strictEqual(api.state.masterLevelsPromise, pending);
+    api.clearMasterLevelsPromise();
+    assert.equal(api.state.masterLevelsPromise, null);
+
+    api.addLabelSymbol('Ⅱ');
+    api.ensureLabelSymbolsLength(3);
+    assert.ok(api.state.labelSymbols.length >= 3);
+
+    api.setShowOcr(true);
+    assert.equal(api.state.showOcr, true);
+  });
+});
+
 describe('gallery dom utils', () => {
   let domUtils;
   let selectorMap;
@@ -1398,6 +1456,52 @@ describe('gallery storage utils', () => {
     });
     await blocked.flushNow();
     assert.equal(fetchCalls, 1, 'should not call fetch for merged dataset');
+  });
+});
+
+describe('gallery storage manager', () => {
+  beforeEach(() => {
+    global.window = {};
+  });
+
+  test('wraps underlying storage implementation', async () => {
+    runScript('templates/gallery/storage/utils.js');
+    runScript('templates/gallery/storage/manager.js');
+
+    let saveCalls = 0;
+    const stubManager = {
+      supported: true,
+      usesOpfs: true,
+      usesLocalBackup: false,
+      fileName: 'results.csv',
+      scheduleSave: () => {
+        saveCalls += 1;
+      },
+      async tryLoad(name) {
+        return name === 'results.csv' ? 'csv-data' : null;
+      }
+    };
+
+    const managerFactory = global.window.galleryStorageManagerFactory;
+    const manager = managerFactory.createStorageManager({
+      storageUtils: {
+        createOpfsManager: () => stubManager
+      },
+      getRecords: () => [],
+      getDatasetState: () => ({ kind: 'normal' }),
+      getCsvPath: () => 'results.csv',
+      resolveCsvSavePath: (value) => value,
+      setStorageStatus: () => {}
+    });
+
+    manager.scheduleSave();
+    assert.equal(saveCalls, 1);
+
+    const loaded = await manager.tryLoad('results.csv');
+    assert.equal(loaded, 'csv-data');
+    assert.equal(manager.supported, true);
+    assert.equal(manager.usesOpfs, true);
+    assert.equal(manager.fileName, 'results.csv');
   });
 });
 
