@@ -16,7 +16,8 @@ DEFAULT_MASTER_CSV = str(templates_path("master_relics.csv"))
 DEFAULT_MASTER_JSON = "master_relics.json"
 TEMPLATE_HTML_PATH = str(templates_path("gallery.html"))
 TEMPLATE_CSS_PATH = str(templates_path("gallery.css"))
-TEMPLATE_JS_PATH = str(templates_path("gallery.js"))
+TEMPLATE_INDEX_JS_PATH = str(templates_path("gallery/index.js"))
+TEMPLATE_CORE_JS_PATH = str(templates_path("gallery.js"))
 
 ADDITIONAL_GALLERY_SCRIPTS = [
     "gallery/utils/dom.js",
@@ -354,23 +355,30 @@ def generate_html(
         )
     css_reference = _cache_busted_path(css_relative, css_abs_path)
 
+    index_relative, index_abs_path = _copy_static_asset(
+        TEMPLATE_INDEX_JS_PATH,
+        output_dir,
+        target_relative_path='gallery/index.js',
+    )
+    index_reference = _cache_busted_path(index_relative, index_abs_path)
+
     if js_relative_override is not None:
-        js_relative = js_relative_override.replace('\\', '/')
+        core_js_relative = js_relative_override.replace('\\', '/')
         if '://' in js_relative_override:
-            js_abs_path = None
+            core_js_abs_path = None
         elif os.path.isabs(js_relative_override):
-            js_abs_path = js_relative_override
+            core_js_abs_path = js_relative_override
         else:
-            candidate_js = os.path.join(output_dir, js_relative)
-            js_abs_path = candidate_js if os.path.exists(candidate_js) else None
+            candidate_js = os.path.join(output_dir, core_js_relative)
+            core_js_abs_path = candidate_js if os.path.exists(candidate_js) else None
     else:
-        js_relative, js_abs_path = _copy_static_asset(
-            TEMPLATE_JS_PATH,
+        core_js_relative, core_js_abs_path = _copy_static_asset(
+            TEMPLATE_CORE_JS_PATH,
             output_dir,
             override=js_template_path,
             target_relative_path=js_output_name,
         )
-    js_reference = _cache_busted_path(js_relative, js_abs_path)
+    core_js_reference = _cache_busted_path(core_js_relative, core_js_abs_path)
 
     _copy_gallery_modules(output_dir)
 
@@ -385,7 +393,8 @@ def generate_html(
     html_output = html_output.replace("__MASTER_OPTIONS__", _escape_attr(json.dumps(embed_options, ensure_ascii=False)))
     html_output = html_output.replace("__MASTER_LEVELS__", _escape_attr(json.dumps(master_levels_map, ensure_ascii=False)))
     html_output = html_output.replace("__CSS_FILE__", _escape_attr(css_reference))
-    html_output = html_output.replace("__JS_FILE__", _escape_attr(js_reference))
+    html_output = html_output.replace("__JS_FILE__", _escape_attr(index_reference))
+    html_output = html_output.replace("__CORE_JS__", _escape_attr(core_js_reference))
     html_output = html_output.replace("__DATASETS__", _escape_attr(json.dumps(dataset_entries, ensure_ascii=False)))
     html_output = html_output.replace("__ACTIVE_DATASET__", _escape_attr(str(active_dataset_index)))
 
