@@ -12,7 +12,7 @@
 ```powershell
 # 任意の作業ディレクトリで
 PS> git clone <このリポジトリURL>
-PS> cd nightreign-relic
+PS> cd RelicListMaker
 # `python` エイリアスが未設定な環境があるため `py` を使用する
 PS> py -m venv .venv
 PS> .\.venv\Scripts\Activate.ps1
@@ -33,15 +33,15 @@ PS> pip install -r requirements-build.txt
 PS> pyinstaller --clean --noconfirm pyinstaller.spec
 ```
 
-- 出力は `dist/nightreign-relic/` に配置される。
+- 出力は `dist/RelicListMaker/` に配置される。
 - `templates/` 配下の HTML/CSS/JS と `master_relics.csv`、および `tesseract/` 以下のファイルは自動でバンドルされる。
-- 既存の `dist/nightreign-relic/videos/` はビルド前後でバックアップ・復元されるため、同梱したサンプル動画が消えることはない。
+- 既存の `dist/RelicListMaker/videos/` はビルド前後でバックアップ・復元されるため、同梱したサンプル動画が消えることはない。
 
 ### PowerShell スクリプトでの自動化
 Windows 環境ではリポジトリ同梱の `docs/build_windows.ps1` を使うと、仮想環境の作成～依存インストール～PyInstaller 実行までを一括で実行できる。
 
 ```powershell
-PS> cd nightreign-relic
+PS> cd RelicListMaker
 PS> powershell -ExecutionPolicy Bypass -File .\docs\build_windows.ps1
 ```
 
@@ -54,9 +54,9 @@ PS> powershell -ExecutionPolicy Bypass -File .\docs\build_windows.ps1
 ビルド完了後、配布フォルダのパスが `[RESULT]` 行で表示される。
 
 ## 配布フォルダの整備
-- `dist/nightreign-relic/` を配布単位として扱う。
+- `dist/RelicListMaker/` を配布単位として扱う。
 - 実行時には以下の構成を想定している。
-  - `nightreign-relic.exe`：GUI ランチャー。本体の解析処理とビューワサーバーが統合されている。
+  - `RelicListMaker.exe`：GUI ランチャー。本体の解析処理とビューワサーバーが統合されている。
   - `templates/` (PyInstaller が展開)
   - `videos/` : ビルド時に自動生成。入力動画を配置する（手動でコピー／差し替え可）
   - `results/` : 実行時に自動生成される
@@ -64,8 +64,8 @@ PS> powershell -ExecutionPolicy Bypass -File .\docs\build_windows.ps1
 
 ## 実行方法
 ```powershell
-PS> cd dist/nightreign-relic
-PS> .\nightreign-relic.exe
+PS> cd dist/RelicListMaker
+PS> .\RelicListMaker.exe
 ```
 
 - GUI 上で動画フォルダ・結果フォルダを設定し、「動画処理を実行」でパイプラインを起動できる。

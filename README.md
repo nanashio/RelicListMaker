@@ -1,12 +1,12 @@
-# Nightreign Relic
+# RelicListMaker
 
 ## はじめに
-Nightreign Relic は、動画から遺物の文字を読み取って一覧化する Windows 向けアプリケーションです。
+RelicListMaker は、動画から遺物の文字を読み取って一覧化する Windows 向けアプリケーションです。
 
 ## 配布ファイル
-- `dist/NightreignRelic-win64.zip`
+- `dist/RelicListMaker-win64.zip`
   - Windows 10/11 (64bit) 向けにビルドされた実行ファイル一式です。
-  - ZIP を展開すると、アプリ本体 (`NightreignRelic.exe`) と必要なリソースが同階層に展開されます。フォルダ構成を変更しないでください。
+  - ZIP を展開すると、アプリ本体 (`RelicListMaker.exe`) と必要なリソースが同階層に展開されます。フォルダ構成を変更しないでください。
 
 ## 必要な動画
 - 処理対象の動画ファイル（`.mp4` / `.avi` など）
@@ -17,11 +17,11 @@ Nightreign Relic は、動画から遺物の文字を読み取って一覧化す
 ## 使い方
 
 ### インストール
-1. `NightreignRelic-win64.zip` を任意の場所に展開します。
+1. `RelicListMaker-win64.zip` を任意の場所に展開します。
 
 ### 動画解析
-1. 展開先フォルダにある `NightreignRelic.exe` をダブルクリックして起動します。
-2. 解析したい動画ファイルを `NightreignRelic.exe` にドラッグ＆ドロップするか、画面の案内に従って選択してください。
+1. 展開先フォルダにある `RelicListMaker.exe` をダブルクリックして起動します。
+2. 解析したい動画ファイルを `RelicListMaker.exe` にドラッグ＆ドロップするか、画面の案内に従って選択してください。
 3. 解析完了すると、`results/<動画名>/` に解析結果一式(csv、遺物画像)が保存されます。
 
 ### 遺物一覧表示&確認
@@ -40,7 +40,7 @@ Nightreign Relic は、動画から遺物の文字を読み取って一覧化す
   - `frames/`: 必要に応じて保存された元フレーム (オプション)
   - `crops/`: OCR 対象のクロップ画像
   - `<動画名>.csv`: 抽出した効果やレベル情報
-  - `viewer.html`: ブラウザで閲覧できるギャラリー（`NightreignRelic.exe` の「ビューワを開く」から起動）
+  - `viewer.html`: ブラウザで閲覧できるギャラリー（`RelicListMaker.exe` の「ビューワを開く」から起動）
 
 ## 動作確認
 - Windows 11 でのみ動作確認済みです。
@@ -51,7 +51,7 @@ Nightreign Relic は、動画から遺物の文字を読み取って一覧化す
 ## 開発者向け情報
 
 ### プロジェクト概要
-Nightreign Relic は、動画内の遺物情報を自動で抽出・整理し、レビュー可能なギャラリーとして出力するためのツールチェーンです。`main.py` を起点にフレーム抽出、OCR、辞書照合、HTML ギャラリー生成までを一括で実行し、結果は `results/<動画名>/` 以下にまとめられます。
+RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、レビュー可能なギャラリーとして出力するためのツールチェーンです。`main.py` を起点にフレーム抽出、OCR、辞書照合、HTML ギャラリー生成までを一括で実行し、結果は `results/<動画名>/` 以下にまとめられます。
 
 ### 主な使用技術
 | 技術 | 用途 |
@@ -60,7 +60,7 @@ Nightreign Relic は、動画内の遺物情報を自動で抽出・整理し、
 | OpenCV / NumPy | フレーム抽出や画像前処理 (`extract_frames.py`, `preprocess.py`) を支える画像処理基盤 |
 | Tesseract OCR + pytesseract | 遺物名・効果文のテキスト認識を担う OCR エンジン |
 | RapidFuzz | OCR 結果と `templates/master_relics.csv` を照合して最適な遺物候補を推定 |
-| PyInstaller | `NightreignRelic.exe` を含む Windows 向け配布物のパッケージングに使用 |
+| PyInstaller | `RelicListMaker.exe` を含む Windows 向け配布物のパッケージングに使用 |
 
 ### ディレクトリ構成
 ```

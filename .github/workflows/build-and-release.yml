@@ -45,11 +45,11 @@ jobs:
       - name: Archive distribution
         shell: pwsh
         run: |
-          $distPath = 'dist/nightreign-relic'
+          $distPath = 'dist/RelicListMaker'
           if (-not (Test-Path $distPath)) {
             throw "PyInstaller output not found at $distPath"
           }
-          $archive = 'nightreign-relic-windows.zip'
+          $archive = 'RelicListMaker-windows.zip'
           if (Test-Path $archive) {
             Remove-Item $archive
           }
@@ -58,25 +58,25 @@ jobs:
       - name: Generate checksum
         shell: pwsh
         run: |
-          $archive = 'nightreign-relic-windows.zip'
+          $archive = 'RelicListMaker-windows.zip'
           $hash = Get-FileHash $archive -Algorithm SHA256
-          "${hash.Hash}  $archive" | Out-File -FilePath 'nightreign-relic-windows.sha256' -Encoding ascii
+          "${hash.Hash}  $archive" | Out-File -FilePath 'RelicListMaker-windows.sha256' -Encoding ascii
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nightreign-relic-windows
+          name: RelicListMaker-windows
           path: |
-            nightreign-relic-windows.zip
-            nightreign-relic-windows.sha256
+            RelicListMaker-windows.zip
+            RelicListMaker-windows.sha256
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            nightreign-relic-windows.zip
-            nightreign-relic-windows.sha256
+            RelicListMaker-windows.zip
+            RelicListMaker-windows.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -86,7 +86,7 @@ jobs:
           $summary = @"
           ## 実行内容
           - PyInstaller で Windows 向け実行ファイルをビルド
-          - dist/nightreign-relic 配下を ZIP に圧縮
+          - dist/RelicListMaker 配下を ZIP に圧縮
           - ZIP の SHA256 チェックサムを生成
           - 成果物 (ZIP/チェックサム) をワークフローのアーティファクトとして保存
           "@

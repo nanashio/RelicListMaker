@@ -181,13 +181,13 @@ def redirect_streams(target_queue: "queue.Queue[str]"):
 
 
 class RelicGuiApp:
-    """NightReign Relic パイプラインのGUIフロントエンド."""
+    """RelicListMaker パイプラインのGUIフロントエンド."""
 
     POLL_INTERVAL_MS = 100
 
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
-        self.root.title("NightReign Relic ツール")
+        self.root.title("RelicListMaker ツール")
         self._apply_japanese_fonts()
 
         self.base_dir = _default_base_dir()
