@@ -72,192 +72,42 @@
         throw new Error('gallery dom utilities are incomplete');
     }
 
-    const dataUtils = window.galleryDataUtils || {};
-    const normalizeSuppressedLevelsFromUtils = dataUtils.normalizeSuppressedLevels;
-    const normalizeSuppressedRecords =
-        typeof normalizeSuppressedLevelsFromUtils === 'function'
-            ? (records) => normalizeSuppressedLevelsFromUtils(records)
-            : (records) => records;
-    const storageUtils = window.galleryStorageUtils || null;
+    const dataUtils = window.galleryDataUtils || null;
 
-    if (!storageUtils) {
-        throw new Error('gallery storage utilities are not available');
+    if (!dataUtils) {
+        throw new Error('gallery data utilities are not available');
     }
 
-    const { createDuplicateManager, parseCsvRows, parseCsvRecords, loadMergedRecords } = storageUtils;
-
-    if (
-        typeof createDuplicateManager !== 'function' ||
-        typeof parseCsvRows !== 'function' ||
-        typeof parseCsvRecords !== 'function' ||
-        typeof loadMergedRecords !== 'function'
-    ) {
-        throw new Error('gallery storage utilities are incomplete');
-    }
-
-    let {
-        sanitizeLevelList = null,
-        normalizeEffectName = null,
-        effectKey = null,
-        normalizeLevelNumericValue = null,
-        sortLevelsAscending = null,
-        parseLevelTokens = null,
-        parseMasterOptions = null,
-        parseMasterLevels = null
+    const {
+        sanitizeLevelList,
+        normalizeEffectName,
+        effectKey,
+        normalizeLevelNumericValue,
+        sortLevelsAscending,
+        parseLevelTokens,
+        parseMasterOptions,
+        parseMasterLevels,
+        normalizeSuppressedLevels: normalizeSuppressedLevelsFromUtils
     } = dataUtils;
 
-    if (!sanitizeLevelList) {
-        sanitizeLevelList = (values) => {
-            if (!Array.isArray(values)) {
-                return [];
-            }
-            return values
-                .map((value) => (value == null ? '' : String(value).trim()))
-                .filter((value) => value !== '');
-        };
+    const dataUtilsMissing = [
+        ['sanitizeLevelList', sanitizeLevelList],
+        ['normalizeEffectName', normalizeEffectName],
+        ['effectKey', effectKey],
+        ['normalizeLevelNumericValue', normalizeLevelNumericValue],
+        ['sortLevelsAscending', sortLevelsAscending],
+        ['parseLevelTokens', parseLevelTokens],
+        ['parseMasterOptions', parseMasterOptions],
+        ['parseMasterLevels', parseMasterLevels],
+        ['normalizeSuppressedLevels', normalizeSuppressedLevelsFromUtils]
+    ].filter(([, value]) => typeof value !== 'function');
+
+    if (dataUtilsMissing.length) {
+        const missingNames = dataUtilsMissing.map(([name]) => name).join(', ');
+        throw new Error(`gallery data utilities are incomplete: missing ${missingNames}`);
     }
 
-    if (!normalizeEffectName) {
-        normalizeEffectName = (value) => {
-            if (value == null) {
-                return '';
-            }
-            return String(value).trim();
-        };
-    }
-
-    if (!effectKey) {
-        effectKey = (value) => {
-            const normalized = normalizeEffectName(value);
-            return normalized ? normalized.toLowerCase() : '';
-        };
-    }
-
-    if (!normalizeLevelNumericValue) {
-        normalizeLevelNumericValue = (value) => {
-            if (value == null) {
-                return null;
-            }
-            const text = String(value).trim();
-            if (!text) {
-                return null;
-            }
-            const normalized = text
-                .replace(/[＋﹢]/g, '+')
-                .replace(/[－﹣−]/g, '-')
-                .replace(/\s+/g, '');
-            const match = normalized.match(/^[+-]?\d+(?:\.\d+)?$/);
-            if (!match) {
-                return null;
-            }
-            const numeric = Number(normalized);
-            return Number.isNaN(numeric) ? null : numeric;
-        };
-    }
-
-    if (!sortLevelsAscending) {
-        sortLevelsAscending = (values) => {
-            if (!Array.isArray(values)) {
-                return [];
-            }
-            const copy = values.slice();
-            const parseValue = (value) => {
-                const number = normalizeLevelNumericValue(value);
-                if (number != null) {
-                    return { key: number, text: String(number), isNumeric: true };
-                }
-                const textValue = value == null ? '' : String(value).trim();
-                return { key: textValue.toLowerCase(), text: textValue, isNumeric: false };
-            };
-
-            return copy
-                .map((value) => ({ raw: value, parsed: parseValue(value) }))
-                .sort((left, right) => {
-                    if (left.parsed.isNumeric && right.parsed.isNumeric) {
-                        return left.parsed.key - right.parsed.key;
-                    }
-                    if (left.parsed.isNumeric) {
-                        return -1;
-                    }
-                    if (right.parsed.isNumeric) {
-                        return 1;
-                    }
-                    if (left.parsed.key < right.parsed.key) {
-                        return -1;
-                    }
-                    if (left.parsed.key > right.parsed.key) {
-                        return 1;
-                    }
-                    return 0;
-                })
-                .map((entry) => entry.raw);
-        };
-    }
-
-    if (!parseLevelTokens) {
-        parseLevelTokens = (raw) => {
-            if (raw == null) {
-                return [];
-            }
-            if (Array.isArray(raw)) {
-                return raw.slice();
-            }
-            const text = String(raw).trim();
-            if (!text) {
-                return [];
-            }
-            const lower = text.toLowerCase();
-            if (lower === 'false' || lower === 'なし' || lower === 'null') {
-                return [];
-            }
-            return text
-                .split(/[|,]/)
-                .map((value) => value.trim())
-                .filter((value) => value !== '');
-        };
-    }
-
-    if (!parseMasterOptions) {
-        parseMasterOptions = (source) => {
-            let list = source;
-            if (typeof source === 'string') {
-                const text = source.trim();
-                if (!text) {
-                    return [];
-                }
-                try {
-                    list = JSON.parse(text);
-                } catch (_error) {
-                    return sanitizeLevelList(text.split(/[|,]/));
-                }
-            }
-
-            if (!Array.isArray(list)) {
-                return [];
-            }
-
-            const normalized = list
-                .map((entry) => {
-                    if (entry == null) {
-                        return '';
-                    }
-                    if (typeof entry === 'object') {
-                        const raw =
-                            entry.EffectBase ||
-                            entry.effect ||
-                            entry.name ||
-                            entry.value ||
-                            entry.label ||
-                            '';
-                        return typeof raw === 'string' ? raw.trim() : '';
-                    }
-                    return String(entry).trim();
-                })
-                .filter((value) => value !== '');
-
-            return Array.from(new Set(normalized));
-        };
-    }
+    const normalizeSuppressedRecords = (records) => normalizeSuppressedLevelsFromUtils(records);
 
     function normalizeStatus(value) {
         const text = (value || '').toString().trim().toLowerCase();
@@ -278,93 +128,6 @@
             return '修正済み';
         }
         return '未レビュー';
-    }
-
-    if (!parseMasterLevels) {
-        parseMasterLevels = (source) => {
-            if (!source) {
-                return new Map();
-            }
-
-            let data = source;
-            if (typeof source === 'string') {
-                const text = source.trim();
-                if (!text) {
-                    return new Map();
-                }
-                try {
-                    data = JSON.parse(text);
-                } catch (error) {
-                    console.warn('master levelsの解析に失敗しました:', error);
-                    return new Map();
-                }
-            }
-
-            const result = new Map();
-
-            const assignLevels = (name, levels) => {
-                const key = effectKey(name);
-                if (!key) {
-                    return;
-                }
-                const tokens = Array.isArray(levels) ? levels : parseLevelTokens(levels);
-                const sanitized = sanitizeLevelList(tokens);
-                if (!sanitized.length) {
-                    return;
-                }
-                const sorted = sortLevelsAscending(sanitized);
-                if (result.has(key)) {
-                    const merged = sanitizeLevelList(result.get(key).concat(sorted));
-                    result.set(key, sortLevelsAscending(merged));
-                    return;
-                }
-                result.set(key, sorted);
-            };
-
-            if (data instanceof Map) {
-                data.forEach((value, key) => {
-                    assignLevels(key, value);
-                });
-                return result;
-            }
-
-            if (Array.isArray(data)) {
-                data.forEach((entry) => {
-                    if (!entry) {
-                        return;
-                    }
-                    if (typeof entry === 'object') {
-                        const name =
-                            entry.EffectBase ||
-                            entry.effect ||
-                            entry.name ||
-                            entry.label ||
-                            entry.key ||
-                            '';
-                        const levels =
-                            entry.Levels ||
-                            entry.levels ||
-                            entry.values ||
-                            entry.options ||
-                            entry.candidates ||
-                            entry.list ||
-                            null;
-                        assignLevels(name, levels);
-                    } else {
-                        assignLevels(entry, []);
-                    }
-                });
-                return result;
-            }
-
-            if (typeof data === 'object') {
-                Object.keys(data).forEach((key) => {
-                    assignLevels(key, data[key]);
-                });
-            }
-
-            return result;
-        };
     }
 
     function parseMasterLevelsCsv(text) {

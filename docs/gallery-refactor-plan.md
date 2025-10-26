@@ -43,6 +43,7 @@
 - **DOM/ストレージユーティリティの統合**: `templates/gallery/utils/dom.js` にファクトリを導入し、`templates/gallery.js` からのフォールバック実装を撤廃。`window.galleryStorageUtils` の API を必須依存として扱い、Node テストで依存注入経路を検証。
 - **データ正規化の拡充**: `utils/data.js` に抑制レベル正規化を追加し、旧 CSV/OPFS データの互換性を担保。データセット解析ユーティリティを `dataset/utils.js` へ集約しテストを整備。
 - **データセット依存の一本化**: `templates/gallery.js` のデータセットユーティリティ内蔵フォールバックを廃止し、`galleryDatasetUtilsFactory` 提供モジュールを必須依存として採用。重複実装を削除して整合性を向上。
+- **データユーティリティの一本化**: `templates/gallery.js` からレベル正規化やマスター候補解析のフォールバック実装を排除し、`galleryDataUtils` が提供する純粋関数を必須依存として扱う。欠落時は明示的に例外を送出し、モジュール実装との乖離を防止。
 - **テスト体制の強化**: `tests/js/gallery_modules.test.mjs` でフィルタ・アイテム生成・効果レベル処理などのシナリオを網羅し、保存トリガーや候補リセットを検証。
 - **状態管理と永続化の抽象化**: `app/stateApi.js` と `storage/manager.js` を導入し、`gallery.js` から直接状態や OPFS 実装へアクセスしない構造に更新。描画・イベント層へ API を注入し、Node テストでモック差し替えが容易な設計に整えた。
 - **ES Modules エントリポイントの整備**: `templates/gallery/index.js` を追加し、HTML テンプレートを `<script type="module">` で読み込む構成に更新。動的 import で `gallery.js` を初期化しつつ依存モジュールの読み込み順序を保証し、`generate_gallery.py` と Playwright フィクスチャを新構成に合わせて更新した。
