@@ -36,6 +36,7 @@ jobs:
           if (Test-Path 'requirements.txt') {
             pip install -r requirements.txt
           }
+          pip install "tkinterdnd2>=0.4.2"
 
       - name: Build executable with PyInstaller
         shell: pwsh

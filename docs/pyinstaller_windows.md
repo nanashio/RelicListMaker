@@ -80,6 +80,7 @@ PS> .\RelicListMaker.exe
 - **Tesseract の日本語データが見つからない**: `tesseract/.../tessdata` に `jpn.traineddata` が含まれているか確認する。外部環境のデータを利用する場合は `TESSDATA_PREFIX` を明示的に指定する。
 - **実行フォルダから動画を認識しない**: `videos/` ディレクトリが exe と同じ階層に存在するか確認する。
 - **ブラウザが「データが送信されませんでした」と表示する**: GUI ログに表示されるビューワルートと `viewer_server_error.log` を確認し、エラー詳細に従って対処する。
+- **GUI ログに「この環境ではドラッグ＆ドロップを利用できません」と出る**: `tkinterdnd2` もしくは `tkdnd` が同梱されていない状態です。ビルド用仮想環境で `pip install tkinterdnd2` を実行した上で PyInstaller を再実行すると、`pyinstaller.spec` の `TKDND_DATAS` 収集処理によりライブラリがバンドルされます。
 
 ## ライセンス注意
 - Tesseract OCR は Apache License 2.0 です。同梱する際は upstream の `LICENSE` と `NOTICE` を配布物に含めてください。
