@@ -189,6 +189,8 @@ class RelicGuiApp:
         self.root = root
         self.root.title("RelicListMaker ツール")
         self._apply_japanese_fonts()
+        self._menubar_attached = False
+        self._fallback_menu_frame: Optional[ttk.Frame] = None
         self._create_menubar()
 
         self.base_dir = _default_base_dir()
@@ -344,11 +346,17 @@ class RelicGuiApp:
                 continue
 
     def _build_layout(self) -> None:
+        self.root.columnconfigure(0, weight=1)
+        base_row = 0
+        if not self._menubar_attached:
+            self._fallback_menu_frame = self._create_menu_buttonbar(self.root)
+            self._fallback_menu_frame.grid(row=base_row, column=0, sticky="ew")
+            base_row += 1
+
         main_frame = ttk.Frame(self.root, padding=12)
         self.main_frame = main_frame
-        main_frame.grid(row=0, column=0, sticky="nsew")
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
+        main_frame.grid(row=base_row, column=0, sticky="nsew")
+        self.root.rowconfigure(base_row, weight=1)
 
         main_frame.columnconfigure(0, weight=1)
 
@@ -439,20 +447,66 @@ class RelicGuiApp:
     def _create_menubar(self) -> None:
         """アプリケーションのメニューバーを初期化する。"""
 
+        self.root.option_add("*tearOff", False)
         menubar = tk.Menu(self.root)
 
         file_menu = tk.Menu(menubar, tearoff=False)
         file_menu.add_command(label="終了", command=self.on_close)
         menubar.add_cascade(label="ファイル", menu=file_menu)
 
-        menubar.add_command(label="設定", command=self._open_settings_dialog)
+        settings_menu = tk.Menu(menubar, tearoff=False)
+        settings_menu.add_command(label="設定を開く", command=self._open_settings_dialog)
+        menubar.add_cascade(label="設定", menu=settings_menu)
 
         help_menu = tk.Menu(menubar, tearoff=False)
         help_menu.add_command(label="このアプリについて", command=self._show_about_dialog)
         menubar.add_cascade(label="ヘルプ", menu=help_menu)
 
-        self.root.configure(menu=menubar)
+        attached = False
+        for setter in (
+            lambda menu: self.root.configure(menu=menu),
+            lambda menu: self.root.__setitem__("menu", menu),
+        ):
+            try:
+                setter(menubar)
+                attached = bool(self.root.cget("menu"))
+            except tk.TclError:
+                continue
+            if attached:
+                break
+
+        self._menubar_attached = attached
         self.menubar = menubar
+
+    def _create_menu_buttonbar(self, master: tk.Misc) -> ttk.Frame:
+        """メニューバーが表示できない環境向けの代替ボタン群を生成する。"""
+
+        frame = ttk.Frame(master, padding=(12, 8, 12, 0))
+        frame.columnconfigure(3, weight=1)
+
+        file_button = ttk.Menubutton(frame, text="ファイル")
+        file_menu = tk.Menu(file_button, tearoff=False)
+        file_menu.add_command(label="終了", command=self.on_close)
+        file_button["menu"] = file_menu
+        file_button.grid(row=0, column=0, padx=(0, 8))
+
+        ttk.Button(frame, text="設定...", command=self._open_settings_dialog).grid(
+            row=0, column=1, padx=8
+        )
+
+        help_button = ttk.Menubutton(frame, text="ヘルプ")
+        help_menu = tk.Menu(help_button, tearoff=False)
+        help_menu.add_command(label="このアプリについて", command=self._show_about_dialog)
+        help_button["menu"] = help_menu
+        help_button.grid(row=0, column=2, padx=8)
+
+        ttk.Label(
+            frame,
+            text="メニューバーが表示されない場合はこちらをご利用ください",
+            foreground="gray",
+        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(6, 0))
+
+        return frame
 
     def _build_settings_content(self, parent: tk.Widget) -> None:
         """設定ダイアログの内容を構築する。"""
