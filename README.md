@@ -46,8 +46,6 @@ RelicListMaker は、動画から遺物の文字を読み取って一覧化す�
 - Windows 11 でのみ動作確認済みです。
 - Steam ゲームレコーディングでエクスポートした動画でのみ動作確認済みです。
 
----
-
 ## 開発者向け情報
 
 ### プロジェクト概要
@@ -116,4 +114,7 @@ OCR 精度を改善したい場合は、個別の画像に対して前処理パ�
 python preprocess.py path/to/image.png --out preprocessed/
 ```
 生成された出力を確認し、しきい値やリサイズ係数などの調整に活用してください。
+
+## ライセンス
+- 配布物には Tesseract OCR (Apache License 2.0) が同梱されています。再配布時にはリポジトリ直下の `LICENSE` を同梱し、Tesseract OCR のライセンス要件に従ってください。詳細は `docs/THIRD_PARTY_LICENSES.md` も参照してください。
 
