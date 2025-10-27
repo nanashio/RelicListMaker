@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import platform
+import shutil
 from functools import lru_cache
 from pathlib import Path
 from typing import List, NamedTuple, Optional
@@ -13,6 +14,19 @@ from resource_paths import resource_path
 class TesseractInfo(NamedTuple):
     cmd: Path
     tessdata_prefix: Optional[Path]
+
+
+_SYSTEM_TESSERACT_REASON: Optional[str] = None
+
+
+def _is_wsl() -> bool:
+    if platform.system().lower() != "linux":
+        return False
+    try:
+        with open("/proc/sys/kernel/osrelease", "r", encoding="utf-8") as fp:
+            return "microsoft" in fp.read().lower()
+    except OSError:
+        return False
 
 
 def _iter_candidate_roots(base: Path) -> List[Path]:
@@ -90,16 +104,76 @@ def find_bundled_tesseract() -> Optional[TesseractInfo]:
     return None
 
 
-def configure_pytesseract() -> Optional[TesseractInfo]:
-    """バンドル済み Tesseract があれば pytesseract をそのパスに向ける."""
-    info = find_bundled_tesseract()
-    if not info:
-        return None
-
+def _activate_bundled(info: TesseractInfo) -> TesseractInfo:
     import pytesseract  # 遅延インポートで循環依存を避ける
 
     pytesseract.pytesseract.tesseract_cmd = str(info.cmd)
+    binary_dir = info.cmd.parent
+    if platform.system().lower().startswith("win"):
+        try:
+            os.add_dll_directory(str(binary_dir))  # type: ignore[attr-defined]
+        except (AttributeError, FileNotFoundError, OSError):
+            pass
+    existing_path = os.environ.get("PATH", "")
+    current_paths = [segment for segment in existing_path.split(os.pathsep) if segment]
+    binary_str = str(binary_dir)
+    if binary_str not in current_paths:
+        current_paths.insert(0, binary_str)
+    os.environ["PATH"] = os.pathsep.join(current_paths)
     if info.tessdata_prefix:
         os.environ.setdefault("TESSDATA_PREFIX", str(info.tessdata_prefix))
         os.environ.setdefault("PYTESSERACT_TESSDATA_PREFIX", str(info.tessdata_prefix))
+    print(f"[INFO] バンドル済みTesseractを使用します: {info.cmd}")
+    if info.tessdata_prefix:
+        print(f"[INFO] tessdata パス: {info.tessdata_prefix}")
     return info
+
+
+def configure_pytesseract() -> Optional[TesseractInfo]:
+    """バンドル済み Tesseract があれば pytesseract をそのパスに向ける."""
+    global _SYSTEM_TESSERACT_REASON
+
+    system = platform.system().lower()
+    info = find_bundled_tesseract()
+
+    if system.startswith("win"):
+        if not info:
+            raise RuntimeError(
+                "Windows 環境ではバンドル済み Tesseract が必須です。"
+                " `tesseract/windows-x64/` の配置を確認してください。"
+            )
+        _SYSTEM_TESSERACT_REASON = None
+        return _activate_bundled(info)
+
+    if _is_wsl():
+        if shutil.which("tesseract"):
+            _SYSTEM_TESSERACT_REASON = "wsl"
+            print("[INFO] WSL 環境ではローカルインストールされた Tesseract を優先します")
+            return None
+        if info:
+            print(
+                "[WARN] WSL 環境でシステムの Tesseract が見つからなかったため、同梱版を使用します"
+            )
+            _SYSTEM_TESSERACT_REASON = None
+            return _activate_bundled(info)
+        _SYSTEM_TESSERACT_REASON = "missing"
+        print(
+            "[ERROR] WSL 環境で利用可能な Tesseract が見つかりません。"
+            " `sudo apt install tesseract-ocr` などでインストールしてください。"
+        )
+        return None
+
+    if info:
+        _SYSTEM_TESSERACT_REASON = None
+        return _activate_bundled(info)
+
+    _SYSTEM_TESSERACT_REASON = "not_found"
+    return None
+
+
+def is_system_tesseract_preferred() -> bool:
+    return _SYSTEM_TESSERACT_REASON is not None
+
+
+def system_tesseract_reason() -> Optional[str]:
+    return _SYSTEM_TESSERACT_REASON
