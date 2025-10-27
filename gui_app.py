@@ -189,6 +189,7 @@ class RelicGuiApp:
         self.root = root
         self.root.title("RelicListMaker ツール")
         self._apply_japanese_fonts()
+        self._create_menubar()
 
         self.base_dir = _default_base_dir()
         self.video_dir_var = tk.StringVar(value="videos")
@@ -198,7 +199,6 @@ class RelicGuiApp:
         self.server_port_var = tk.StringVar(value="0")
         self.open_browser_var = tk.BooleanVar(value=True)
         self.save_frames_var = tk.BooleanVar(value=False)
-        self.settings_visible = tk.BooleanVar(value=False)
         self.merge_only_reviewed_var = tk.BooleanVar(value=True)
 
         self.pipeline_thread: Optional[threading.Thread] = None
@@ -220,6 +220,7 @@ class RelicGuiApp:
         self._dropped_video_set: set[str] = set()
         self.queue_tree: Optional[ttk.Treeview] = None
         self.queue_selection_var: tk.StringVar = tk.StringVar(value="ドラッグ＆ドロップで動画を追加してください")
+        self._settings_window: Optional[tk.Toplevel] = None
 
         self._build_layout()
         self._init_drag_and_drop()
@@ -351,59 +352,9 @@ class RelicGuiApp:
 
         main_frame.columnconfigure(0, weight=1)
 
-        settings_container = ttk.Frame(main_frame)
-        settings_container.grid(row=0, column=0, sticky="ew")
-        settings_container.columnconfigure(0, weight=0)
-        settings_container.columnconfigure(1, weight=1)
-
-        self.settings_toggle_button = ttk.Button(
-            settings_container,
-            text="設定を表示",
-            command=self._toggle_settings_visibility,
-            width=16,
-        )
-        self.settings_toggle_button.grid(row=0, column=0, sticky="w", pady=(0, 4))
-
-        self.config_frame = ttk.LabelFrame(settings_container, text="設定", padding=12)
-        self.config_frame.grid(row=1, column=0, columnspan=2, sticky="nsew")
-        settings_container.rowconfigure(1, weight=1)
-        config_frame = self.config_frame
-        config_frame.columnconfigure(1, weight=1)
-
-        ttk.Label(config_frame, text="動画フォルダ").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=2)
-        video_entry = ttk.Entry(config_frame, textvariable=self.video_dir_var)
-        video_entry.grid(row=0, column=1, sticky="ew", pady=2)
-        ttk.Button(config_frame, text="選択", command=self._select_video_dir).grid(row=0, column=2, padx=(8, 0), pady=2)
-
-        ttk.Label(config_frame, text="結果フォルダ").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=2)
-        results_entry = ttk.Entry(config_frame, textvariable=self.results_dir_var)
-        results_entry.grid(row=1, column=1, sticky="ew", pady=2)
-        ttk.Button(config_frame, text="選択", command=self._select_results_dir).grid(row=1, column=2, padx=(8, 0), pady=2)
-
-        ttk.Label(config_frame, text="OCRアップサンプル").grid(row=2, column=0, sticky="w", padx=(0, 8), pady=2)
-        ttk.Entry(config_frame, textvariable=self.ocr_upsample_var, width=10).grid(row=2, column=1, sticky="w", pady=2)
-
-        ttk.Label(config_frame, text="サーバーホスト").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=2)
-        ttk.Entry(config_frame, textvariable=self.server_host_var, width=16).grid(row=3, column=1, sticky="w", pady=2)
-
-        ttk.Label(config_frame, text="サーバーポート").grid(row=4, column=0, sticky="w", padx=(0, 8), pady=2)
-        ttk.Entry(config_frame, textvariable=self.server_port_var, width=10).grid(row=4, column=1, sticky="w", pady=2)
-
-        ttk.Checkbutton(
-            config_frame,
-            text="サーバー起動時にブラウザを開く",
-            variable=self.open_browser_var,
-        ).grid(row=5, column=0, columnspan=3, sticky="w", pady=4)
-
-        ttk.Checkbutton(
-            config_frame,
-            text="全体画像を出力する",
-            variable=self.save_frames_var,
-        ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(0, 4))
-
         queue_frame = ttk.LabelFrame(main_frame, text="動画処理", padding=12)
-        queue_frame.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
-        main_frame.rowconfigure(1, weight=1)
+        queue_frame.grid(row=0, column=0, sticky="nsew")
+        main_frame.rowconfigure(0, weight=1)
         for col_index in range(3):
             queue_frame.columnconfigure(col_index, weight=1)
         queue_frame.rowconfigure(0, weight=1)
@@ -447,7 +398,7 @@ class RelicGuiApp:
         )
 
         actions_frame = ttk.LabelFrame(main_frame, text="処理結果の確認", padding=12)
-        actions_frame.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        actions_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
         actions_frame.columnconfigure(0, weight=1)
         actions_frame.columnconfigure(1, weight=1)
 
@@ -471,8 +422,8 @@ class RelicGuiApp:
         ttk.Label(progress_frame, textvariable=self.progress_var).grid(row=1, column=0, sticky="w", pady=(8, 0))
 
         log_frame = ttk.LabelFrame(main_frame, text="ログ", padding=12)
-        log_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
-        main_frame.rowconfigure(3, weight=1)
+        log_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
+        main_frame.rowconfigure(2, weight=1)
 
         self.log_text = tk.Text(log_frame, height=20, state="disabled", wrap="word")
         self.log_text.grid(row=0, column=0, sticky="nsew")
@@ -482,26 +433,112 @@ class RelicGuiApp:
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
 
-        self._set_settings_visibility(self.settings_visible.get())
-
         self._refresh_progress_display()
         self._refresh_queue_view()
 
-    def _toggle_settings_visibility(self) -> None:
-        """設定セクションの表示状態をトグルする。"""
+    def _create_menubar(self) -> None:
+        """アプリケーションのメニューバーを初期化する。"""
 
-        self._set_settings_visibility(not self.settings_visible.get())
+        menubar = tk.Menu(self.root)
 
-    def _set_settings_visibility(self, visible: bool) -> None:
-        """設定セクションを表示/非表示に切り替える。"""
+        file_menu = tk.Menu(menubar, tearoff=False)
+        file_menu.add_command(label="終了", command=self.on_close)
+        menubar.add_cascade(label="ファイル", menu=file_menu)
 
-        self.settings_visible.set(visible)
-        if visible:
-            self.config_frame.grid()
-            self.settings_toggle_button.configure(text="設定を隠す")
-        else:
-            self.config_frame.grid_remove()
-            self.settings_toggle_button.configure(text="設定を表示")
+        menubar.add_command(label="設定", command=self._open_settings_dialog)
+
+        help_menu = tk.Menu(menubar, tearoff=False)
+        help_menu.add_command(label="このアプリについて", command=self._show_about_dialog)
+        menubar.add_cascade(label="ヘルプ", menu=help_menu)
+
+        self.root.configure(menu=menubar)
+        self.menubar = menubar
+
+    def _build_settings_content(self, parent: tk.Widget) -> None:
+        """設定ダイアログの内容を構築する。"""
+
+        for index in range(3):
+            weight = 1 if index == 1 else 0
+            parent.columnconfigure(index, weight=weight)
+
+        ttk.Label(parent, text="動画フォルダ").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=2)
+        ttk.Entry(parent, textvariable=self.video_dir_var).grid(row=0, column=1, sticky="ew", pady=2)
+        ttk.Button(parent, text="選択", command=self._select_video_dir).grid(row=0, column=2, padx=(8, 0), pady=2)
+
+        ttk.Label(parent, text="結果フォルダ").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=2)
+        ttk.Entry(parent, textvariable=self.results_dir_var).grid(row=1, column=1, sticky="ew", pady=2)
+        ttk.Button(parent, text="選択", command=self._select_results_dir).grid(row=1, column=2, padx=(8, 0), pady=2)
+
+        ttk.Label(parent, text="OCRアップサンプル").grid(row=2, column=0, sticky="w", padx=(0, 8), pady=2)
+        ttk.Entry(parent, textvariable=self.ocr_upsample_var, width=10).grid(row=2, column=1, sticky="w", pady=2)
+
+        ttk.Label(parent, text="サーバーホスト").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=2)
+        ttk.Entry(parent, textvariable=self.server_host_var, width=16).grid(row=3, column=1, sticky="w", pady=2)
+
+        ttk.Label(parent, text="サーバーポート").grid(row=4, column=0, sticky="w", padx=(0, 8), pady=2)
+        ttk.Entry(parent, textvariable=self.server_port_var, width=10).grid(row=4, column=1, sticky="w", pady=2)
+
+        ttk.Checkbutton(
+            parent,
+            text="サーバー起動時にブラウザを開く",
+            variable=self.open_browser_var,
+        ).grid(row=5, column=0, columnspan=3, sticky="w", pady=4)
+
+        ttk.Checkbutton(
+            parent,
+            text="全体画像を出力する",
+            variable=self.save_frames_var,
+        ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(0, 4))
+
+        button_frame = ttk.Frame(parent)
+        button_frame.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(12, 0))
+        button_frame.columnconfigure(0, weight=1)
+        ttk.Button(button_frame, text="閉じる", command=self._close_settings_dialog).grid(row=0, column=0, sticky="e")
+
+    def _open_settings_dialog(self) -> None:
+        """設定ダイアログを表示する。"""
+
+        if self._settings_window is not None and tk.Toplevel.winfo_exists(self._settings_window):
+            self._settings_window.deiconify()
+            self._settings_window.lift()
+            self._settings_window.focus_set()
+            return
+
+        window = tk.Toplevel(self.root)
+        window.title("設定")
+        window.transient(self.root)
+        window.resizable(False, False)
+        window.protocol("WM_DELETE_WINDOW", self._close_settings_dialog)
+        window.grab_set()
+
+        content = ttk.Frame(window, padding=12)
+        content.grid(row=0, column=0, sticky="nsew")
+        window.columnconfigure(0, weight=1)
+        window.rowconfigure(0, weight=1)
+
+        self._build_settings_content(content)
+
+        self._settings_window = window
+        window.focus_set()
+
+    def _close_settings_dialog(self) -> None:
+        """設定ダイアログを閉じる。"""
+
+        if self._settings_window is None:
+            return
+
+        window = self._settings_window
+        self._settings_window = None
+        with contextlib.suppress(tk.TclError):
+            window.grab_release()
+        with contextlib.suppress(tk.TclError):
+            window.destroy()
+
+    def _show_about_dialog(self) -> None:
+        """アプリケーションの情報を表示する。"""
+
+        message = "RelicListMaker\nhttps://github.com/nanashio/RelicListMaker"
+        messagebox.showinfo("このアプリについて", message)
 
     def _init_drag_and_drop(self) -> None:
         """動画ファイルのドラッグ＆ドロップ受付を設定する."""
@@ -1191,6 +1228,7 @@ class RelicGuiApp:
             except Exception:
                 pass
 
+        self._close_settings_dialog()
         self.root.destroy()
 
 
