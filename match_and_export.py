@@ -11,7 +11,11 @@ from typing import Sequence
 from preprocess import prepare_crop_for_ocr
 from relic_data import load_master_effects_and_levels, normalize_master_values
 from resource_paths import templates_path
-from tesseract_bundle import configure_pytesseract
+from tesseract_bundle import (
+    configure_pytesseract,
+    is_system_tesseract_preferred,
+    system_tesseract_reason,
+)
 
 BUNDLED_TESSERACT = configure_pytesseract()
 _TESSERACT_NOTICE_SHOWN = False
@@ -230,12 +234,12 @@ def process_images(
 ):
     global _TESSERACT_NOTICE_SHOWN
     if not _TESSERACT_NOTICE_SHOWN:
-        if BUNDLED_TESSERACT:
-            print(f"[INFO] バンドル済みTesseractを使用します: {BUNDLED_TESSERACT.cmd}")
-            if BUNDLED_TESSERACT.tessdata_prefix:
-                print(f"[INFO] tessdata パス: {BUNDLED_TESSERACT.tessdata_prefix}")
-        else:
-            print("[INFO] システムにインストール済みの Tesseract を利用します")
+        if is_system_tesseract_preferred():
+            reason = system_tesseract_reason()
+            if reason == "wsl":
+                print("[INFO] WSL 環境のためシステムにインストールされた Tesseract を利用します")
+            elif reason and reason != "missing":
+                print("[INFO] システムにインストール済みの Tesseract を利用します")
         _TESSERACT_NOTICE_SHOWN = True
     version = pytesseract.get_tesseract_version()
     print(f"Tesseract Ver: {version}")

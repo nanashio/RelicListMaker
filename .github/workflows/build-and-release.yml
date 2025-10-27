@@ -38,6 +38,56 @@ jobs:
           }
           pip install "tkinterdnd2>=0.4.2"
 
+      - name: Install Tesseract runtime
+        shell: pwsh
+        run: |
+          $version = '5.5.0.20241111'
+          $downloadUrl = "https://github.com/UB-Mannheim/tesseract/releases/download/v$version/tesseract-ocr-w64-setup-$version.exe"
+          $installer = Join-Path $env:RUNNER_TEMP 'tesseract-installer.exe'
+          Write-Host "Downloading Tesseract $version from $downloadUrl"
+          Invoke-WebRequest -Uri $downloadUrl -OutFile $installer
+          Write-Host 'Running silent installer'
+          $process = Start-Process -FilePath $installer -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            throw "Tesseract installer exited with code $($process.ExitCode)"
+          }
+
+      - name: Sync Tesseract bundle
+        shell: pwsh
+        run: |
+          $source = 'C:\Program Files\Tesseract-OCR'
+          if (-not (Test-Path $source)) {
+            throw "Expected Tesseract installation at $source"
+          }
+
+          $bundleRoot = 'tesseract/windows-x64'
+          if (-not (Test-Path $bundleRoot)) {
+            New-Item -ItemType Directory -Path $bundleRoot | Out-Null
+          }
+
+          Copy-Item -Path (Join-Path $source 'tesseract.exe') -Destination $bundleRoot -Force
+
+          Get-ChildItem -Path $bundleRoot -Filter '*.dll' -File -ErrorAction SilentlyContinue | Remove-Item -Force
+          Get-ChildItem -Path $source -Filter '*.dll' -File | Copy-Item -Destination $bundleRoot -Force
+
+          $licensePatterns = '*.txt','COPYING*','NOTICE*','LICENSE*'
+          foreach ($pattern in $licensePatterns) {
+            Get-ChildItem -Path $source -Filter $pattern -File -ErrorAction SilentlyContinue |
+              Copy-Item -Destination $bundleRoot -Force
+          }
+
+          $tessdataSource = Join-Path $source 'tessdata'
+          $tessdataDest = Join-Path $bundleRoot 'tessdata'
+          if (-not (Test-Path $tessdataDest)) {
+            New-Item -ItemType Directory -Path $tessdataDest | Out-Null
+          }
+          foreach ($lang in @('eng','jpn','jpn_vert','osd')) {
+            $srcFile = Join-Path $tessdataSource "$lang.traineddata"
+            if (Test-Path $srcFile) {
+              Copy-Item -Path $srcFile -Destination $tessdataDest -Force
+            }
+          }
+
       - name: Build executable with PyInstaller
         shell: pwsh
         run: |
