@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextlib
+import csv
 import io
 import queue
 import shutil
@@ -41,6 +42,91 @@ else:
 
 
 _WINDOWS_DROP_SUPPORT = None
+
+
+_REVIEWED_STATUSES = {"pass", "corrected"}
+
+
+def _normalize_effect_status(value: object) -> str:
+    if value is None:
+        return "pending"
+    text = str(value).strip().lower()
+    if not text:
+        return "pending"
+    if text in _REVIEWED_STATUSES:
+        return text
+    if text in {"fail", "failed", "ng", "reject", "rejected", "x"}:
+        return "pending"
+    return text
+
+
+def _slot_has_content(row: dict[str, object], slot: int) -> bool:
+    effect_key = f"Effect{slot}"
+    raw_key = f"RawText{slot}"
+    score_key = f"Effect{slot}Score"
+    correction_key = f"Effect{slot}Correction"
+    for key in (effect_key, raw_key, correction_key, score_key):
+        if key not in row:
+            continue
+        value = row.get(key)
+        if value is None:
+            continue
+        if isinstance(value, str):
+            if value.strip():
+                return True
+        else:
+            return True
+    return False
+
+
+def _row_has_effect_entries(row: dict[str, object]) -> bool:
+    for key in row.keys():
+        if not key.startswith("Effect") or not key.endswith("Status"):
+            continue
+        slot_text = key[len("Effect") : -len("Status")]
+        if not slot_text.isdigit():
+            continue
+        if _slot_has_content(row, int(slot_text)):
+            return True
+    return False
+
+
+def _row_is_fully_reviewed(row: dict[str, object]) -> bool:
+    has_slots = False
+    for key in row.keys():
+        if not key.startswith("Effect") or not key.endswith("Status"):
+            continue
+        slot_text = key[len("Effect") : -len("Status")]
+        if not slot_text.isdigit():
+            continue
+        slot = int(slot_text)
+        if not _slot_has_content(row, slot):
+            continue
+        has_slots = True
+        status = _normalize_effect_status(row.get(key))
+        if status not in _REVIEWED_STATUSES:
+            return False
+    return has_slots
+
+
+def _summarize_review_state(csv_path: Path) -> str:
+    try:
+        with csv_path.open("r", newline="", encoding="utf-8-sig") as csv_file:
+            reader = csv.DictReader(csv_file)
+            any_effect_rows = False
+            for row in reader:
+                if not row:
+                    continue
+                if not _row_has_effect_entries(row):
+                    continue
+                any_effect_rows = True
+                if not _row_is_fully_reviewed(row):
+                    return "未レビュー含む"
+            if any_effect_rows:
+                return "全レビュー済"
+    except Exception:
+        return "未レビュー含む"
+    return "未レビュー含む"
 
 
 if sys.platform.startswith("win") and ctypes is not None and hasattr(wintypes, "LRESULT"):
@@ -453,7 +539,7 @@ class RelicGuiApp:
         columns = ("folder", "status", "csv", "updated")
         tree = ttk.Treeview(actions_frame, columns=columns, show="headings", height=6)
         tree.heading("folder", text="フォルダ名")
-        tree.heading("status", text="選択状態")
+        tree.heading("status", text="レビュー状態")
         tree.heading("csv", text="CSVファイル")
         tree.heading("updated", text="最終更新")
         tree.column("folder", anchor="w", width=140, stretch=True)
@@ -897,50 +983,30 @@ class RelicGuiApp:
             if folder.name.lower() == "gallery":
                 continue
 
-            csv_candidates = [
-                path
-                for path in folder.glob("*.csv")
-                if path.name.lower() != "corrections.csv"
-            ]
-            csv_candidates.sort()
-
-            review_candidates = [path for path in csv_candidates if path.stem.endswith("_review")]
-            chosen: Optional[Path] = None
-
-            if review_candidates:
-                chosen = review_candidates[-1]
-            else:
-                expected_name = folder.name + ".csv"
-                for path in csv_candidates:
-                    if path.name == expected_name:
-                        chosen = path
-                        break
-                if chosen is None and csv_candidates:
-                    chosen = csv_candidates[0]
+            csv_path: Optional[Path] = None
+            for path in sorted(folder.glob("*.csv")):
+                if path.name.lower() == "corrections.csv":
+                    continue
+                csv_path = path
+                break
 
             try:
-                modified = datetime.fromtimestamp(chosen.stat().st_mtime) if chosen else None
+                modified = datetime.fromtimestamp(csv_path.stat().st_mtime) if csv_path else None
             except OSError:
                 modified = None
 
-            if not csv_candidates:
-                status_text = "CSVなし"
-            elif chosen and chosen.stem.endswith("_review"):
-                status_text = "レビューCSV"
-            elif review_candidates:
-                status_text = "レビューCSV候補あり"
+            if csv_path:
+                status_text = _summarize_review_state(csv_path)
             else:
-                status_text = "通常CSV"
+                status_text = "未レビュー含む"
 
             entries.append(
                 {
                     "folder": folder.name,
-                    "csv": chosen.name if chosen else "",
-                    "csv_path": str(chosen) if chosen else "",
+                    "csv": csv_path.name if csv_path else "",
+                    "csv_path": str(csv_path) if csv_path else "",
                     "status": status_text,
                     "updated": modified.strftime("%Y-%m-%d %H:%M") if modified else "",
-                    "chosen_is_review": bool(chosen and chosen in review_candidates),
-                    "review_candidates": len(review_candidates),
                 }
             )
 
@@ -991,8 +1057,8 @@ class RelicGuiApp:
         if not entries:
             message = "処理済みデータが見つかりません"
         else:
-            reviewed_count = sum(1 for entry in entries if entry.get("chosen_is_review"))
-            message = f"{len(entries)} 件 (レビューCSV {reviewed_count} 件)"
+            reviewed_count = sum(1 for entry in entries if entry.get("status") == "全レビュー済")
+            message = f"{len(entries)} 件 (全レビュー済 {reviewed_count} 件)"
 
         self.results_status_var.set(message)
         if log:
