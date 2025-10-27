@@ -204,6 +204,7 @@ class RelicGuiApp:
         self.save_frames_var = tk.BooleanVar(value=False)
         self.merge_only_reviewed_var = tk.BooleanVar(value=True)
         self.results_status_var = tk.StringVar(value="結果フォルダを読み込んでください")
+        self.log_visible_var = tk.BooleanVar(value=False)
 
         self.pipeline_thread: Optional[threading.Thread] = None
         self.server_context: Optional[ServerContext] = None
@@ -226,6 +227,7 @@ class RelicGuiApp:
         self.queue_selection_var: tk.StringVar = tk.StringVar(value="ドラッグ＆ドロップで動画を追加してください")
         self._settings_window: Optional[tk.Toplevel] = None
         self.results_tree: Optional[ttk.Treeview] = None
+        self.log_frame: Optional[ttk.LabelFrame] = None
         self._results_entries: list[dict[str, object]] = []
         self._results_refresh_pending = False
 
@@ -414,41 +416,42 @@ class RelicGuiApp:
         )
 
         actions_frame = ttk.LabelFrame(main_frame, text="処理結果の確認", padding=12)
-        actions_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        actions_frame.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
+        main_frame.rowconfigure(1, weight=1)
         actions_frame.columnconfigure(0, weight=1)
-        actions_frame.columnconfigure(1, weight=1)
+        actions_frame.columnconfigure(1, weight=0)
+        actions_frame.rowconfigure(2, weight=1)
 
-        self.server_start_button = ttk.Button(actions_frame, text="ビューワを開く", command=self.on_start_server)
+        buttons_frame = ttk.Frame(actions_frame)
+        buttons_frame.grid(row=0, column=0, columnspan=2, sticky="ew")
+        buttons_frame.columnconfigure(0, weight=1)
+        buttons_frame.columnconfigure(1, weight=1)
+
+        self.server_start_button = ttk.Button(buttons_frame, text="ビューワを開く", command=self.on_start_server)
         self.server_start_button.grid(row=0, column=0, sticky="ew", padx=(4, 2), pady=4)
 
-        self.merge_button = ttk.Button(actions_frame, text="統合結果を生成", command=self.on_merge_results)
+        self.merge_button = ttk.Button(buttons_frame, text="統合結果を生成", command=self.on_merge_results)
         self.merge_button.grid(row=0, column=1, sticky="ew", padx=(2, 4), pady=4)
 
         ttk.Checkbutton(
-            actions_frame,
+            buttons_frame,
             text="効果が全てレビュー済みの項目のみ統合",
             variable=self.merge_only_reviewed_var,
-        ).grid(row=1, column=1, sticky="w", padx=(2, 4), pady=(0, 4))
+        ).grid(row=1, column=0, columnspan=2, sticky="w", padx=(4, 4), pady=(0, 4))
 
-        progress_frame = ttk.Frame(queue_frame, padding=8)
-        progress_frame.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(12, 0))
-        progress_frame.columnconfigure(0, weight=1)
-        self.progress_bar = ttk.Progressbar(progress_frame, orient="horizontal", mode="indeterminate")
-        self.progress_bar.grid(row=0, column=0, sticky="ew")
-        ttk.Label(progress_frame, textvariable=self.progress_var).grid(row=1, column=0, sticky="w", pady=(8, 0))
-
-        results_frame = ttk.LabelFrame(main_frame, text="結果フォルダの内容", padding=12)
-        results_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
-        results_frame.columnconfigure(0, weight=1)
-        results_frame.rowconfigure(1, weight=1)
-
-        toolbar = ttk.Frame(results_frame)
-        toolbar.grid(row=0, column=0, sticky="ew")
+        toolbar = ttk.Frame(actions_frame)
+        toolbar.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
         ttk.Button(toolbar, text="再読み込み", command=lambda: self._refresh_results_list(log=True)).pack(side="left")
         ttk.Label(toolbar, textvariable=self.results_status_var).pack(side="left", padx=8)
+        ttk.Checkbutton(
+            toolbar,
+            text="ログを表示",
+            variable=self.log_visible_var,
+            command=self._update_log_visibility,
+        ).pack(side="right")
 
         columns = ("folder", "status", "csv", "updated")
-        tree = ttk.Treeview(results_frame, columns=columns, show="headings", height=6)
+        tree = ttk.Treeview(actions_frame, columns=columns, show="headings", height=6)
         tree.heading("folder", text="フォルダ名")
         tree.heading("status", text="選択状態")
         tree.heading("csv", text="CSVファイル")
@@ -457,16 +460,23 @@ class RelicGuiApp:
         tree.column("status", anchor="w", width=120, stretch=False)
         tree.column("csv", anchor="w", width=160, stretch=True)
         tree.column("updated", anchor="center", width=140, stretch=False)
-        tree.grid(row=1, column=0, sticky="nsew")
-        results_scroll = ttk.Scrollbar(results_frame, orient="vertical", command=tree.yview)
-        results_scroll.grid(row=1, column=1, sticky="ns")
+        tree.grid(row=2, column=0, sticky="nsew")
+        results_scroll = ttk.Scrollbar(actions_frame, orient="vertical", command=tree.yview)
+        results_scroll.grid(row=2, column=1, sticky="ns")
         tree.configure(yscrollcommand=results_scroll.set)
         self.results_tree = tree
 
+        progress_frame = ttk.Frame(queue_frame, padding=8)
+        progress_frame.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(12, 0))
+        progress_frame.columnconfigure(0, weight=1)
+        self.progress_bar = ttk.Progressbar(progress_frame, orient="horizontal", mode="indeterminate")
+        self.progress_bar.grid(row=0, column=0, sticky="ew")
+        ttk.Label(progress_frame, textvariable=self.progress_var).grid(row=1, column=0, sticky="w", pady=(8, 0))
+
         log_frame = ttk.LabelFrame(main_frame, text="ログ", padding=12)
-        log_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+        log_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
         main_frame.rowconfigure(2, weight=1)
-        main_frame.rowconfigure(3, weight=1)
+        self.log_frame = log_frame
 
         self.log_text = tk.Text(log_frame, height=20, state="disabled", wrap="word")
         self.log_text.grid(row=0, column=0, sticky="nsew")
@@ -478,6 +488,7 @@ class RelicGuiApp:
 
         self._refresh_progress_display()
         self._refresh_queue_view()
+        self._update_log_visibility()
 
     def _create_menubar(self) -> None:
         """アプリケーションのメニューバーを初期化する。"""
@@ -883,6 +894,8 @@ class RelicGuiApp:
         for folder in sorted(results_dir.iterdir()):
             if folder.name.startswith(".") or not folder.is_dir():
                 continue
+            if folder.name.lower() == "gallery":
+                continue
 
             csv_candidates = [
                 path
@@ -984,6 +997,14 @@ class RelicGuiApp:
         self.results_status_var.set(message)
         if log:
             self.append_log(f"[GUI] 結果フォルダを読み込みました: {results_path_text} ({len(entries)} 件)")
+
+    def _update_log_visibility(self) -> None:
+        if self.log_frame is None:
+            return
+        if self.log_visible_var.get():
+            self.log_frame.grid()
+        else:
+            self.log_frame.grid_remove()
 
     def _update_queue_controls(self) -> None:
         if self.queue_tree is None:
