@@ -44,10 +44,23 @@ jobs:
           $version = '5.4.0.20240606'
           $downloadUrl = "https://github.com/UB-Mannheim/tesseract/releases/download/v$version/tesseract-ocr-w64-setup-$version.exe"
           $installer = Join-Path $env:RUNNER_TEMP 'tesseract-installer.exe'
+          $infSource = 'tesseract\tesseract-install.inf'
+          if (-not (Test-Path $infSource)) {
+            throw "Tesseract installer config not found at $infSource"
+          }
+          $infPath = Join-Path $env:RUNNER_TEMP 'tesseract-install.inf'
+          Copy-Item -Path $infSource -Destination $infPath -Force
           Write-Host "Downloading Tesseract $version from $downloadUrl"
           Invoke-WebRequest -Uri $downloadUrl -OutFile $installer
           Write-Host 'Running silent installer'
-          $process = Start-Process -FilePath $installer -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
+          $arguments = @(
+            '/VERYSILENT',
+            '/SUPPRESSMSGBOXES',
+            '/NORESTART',
+            '/SP-',
+            "/LOADINF=`"$infPath`""
+          )
+          $process = Start-Process -FilePath $installer -ArgumentList $arguments -Wait -PassThru
           if ($process.ExitCode -ne 0) {
             throw "Tesseract installer exited with code $($process.ExitCode)"
           }
@@ -81,7 +94,7 @@ jobs:
           if (-not (Test-Path $tessdataDest)) {
             New-Item -ItemType Directory -Path $tessdataDest | Out-Null
           }
-          foreach ($lang in @('eng','jpn','jpn_vert','osd')) {
+          foreach ($lang in @('eng','jpn','osd')) {
             $srcFile = Join-Path $tessdataSource "$lang.traineddata"
             if (Test-Path $srcFile) {
               Copy-Item -Path $srcFile -Destination $tessdataDest -Force

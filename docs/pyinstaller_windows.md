@@ -5,9 +5,9 @@
 - Python 3.11 系推奨 (64bit)
 - Microsoft Visual C++ 再頒布可能パッケージ (既に OpenCV を利用している環境なら導入済みのことが多い)
 - Tesseract OCR 同梱用のファイル（ハッシュ確認済みの配布物から取得）
-  - 例: [UB Mannheim 版インストーラ](https://github.com/UB-Mannheim/tesseract/wiki) から **5.5.0.20241111 (64bit)** を展開し、`tesseract.exe`・`tessdata`・`.dll` を `tesseract/windows-x64/` 配下に配置する。
+  - 例: [UB Mannheim 版インストーラ](https://github.com/UB-Mannheim/tesseract/wiki) から **5.4.0.20240606 (64bit)** を展開し、`tesseract.exe`・`tessdata`・`.dll` を `tesseract/windows-x64/` 配下に配置する。
   - GitHub Actions のリリースワークフローでは、このインストーラを自動でダウンロードして `tesseract/windows-x64/` に同期してから PyInstaller を実行するため、CI では追加作業は不要。
-  - 少なくとも `eng.traineddata` と `jpn.traineddata` を含める。
+  - 少なくとも `eng.traineddata` と `jpn.traineddata` を含め、必要であれば `osd.traineddata` を追加する。縦書き用の `jpn_vert.traineddata` は含めない。
 
 ## プロジェクトの取得と仮想環境
 ```powershell
