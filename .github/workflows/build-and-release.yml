@@ -41,7 +41,7 @@ jobs:
       - name: Install Tesseract runtime
         shell: pwsh
         run: |
-          $version = '5.5.0.20241111'
+          $version = '5.4.0.20240606'
           $downloadUrl = "https://github.com/UB-Mannheim/tesseract/releases/download/v$version/tesseract-ocr-w64-setup-$version.exe"
           $installer = Join-Path $env:RUNNER_TEMP 'tesseract-installer.exe'
           Write-Host "Downloading Tesseract $version from $downloadUrl"
