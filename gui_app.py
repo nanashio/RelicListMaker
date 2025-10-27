@@ -10,6 +10,7 @@ import types
 import threading
 import traceback
 import tkinter as tk
+from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk, font
 from typing import Optional
@@ -202,6 +203,7 @@ class RelicGuiApp:
         self.open_browser_var = tk.BooleanVar(value=True)
         self.save_frames_var = tk.BooleanVar(value=False)
         self.merge_only_reviewed_var = tk.BooleanVar(value=True)
+        self.results_status_var = tk.StringVar(value="結果フォルダを読み込んでください")
 
         self.pipeline_thread: Optional[threading.Thread] = None
         self.server_context: Optional[ServerContext] = None
@@ -223,11 +225,17 @@ class RelicGuiApp:
         self.queue_tree: Optional[ttk.Treeview] = None
         self.queue_selection_var: tk.StringVar = tk.StringVar(value="ドラッグ＆ドロップで動画を追加してください")
         self._settings_window: Optional[tk.Toplevel] = None
+        self.results_tree: Optional[ttk.Treeview] = None
+        self._results_entries: list[dict[str, object]] = []
+        self._results_refresh_pending = False
+
+        self.results_dir_var.trace_add("write", lambda *_args: self._schedule_results_refresh())
 
         self._build_layout()
         self._init_drag_and_drop()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.after(self.POLL_INTERVAL_MS, self._process_log_queue)
+        self._refresh_results_list()
 
     def _apply_japanese_fonts(self) -> None:
         """Tkの標準フォントを日本語表示に適したフォントへ切り替える."""
@@ -429,9 +437,36 @@ class RelicGuiApp:
         self.progress_bar.grid(row=0, column=0, sticky="ew")
         ttk.Label(progress_frame, textvariable=self.progress_var).grid(row=1, column=0, sticky="w", pady=(8, 0))
 
+        results_frame = ttk.LabelFrame(main_frame, text="結果フォルダの内容", padding=12)
+        results_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
+        results_frame.columnconfigure(0, weight=1)
+        results_frame.rowconfigure(1, weight=1)
+
+        toolbar = ttk.Frame(results_frame)
+        toolbar.grid(row=0, column=0, sticky="ew")
+        ttk.Button(toolbar, text="再読み込み", command=lambda: self._refresh_results_list(log=True)).pack(side="left")
+        ttk.Label(toolbar, textvariable=self.results_status_var).pack(side="left", padx=8)
+
+        columns = ("folder", "status", "csv", "updated")
+        tree = ttk.Treeview(results_frame, columns=columns, show="headings", height=6)
+        tree.heading("folder", text="フォルダ名")
+        tree.heading("status", text="選択状態")
+        tree.heading("csv", text="CSVファイル")
+        tree.heading("updated", text="最終更新")
+        tree.column("folder", anchor="w", width=140, stretch=True)
+        tree.column("status", anchor="w", width=120, stretch=False)
+        tree.column("csv", anchor="w", width=160, stretch=True)
+        tree.column("updated", anchor="center", width=140, stretch=False)
+        tree.grid(row=1, column=0, sticky="nsew")
+        results_scroll = ttk.Scrollbar(results_frame, orient="vertical", command=tree.yview)
+        results_scroll.grid(row=1, column=1, sticky="ns")
+        tree.configure(yscrollcommand=results_scroll.set)
+        self.results_tree = tree
+
         log_frame = ttk.LabelFrame(main_frame, text="ログ", padding=12)
-        log_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
+        log_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
         main_frame.rowconfigure(2, weight=1)
+        main_frame.rowconfigure(3, weight=1)
 
         self.log_text = tk.Text(log_frame, height=20, state="disabled", wrap="word")
         self.log_text.grid(row=0, column=0, sticky="nsew")
@@ -834,6 +869,122 @@ class RelicGuiApp:
             self.queue_tree.insert("", "end", iid=path, values=(name, color, path))
         self._update_queue_controls()
 
+    def _schedule_results_refresh(self) -> None:
+        if self._results_refresh_pending:
+            return
+        self._results_refresh_pending = True
+        self.root.after(200, lambda: self._refresh_results_list())
+
+    def _collect_results_entries(self, results_dir: Path) -> list[dict[str, object]]:
+        entries: list[dict[str, object]] = []
+        if not results_dir.exists():
+            return entries
+
+        for folder in sorted(results_dir.iterdir()):
+            if folder.name.startswith(".") or not folder.is_dir():
+                continue
+
+            csv_candidates = [
+                path
+                for path in folder.glob("*.csv")
+                if path.name.lower() != "corrections.csv"
+            ]
+            csv_candidates.sort()
+
+            review_candidates = [path for path in csv_candidates if path.stem.endswith("_review")]
+            chosen: Optional[Path] = None
+
+            if review_candidates:
+                chosen = review_candidates[-1]
+            else:
+                expected_name = folder.name + ".csv"
+                for path in csv_candidates:
+                    if path.name == expected_name:
+                        chosen = path
+                        break
+                if chosen is None and csv_candidates:
+                    chosen = csv_candidates[0]
+
+            try:
+                modified = datetime.fromtimestamp(chosen.stat().st_mtime) if chosen else None
+            except OSError:
+                modified = None
+
+            if not csv_candidates:
+                status_text = "CSVなし"
+            elif chosen and chosen.stem.endswith("_review"):
+                status_text = "レビューCSV"
+            elif review_candidates:
+                status_text = "レビューCSV候補あり"
+            else:
+                status_text = "通常CSV"
+
+            entries.append(
+                {
+                    "folder": folder.name,
+                    "csv": chosen.name if chosen else "",
+                    "csv_path": str(chosen) if chosen else "",
+                    "status": status_text,
+                    "updated": modified.strftime("%Y-%m-%d %H:%M") if modified else "",
+                    "chosen_is_review": bool(chosen and chosen in review_candidates),
+                    "review_candidates": len(review_candidates),
+                }
+            )
+
+        return entries
+
+    def _refresh_results_list(self, log: bool = False) -> None:
+        self._results_refresh_pending = False
+        tree = self.results_tree
+        if tree is None:
+            return
+
+        results_dir = self._resolve_input_path(self.results_dir_var.get())
+        results_path_text = str(results_dir)
+
+        if not results_dir.exists():
+            tree.delete(*tree.get_children())
+            self._results_entries = []
+            message = f"結果フォルダが見つかりません: {results_path_text}"
+            self.results_status_var.set(message)
+            if log:
+                self.append_log(f"[WARN] {message}")
+            return
+
+        try:
+            entries = self._collect_results_entries(results_dir)
+        except Exception as exc:  # noqa: BLE001 - 例外内容をGUIに表示するため
+            tree.delete(*tree.get_children())
+            self._results_entries = []
+            message = f"結果フォルダの読み込みに失敗しました: {exc}"
+            self.results_status_var.set("結果フォルダの読み込みに失敗しました")
+            self.append_log(f"[ERROR] {message}")
+            return
+
+        self._results_entries = entries
+        tree.delete(*tree.get_children())
+        for entry in entries:
+            tree.insert(
+                "",
+                "end",
+                values=(
+                    entry.get("folder", ""),
+                    entry.get("status", ""),
+                    entry.get("csv", ""),
+                    entry.get("updated", ""),
+                ),
+            )
+
+        if not entries:
+            message = "処理済みデータが見つかりません"
+        else:
+            reviewed_count = sum(1 for entry in entries if entry.get("chosen_is_review"))
+            message = f"{len(entries)} 件 (レビューCSV {reviewed_count} 件)"
+
+        self.results_status_var.set(message)
+        if log:
+            self.append_log(f"[GUI] 結果フォルダを読み込みました: {results_path_text} ({len(entries)} 件)")
+
     def _update_queue_controls(self) -> None:
         if self.queue_tree is None:
             return
@@ -1161,6 +1312,7 @@ class RelicGuiApp:
         self._dropped_videos.clear()
         self._dropped_video_set.clear()
         self._refresh_queue_view()
+        self._schedule_results_refresh()
 
     def on_merge_results(self) -> None:
         if self.merge_thread and self.merge_thread.is_alive():
@@ -1202,6 +1354,7 @@ class RelicGuiApp:
         if self._merge_progress_token is not None:
             self._stop_progress(self._merge_progress_token)
             self._merge_progress_token = None
+        self._schedule_results_refresh()
 
     def on_start_server(self) -> None:
         if self.server_context is not None:
