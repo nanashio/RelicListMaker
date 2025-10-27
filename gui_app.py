@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextlib
+import csv
 import io
 import queue
 import shutil
@@ -41,6 +42,91 @@ else:
 
 
 _WINDOWS_DROP_SUPPORT = None
+
+
+_REVIEWED_STATUSES = {"pass", "corrected"}
+
+
+def _normalize_effect_status(value: object) -> str:
+    if value is None:
+        return "pending"
+    text = str(value).strip().lower()
+    if not text:
+        return "pending"
+    if text in _REVIEWED_STATUSES:
+        return text
+    if text in {"fail", "failed", "ng", "reject", "rejected", "x"}:
+        return "pending"
+    return text
+
+
+def _slot_has_content(row: dict[str, object], slot: int) -> bool:
+    effect_key = f"Effect{slot}"
+    raw_key = f"RawText{slot}"
+    score_key = f"Effect{slot}Score"
+    correction_key = f"Effect{slot}Correction"
+    for key in (effect_key, raw_key, correction_key, score_key):
+        if key not in row:
+            continue
+        value = row.get(key)
+        if value is None:
+            continue
+        if isinstance(value, str):
+            if value.strip():
+                return True
+        else:
+            return True
+    return False
+
+
+def _row_has_effect_entries(row: dict[str, object]) -> bool:
+    for key in row.keys():
+        if not key.startswith("Effect") or not key.endswith("Status"):
+            continue
+        slot_text = key[len("Effect") : -len("Status")]
+        if not slot_text.isdigit():
+            continue
+        if _slot_has_content(row, int(slot_text)):
+            return True
+    return False
+
+
+def _row_is_fully_reviewed(row: dict[str, object]) -> bool:
+    has_slots = False
+    for key in row.keys():
+        if not key.startswith("Effect") or not key.endswith("Status"):
+            continue
+        slot_text = key[len("Effect") : -len("Status")]
+        if not slot_text.isdigit():
+            continue
+        slot = int(slot_text)
+        if not _slot_has_content(row, slot):
+            continue
+        has_slots = True
+        status = _normalize_effect_status(row.get(key))
+        if status not in _REVIEWED_STATUSES:
+            return False
+    return has_slots
+
+
+def _summarize_review_state(csv_path: Path) -> str:
+    try:
+        with csv_path.open("r", newline="", encoding="utf-8-sig") as csv_file:
+            reader = csv.DictReader(csv_file)
+            any_effect_rows = False
+            for row in reader:
+                if not row:
+                    continue
+                if not _row_has_effect_entries(row):
+                    continue
+                any_effect_rows = True
+                if not _row_is_fully_reviewed(row):
+                    return "未レビュー含む"
+            if any_effect_rows:
+                return "全レビュー済"
+    except Exception:
+        return "未レビュー含む"
+    return "未レビュー含む"
 
 
 if sys.platform.startswith("win") and ctypes is not None and hasattr(wintypes, "LRESULT"):
@@ -204,6 +290,7 @@ class RelicGuiApp:
         self.save_frames_var = tk.BooleanVar(value=False)
         self.merge_only_reviewed_var = tk.BooleanVar(value=True)
         self.results_status_var = tk.StringVar(value="結果フォルダを読み込んでください")
+        self.log_visible_var = tk.BooleanVar(value=False)
 
         self.pipeline_thread: Optional[threading.Thread] = None
         self.server_context: Optional[ServerContext] = None
@@ -226,6 +313,7 @@ class RelicGuiApp:
         self.queue_selection_var: tk.StringVar = tk.StringVar(value="ドラッグ＆ドロップで動画を追加してください")
         self._settings_window: Optional[tk.Toplevel] = None
         self.results_tree: Optional[ttk.Treeview] = None
+        self.log_frame: Optional[ttk.LabelFrame] = None
         self._results_entries: list[dict[str, object]] = []
         self._results_refresh_pending = False
 
@@ -414,21 +502,55 @@ class RelicGuiApp:
         )
 
         actions_frame = ttk.LabelFrame(main_frame, text="処理結果の確認", padding=12)
-        actions_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        actions_frame.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
+        main_frame.rowconfigure(1, weight=1)
         actions_frame.columnconfigure(0, weight=1)
-        actions_frame.columnconfigure(1, weight=1)
+        actions_frame.columnconfigure(1, weight=0)
+        actions_frame.rowconfigure(2, weight=1)
 
-        self.server_start_button = ttk.Button(actions_frame, text="ビューワを開く", command=self.on_start_server)
+        buttons_frame = ttk.Frame(actions_frame)
+        buttons_frame.grid(row=0, column=0, columnspan=2, sticky="ew")
+        buttons_frame.columnconfigure(0, weight=1)
+        buttons_frame.columnconfigure(1, weight=1)
+
+        self.server_start_button = ttk.Button(buttons_frame, text="ビューワを開く", command=self.on_start_server)
         self.server_start_button.grid(row=0, column=0, sticky="ew", padx=(4, 2), pady=4)
 
-        self.merge_button = ttk.Button(actions_frame, text="統合結果を生成", command=self.on_merge_results)
+        self.merge_button = ttk.Button(buttons_frame, text="統合結果を生成", command=self.on_merge_results)
         self.merge_button.grid(row=0, column=1, sticky="ew", padx=(2, 4), pady=4)
 
         ttk.Checkbutton(
-            actions_frame,
+            buttons_frame,
             text="効果が全てレビュー済みの項目のみ統合",
             variable=self.merge_only_reviewed_var,
-        ).grid(row=1, column=1, sticky="w", padx=(2, 4), pady=(0, 4))
+        ).grid(row=1, column=0, columnspan=2, sticky="w", padx=(4, 4), pady=(0, 4))
+
+        toolbar = ttk.Frame(actions_frame)
+        toolbar.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        ttk.Button(toolbar, text="再読み込み", command=lambda: self._refresh_results_list(log=True)).pack(side="left")
+        ttk.Label(toolbar, textvariable=self.results_status_var).pack(side="left", padx=8)
+        ttk.Checkbutton(
+            toolbar,
+            text="ログを表示",
+            variable=self.log_visible_var,
+            command=self._update_log_visibility,
+        ).pack(side="right")
+
+        columns = ("folder", "status", "csv", "updated")
+        tree = ttk.Treeview(actions_frame, columns=columns, show="headings", height=6)
+        tree.heading("folder", text="フォルダ名")
+        tree.heading("status", text="レビュー状態")
+        tree.heading("csv", text="CSVファイル")
+        tree.heading("updated", text="最終更新")
+        tree.column("folder", anchor="w", width=140, stretch=True)
+        tree.column("status", anchor="w", width=120, stretch=False)
+        tree.column("csv", anchor="w", width=160, stretch=True)
+        tree.column("updated", anchor="center", width=140, stretch=False)
+        tree.grid(row=2, column=0, sticky="nsew")
+        results_scroll = ttk.Scrollbar(actions_frame, orient="vertical", command=tree.yview)
+        results_scroll.grid(row=2, column=1, sticky="ns")
+        tree.configure(yscrollcommand=results_scroll.set)
+        self.results_tree = tree
 
         progress_frame = ttk.Frame(queue_frame, padding=8)
         progress_frame.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(12, 0))
@@ -437,36 +559,10 @@ class RelicGuiApp:
         self.progress_bar.grid(row=0, column=0, sticky="ew")
         ttk.Label(progress_frame, textvariable=self.progress_var).grid(row=1, column=0, sticky="w", pady=(8, 0))
 
-        results_frame = ttk.LabelFrame(main_frame, text="結果フォルダの内容", padding=12)
-        results_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
-        results_frame.columnconfigure(0, weight=1)
-        results_frame.rowconfigure(1, weight=1)
-
-        toolbar = ttk.Frame(results_frame)
-        toolbar.grid(row=0, column=0, sticky="ew")
-        ttk.Button(toolbar, text="再読み込み", command=lambda: self._refresh_results_list(log=True)).pack(side="left")
-        ttk.Label(toolbar, textvariable=self.results_status_var).pack(side="left", padx=8)
-
-        columns = ("folder", "status", "csv", "updated")
-        tree = ttk.Treeview(results_frame, columns=columns, show="headings", height=6)
-        tree.heading("folder", text="フォルダ名")
-        tree.heading("status", text="選択状態")
-        tree.heading("csv", text="CSVファイル")
-        tree.heading("updated", text="最終更新")
-        tree.column("folder", anchor="w", width=140, stretch=True)
-        tree.column("status", anchor="w", width=120, stretch=False)
-        tree.column("csv", anchor="w", width=160, stretch=True)
-        tree.column("updated", anchor="center", width=140, stretch=False)
-        tree.grid(row=1, column=0, sticky="nsew")
-        results_scroll = ttk.Scrollbar(results_frame, orient="vertical", command=tree.yview)
-        results_scroll.grid(row=1, column=1, sticky="ns")
-        tree.configure(yscrollcommand=results_scroll.set)
-        self.results_tree = tree
-
         log_frame = ttk.LabelFrame(main_frame, text="ログ", padding=12)
-        log_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
+        log_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
         main_frame.rowconfigure(2, weight=1)
-        main_frame.rowconfigure(3, weight=1)
+        self.log_frame = log_frame
 
         self.log_text = tk.Text(log_frame, height=20, state="disabled", wrap="word")
         self.log_text.grid(row=0, column=0, sticky="nsew")
@@ -478,6 +574,7 @@ class RelicGuiApp:
 
         self._refresh_progress_display()
         self._refresh_queue_view()
+        self._update_log_visibility()
 
     def _create_menubar(self) -> None:
         """アプリケーションのメニューバーを初期化する。"""
@@ -883,51 +980,33 @@ class RelicGuiApp:
         for folder in sorted(results_dir.iterdir()):
             if folder.name.startswith(".") or not folder.is_dir():
                 continue
+            if folder.name.lower() == "gallery":
+                continue
 
-            csv_candidates = [
-                path
-                for path in folder.glob("*.csv")
-                if path.name.lower() != "corrections.csv"
-            ]
-            csv_candidates.sort()
-
-            review_candidates = [path for path in csv_candidates if path.stem.endswith("_review")]
-            chosen: Optional[Path] = None
-
-            if review_candidates:
-                chosen = review_candidates[-1]
-            else:
-                expected_name = folder.name + ".csv"
-                for path in csv_candidates:
-                    if path.name == expected_name:
-                        chosen = path
-                        break
-                if chosen is None and csv_candidates:
-                    chosen = csv_candidates[0]
+            csv_path: Optional[Path] = None
+            for path in sorted(folder.glob("*.csv")):
+                if path.name.lower() == "corrections.csv":
+                    continue
+                csv_path = path
+                break
 
             try:
-                modified = datetime.fromtimestamp(chosen.stat().st_mtime) if chosen else None
+                modified = datetime.fromtimestamp(csv_path.stat().st_mtime) if csv_path else None
             except OSError:
                 modified = None
 
-            if not csv_candidates:
-                status_text = "CSVなし"
-            elif chosen and chosen.stem.endswith("_review"):
-                status_text = "レビューCSV"
-            elif review_candidates:
-                status_text = "レビューCSV候補あり"
+            if csv_path:
+                status_text = _summarize_review_state(csv_path)
             else:
-                status_text = "通常CSV"
+                status_text = "未レビュー含む"
 
             entries.append(
                 {
                     "folder": folder.name,
-                    "csv": chosen.name if chosen else "",
-                    "csv_path": str(chosen) if chosen else "",
+                    "csv": csv_path.name if csv_path else "",
+                    "csv_path": str(csv_path) if csv_path else "",
                     "status": status_text,
                     "updated": modified.strftime("%Y-%m-%d %H:%M") if modified else "",
-                    "chosen_is_review": bool(chosen and chosen in review_candidates),
-                    "review_candidates": len(review_candidates),
                 }
             )
 
@@ -978,12 +1057,20 @@ class RelicGuiApp:
         if not entries:
             message = "処理済みデータが見つかりません"
         else:
-            reviewed_count = sum(1 for entry in entries if entry.get("chosen_is_review"))
-            message = f"{len(entries)} 件 (レビューCSV {reviewed_count} 件)"
+            reviewed_count = sum(1 for entry in entries if entry.get("status") == "全レビュー済")
+            message = f"{len(entries)} 件 (全レビュー済 {reviewed_count} 件)"
 
         self.results_status_var.set(message)
         if log:
             self.append_log(f"[GUI] 結果フォルダを読み込みました: {results_path_text} ({len(entries)} 件)")
+
+    def _update_log_visibility(self) -> None:
+        if self.log_frame is None:
+            return
+        if self.log_visible_var.get():
+            self.log_frame.grid()
+        else:
+            self.log_frame.grid_remove()
 
     def _update_queue_controls(self) -> None:
         if self.queue_tree is None:
