@@ -10,9 +10,9 @@ associateimages=0
 
 [Components]
 main=yes
-additional_languages=no
-lang\\eng=yes
-lang\\jpn=yes
-lang\\osd=yes
+additional_languages=yes
+lang\eng=yes
+lang\jpn=yes
+lang\osd=yes
 
 [Run]
