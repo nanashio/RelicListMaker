@@ -8,11 +8,11 @@
 3. `tesseract/` 直下
 
 各ディレクトリの中で `tesseract.exe` もしくは `tesseract` を探し、`bin/` 配下も走査対象になります。
-`jpn.traineddata` と `eng.traineddata` など必要な言語データは同じ階層の `tessdata/` に配置してください。
+`jpn.traineddata` と `eng.traineddata` など必要な言語データは同じ階層の `tessdata/` に配置してください。リポジトリの既定状態では `tessdata/` に学習データを含めていないため、ビルド前に必要な言語だけを追加する運用を想定しています。
 
 ## 言語データの優先度
 - 必須: `eng.traineddata`, `jpn.traineddata`
-- 任意追加: `jpn_vert.traineddata` (縦書き素材向け), `osd.traineddata` (向き検出), `equ.traineddata` (数式認識) など
+- 任意追加: `osd.traineddata` (向き検出), `equ.traineddata` (数式認識) など
 
 
 ## 例: Windows x64 向け
@@ -44,7 +44,7 @@ PyInstaller ビルド時には `tesseract/` ディレクトリ全体がそのま
 Windows 向けに配布する際は、このディレクトリに配置したバンドル済みの Tesseract 実行ファイルと DLL をそのまま同梱します。アプリは Windows 環境で常に同梱版を使用するため、配布物から外部インストールにフォールバックすることはありません。
 
 ### DLL の取り扱い
-- GitHub Actions の Windows ビルドでは、ワークフロー内で **UB Mannheim 版 64bit Tesseract 5.5.0.20241111** をダウンロードし、`C:\Program Files\Tesseract-OCR\` 以下に展開された `tesseract.exe` と `.dll` を `tesseract/windows-x64/` へコピーしてから PyInstaller を実行します。リリースアセットには常に同梱済みの実行ファイルと DLL が含まれます。
+- GitHub Actions の Windows ビルドでは、ワークフロー内で **UB Mannheim 版 64bit Tesseract 5.4.0.20240606** をダウンロードし、`C:\Program Files\Tesseract-OCR\` 以下に展開された `tesseract.exe` と `.dll` を `tesseract/windows-x64/` へコピーしてから PyInstaller を実行します。リリースアセットには常に同梱済みの実行ファイルと DLL が含まれます。`tessdata/` には英語 (`eng`)、日本語 (`jpn`)、OSD (`osd`) の学習データのみをコピーし、縦書き用データは含めません。
 - ローカルで手動ビルドする場合は、同じ手順で `Tesseract-OCR` フォルダ内の `.dll` をまとめて `tesseract/windows-x64/` にコピーしてください。代表的なファイルは以下のとおりです。
   - `libtesseract-5.dll`
   - `libleptonica-6.dll`
