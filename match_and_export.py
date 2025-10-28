@@ -6,7 +6,7 @@ import cv2
 import pandas as pd
 import pytesseract
 from rapidfuzz import process, fuzz
-from typing import Sequence
+from typing import Optional, Sequence
 
 from preprocess import prepare_crop_for_ocr
 from relic_data import load_master_effects_and_levels, normalize_master_values
@@ -51,6 +51,16 @@ _LEVEL_NORMALIZE_TABLE = str.maketrans({
     'Ⅳ': '4',
     'Ⅴ': '5',
 })
+
+
+DEFAULT_COLUMN_VISIBILITY: dict[str, bool] = {
+    "ItemColor": True,
+    "RawText": True,
+    "Score": True,
+    "Source": True,
+    "LevelOptions": True,
+    "LevelCorrection": True,
+}
 
 
 def _normalize_level_text(text: str) -> str:
@@ -145,6 +155,18 @@ def load_corrections(corrections_csv):
 
     return corrections
 
+
+def _normalize_column_visibility(overrides: Optional[dict[str, object]]) -> dict[str, bool]:
+    flags = DEFAULT_COLUMN_VISIBILITY.copy()
+    if not overrides:
+        return flags
+    for key, value in overrides.items():
+        try:
+            flags[key] = bool(value)
+        except Exception:
+            continue
+    return flags
+
 def clean_ocr_text(text):
     """Tesseractの改行や改ページコードを整形"""
     if not text:
@@ -227,6 +249,7 @@ def process_images(
     preprocess=True,
     corrections_csv=None,
     item_color=None,
+    column_visibility=None,
 ):
     global _TESSERACT_NOTICE_SHOWN
     if not _TESSERACT_NOTICE_SHOWN:
@@ -253,6 +276,8 @@ def process_images(
         dictionary = normalize_master_values(list(dictionary) + list(corrections_map.values()))
 
     crop_boxes = scale_crop_boxes(BASE_CROP_BOXES, scale)
+    column_flags = _normalize_column_visibility(column_visibility)
+    slot_range = range(1, len(BASE_CROP_BOXES) + 1)
 
     data = []
     for fname in sorted(os.listdir(image_dir)):
@@ -269,15 +294,23 @@ def process_images(
             crop_boxes=crop_boxes,
         )
 
-        row = {"Image": fname, "Duplicate": False, "ItemColor": item_color or 'none'}
+        row = {"Image": fname, "Duplicate": False}
+        if column_flags.get("ItemColor", True):
+            row["ItemColor"] = item_color or "none"
+
         for idx, match in enumerate(matches, start=1):
             raw_value = match.get("raw", "")
             effect_value = match.get("match", "")
-            row[f"RawText{idx}"] = raw_value
             row[f"Effect{idx}"] = effect_value
-            row[f"Effect{idx}Score"] = match.get("score", 0.0)
-            row[f"Effect{idx}Source"] = match.get("source", "dictionary")
             row[f"Effect{idx}Status"] = "pending"
+            row.setdefault(f"Effect{idx}Level", "")
+
+            if column_flags.get("RawText", True):
+                row[f"RawText{idx}"] = raw_value
+            if column_flags.get("Score", True):
+                row[f"Effect{idx}Score"] = match.get("score", 0.0)
+            if column_flags.get("Source", True):
+                row[f"Effect{idx}Source"] = match.get("source", "dictionary")
 
             if level_map:
                 candidates = _find_level_candidates(str(effect_value), level_map)
@@ -285,9 +318,15 @@ def process_images(
                     detected_level = _detect_level(str(raw_value), candidates)
                     row[f"Effect{idx}Level"] = detected_level or ""
                     options_value = _serialize_level_options(candidates)
-                    if options_value:
+                    if column_flags.get("LevelOptions", True) and options_value:
                         row[f"Effect{idx}LevelOptions"] = options_value
-            row[f"Effect{idx}LevelCorrection"] = row.get(f"Effect{idx}LevelCorrection", "")
+
+            if column_flags.get("LevelOptions", True):
+                row.setdefault(f"Effect{idx}LevelOptions", "")
+            if column_flags.get("LevelCorrection", True):
+                row[f"Effect{idx}LevelCorrection"] = row.get(
+                    f"Effect{idx}LevelCorrection", ""
+                )
 
         data.append(row)
 
@@ -295,18 +334,34 @@ def process_images(
         print("[!] 出力対象となるOCR結果がありませんでした")
         return
 
-    fieldnames = []
+    fieldnames: list[str] = ["Image", "Duplicate"]
+    if column_flags.get("ItemColor", True):
+        fieldnames.append("ItemColor")
 
-    def register_field(field_name):
-        if field_name not in fieldnames:
-            fieldnames.append(field_name)
+    for idx in slot_range:
+        fieldnames.append(f"Effect{idx}")
+        fieldnames.append(f"Effect{idx}Level")
+        if column_flags.get("LevelOptions", True):
+            fieldnames.append(f"Effect{idx}LevelOptions")
+        fieldnames.append(f"Effect{idx}Status")
 
-    for mandatory in ("Image", "Duplicate"):
-        register_field(mandatory)
+    if column_flags.get("RawText", True):
+        for idx in slot_range:
+            fieldnames.append(f"RawText{idx}")
+    if column_flags.get("Score", True):
+        for idx in slot_range:
+            fieldnames.append(f"Effect{idx}Score")
+    if column_flags.get("Source", True):
+        for idx in slot_range:
+            fieldnames.append(f"Effect{idx}Source")
+    if column_flags.get("LevelCorrection", True):
+        for idx in slot_range:
+            fieldnames.append(f"Effect{idx}LevelCorrection")
 
     for row in data:
         for key in row.keys():
-            register_field(key)
+            if key not in fieldnames:
+                fieldnames.append(key)
 
     try:
         with open(output_path, "w", encoding="utf-8", newline="") as handle:

@@ -119,6 +119,7 @@ def _process_single_video(
     ocr_upsample: float,
     override_colors: dict[Path, str],
     save_full_frames: bool,
+    csv_column_visibility: Optional[dict[str, object]],
     report: Callable[[str], None],
     advance_report: Callable[[str], None],
 ) -> dict[str, str]:
@@ -150,6 +151,7 @@ def _process_single_video(
         preprocess=True,
         corrections_csv=str(task.corrections_csv),
         item_color=item_color,
+        column_visibility=csv_column_visibility,
     )
     advance_report(f"{video_name} のOCR/マッチング完了")
     print(f"[✓] {task.crops_dir} の結果を {task.csv_path} に出力しました")
@@ -171,6 +173,7 @@ def main(
     video_files: Optional[list[str]] = None,
     item_color_overrides: Optional[dict[str, str]] = None,
     save_full_frames: bool = False,
+    csv_column_visibility: Optional[dict[str, object]] = None,
 ) -> None:
     start_time = time.time()
     print("[INFO] 動画ごとの処理開始...")
@@ -214,6 +217,7 @@ def main(
             ocr_upsample=ocr_upsample,
             override_colors=override_map,
             save_full_frames=save_full_frames,
+            csv_column_visibility=csv_column_visibility,
             report=report,
             advance_report=advance,
         )
