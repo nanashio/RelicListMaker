@@ -205,7 +205,6 @@
             .map((value) => normalizeEffectName(value))
             .filter((value) => value);
         const unique = Array.from(new Set(normalized));
-        unique.sort((a, b) => a.localeCompare(b, 'ja'));
         stateApi.setMasterOptions(unique);
     }
 
