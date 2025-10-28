@@ -288,6 +288,19 @@ class RelicGuiApp:
         self.server_port_var = tk.StringVar(value="0")
         self.open_browser_var = tk.BooleanVar(value=True)
         self.save_frames_var = tk.BooleanVar(value=False)
+        self.csv_column_vars: dict[str, tk.BooleanVar] = {
+            "ItemColor": tk.BooleanVar(value=True),
+            "RawText": tk.BooleanVar(value=True),
+            "Score": tk.BooleanVar(value=True),
+            "Source": tk.BooleanVar(value=True),
+            "LevelOptions": tk.BooleanVar(value=True),
+            "LevelCorrection": tk.BooleanVar(value=True),
+            "Dataset": tk.BooleanVar(value=True),
+            "DatasetFolder": tk.BooleanVar(value=True),
+            "SourceCsv": tk.BooleanVar(value=True),
+            "SourceImage": tk.BooleanVar(value=True),
+            "BaseImage": tk.BooleanVar(value=True),
+        }
         self.merge_only_reviewed_var = tk.BooleanVar(value=True)
         self.results_status_var = tk.StringVar(value="結果フォルダを読み込んでください")
         self.log_visible_var = tk.BooleanVar(value=False)
@@ -676,8 +689,66 @@ class RelicGuiApp:
             variable=self.save_frames_var,
         ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(0, 4))
 
+        csv_frame = ttk.LabelFrame(parent, text="CSV出力列", padding=12)
+        csv_frame.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        for col_index in range(2):
+            csv_frame.columnconfigure(col_index, weight=1)
+
+        required_specs = [
+            ("RawText[n]", "RawText"),
+            ("Effect[n]Score", "Score"),
+            ("Effect[n]LevelOptions", "LevelOptions"),
+            ("Effect[n]LevelCorrection", "LevelCorrection"),
+        ]
+        optional_specs = [
+            ("ItemColor", "ItemColor"),
+            ("Effect[n]Source", "Source"),
+            ("Dataset", "Dataset"),
+            ("DatasetFolder", "DatasetFolder"),
+            ("SourceCsv", "SourceCsv"),
+            ("SourceImage", "SourceImage"),
+            ("BaseImage", "BaseImage"),
+        ]
+
+        ttk.Label(csv_frame, text="ビューワで必要な列").grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 4)
+        )
+        for index, (label, key) in enumerate(required_specs):
+            row_index = 1 + index // 2
+            col_index = index % 2
+            ttk.Checkbutton(
+                csv_frame,
+                text=label,
+                variable=self.csv_column_vars[key],
+                state="disabled",
+            ).grid(row=row_index, column=col_index, sticky="w", padx=(0, 8), pady=2)
+
+        optional_header_row = 1 + (len(required_specs) + 1) // 2
+        ttk.Separator(csv_frame, orient="horizontal").grid(
+            row=optional_header_row,
+            column=0,
+            columnspan=2,
+            sticky="ew",
+            pady=(6, 6),
+        )
+        ttk.Label(csv_frame, text="任意で出力する列").grid(
+            row=optional_header_row + 1,
+            column=0,
+            columnspan=2,
+            sticky="w",
+            pady=(0, 4),
+        )
+        for index, (label, key) in enumerate(optional_specs):
+            row_index = optional_header_row + 2 + index // 2
+            col_index = index % 2
+            ttk.Checkbutton(
+                csv_frame,
+                text=label,
+                variable=self.csv_column_vars[key],
+            ).grid(row=row_index, column=col_index, sticky="w", padx=(0, 8), pady=2)
+
         button_frame = ttk.Frame(parent)
-        button_frame.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(12, 0))
+        button_frame.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(12, 0))
         button_frame.columnconfigure(0, weight=1)
         ttk.Button(button_frame, text="閉じる", command=self._close_settings_dialog).grid(row=0, column=0, sticky="e")
 
@@ -1348,6 +1419,10 @@ class RelicGuiApp:
             for entry in video_entries
             if entry.get("color") not in (None, "", "none")
         }
+        column_visibility = {
+            key: var.get()
+            for key, var in self.csv_column_vars.items()
+        }
 
         self.run_button.configure(state="disabled")
         self.append_log(f"[GUI] 動画処理を開始します: {video_dir} -> {results_dir} ({len(videos_to_process)} 件)")
@@ -1376,6 +1451,7 @@ class RelicGuiApp:
                         video_files=videos_to_process,
                         item_color_overrides=color_overrides,
                         save_full_frames=self.save_frames_var.get(),
+                        csv_column_visibility=column_visibility,
                     )
                 self.append_log("[GUI] 動画処理が完了しました")
             except Exception as exc:  # noqa: BLE001 - GUIログに表示するため広く捕捉
