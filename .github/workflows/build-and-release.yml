@@ -44,25 +44,31 @@ jobs:
           $version = '5.4.0.20240606'
           $downloadUrl = "https://github.com/UB-Mannheim/tesseract/releases/download/v$version/tesseract-ocr-w64-setup-$version.exe"
           $installer = Join-Path $env:RUNNER_TEMP 'tesseract-installer.exe'
-          $infSource = 'tesseract\tesseract-install.inf'
-          if (-not (Test-Path $infSource)) {
-            throw "Tesseract installer config not found at $infSource"
-          }
-          $infPath = Join-Path $env:RUNNER_TEMP 'tesseract-install.inf'
-          Copy-Item -Path $infSource -Destination $infPath -Force
+          $installDir = 'C:\Program Files\Tesseract-OCR'
           Write-Host "Downloading Tesseract $version from $downloadUrl"
           Invoke-WebRequest -Uri $downloadUrl -OutFile $installer
-          Write-Host 'Running silent installer'
+          Write-Host 'Running NSIS silent installer'
           $arguments = @(
-            '/VERYSILENT',
-            '/SUPPRESSMSGBOXES',
-            '/NORESTART',
-            '/SP-',
-            "/LOADINF=`"$infPath`""
+            '/S',
+            "/D=$installDir"
           )
           $process = Start-Process -FilePath $installer -ArgumentList $arguments -Wait -PassThru
           if ($process.ExitCode -ne 0) {
             throw "Tesseract installer exited with code $($process.ExitCode)"
+          }
+
+          $tessdataDir = Join-Path $installDir 'tessdata'
+          $requiredLanguages = @(
+            @{ Name = 'eng'; Source = 'https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata' },
+            @{ Name = 'jpn'; Source = 'https://github.com/tesseract-ocr/tessdata/raw/main/jpn.traineddata' },
+            @{ Name = 'osd'; Source = 'https://github.com/tesseract-ocr/tessdata/raw/main/osd.traineddata' }
+          )
+          foreach ($lang in $requiredLanguages) {
+            $target = Join-Path $tessdataDir ("{0}.traineddata" -f $lang.Name)
+            if (-not (Test-Path $target)) {
+              Write-Host "Downloading missing tessdata: $($lang.Name)"
+              Invoke-WebRequest -Uri $lang.Source -OutFile $target
+            }
           }
 
       - name: Sync Tesseract bundle
