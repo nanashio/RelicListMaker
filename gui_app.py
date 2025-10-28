@@ -1,6 +1,7 @@
 """解析処理とビューワサーバーを統合するGUIランチャー."""
 from __future__ import annotations
 
+import argparse
 import contextlib
 import csv
 import io
@@ -14,11 +15,12 @@ import tkinter as tk
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk, font
-from typing import Optional
+from typing import Optional, Sequence
 
 import main as pipeline_main
 from merge_results import MergeResultsError, merge_results
 from viewer_server import ServerContext, create_server, _open_browser
+from version_info import get_version
 
 
 try:
@@ -1602,7 +1604,17 @@ class RelicGuiApp:
         self.root.destroy()
 
 
-def main() -> None:
+def _parse_cli_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    version = get_version()
+    parser = argparse.ArgumentParser(
+        description=f"RelicListMaker GUI ランチャー (バージョン {version})"
+    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {version}")
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> None:
+    _parse_cli_args(argv)
     if TkinterDnD is not None:
         root = TkinterDnD.Tk()
     else:
