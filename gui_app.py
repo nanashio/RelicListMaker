@@ -686,19 +686,50 @@ class RelicGuiApp:
 
         csv_frame = ttk.LabelFrame(parent, text="CSV出力列", padding=12)
         csv_frame.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(8, 0))
-        for col_index in range(3):
+        for col_index in range(2):
             csv_frame.columnconfigure(col_index, weight=1)
 
-        column_specs = [
-            ("ItemColor 列を出力", "ItemColor"),
-            ("RawText 列を出力", "RawText"),
-            ("Effectスコア列を出力", "Score"),
-            ("マッチ元列を出力", "Source"),
-            ("レベル候補列を出力", "LevelOptions"),
-            ("レベル補正列を出力", "LevelCorrection"),
+        required_specs = [
+            ("RawText 列", "RawText"),
+            ("Effectスコア列", "Score"),
+            ("レベル候補列", "LevelOptions"),
+            ("レベル補正列", "LevelCorrection"),
         ]
-        for index, (label, key) in enumerate(column_specs):
-            row_index, col_index = divmod(index, 3)
+        optional_specs = [
+            ("ItemColor 列", "ItemColor"),
+            ("マッチ元列", "Source"),
+        ]
+
+        ttk.Label(csv_frame, text="ビューワで必要な列").grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 4)
+        )
+        for index, (label, key) in enumerate(required_specs):
+            row_index = 1 + index // 2
+            col_index = index % 2
+            ttk.Checkbutton(
+                csv_frame,
+                text=label,
+                variable=self.csv_column_vars[key],
+            ).grid(row=row_index, column=col_index, sticky="w", padx=(0, 8), pady=2)
+
+        optional_header_row = 1 + (len(required_specs) + 1) // 2
+        ttk.Separator(csv_frame, orient="horizontal").grid(
+            row=optional_header_row,
+            column=0,
+            columnspan=2,
+            sticky="ew",
+            pady=(6, 6),
+        )
+        ttk.Label(csv_frame, text="任意で出力する列").grid(
+            row=optional_header_row + 1,
+            column=0,
+            columnspan=2,
+            sticky="w",
+            pady=(0, 4),
+        )
+        for index, (label, key) in enumerate(optional_specs):
+            row_index = optional_header_row + 2 + index // 2
+            col_index = index % 2
             ttk.Checkbutton(
                 csv_frame,
                 text=label,
