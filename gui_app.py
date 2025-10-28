@@ -15,7 +15,7 @@ import tkinter as tk
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk, font
-from typing import Optional, Sequence
+from typing import Iterator, Optional, Sequence
 
 import main as pipeline_main
 from merge_results import MergeResultsError, merge_results
@@ -41,6 +41,70 @@ if sys.platform.startswith("win"):
 else:
     ctypes = None
     wintypes = None
+
+
+@contextlib.contextmanager
+def _windows_cli_output(argv: Sequence[str] | None) -> Iterator[None]:
+    """Windows の GUI ビルドでも CLI 出力を親コンソールに表示する."""
+
+    if not sys.platform.startswith("win"):
+        yield
+        return
+
+    if not argv:
+        yield
+        return
+
+    if ctypes is None:
+        yield
+        return
+
+    try:
+        kernel32 = ctypes.windll.kernel32
+    except AttributeError:
+        yield
+        return
+
+    attached = False
+    # ATTACH_PARENT_PROCESS = DWORD(-1)
+    if kernel32.AttachConsole(ctypes.c_uint(-1).value):
+        attached = True
+    else:
+        last_error = kernel32.GetLastError()
+        # ERROR_ACCESS_DENIED (5) は既にコンソールへ接続済みという意味
+        if last_error != 5:
+            yield
+            return
+
+    old_stdout, old_stderr = sys.stdout, sys.stderr
+    try:
+        new_stdout = open("CONOUT$", "w", encoding="utf-8", buffering=1)
+        new_stderr = open("CONOUT$", "w", encoding="utf-8", buffering=1)
+    except OSError:
+        if attached:
+            kernel32.FreeConsole()
+        yield
+        return
+
+    sys.stdout = new_stdout
+    sys.stderr = new_stderr
+    try:
+        yield
+    finally:
+        try:
+            sys.stdout.flush()
+        except Exception:
+            pass
+        try:
+            sys.stderr.flush()
+        except Exception:
+            pass
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
+        new_stdout.close()
+        new_stderr.close()
+        if attached:
+            kernel32.FreeConsole()
 
 
 _WINDOWS_DROP_SUPPORT = None
@@ -1605,12 +1669,14 @@ class RelicGuiApp:
 
 
 def _parse_cli_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    version = get_version()
-    parser = argparse.ArgumentParser(
-        description=f"RelicListMaker GUI ランチャー (バージョン {version})"
-    )
-    parser.add_argument("--version", action="version", version=f"%(prog)s {version}")
-    return parser.parse_args(argv)
+    args_list = list(sys.argv[1:] if argv is None else argv)
+    with _windows_cli_output(args_list):
+        version = get_version()
+        parser = argparse.ArgumentParser(
+            description=f"RelicListMaker GUI ランチャー (バージョン {version})"
+        )
+        parser.add_argument("--version", action="version", version=f"%(prog)s {version}")
+        return parser.parse_args(args_list)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
