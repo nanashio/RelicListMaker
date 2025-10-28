@@ -344,6 +344,7 @@ class RelicGuiApp:
         self._apply_japanese_fonts()
         self._menubar_attached = False
         self._fallback_menu_frame: Optional[ttk.Frame] = None
+        self._app_version = get_version()
         self._create_menubar()
 
         self.base_dir = _default_base_dir()
@@ -670,6 +671,8 @@ class RelicGuiApp:
         menubar.add_cascade(label="設定", menu=settings_menu)
 
         help_menu = tk.Menu(menubar, tearoff=False)
+        help_menu.add_command(label=f"バージョン: {self._app_version}", state="disabled")
+        help_menu.add_separator()
         help_menu.add_command(label="このアプリについて", command=self._show_about_dialog)
         menubar.add_cascade(label="ヘルプ", menu=help_menu)
 
@@ -707,6 +710,8 @@ class RelicGuiApp:
 
         help_button = ttk.Menubutton(frame, text="ヘルプ")
         help_menu = tk.Menu(help_button, tearoff=False)
+        help_menu.add_command(label=f"バージョン: {self._app_version}", state="disabled")
+        help_menu.add_separator()
         help_menu.add_command(label="このアプリについて", command=self._show_about_dialog)
         help_button["menu"] = help_menu
         help_button.grid(row=0, column=2, padx=8)
@@ -860,7 +865,10 @@ class RelicGuiApp:
     def _show_about_dialog(self) -> None:
         """アプリケーションの情報を表示する。"""
 
-        message = "RelicListMaker\nhttps://github.com/nanashio/RelicListMaker"
+        message = (
+            f"RelicListMaker\nバージョン: {self._app_version}\n"
+            "https://github.com/nanashio/RelicListMaker"
+        )
         messagebox.showinfo("このアプリについて", message)
 
     def _init_drag_and_drop(self) -> None:
