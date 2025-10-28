@@ -1,6 +1,7 @@
 """解析処理とビューワサーバーを統合するGUIランチャー."""
 from __future__ import annotations
 
+import argparse
 import contextlib
 import csv
 import io
@@ -11,14 +12,16 @@ import types
 import threading
 import traceback
 import tkinter as tk
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk, font
-from typing import Optional
+from typing import Iterator, Optional, Sequence
 
 import main as pipeline_main
 from merge_results import MergeResultsError, merge_results
 from viewer_server import ServerContext, create_server, _open_browser
+from version_info import get_version
 
 
 try:
@@ -33,12 +36,79 @@ except Exception:  # noqa: BLE001 - optional dependency
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".wmv", ".m4v"}
 
 
+GITHUB_URL = "https://github.com/nanashio/RelicListMaker"
+
+
 if sys.platform.startswith("win"):
     import ctypes
     from ctypes import wintypes
 else:
     ctypes = None
     wintypes = None
+
+
+@contextlib.contextmanager
+def _windows_cli_output(argv: Sequence[str] | None) -> Iterator[None]:
+    """Windows の GUI ビルドでも CLI 出力を親コンソールに表示する."""
+
+    if not sys.platform.startswith("win"):
+        yield
+        return
+
+    if not argv:
+        yield
+        return
+
+    if ctypes is None:
+        yield
+        return
+
+    try:
+        kernel32 = ctypes.windll.kernel32
+    except AttributeError:
+        yield
+        return
+
+    attached = False
+    # ATTACH_PARENT_PROCESS = DWORD(-1)
+    if kernel32.AttachConsole(ctypes.c_uint(-1).value):
+        attached = True
+    else:
+        last_error = kernel32.GetLastError()
+        # ERROR_ACCESS_DENIED (5) は既にコンソールへ接続済みという意味
+        if last_error != 5:
+            yield
+            return
+
+    old_stdout, old_stderr = sys.stdout, sys.stderr
+    try:
+        new_stdout = open("CONOUT$", "w", encoding="utf-8", buffering=1)
+        new_stderr = open("CONOUT$", "w", encoding="utf-8", buffering=1)
+    except OSError:
+        if attached:
+            kernel32.FreeConsole()
+        yield
+        return
+
+    sys.stdout = new_stdout
+    sys.stderr = new_stderr
+    try:
+        yield
+    finally:
+        try:
+            sys.stdout.flush()
+        except Exception:
+            pass
+        try:
+            sys.stderr.flush()
+        except Exception:
+            pass
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
+        new_stdout.close()
+        new_stderr.close()
+        if attached:
+            kernel32.FreeConsole()
 
 
 _WINDOWS_DROP_SUPPORT = None
@@ -278,6 +348,7 @@ class RelicGuiApp:
         self._apply_japanese_fonts()
         self._menubar_attached = False
         self._fallback_menu_frame: Optional[ttk.Frame] = None
+        self._app_version = get_version()
         self._create_menubar()
 
         self.base_dir = _default_base_dir()
@@ -604,6 +675,9 @@ class RelicGuiApp:
         menubar.add_cascade(label="設定", menu=settings_menu)
 
         help_menu = tk.Menu(menubar, tearoff=False)
+        help_menu.add_command(label=f"バージョン: {self._app_version}", state="disabled")
+        help_menu.add_command(label=GITHUB_URL, command=self._open_project_site)
+        help_menu.add_separator()
         help_menu.add_command(label="このアプリについて", command=self._show_about_dialog)
         menubar.add_cascade(label="ヘルプ", menu=help_menu)
 
@@ -641,6 +715,9 @@ class RelicGuiApp:
 
         help_button = ttk.Menubutton(frame, text="ヘルプ")
         help_menu = tk.Menu(help_button, tearoff=False)
+        help_menu.add_command(label=f"バージョン: {self._app_version}", state="disabled")
+        help_menu.add_command(label=GITHUB_URL, command=self._open_project_site)
+        help_menu.add_separator()
         help_menu.add_command(label="このアプリについて", command=self._show_about_dialog)
         help_button["menu"] = help_menu
         help_button.grid(row=0, column=2, padx=8)
@@ -794,8 +871,20 @@ class RelicGuiApp:
     def _show_about_dialog(self) -> None:
         """アプリケーションの情報を表示する。"""
 
-        message = "RelicListMaker\nhttps://github.com/nanashio/RelicListMaker"
+        message = f"RelicListMaker\nバージョン: {self._app_version}\n{GITHUB_URL}"
         messagebox.showinfo("このアプリについて", message)
+
+    def _open_project_site(self) -> None:
+        """公式リポジトリのページを開く。"""
+
+        try:
+            opened = webbrowser.open(GITHUB_URL, new=0, autoraise=True)
+        except Exception as exc:  # noqa: BLE001 - GUI でユーザーに通知する
+            messagebox.showerror("ブラウザ起動エラー", f"GitHub ページを開けませんでした: {exc}")
+            return
+
+        if not opened:
+            messagebox.showerror("ブラウザ起動エラー", "GitHub ページを開けませんでした。既定のブラウザ設定を確認してください。")
 
     def _init_drag_and_drop(self) -> None:
         """動画ファイルのドラッグ＆ドロップ受付を設定する."""
@@ -1602,7 +1691,19 @@ class RelicGuiApp:
         self.root.destroy()
 
 
-def main() -> None:
+def _parse_cli_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    args_list = list(sys.argv[1:] if argv is None else argv)
+    with _windows_cli_output(args_list):
+        version = get_version()
+        parser = argparse.ArgumentParser(
+            description=f"RelicListMaker GUI ランチャー (バージョン {version})"
+        )
+        parser.add_argument("--version", action="version", version=f"%(prog)s {version}")
+        return parser.parse_args(args_list)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> None:
+    _parse_cli_args(argv)
     if TkinterDnD is not None:
         root = TkinterDnD.Tk()
     else:
