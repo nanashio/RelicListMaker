@@ -12,6 +12,7 @@ import types
 import threading
 import traceback
 import tkinter as tk
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk, font
@@ -33,6 +34,9 @@ except Exception:  # noqa: BLE001 - optional dependency
     _HAS_DND = False
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".wmv", ".m4v"}
+
+
+GITHUB_URL = "https://github.com/nanashio/RelicListMaker"
 
 
 if sys.platform.startswith("win"):
@@ -672,6 +676,7 @@ class RelicGuiApp:
 
         help_menu = tk.Menu(menubar, tearoff=False)
         help_menu.add_command(label=f"バージョン: {self._app_version}", state="disabled")
+        help_menu.add_command(label=GITHUB_URL, command=self._open_project_site)
         help_menu.add_separator()
         help_menu.add_command(label="このアプリについて", command=self._show_about_dialog)
         menubar.add_cascade(label="ヘルプ", menu=help_menu)
@@ -711,6 +716,7 @@ class RelicGuiApp:
         help_button = ttk.Menubutton(frame, text="ヘルプ")
         help_menu = tk.Menu(help_button, tearoff=False)
         help_menu.add_command(label=f"バージョン: {self._app_version}", state="disabled")
+        help_menu.add_command(label=GITHUB_URL, command=self._open_project_site)
         help_menu.add_separator()
         help_menu.add_command(label="このアプリについて", command=self._show_about_dialog)
         help_button["menu"] = help_menu
@@ -865,11 +871,20 @@ class RelicGuiApp:
     def _show_about_dialog(self) -> None:
         """アプリケーションの情報を表示する。"""
 
-        message = (
-            f"RelicListMaker\nバージョン: {self._app_version}\n"
-            "https://github.com/nanashio/RelicListMaker"
-        )
+        message = f"RelicListMaker\nバージョン: {self._app_version}\n{GITHUB_URL}"
         messagebox.showinfo("このアプリについて", message)
+
+    def _open_project_site(self) -> None:
+        """公式リポジトリのページを開く。"""
+
+        try:
+            opened = webbrowser.open(GITHUB_URL, new=0, autoraise=True)
+        except Exception as exc:  # noqa: BLE001 - GUI でユーザーに通知する
+            messagebox.showerror("ブラウザ起動エラー", f"GitHub ページを開けませんでした: {exc}")
+            return
+
+        if not opened:
+            messagebox.showerror("ブラウザ起動エラー", "GitHub ページを開けませんでした。既定のブラウザ設定を確認してください。")
 
     def _init_drag_and_drop(self) -> None:
         """動画ファイルのドラッグ＆ドロップ受付を設定する."""
