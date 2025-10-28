@@ -60,6 +60,11 @@ DEFAULT_COLUMN_VISIBILITY: dict[str, bool] = {
     "Source": True,
     "LevelOptions": True,
     "LevelCorrection": True,
+    "Dataset": True,
+    "DatasetFolder": True,
+    "SourceCsv": True,
+    "SourceImage": True,
+    "BaseImage": True,
 }
 
 
@@ -327,6 +332,17 @@ def process_images(
                 row[f"Effect{idx}LevelCorrection"] = row.get(
                     f"Effect{idx}LevelCorrection", ""
                 )
+
+        if not column_flags.get("Dataset", True):
+            row.pop("Dataset", None)
+        if not column_flags.get("DatasetFolder", True):
+            row.pop("DatasetFolder", None)
+        if not column_flags.get("SourceCsv", True):
+            row.pop("SourceCsv", None)
+        if not column_flags.get("SourceImage", True):
+            row.pop("SourceImage", None)
+        if not column_flags.get("BaseImage", True):
+            row.pop("BaseImage", None)
 
         data.append(row)
 

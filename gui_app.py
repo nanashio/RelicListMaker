@@ -295,6 +295,11 @@ class RelicGuiApp:
             "Source": tk.BooleanVar(value=True),
             "LevelOptions": tk.BooleanVar(value=True),
             "LevelCorrection": tk.BooleanVar(value=True),
+            "Dataset": tk.BooleanVar(value=True),
+            "DatasetFolder": tk.BooleanVar(value=True),
+            "SourceCsv": tk.BooleanVar(value=True),
+            "SourceImage": tk.BooleanVar(value=True),
+            "BaseImage": tk.BooleanVar(value=True),
         }
         self.merge_only_reviewed_var = tk.BooleanVar(value=True)
         self.results_status_var = tk.StringVar(value="結果フォルダを読み込んでください")
@@ -690,23 +695,19 @@ class RelicGuiApp:
             csv_frame.columnconfigure(col_index, weight=1)
 
         required_specs = [
-            ("RawText1, RawText2, RawText3", "RawText"),
-            (
-                "Effect1Score, Effect2Score, Effect3Score",
-                "Score",
-            ),
-            (
-                "Effect1LevelOptions, Effect2LevelOptions, Effect3LevelOptions",
-                "LevelOptions",
-            ),
-            (
-                "Effect1LevelCorrection, Effect2LevelCorrection, Effect3LevelCorrection",
-                "LevelCorrection",
-            ),
+            ("RawText[n]", "RawText"),
+            ("Effect[n]Score", "Score"),
+            ("Effect[n]LevelOptions", "LevelOptions"),
+            ("Effect[n]LevelCorrection", "LevelCorrection"),
         ]
         optional_specs = [
             ("ItemColor", "ItemColor"),
-            ("Effect1Source, Effect2Source, Effect3Source", "Source"),
+            ("Effect[n]Source", "Source"),
+            ("Dataset", "Dataset"),
+            ("DatasetFolder", "DatasetFolder"),
+            ("SourceCsv", "SourceCsv"),
+            ("SourceImage", "SourceImage"),
+            ("BaseImage", "BaseImage"),
         ]
 
         ttk.Label(csv_frame, text="ビューワで必要な列").grid(
@@ -719,6 +720,7 @@ class RelicGuiApp:
                 csv_frame,
                 text=label,
                 variable=self.csv_column_vars[key],
+                state="disabled",
             ).grid(row=row_index, column=col_index, sticky="w", padx=(0, 8), pady=2)
 
         optional_header_row = 1 + (len(required_specs) + 1) // 2
