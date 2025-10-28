@@ -690,14 +690,23 @@ class RelicGuiApp:
             csv_frame.columnconfigure(col_index, weight=1)
 
         required_specs = [
-            ("RawText 列", "RawText"),
-            ("Effectスコア列", "Score"),
-            ("レベル候補列", "LevelOptions"),
-            ("レベル補正列", "LevelCorrection"),
+            ("RawText1, RawText2, RawText3", "RawText"),
+            (
+                "Effect1Score, Effect2Score, Effect3Score",
+                "Score",
+            ),
+            (
+                "Effect1LevelOptions, Effect2LevelOptions, Effect3LevelOptions",
+                "LevelOptions",
+            ),
+            (
+                "Effect1LevelCorrection, Effect2LevelCorrection, Effect3LevelCorrection",
+                "LevelCorrection",
+            ),
         ]
         optional_specs = [
-            ("ItemColor 列", "ItemColor"),
-            ("マッチ元列", "Source"),
+            ("ItemColor", "ItemColor"),
+            ("Effect1Source, Effect2Source, Effect3Source", "Source"),
         ]
 
         ttk.Label(csv_frame, text="ビューワで必要な列").grid(
