@@ -172,6 +172,32 @@ def _normalize_column_visibility(overrides: Optional[dict[str, object]]) -> dict
             continue
     return flags
 
+
+def _ensure_effect_slots(
+    row: dict[str, object], slot_range: range, column_flags: dict[str, bool]
+) -> None:
+    """不足している効果スロットの初期値を補完する."""
+
+    for idx in slot_range:
+        effect_key = f"Effect{idx}"
+        level_key = f"Effect{idx}Level"
+        status_key = f"Effect{idx}Status"
+
+        row.setdefault(effect_key, "-")
+        row.setdefault(level_key, "")
+        row.setdefault(status_key, "pending")
+
+        if column_flags.get("LevelOptions", True):
+            row.setdefault(f"Effect{idx}LevelOptions", "")
+        if column_flags.get("LevelCorrection", True):
+            row.setdefault(f"Effect{idx}LevelCorrection", "")
+        if column_flags.get("RawText", True):
+            row.setdefault(f"RawText{idx}", "")
+        if column_flags.get("Score", True):
+            row.setdefault(f"Effect{idx}Score", "")
+        if column_flags.get("Source", True):
+            row.setdefault(f"Effect{idx}Source", "")
+
 def clean_ocr_text(text):
     """Tesseractの改行や改ページコードを整形"""
     if not text:
@@ -332,6 +358,8 @@ def process_images(
                 row[f"Effect{idx}LevelCorrection"] = row.get(
                     f"Effect{idx}LevelCorrection", ""
                 )
+
+        _ensure_effect_slots(row, slot_range, column_flags)
 
         if not column_flags.get("Dataset", True):
             row.pop("Dataset", None)
