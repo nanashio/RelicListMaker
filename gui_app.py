@@ -772,8 +772,13 @@ class RelicGuiApp:
             row=7, column=0, sticky="w", padx=(0, 8), pady=2
         )
         ttk.Entry(parent, textvariable=self.item_image_view_box_var).grid(
-            row=7, column=1, columnspan=2, sticky="ew", pady=2
+            row=7, column=1, sticky="ew", pady=2
         )
+        ttk.Button(
+            parent,
+            text="初期値に戻す",
+            command=self._reset_item_image_view_box,
+        ).grid(row=7, column=2, padx=(8, 0), pady=2)
 
         csv_frame = ttk.LabelFrame(parent, text="CSV出力列", padding=12)
         csv_frame.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(8, 0))
@@ -1475,6 +1480,11 @@ class RelicGuiApp:
         selected = filedialog.askdirectory(title="結果フォルダを選択")
         if selected:
             self.results_dir_var.set(self._to_user_value(Path(selected)))
+
+    def _reset_item_image_view_box(self) -> None:
+        """アイテム画像の表示範囲を初期値へ戻す。"""
+
+        self.item_image_view_box_var.set(DEFAULT_ITEM_IMAGE_VIEW_BOX)
 
     def append_log(self, message: str) -> None:
         text = message if message.endswith("\n") else message + "\n"
