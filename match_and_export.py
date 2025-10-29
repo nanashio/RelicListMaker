@@ -285,6 +285,7 @@ def process_images(
     corrections_csv=None,
     item_color=None,
     column_visibility=None,
+    master_csv_path=None,
 ):
     global _TESSERACT_NOTICE_SHOWN
     if not _TESSERACT_NOTICE_SHOWN:
@@ -299,7 +300,7 @@ def process_images(
     print(f"Tesseract Ver: {version}")
 
     dictionary, level_map = load_master_effects_and_levels(
-        DICTIONARY_PATH, column=COLUMN_NAME_IN_CSV
+        master_csv_path or DICTIONARY_PATH, column=COLUMN_NAME_IN_CSV
     )
     if not dictionary:
         print("辞書の読み込み失敗")

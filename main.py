@@ -8,7 +8,7 @@ from typing import Callable, Iterable, Optional
 from extract_frames import extract_and_crop
 from generate_gallery import generate_html
 from match_and_export import process_images
-from relic_data import load_master_csv
+from relic_data import load_master_csv, normalize_master_values
 from resource_paths import templates_path
 
 VIDEO_DIR = "videos"
@@ -26,6 +26,12 @@ COLOR_KEYWORDS = {
     '青': 'blue',
     '黄': 'yellow',
 }
+
+
+DEFAULT_RELIC_TYPE = "normal"
+DEEP_RELIC_TYPE = "deep"
+DEEP_KEYWORD = "deep"
+DEEP_MASTER_FILENAME = "master_relics_deep.csv"
 
 
 @dataclass(frozen=True)
@@ -54,6 +60,14 @@ def detect_item_color(name: str) -> Optional[str]:
             return COLOR_KEYWORDS[word]
 
     return None
+
+
+def detect_relic_type(name: str) -> str:
+    if not name:
+        return DEFAULT_RELIC_TYPE
+    if DEEP_KEYWORD in name.lower():
+        return DEEP_RELIC_TYPE
+    return DEFAULT_RELIC_TYPE
 
 
 def _gather_video_files(video_dir: Path, candidates: Optional[Iterable[str]]) -> list[Path]:
@@ -113,11 +127,22 @@ def _decide_item_color(task: VideoTask, overrides: dict[Path, str]) -> Optional[
     return detect_item_color(task.base_name)
 
 
+def _decide_relic_type(task: VideoTask, overrides: dict[Path, str]) -> str:
+    override = overrides.get(task.source_path)
+    if override is not None and override.strip():
+        lowered = override.strip().lower()
+        if lowered == DEEP_RELIC_TYPE:
+            return DEEP_RELIC_TYPE
+        return DEFAULT_RELIC_TYPE
+    return detect_relic_type(task.base_name)
+
+
 def _process_single_video(
     task: VideoTask,
     *,
     ocr_upsample: float,
     override_colors: dict[Path, str],
+    override_types: dict[Path, str],
     save_full_frames: bool,
     csv_column_visibility: Optional[dict[str, object]],
     report: Callable[[str], None],
@@ -141,6 +166,11 @@ def _process_single_video(
     advance_report(f"{video_name} のフレーム抽出完了")
 
     item_color = _decide_item_color(task, override_colors)
+    relic_type = _decide_relic_type(task, override_types)
+    if relic_type == DEEP_RELIC_TYPE:
+        master_csv_path = templates_path(DEEP_MASTER_FILENAME)
+    else:
+        master_csv_path = templates_path("master_relics.csv")
 
     report(f"{video_name} のOCR/マッチング中...")
     process_images(
@@ -152,6 +182,7 @@ def _process_single_video(
         corrections_csv=str(task.corrections_csv),
         item_color=item_color,
         column_visibility=csv_column_visibility,
+        master_csv_path=str(master_csv_path),
     )
     advance_report(f"{video_name} のOCR/マッチング完了")
     print(f"[✓] {task.crops_dir} の結果を {task.csv_path} に出力しました")
@@ -162,6 +193,7 @@ def _process_single_video(
         "csv": os.path.relpath(task.csv_path, result_dir),
         "img_dir": os.path.relpath(task.crops_dir, result_dir),
         "folder": os.path.relpath(task.output_dir, result_dir),
+        "relic_type": relic_type,
     }
 
 
@@ -175,6 +207,7 @@ def main(
     save_full_frames: bool = False,
     csv_column_visibility: Optional[dict[str, object]] = None,
     item_image_view_box: Optional[str] = None,
+    relic_type_overrides: Optional[dict[str, str]] = None,
 ) -> None:
     start_time = time.time()
     print("[INFO] 動画ごとの処理開始...")
@@ -182,13 +215,15 @@ def main(
     result_dir_path = Path(result_dir)
     result_dir_path.mkdir(parents=True, exist_ok=True)
 
-    master_src = templates_path("master_relics.csv")
-    master_options = load_master_csv(master_src)
+    normal_master_src = templates_path("master_relics.csv")
+    deep_master_src = templates_path(DEEP_MASTER_FILENAME)
     dataset_entries: list[dict[str, str]] = []
+    used_relic_types: set[str] = set()
 
     video_dir_path = Path(video_dir)
     selected_videos = _gather_video_files(video_dir_path, video_files)
     override_map = _build_override_map(item_color_overrides)
+    type_override_map = _build_override_map(relic_type_overrides)
 
     total_steps = len(selected_videos) * 2 + 1 if selected_videos else 1
     current_step = 0
@@ -217,12 +252,21 @@ def main(
             task,
             ocr_upsample=ocr_upsample,
             override_colors=override_map,
+            override_types=type_override_map,
             save_full_frames=save_full_frames,
             csv_column_visibility=csv_column_visibility,
             report=report,
             advance_report=advance,
         )
+        used_relic_types.add(entry.get("relic_type", DEFAULT_RELIC_TYPE))
         dataset_entries.append(entry)
+
+    master_candidates: list[str] = []
+    if not used_relic_types or DEFAULT_RELIC_TYPE in used_relic_types:
+        master_candidates.extend(load_master_csv(normal_master_src))
+    if DEEP_RELIC_TYPE in used_relic_types:
+        master_candidates.extend(load_master_csv(deep_master_src))
+    master_options = normalize_master_values(master_candidates)
 
     default_csv_path = (
         (result_dir_path / dataset_entries[0]["csv"]).resolve()
