@@ -1,8 +1,8 @@
 import csv
 import html
 import json
-import sys
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -10,7 +10,14 @@ import pytest
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from generate_gallery import DEFAULT_ITEM_IMAGE_VIEW_BOX
-from merge_results import MERGED_CSV_NAME, MERGED_DIR_NAME, merge_results, _is_duplicate
+from merge_results import (
+    MERGED_CSV_NAME,
+    MERGED_DIR_NAME,
+    merge_results,
+    _collect_existing_merged_entries,
+    _is_duplicate,
+    _prefer_review_csv,
+)
 
 
 def _write_csv(path: Path, header: list[str], rows: list[list[str]]) -> None:
@@ -181,6 +188,58 @@ def test_merge_results_applies_custom_view_box(sample_results: Path) -> None:
 
     html_text = (sample_results / "viewer.html").read_text(encoding="utf-8")
     assert f"--item-image-view-box: {custom_view_box};" in html_text
+
+
+def test_prefer_review_csv_prioritizes_review_files(tmp_path: Path) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    base = dataset_dir / "dataset.csv"
+    base.write_text("Image\n", encoding="utf-8")
+    review_old = dataset_dir / "dataset_202301_review.csv"
+    review_old.write_text("Image\n", encoding="utf-8")
+    review_new = dataset_dir / "dataset_202312_review.csv"
+    review_new.write_text("Image\n", encoding="utf-8")
+
+    selected = _prefer_review_csv([base, review_old, review_new], "dataset")
+    assert selected == review_new
+
+
+def test_prefer_review_csv_falls_back_to_named_csv(tmp_path: Path) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    base = dataset_dir / "dataset.csv"
+    base.write_text("Image\n", encoding="utf-8")
+    extra = dataset_dir / "other.csv"
+    extra.write_text("Image\n", encoding="utf-8")
+
+    selected = _prefer_review_csv([extra, base], "dataset")
+    assert selected == base
+
+
+def test_collect_existing_merged_entries_returns_sorted_metadata(tmp_path: Path) -> None:
+    root = tmp_path / "results"
+    root.mkdir()
+
+    merged_base = root / MERGED_DIR_NAME
+    merged_base.mkdir()
+    (merged_base / MERGED_CSV_NAME).write_text("Image\n", encoding="utf-8")
+    (merged_base / "crops").mkdir()
+
+    merged_extra = root / f"{MERGED_DIR_NAME}_2"
+    merged_extra.mkdir()
+    (merged_extra / MERGED_CSV_NAME).write_text("Image\n", encoding="utf-8")
+    (merged_extra / "crops").mkdir()
+
+    unrelated = root / "video_a"
+    unrelated.mkdir()
+    (unrelated / "crops").mkdir()
+
+    entries = _collect_existing_merged_entries(root, MERGED_DIR_NAME)
+
+    assert entries[0]["label"] == "統合結果"
+    assert entries[0]["csv"] == f"{MERGED_DIR_NAME}/{MERGED_CSV_NAME}"
+    assert entries[1]["label"].startswith("統合結果")
+    assert entries[1]["folder"] == merged_extra.name
 
 
 def test_merge_results_with_real_dataset(sample_results_dir: Path) -> None:
