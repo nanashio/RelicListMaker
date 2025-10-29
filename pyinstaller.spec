@@ -42,6 +42,10 @@ datas.extend(collect_datas(tesseract_dir, "tesseract"))
 
 datas.extend(TKDND_DATAS)
 
+version_file = project_dir / "RELEASE_VERSION"
+if version_file.exists():
+    datas.append((str(version_file), "."))
+
 placeholder_root = project_dir / "build" / "__pyinstaller_placeholders__"
 placeholder_root.mkdir(parents=True, exist_ok=True)
 videos_placeholder = placeholder_root / "videos_placeholder.txt"

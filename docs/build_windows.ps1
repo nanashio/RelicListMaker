@@ -61,8 +61,41 @@ $scriptDir = Split-Path -Parent $PSCommandPath
 $repoRoot = Resolve-Path (Join-Path $scriptDir '..')
 Push-Location $repoRoot
 
+$versionFile = Join-Path $repoRoot 'RELEASE_VERSION'
+$versionFileExisted = Test-Path $versionFile
+$versionFileOriginal = $null
+if ($versionFileExisted) {
+    try {
+        $versionFileOriginal = Get-Content -Path $versionFile -Raw -ErrorAction Stop
+    }
+    catch {
+        $versionFileOriginal = $null
+    }
+}
+
 try {
     Write-Info "Working directory: $repoRoot"
+
+    $releaseVersion = $null
+    try {
+        $releaseVersion = (git describe --tags --abbrev=0).Trim()
+    }
+    catch {
+        $releaseVersion = $null
+    }
+    if (-not $releaseVersion) {
+        try {
+            $releaseVersion = (git rev-parse --short HEAD).Trim()
+        }
+        catch {
+            $releaseVersion = $null
+        }
+    }
+    if (-not $releaseVersion) {
+        $releaseVersion = '0.0.0-dev'
+    }
+    Set-Content -Path $versionFile -Value $releaseVersion -Encoding UTF8
+    Write-Info ("Embedding release version: {0}" -f $releaseVersion)
 
     Write-Info ("Resolving WSL project path ({0})" -f $WslPath)
     $wslPathResult = & wsl.exe wslpath -w $WslPath
@@ -184,6 +217,14 @@ catch {
     exit 1
 }
 finally {
+    if ($versionFileExisted) {
+        if ($versionFileOriginal -ne $null) {
+            Set-Content -Path $versionFile -Value $versionFileOriginal -Encoding UTF8
+        }
+    }
+    elseif (Test-Path $versionFile) {
+        Remove-Item $versionFile -ErrorAction SilentlyContinue
+    }
     Pop-Location
 
 }

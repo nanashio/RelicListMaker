@@ -1,7 +1,11 @@
 import json
+import pathlib
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
+
+import pytest
 
 from viewer_server import API_SAVE_PATH, create_server
 
@@ -43,6 +47,77 @@ def test_save_endpoint_updates_csv(tmp_path: Path) -> None:
         header = content[0].split(',')
         assert header[:3] == ["Image", "Duplicate", "Effect1Status"]
         assert any(line.startswith("bar.png,True,pending") for line in content[1:])
+    finally:
+        context.stop()
+        thread.join(timeout=2)
+
+
+def test_save_endpoint_rejects_outside_csv(tmp_path: Path) -> None:
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+
+    context = create_server(results_dir=results_dir, host="127.0.0.1", port=0)
+    thread = context.start_in_thread()
+    try:
+        time.sleep(0.1)
+        url = f"http://{context.host}:{context.port}{API_SAVE_PATH}"
+        payload = {
+            "csvPath": "../secret.csv",
+            "datasetLabel": "sample",
+            "records": [],
+        }
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            urllib.request.urlopen(request, timeout=5)
+        assert exc.value.code == 400
+        body = json.loads(exc.value.read().decode("utf-8"))
+        assert body.get("error") == "csv-path-outside-root"
+    finally:
+        context.stop()
+        thread.join(timeout=2)
+
+
+def test_save_endpoint_reports_write_failure(monkeypatch, tmp_path: Path) -> None:
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+    csv_path = results_dir / "sample.csv"
+    csv_path.write_text("Image\n", encoding="utf-8")
+
+    original_replace = pathlib.Path.replace
+
+    def failing_replace(self, target):
+        if self.name.endswith(".csv.tmp"):
+            raise OSError("cannot replace")
+        return original_replace(self, target)
+
+    monkeypatch.setattr(pathlib.Path, "replace", failing_replace)
+
+    context = create_server(results_dir=results_dir, host="127.0.0.1", port=0)
+    thread = context.start_in_thread()
+    try:
+        time.sleep(0.1)
+        url = f"http://{context.host}:{context.port}{API_SAVE_PATH}"
+        payload = {
+            "csvPath": "/sample.csv",
+            "datasetLabel": "sample",
+            "records": [{"Image": "foo.png"}],
+        }
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            urllib.request.urlopen(request, timeout=5)
+        assert exc.value.code == 500
+        body = json.loads(exc.value.read().decode("utf-8"))
+        assert body.get("error", "").startswith("write-failed")
     finally:
         context.stop()
         thread.join(timeout=2)

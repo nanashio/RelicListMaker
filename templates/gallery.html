@@ -2,12 +2,12 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>OCR結果ギャラリー</title>
+    <title>遺物一覧</title>
     <link rel="stylesheet" href="__CSS_FILE__">
     <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==">
 </head>
-<body data-results-csv="__RESULTS_CSV__" data-img-dir="__IMAGE_DIR__" data-label-symbols="__LABEL_SYMBOLS__" data-master-csv="__MASTER_CSV__" data-master-json="__MASTER_JSON__" data-master-options="__MASTER_OPTIONS__" data-master-levels="__MASTER_LEVELS__" data-datasets="__DATASETS__" data-active-dataset="__ACTIVE_DATASET__" data-core-script="__CORE_JS__">
-    <h1>OCR結果ギャラリー</h1>
+<body data-results-csv="__RESULTS_CSV__" data-img-dir="__IMAGE_DIR__" data-label-symbols="__LABEL_SYMBOLS__" data-master-csv="__MASTER_CSV__" data-master-json="__MASTER_JSON__" data-master-options="__MASTER_OPTIONS__" data-master-levels="__MASTER_LEVELS__" data-datasets="__DATASETS__" data-active-dataset="__ACTIVE_DATASET__" data-core-script="__CORE_JS__" data-default-item-image-view-box="__ITEM_IMAGE_VIEW_BOX__" style="--item-image-view-box: __ITEM_IMAGE_VIEW_BOX__;">
+    <h1>遺物一覧</h1>
     <div class="toolbar">
         <div class="dataset-selector" id="dataset-selector">
             <label for="dataset-select">対象</label>
@@ -42,6 +42,35 @@
         <button id="upload-csv" type="button">CSVを読み込む</button>
         <input id="upload-csv-input" type="file" accept=".csv" hidden>
         <span id="storage-status" class="storage-status" role="status" aria-live="polite"></span>
+    </div>
+    <div class="viewbox-controls" id="viewbox-controls">
+        <div class="viewbox-header" role="presentation">
+            <span class="viewbox-title">画像表示範囲</span>
+            <span class="viewbox-subtitle">(object-view-box)</span>
+        </div>
+        <div class="viewbox-fields" role="group" aria-label="表示範囲の設定値">
+            <label class="viewbox-field" for="viewbox-top">
+                <span class="viewbox-field-label">上 (px)</span>
+                <input id="viewbox-top" class="viewbox-number" type="number" inputmode="decimal" step="0.1" min="0">
+            </label>
+            <label class="viewbox-field" for="viewbox-left">
+                <span class="viewbox-field-label">左 (px)</span>
+                <input id="viewbox-left" class="viewbox-number" type="number" inputmode="decimal" step="0.1" min="0">
+            </label>
+            <label class="viewbox-field" for="viewbox-height">
+                <span class="viewbox-field-label">縦幅 (px)</span>
+                <input id="viewbox-height" class="viewbox-number" type="number" inputmode="decimal" step="0.1" min="0">
+            </label>
+            <label class="viewbox-field" for="viewbox-width">
+                <span class="viewbox-field-label">横幅 (px)</span>
+                <input id="viewbox-width" class="viewbox-number" type="number" inputmode="decimal" step="0.1" min="0">
+            </label>
+        </div>
+        <div class="viewbox-actions">
+            <button id="viewbox-apply" class="viewbox-button" type="button">適用</button>
+            <button id="viewbox-reset" class="viewbox-button" type="button">初期値に戻す</button>
+            <span id="viewbox-status" class="viewbox-status" role="status" aria-live="polite"></span>
+        </div>
     </div>
     <p id="gallery-summary" class="gallery-summary" role="status" aria-live="polite"></p>
     <p id="gallery-status" class="gallery-status" role="status"></p>

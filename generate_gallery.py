@@ -12,6 +12,7 @@ RESULTS_CSV_PATH = "results_input_video.csv"
 IMG_DIR = "crops/input_video"
 OUTPUT_HTML = "viewer.html"
 LABEL_SYMBOLS = ["①", "②", "③"]
+DEFAULT_ITEM_IMAGE_VIEW_BOX = "inset(0px 180px 0px 0px)"
 DEFAULT_MASTER_CSV = str(templates_path("master_relics.csv"))
 DEFAULT_MASTER_JSON = "master_relics.json"
 TEMPLATE_HTML_PATH = str(templates_path("gallery.html"))
@@ -54,6 +55,21 @@ def _sanitize_symbols(symbols):
         if text:
             cleaned.append(text)
     return cleaned
+
+
+def _normalize_item_image_view_box(value: Optional[str]) -> str:
+    default = DEFAULT_ITEM_IMAGE_VIEW_BOX
+    if value is None:
+        return default
+    text = str(value).strip()
+    if not text:
+        return default
+    sanitized = text.replace("\r", " ").replace("\n", " ")
+    if any(char in sanitized for char in {'"', "'", ';', '<', '>', '{', '}'}):
+        return default
+    if len(sanitized) > 200:
+        sanitized = sanitized[:200]
+    return sanitized
 
 
 def _normalize_dataset_entries(datasets, output_dir: str):
@@ -215,6 +231,7 @@ def generate_html(
     master_options: Optional[Sequence[str]] = None,
     datasets=None,
     active_dataset_index: int = 0,
+    item_image_view_box: Optional[str] = None,
     css_relative_override: Optional[str] = None,
     js_relative_override: Optional[str] = None,
 ):
@@ -244,6 +261,7 @@ def generate_html(
         img_rel_dir = "."
 
     master_options = normalize_master_values(master_options)
+    resolved_view_box = _normalize_item_image_view_box(item_image_view_box)
     master_csv_rel_path = ""
     master_json_rel_path = ""
     master_levels_map: Dict[str, List[str]] = {}
@@ -397,6 +415,7 @@ def generate_html(
     html_output = html_output.replace("__CORE_JS__", _escape_attr(core_js_reference))
     html_output = html_output.replace("__DATASETS__", _escape_attr(json.dumps(dataset_entries, ensure_ascii=False)))
     html_output = html_output.replace("__ACTIVE_DATASET__", _escape_attr(str(active_dataset_index)))
+    html_output = html_output.replace("__ITEM_IMAGE_VIEW_BOX__", _escape_attr(resolved_view_box))
 
     with open(output_html, "w", encoding="utf-8") as handle:
         handle.write(html_output)

@@ -1,7 +1,9 @@
 """解析処理とビューワサーバーを統合するGUIランチャー."""
 from __future__ import annotations
 
+import argparse
 import contextlib
+import csv
 import io
 import queue
 import shutil
@@ -10,13 +12,16 @@ import types
 import threading
 import traceback
 import tkinter as tk
+import webbrowser
+from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk, font
-from typing import Optional
+from typing import Iterator, Optional, Sequence
 
 import main as pipeline_main
 from merge_results import MergeResultsError, merge_results
 from viewer_server import ServerContext, create_server, _open_browser
+from version_info import get_version
 
 
 try:
@@ -31,6 +36,9 @@ except Exception:  # noqa: BLE001 - optional dependency
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".wmv", ".m4v"}
 
 
+GITHUB_URL = "https://github.com/nanashio/RelicListMaker"
+
+
 if sys.platform.startswith("win"):
     import ctypes
     from ctypes import wintypes
@@ -39,7 +47,156 @@ else:
     wintypes = None
 
 
+@contextlib.contextmanager
+def _windows_cli_output(argv: Sequence[str] | None) -> Iterator[None]:
+    """Windows の GUI ビルドでも CLI 出力を親コンソールに表示する."""
+
+    if not sys.platform.startswith("win"):
+        yield
+        return
+
+    if not argv:
+        yield
+        return
+
+    if ctypes is None:
+        yield
+        return
+
+    try:
+        kernel32 = ctypes.windll.kernel32
+    except AttributeError:
+        yield
+        return
+
+    attached = False
+    # ATTACH_PARENT_PROCESS = DWORD(-1)
+    if kernel32.AttachConsole(ctypes.c_uint(-1).value):
+        attached = True
+    else:
+        last_error = kernel32.GetLastError()
+        # ERROR_ACCESS_DENIED (5) は既にコンソールへ接続済みという意味
+        if last_error != 5:
+            yield
+            return
+
+    old_stdout, old_stderr = sys.stdout, sys.stderr
+    try:
+        new_stdout = open("CONOUT$", "w", encoding="utf-8", buffering=1)
+        new_stderr = open("CONOUT$", "w", encoding="utf-8", buffering=1)
+    except OSError:
+        if attached:
+            kernel32.FreeConsole()
+        yield
+        return
+
+    sys.stdout = new_stdout
+    sys.stderr = new_stderr
+    try:
+        yield
+    finally:
+        try:
+            sys.stdout.flush()
+        except Exception:
+            pass
+        try:
+            sys.stderr.flush()
+        except Exception:
+            pass
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
+        new_stdout.close()
+        new_stderr.close()
+        if attached:
+            kernel32.FreeConsole()
+
+
 _WINDOWS_DROP_SUPPORT = None
+
+
+_REVIEWED_STATUSES = {"pass", "corrected"}
+
+
+def _normalize_effect_status(value: object) -> str:
+    if value is None:
+        return "pending"
+    text = str(value).strip().lower()
+    if not text:
+        return "pending"
+    if text in _REVIEWED_STATUSES:
+        return text
+    if text in {"fail", "failed", "ng", "reject", "rejected", "x"}:
+        return "pending"
+    return text
+
+
+def _slot_has_content(row: dict[str, object], slot: int) -> bool:
+    effect_key = f"Effect{slot}"
+    raw_key = f"RawText{slot}"
+    score_key = f"Effect{slot}Score"
+    correction_key = f"Effect{slot}Correction"
+    for key in (effect_key, raw_key, correction_key, score_key):
+        if key not in row:
+            continue
+        value = row.get(key)
+        if value is None:
+            continue
+        if isinstance(value, str):
+            if value.strip():
+                return True
+        else:
+            return True
+    return False
+
+
+def _row_has_effect_entries(row: dict[str, object]) -> bool:
+    for key in row.keys():
+        if not key.startswith("Effect") or not key.endswith("Status"):
+            continue
+        slot_text = key[len("Effect") : -len("Status")]
+        if not slot_text.isdigit():
+            continue
+        if _slot_has_content(row, int(slot_text)):
+            return True
+    return False
+
+
+def _row_is_fully_reviewed(row: dict[str, object]) -> bool:
+    has_slots = False
+    for key in row.keys():
+        if not key.startswith("Effect") or not key.endswith("Status"):
+            continue
+        slot_text = key[len("Effect") : -len("Status")]
+        if not slot_text.isdigit():
+            continue
+        slot = int(slot_text)
+        if not _slot_has_content(row, slot):
+            continue
+        has_slots = True
+        status = _normalize_effect_status(row.get(key))
+        if status not in _REVIEWED_STATUSES:
+            return False
+    return has_slots
+
+
+def _summarize_review_state(csv_path: Path) -> str:
+    try:
+        with csv_path.open("r", newline="", encoding="utf-8-sig") as csv_file:
+            reader = csv.DictReader(csv_file)
+            any_effect_rows = False
+            for row in reader:
+                if not row:
+                    continue
+                if not _row_has_effect_entries(row):
+                    continue
+                any_effect_rows = True
+                if not _row_is_fully_reviewed(row):
+                    return "未レビュー含む"
+            if any_effect_rows:
+                return "全レビュー済"
+    except Exception:
+        return "未レビュー含む"
+    return "未レビュー含む"
 
 
 if sys.platform.startswith("win") and ctypes is not None and hasattr(wintypes, "LRESULT"):
@@ -189,6 +346,10 @@ class RelicGuiApp:
         self.root = root
         self.root.title("RelicListMaker ツール")
         self._apply_japanese_fonts()
+        self._menubar_attached = False
+        self._fallback_menu_frame: Optional[ttk.Frame] = None
+        self._app_version = get_version()
+        self._create_menubar()
 
         self.base_dir = _default_base_dir()
         self.video_dir_var = tk.StringVar(value="videos")
@@ -198,8 +359,22 @@ class RelicGuiApp:
         self.server_port_var = tk.StringVar(value="0")
         self.open_browser_var = tk.BooleanVar(value=True)
         self.save_frames_var = tk.BooleanVar(value=False)
-        self.settings_visible = tk.BooleanVar(value=False)
+        self.csv_column_vars: dict[str, tk.BooleanVar] = {
+            "ItemColor": tk.BooleanVar(value=True),
+            "RawText": tk.BooleanVar(value=True),
+            "Score": tk.BooleanVar(value=True),
+            "Source": tk.BooleanVar(value=True),
+            "LevelOptions": tk.BooleanVar(value=True),
+            "LevelCorrection": tk.BooleanVar(value=True),
+            "Dataset": tk.BooleanVar(value=True),
+            "DatasetFolder": tk.BooleanVar(value=True),
+            "SourceCsv": tk.BooleanVar(value=True),
+            "SourceImage": tk.BooleanVar(value=True),
+            "BaseImage": tk.BooleanVar(value=True),
+        }
         self.merge_only_reviewed_var = tk.BooleanVar(value=True)
+        self.results_status_var = tk.StringVar(value="結果フォルダを読み込んでください")
+        self.log_visible_var = tk.BooleanVar(value=False)
 
         self.pipeline_thread: Optional[threading.Thread] = None
         self.server_context: Optional[ServerContext] = None
@@ -220,11 +395,19 @@ class RelicGuiApp:
         self._dropped_video_set: set[str] = set()
         self.queue_tree: Optional[ttk.Treeview] = None
         self.queue_selection_var: tk.StringVar = tk.StringVar(value="ドラッグ＆ドロップで動画を追加してください")
+        self._settings_window: Optional[tk.Toplevel] = None
+        self.results_tree: Optional[ttk.Treeview] = None
+        self.log_frame: Optional[ttk.LabelFrame] = None
+        self._results_entries: list[dict[str, object]] = []
+        self._results_refresh_pending = False
+
+        self.results_dir_var.trace_add("write", lambda *_args: self._schedule_results_refresh())
 
         self._build_layout()
         self._init_drag_and_drop()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.after(self.POLL_INTERVAL_MS, self._process_log_queue)
+        self._refresh_results_list()
 
     def _apply_japanese_fonts(self) -> None:
         """Tkの標準フォントを日本語表示に適したフォントへ切り替える."""
@@ -343,67 +526,23 @@ class RelicGuiApp:
                 continue
 
     def _build_layout(self) -> None:
+        self.root.columnconfigure(0, weight=1)
+        base_row = 0
+        if not self._menubar_attached:
+            self._fallback_menu_frame = self._create_menu_buttonbar(self.root)
+            self._fallback_menu_frame.grid(row=base_row, column=0, sticky="ew")
+            base_row += 1
+
         main_frame = ttk.Frame(self.root, padding=12)
         self.main_frame = main_frame
-        main_frame.grid(row=0, column=0, sticky="nsew")
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
+        main_frame.grid(row=base_row, column=0, sticky="nsew")
+        self.root.rowconfigure(base_row, weight=1)
 
         main_frame.columnconfigure(0, weight=1)
 
-        settings_container = ttk.Frame(main_frame)
-        settings_container.grid(row=0, column=0, sticky="ew")
-        settings_container.columnconfigure(0, weight=0)
-        settings_container.columnconfigure(1, weight=1)
-
-        self.settings_toggle_button = ttk.Button(
-            settings_container,
-            text="設定を表示",
-            command=self._toggle_settings_visibility,
-            width=16,
-        )
-        self.settings_toggle_button.grid(row=0, column=0, sticky="w", pady=(0, 4))
-
-        self.config_frame = ttk.LabelFrame(settings_container, text="設定", padding=12)
-        self.config_frame.grid(row=1, column=0, columnspan=2, sticky="nsew")
-        settings_container.rowconfigure(1, weight=1)
-        config_frame = self.config_frame
-        config_frame.columnconfigure(1, weight=1)
-
-        ttk.Label(config_frame, text="動画フォルダ").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=2)
-        video_entry = ttk.Entry(config_frame, textvariable=self.video_dir_var)
-        video_entry.grid(row=0, column=1, sticky="ew", pady=2)
-        ttk.Button(config_frame, text="選択", command=self._select_video_dir).grid(row=0, column=2, padx=(8, 0), pady=2)
-
-        ttk.Label(config_frame, text="結果フォルダ").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=2)
-        results_entry = ttk.Entry(config_frame, textvariable=self.results_dir_var)
-        results_entry.grid(row=1, column=1, sticky="ew", pady=2)
-        ttk.Button(config_frame, text="選択", command=self._select_results_dir).grid(row=1, column=2, padx=(8, 0), pady=2)
-
-        ttk.Label(config_frame, text="OCRアップサンプル").grid(row=2, column=0, sticky="w", padx=(0, 8), pady=2)
-        ttk.Entry(config_frame, textvariable=self.ocr_upsample_var, width=10).grid(row=2, column=1, sticky="w", pady=2)
-
-        ttk.Label(config_frame, text="サーバーホスト").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=2)
-        ttk.Entry(config_frame, textvariable=self.server_host_var, width=16).grid(row=3, column=1, sticky="w", pady=2)
-
-        ttk.Label(config_frame, text="サーバーポート").grid(row=4, column=0, sticky="w", padx=(0, 8), pady=2)
-        ttk.Entry(config_frame, textvariable=self.server_port_var, width=10).grid(row=4, column=1, sticky="w", pady=2)
-
-        ttk.Checkbutton(
-            config_frame,
-            text="サーバー起動時にブラウザを開く",
-            variable=self.open_browser_var,
-        ).grid(row=5, column=0, columnspan=3, sticky="w", pady=4)
-
-        ttk.Checkbutton(
-            config_frame,
-            text="全体画像を出力する",
-            variable=self.save_frames_var,
-        ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(0, 4))
-
         queue_frame = ttk.LabelFrame(main_frame, text="動画処理", padding=12)
-        queue_frame.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
-        main_frame.rowconfigure(1, weight=1)
+        queue_frame.grid(row=0, column=0, sticky="nsew")
+        main_frame.rowconfigure(0, weight=1)
         for col_index in range(3):
             queue_frame.columnconfigure(col_index, weight=1)
         queue_frame.rowconfigure(0, weight=1)
@@ -447,21 +586,55 @@ class RelicGuiApp:
         )
 
         actions_frame = ttk.LabelFrame(main_frame, text="処理結果の確認", padding=12)
-        actions_frame.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        actions_frame.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
+        main_frame.rowconfigure(1, weight=1)
         actions_frame.columnconfigure(0, weight=1)
-        actions_frame.columnconfigure(1, weight=1)
+        actions_frame.columnconfigure(1, weight=0)
+        actions_frame.rowconfigure(2, weight=1)
 
-        self.server_start_button = ttk.Button(actions_frame, text="ビューワを開く", command=self.on_start_server)
+        buttons_frame = ttk.Frame(actions_frame)
+        buttons_frame.grid(row=0, column=0, columnspan=2, sticky="ew")
+        buttons_frame.columnconfigure(0, weight=1)
+        buttons_frame.columnconfigure(1, weight=1)
+
+        self.server_start_button = ttk.Button(buttons_frame, text="ビューワを開く", command=self.on_start_server)
         self.server_start_button.grid(row=0, column=0, sticky="ew", padx=(4, 2), pady=4)
 
-        self.merge_button = ttk.Button(actions_frame, text="統合結果を生成", command=self.on_merge_results)
+        self.merge_button = ttk.Button(buttons_frame, text="統合結果を生成", command=self.on_merge_results)
         self.merge_button.grid(row=0, column=1, sticky="ew", padx=(2, 4), pady=4)
 
         ttk.Checkbutton(
-            actions_frame,
+            buttons_frame,
             text="効果が全てレビュー済みの項目のみ統合",
             variable=self.merge_only_reviewed_var,
-        ).grid(row=1, column=1, sticky="w", padx=(2, 4), pady=(0, 4))
+        ).grid(row=1, column=0, columnspan=2, sticky="w", padx=(4, 4), pady=(0, 4))
+
+        toolbar = ttk.Frame(actions_frame)
+        toolbar.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        ttk.Button(toolbar, text="再読み込み", command=lambda: self._refresh_results_list(log=True)).pack(side="left")
+        ttk.Label(toolbar, textvariable=self.results_status_var).pack(side="left", padx=8)
+        ttk.Checkbutton(
+            toolbar,
+            text="ログを表示",
+            variable=self.log_visible_var,
+            command=self._update_log_visibility,
+        ).pack(side="right")
+
+        columns = ("folder", "status", "csv", "updated")
+        tree = ttk.Treeview(actions_frame, columns=columns, show="headings", height=6)
+        tree.heading("folder", text="フォルダ名")
+        tree.heading("status", text="レビュー状態")
+        tree.heading("csv", text="CSVファイル")
+        tree.heading("updated", text="最終更新")
+        tree.column("folder", anchor="w", width=140, stretch=True)
+        tree.column("status", anchor="w", width=120, stretch=False)
+        tree.column("csv", anchor="w", width=160, stretch=True)
+        tree.column("updated", anchor="center", width=140, stretch=False)
+        tree.grid(row=2, column=0, sticky="nsew")
+        results_scroll = ttk.Scrollbar(actions_frame, orient="vertical", command=tree.yview)
+        results_scroll.grid(row=2, column=1, sticky="ns")
+        tree.configure(yscrollcommand=results_scroll.set)
+        self.results_tree = tree
 
         progress_frame = ttk.Frame(queue_frame, padding=8)
         progress_frame.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(12, 0))
@@ -471,8 +644,9 @@ class RelicGuiApp:
         ttk.Label(progress_frame, textvariable=self.progress_var).grid(row=1, column=0, sticky="w", pady=(8, 0))
 
         log_frame = ttk.LabelFrame(main_frame, text="ログ", padding=12)
-        log_frame.grid(row=3, column=0, sticky="nsew", pady=(12, 0))
-        main_frame.rowconfigure(3, weight=1)
+        log_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
+        main_frame.rowconfigure(2, weight=1)
+        self.log_frame = log_frame
 
         self.log_text = tk.Text(log_frame, height=20, state="disabled", wrap="word")
         self.log_text.grid(row=0, column=0, sticky="nsew")
@@ -482,26 +656,235 @@ class RelicGuiApp:
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
 
-        self._set_settings_visibility(self.settings_visible.get())
-
         self._refresh_progress_display()
         self._refresh_queue_view()
+        self._update_log_visibility()
 
-    def _toggle_settings_visibility(self) -> None:
-        """設定セクションの表示状態をトグルする。"""
+    def _create_menubar(self) -> None:
+        """アプリケーションのメニューバーを初期化する。"""
 
-        self._set_settings_visibility(not self.settings_visible.get())
+        self.root.option_add("*tearOff", False)
+        menubar = tk.Menu(self.root)
 
-    def _set_settings_visibility(self, visible: bool) -> None:
-        """設定セクションを表示/非表示に切り替える。"""
+        file_menu = tk.Menu(menubar, tearoff=False)
+        file_menu.add_command(label="終了", command=self.on_close)
+        menubar.add_cascade(label="ファイル", menu=file_menu)
 
-        self.settings_visible.set(visible)
-        if visible:
-            self.config_frame.grid()
-            self.settings_toggle_button.configure(text="設定を隠す")
-        else:
-            self.config_frame.grid_remove()
-            self.settings_toggle_button.configure(text="設定を表示")
+        settings_menu = tk.Menu(menubar, tearoff=False)
+        settings_menu.add_command(label="設定を開く", command=self._open_settings_dialog)
+        menubar.add_cascade(label="設定", menu=settings_menu)
+
+        help_menu = tk.Menu(menubar, tearoff=False)
+        help_menu.add_command(label=f"バージョン: {self._app_version}", state="disabled")
+        help_menu.add_command(label=GITHUB_URL, command=self._open_project_site)
+        help_menu.add_separator()
+        help_menu.add_command(label="このアプリについて", command=self._show_about_dialog)
+        menubar.add_cascade(label="ヘルプ", menu=help_menu)
+
+        attached = False
+        for setter in (
+            lambda menu: self.root.configure(menu=menu),
+            lambda menu: self.root.__setitem__("menu", menu),
+        ):
+            try:
+                setter(menubar)
+                attached = bool(self.root.cget("menu"))
+            except tk.TclError:
+                continue
+            if attached:
+                break
+
+        self._menubar_attached = attached
+        self.menubar = menubar
+
+    def _create_menu_buttonbar(self, master: tk.Misc) -> ttk.Frame:
+        """メニューバーが表示できない環境向けの代替ボタン群を生成する。"""
+
+        frame = ttk.Frame(master, padding=(12, 8, 12, 0))
+        frame.columnconfigure(3, weight=1)
+
+        file_button = ttk.Menubutton(frame, text="ファイル")
+        file_menu = tk.Menu(file_button, tearoff=False)
+        file_menu.add_command(label="終了", command=self.on_close)
+        file_button["menu"] = file_menu
+        file_button.grid(row=0, column=0, padx=(0, 8))
+
+        ttk.Button(frame, text="設定...", command=self._open_settings_dialog).grid(
+            row=0, column=1, padx=8
+        )
+
+        help_button = ttk.Menubutton(frame, text="ヘルプ")
+        help_menu = tk.Menu(help_button, tearoff=False)
+        help_menu.add_command(label=f"バージョン: {self._app_version}", state="disabled")
+        help_menu.add_command(label=GITHUB_URL, command=self._open_project_site)
+        help_menu.add_separator()
+        help_menu.add_command(label="このアプリについて", command=self._show_about_dialog)
+        help_button["menu"] = help_menu
+        help_button.grid(row=0, column=2, padx=8)
+
+        ttk.Label(
+            frame,
+            text="メニューバーが表示されない場合はこちらをご利用ください",
+            foreground="gray",
+        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(6, 0))
+
+        return frame
+
+    def _build_settings_content(self, parent: tk.Widget) -> None:
+        """設定ダイアログの内容を構築する。"""
+
+        for index in range(3):
+            weight = 1 if index == 1 else 0
+            parent.columnconfigure(index, weight=weight)
+
+        ttk.Label(parent, text="動画フォルダ").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=2)
+        ttk.Entry(parent, textvariable=self.video_dir_var).grid(row=0, column=1, sticky="ew", pady=2)
+        ttk.Button(parent, text="選択", command=self._select_video_dir).grid(row=0, column=2, padx=(8, 0), pady=2)
+
+        ttk.Label(parent, text="結果フォルダ").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=2)
+        ttk.Entry(parent, textvariable=self.results_dir_var).grid(row=1, column=1, sticky="ew", pady=2)
+        ttk.Button(parent, text="選択", command=self._select_results_dir).grid(row=1, column=2, padx=(8, 0), pady=2)
+
+        ttk.Label(parent, text="OCRアップサンプル").grid(row=2, column=0, sticky="w", padx=(0, 8), pady=2)
+        ttk.Entry(parent, textvariable=self.ocr_upsample_var, width=10).grid(row=2, column=1, sticky="w", pady=2)
+
+        ttk.Label(parent, text="サーバーホスト").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=2)
+        ttk.Entry(parent, textvariable=self.server_host_var, width=16).grid(row=3, column=1, sticky="w", pady=2)
+
+        ttk.Label(parent, text="サーバーポート").grid(row=4, column=0, sticky="w", padx=(0, 8), pady=2)
+        ttk.Entry(parent, textvariable=self.server_port_var, width=10).grid(row=4, column=1, sticky="w", pady=2)
+
+        ttk.Checkbutton(
+            parent,
+            text="サーバー起動時にブラウザを開く",
+            variable=self.open_browser_var,
+        ).grid(row=5, column=0, columnspan=3, sticky="w", pady=4)
+
+        ttk.Checkbutton(
+            parent,
+            text="全体画像を出力する",
+            variable=self.save_frames_var,
+        ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(0, 4))
+
+        csv_frame = ttk.LabelFrame(parent, text="CSV出力列", padding=12)
+        csv_frame.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        for col_index in range(2):
+            csv_frame.columnconfigure(col_index, weight=1)
+
+        required_specs = [
+            ("RawText[n]", "RawText"),
+            ("Effect[n]Score", "Score"),
+            ("Effect[n]LevelOptions", "LevelOptions"),
+            ("Effect[n]LevelCorrection", "LevelCorrection"),
+        ]
+        optional_specs = [
+            ("ItemColor", "ItemColor"),
+            ("Effect[n]Source", "Source"),
+            ("Dataset", "Dataset"),
+            ("DatasetFolder", "DatasetFolder"),
+            ("SourceCsv", "SourceCsv"),
+            ("SourceImage", "SourceImage"),
+            ("BaseImage", "BaseImage"),
+        ]
+
+        ttk.Label(csv_frame, text="ビューワで必要な列").grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 4)
+        )
+        for index, (label, key) in enumerate(required_specs):
+            row_index = 1 + index // 2
+            col_index = index % 2
+            ttk.Checkbutton(
+                csv_frame,
+                text=label,
+                variable=self.csv_column_vars[key],
+                state="disabled",
+            ).grid(row=row_index, column=col_index, sticky="w", padx=(0, 8), pady=2)
+
+        optional_header_row = 1 + (len(required_specs) + 1) // 2
+        ttk.Separator(csv_frame, orient="horizontal").grid(
+            row=optional_header_row,
+            column=0,
+            columnspan=2,
+            sticky="ew",
+            pady=(6, 6),
+        )
+        ttk.Label(csv_frame, text="任意で出力する列").grid(
+            row=optional_header_row + 1,
+            column=0,
+            columnspan=2,
+            sticky="w",
+            pady=(0, 4),
+        )
+        for index, (label, key) in enumerate(optional_specs):
+            row_index = optional_header_row + 2 + index // 2
+            col_index = index % 2
+            ttk.Checkbutton(
+                csv_frame,
+                text=label,
+                variable=self.csv_column_vars[key],
+            ).grid(row=row_index, column=col_index, sticky="w", padx=(0, 8), pady=2)
+
+        button_frame = ttk.Frame(parent)
+        button_frame.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(12, 0))
+        button_frame.columnconfigure(0, weight=1)
+        ttk.Button(button_frame, text="閉じる", command=self._close_settings_dialog).grid(row=0, column=0, sticky="e")
+
+    def _open_settings_dialog(self) -> None:
+        """設定ダイアログを表示する。"""
+
+        if self._settings_window is not None and tk.Toplevel.winfo_exists(self._settings_window):
+            self._settings_window.deiconify()
+            self._settings_window.lift()
+            self._settings_window.focus_set()
+            return
+
+        window = tk.Toplevel(self.root)
+        window.title("設定")
+        window.transient(self.root)
+        window.resizable(False, False)
+        window.protocol("WM_DELETE_WINDOW", self._close_settings_dialog)
+        window.grab_set()
+
+        content = ttk.Frame(window, padding=12)
+        content.grid(row=0, column=0, sticky="nsew")
+        window.columnconfigure(0, weight=1)
+        window.rowconfigure(0, weight=1)
+
+        self._build_settings_content(content)
+
+        self._settings_window = window
+        window.focus_set()
+
+    def _close_settings_dialog(self) -> None:
+        """設定ダイアログを閉じる。"""
+
+        if self._settings_window is None:
+            return
+
+        window = self._settings_window
+        self._settings_window = None
+        with contextlib.suppress(tk.TclError):
+            window.grab_release()
+        with contextlib.suppress(tk.TclError):
+            window.destroy()
+
+    def _show_about_dialog(self) -> None:
+        """アプリケーションの情報を表示する。"""
+
+        message = f"RelicListMaker\nバージョン: {self._app_version}\n{GITHUB_URL}"
+        messagebox.showinfo("このアプリについて", message)
+
+    def _open_project_site(self) -> None:
+        """公式リポジトリのページを開く。"""
+
+        try:
+            opened = webbrowser.open(GITHUB_URL, new=0, autoraise=True)
+        except Exception as exc:  # noqa: BLE001 - GUI でユーザーに通知する
+            messagebox.showerror("ブラウザ起動エラー", f"GitHub ページを開けませんでした: {exc}")
+            return
+
+        if not opened:
+            messagebox.showerror("ブラウザ起動エラー", "GitHub ページを開けませんでした。既定のブラウザ設定を確認してください。")
 
     def _init_drag_and_drop(self) -> None:
         """動画ファイルのドラッグ＆ドロップ受付を設定する."""
@@ -742,6 +1125,112 @@ class RelicGuiApp:
             color = entry.get("color", self.color_options[0]) or self.color_options[0]
             self.queue_tree.insert("", "end", iid=path, values=(name, color, path))
         self._update_queue_controls()
+
+    def _schedule_results_refresh(self) -> None:
+        if self._results_refresh_pending:
+            return
+        self._results_refresh_pending = True
+        self.root.after(200, lambda: self._refresh_results_list())
+
+    def _collect_results_entries(self, results_dir: Path) -> list[dict[str, object]]:
+        entries: list[dict[str, object]] = []
+        if not results_dir.exists():
+            return entries
+
+        for folder in sorted(results_dir.iterdir()):
+            if folder.name.startswith(".") or not folder.is_dir():
+                continue
+            if folder.name.lower() == "gallery":
+                continue
+
+            csv_path: Optional[Path] = None
+            for path in sorted(folder.glob("*.csv")):
+                if path.name.lower() == "corrections.csv":
+                    continue
+                csv_path = path
+                break
+
+            try:
+                modified = datetime.fromtimestamp(csv_path.stat().st_mtime) if csv_path else None
+            except OSError:
+                modified = None
+
+            if csv_path:
+                status_text = _summarize_review_state(csv_path)
+            else:
+                status_text = "未レビュー含む"
+
+            entries.append(
+                {
+                    "folder": folder.name,
+                    "csv": csv_path.name if csv_path else "",
+                    "csv_path": str(csv_path) if csv_path else "",
+                    "status": status_text,
+                    "updated": modified.strftime("%Y-%m-%d %H:%M") if modified else "",
+                }
+            )
+
+        return entries
+
+    def _refresh_results_list(self, log: bool = False) -> None:
+        self._results_refresh_pending = False
+        tree = self.results_tree
+        if tree is None:
+            return
+
+        results_dir = self._resolve_input_path(self.results_dir_var.get())
+        results_path_text = str(results_dir)
+
+        if not results_dir.exists():
+            tree.delete(*tree.get_children())
+            self._results_entries = []
+            message = f"結果フォルダが見つかりません: {results_path_text}"
+            self.results_status_var.set(message)
+            if log:
+                self.append_log(f"[WARN] {message}")
+            return
+
+        try:
+            entries = self._collect_results_entries(results_dir)
+        except Exception as exc:  # noqa: BLE001 - 例外内容をGUIに表示するため
+            tree.delete(*tree.get_children())
+            self._results_entries = []
+            message = f"結果フォルダの読み込みに失敗しました: {exc}"
+            self.results_status_var.set("結果フォルダの読み込みに失敗しました")
+            self.append_log(f"[ERROR] {message}")
+            return
+
+        self._results_entries = entries
+        tree.delete(*tree.get_children())
+        for entry in entries:
+            tree.insert(
+                "",
+                "end",
+                values=(
+                    entry.get("folder", ""),
+                    entry.get("status", ""),
+                    entry.get("csv", ""),
+                    entry.get("updated", ""),
+                ),
+            )
+
+        if not entries:
+            message = "処理済みデータが見つかりません"
+        else:
+            reviewed_count = sum(1 for entry in entries if entry.get("status") == "全レビュー済")
+            message = f"{len(entries)} 件 (全レビュー済 {reviewed_count} 件)"
+
+        self.results_status_var.set(message)
+        if log:
+            self.append_log(f"[GUI] 結果フォルダを読み込みました: {results_path_text} ({len(entries)} 件)")
+
+    def _update_log_visibility(self) -> None:
+        if self.log_frame is None:
+            return
+        if self.log_visible_var.get():
+            self.log_frame.grid()
+        else:
+            self.log_frame.grid_remove()
 
     def _update_queue_controls(self) -> None:
         if self.queue_tree is None:
@@ -1019,6 +1508,10 @@ class RelicGuiApp:
             for entry in video_entries
             if entry.get("color") not in (None, "", "none")
         }
+        column_visibility = {
+            key: var.get()
+            for key, var in self.csv_column_vars.items()
+        }
 
         self.run_button.configure(state="disabled")
         self.append_log(f"[GUI] 動画処理を開始します: {video_dir} -> {results_dir} ({len(videos_to_process)} 件)")
@@ -1047,6 +1540,7 @@ class RelicGuiApp:
                         video_files=videos_to_process,
                         item_color_overrides=color_overrides,
                         save_full_frames=self.save_frames_var.get(),
+                        csv_column_visibility=column_visibility,
                     )
                 self.append_log("[GUI] 動画処理が完了しました")
             except Exception as exc:  # noqa: BLE001 - GUIログに表示するため広く捕捉
@@ -1070,6 +1564,7 @@ class RelicGuiApp:
         self._dropped_videos.clear()
         self._dropped_video_set.clear()
         self._refresh_queue_view()
+        self._schedule_results_refresh()
 
     def on_merge_results(self) -> None:
         if self.merge_thread and self.merge_thread.is_alive():
@@ -1111,6 +1606,7 @@ class RelicGuiApp:
         if self._merge_progress_token is not None:
             self._stop_progress(self._merge_progress_token)
             self._merge_progress_token = None
+        self._schedule_results_refresh()
 
     def on_start_server(self) -> None:
         if self.server_context is not None:
@@ -1191,10 +1687,23 @@ class RelicGuiApp:
             except Exception:
                 pass
 
+        self._close_settings_dialog()
         self.root.destroy()
 
 
-def main() -> None:
+def _parse_cli_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    args_list = list(sys.argv[1:] if argv is None else argv)
+    with _windows_cli_output(args_list):
+        version = get_version()
+        parser = argparse.ArgumentParser(
+            description=f"RelicListMaker GUI ランチャー (バージョン {version})"
+        )
+        parser.add_argument("--version", action="version", version=f"%(prog)s {version}")
+        return parser.parse_args(args_list)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> None:
+    _parse_cli_args(argv)
     if TkinterDnD is not None:
         root = TkinterDnD.Tk()
     else:

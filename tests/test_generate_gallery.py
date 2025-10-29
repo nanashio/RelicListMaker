@@ -109,7 +109,9 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
         "__JS_FILE__\n"
         "__CORE_JS__\n"
         "__DATASETS__\n"
-        "__ACTIVE_DATASET__"
+        "__ACTIVE_DATASET__\n"
+        "__ITEM_IMAGE_VIEW_BOX__\n"
+        "__ITEM_IMAGE_VIEW_BOX__"
     )
 
     monkeypatch.setattr(generate_gallery, "_load_text_asset", lambda *args, **kwargs: template)
@@ -156,6 +158,141 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
     assert datasets_json[0]["kind"] == "merged"
     assert datasets_json[0]["sources"][0]["label"] == "A"
     assert json.loads(parts[11]) == 1
-    assert "?v=" in parts[7]
-    assert "?v=" in parts[8]
-    assert "?v=" in parts[9]
+
+
+def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_path):
+    results_csv = tmp_path / "results.csv"
+    results_csv.write_text("id,label\n", encoding="utf-8")
+    img_dir = tmp_path / "images"
+    img_dir.mkdir()
+    output_html = tmp_path / "viewer" / "index.html"
+
+    master_csv = tmp_path / "master.csv"
+    master_csv.write_text(
+        "EffectBase,Levels\nMystic Strike,\"Alpha, Beta\"\n,\n",
+        encoding="utf-8",
+    )
+
+    master_json = tmp_path / "master.json"
+    master_json.write_text(
+        json.dumps([{"EffectBase": "Night Sun"}, "  Mystic Strike  "]),
+        encoding="utf-8",
+    )
+
+    template = "\n".join(
+        [
+            "__RESULTS_CSV__",
+            "__IMAGE_DIR__",
+            "__LABEL_SYMBOLS__",
+            "__MASTER_CSV__",
+            "__MASTER_JSON__",
+            "__MASTER_OPTIONS__",
+            "__MASTER_LEVELS__",
+            "__CSS_FILE__",
+            "__JS_FILE__",
+            "__CORE_JS__",
+            "__DATASETS__",
+            "__ACTIVE_DATASET__",
+            "__ITEM_IMAGE_VIEW_BOX__",
+        ]
+    )
+
+    monkeypatch.setattr(generate_gallery, "_load_text_asset", lambda *args, **kwargs: template)
+
+    copied_assets = []
+
+    def fake_copy_static_asset(default_path, output_dir, override=None, target_relative_path=None):
+        target_name = target_relative_path or Path(default_path).name
+        destination = tmp_path / "copied" / target_name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text("/* asset */", encoding="utf-8")
+        copied_assets.append(Path(default_path).name)
+        return target_name.replace(os.sep, "/"), str(destination)
+
+    monkeypatch.setattr(generate_gallery, "_copy_static_asset", fake_copy_static_asset)
+    monkeypatch.setattr(generate_gallery, "_copy_gallery_modules", lambda output_dir: None)
+
+    datasets = [
+        {"csv": "a/results.csv", "imgDir": "a/images", "label": "A"},
+    ]
+
+    generate_gallery.generate_html(
+        str(results_csv),
+        str(img_dir),
+        str(output_html),
+        label_symbols=[None, "", "◇", "<b>", 123],
+        master_csv_path=str(master_csv),
+        master_json_path=str(master_json),
+        datasets=datasets,
+        item_image_view_box="<script>alert(1)</script>",
+    )
+
+    html_output = output_html.read_text(encoding="utf-8")
+    parts = html_output.splitlines()
+
+    assert json.loads(html.unescape(parts[2])) == ["◇", "<b>", "123"]
+    expected_master_csv_rel = os.path.relpath(master_csv, output_html.parent)
+    expected_master_json_rel = os.path.relpath(master_json, output_html.parent)
+    assert parts[3] == html.escape(expected_master_csv_rel, quote=True)
+    assert parts[4] == html.escape(expected_master_json_rel, quote=True)
+    assert json.loads(html.unescape(parts[5])) == []
+    master_levels = json.loads(html.unescape(parts[6]))
+    assert master_levels == {"Mystic Strike": ["Alpha", "Beta"]}
+    assert parts[12] == html.escape(generate_gallery.DEFAULT_ITEM_IMAGE_VIEW_BOX, quote=True)
+    assert copied_assets.count("gallery.css") == 1
+
+
+def test_generate_html_respects_asset_overrides(monkeypatch, tmp_path):
+    results_csv = tmp_path / "results.csv"
+    results_csv.write_text("id,label\n", encoding="utf-8")
+    img_dir = tmp_path / "images"
+    img_dir.mkdir()
+    output_html = tmp_path / "viewer" / "index.html"
+
+    template = "\n".join(
+        [
+            "__CSS_FILE__",
+            "__JS_FILE__",
+            "__CORE_JS__",
+        ]
+    )
+
+    monkeypatch.setattr(generate_gallery, "_load_text_asset", lambda *args, **kwargs: template)
+
+    copied_assets = []
+
+    def fake_copy_static_asset(default_path, output_dir, override=None, target_relative_path=None):
+        target_name = target_relative_path or Path(default_path).name
+        destination = tmp_path / "copied" / target_name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text("/* asset */", encoding="utf-8")
+        copied_assets.append(Path(default_path).name)
+        return target_name.replace(os.sep, "/"), str(destination)
+
+    monkeypatch.setattr(generate_gallery, "_copy_static_asset", fake_copy_static_asset)
+    monkeypatch.setattr(generate_gallery, "_copy_gallery_modules", lambda output_dir: None)
+
+    custom_core = output_html.parent / "custom" / "core.js"
+    custom_core.parent.mkdir(parents=True, exist_ok=True)
+    custom_core.write_text("console.log('core');", encoding="utf-8")
+
+    generate_gallery.generate_html(
+        str(results_csv),
+        str(img_dir),
+        str(output_html),
+        css_relative_override="https://cdn.example.com/viewer.css",
+        js_relative_override="custom/core.js",
+    )
+
+    html_output = output_html.read_text(encoding="utf-8")
+    parts = html_output.splitlines()
+
+    assert parts[0] == "https://cdn.example.com/viewer.css"
+    assert copied_assets == ["index.js"]
+
+    index_reference = parts[1]
+    assert index_reference.startswith("gallery/index.js?v=")
+
+    expected_core_rel = "custom/core.js"
+    expected_version = str(int(os.path.getmtime(custom_core)))
+    assert parts[2] == f"{expected_core_rel}?v={expected_version}"

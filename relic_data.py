@@ -12,7 +12,8 @@ from resource_paths import templates_path
 MASTER_RELICS_FILENAME = "master_relics.csv"
 DEFAULT_MASTER_COLUMN = "EffectBase"
 LEVELS_COLUMN = "Levels"
-_SKIP_VALUES = {"", "-"}
+_SKIP_VALUES = {""}
+_PLACEHOLDER_VALUE = "-"
 _FALSE_VALUES = {"false", "no", "none"}
 
 
@@ -58,7 +59,11 @@ def _parse_levels_field(raw_value: object) -> list[str]:
     levels: list[str] = []
     for token in text_value.split(","):
         cleaned = token.strip()
-        if cleaned and cleaned not in _SKIP_VALUES and cleaned not in levels:
+        if not cleaned or cleaned in _SKIP_VALUES:
+            continue
+        if cleaned == _PLACEHOLDER_VALUE:
+            continue
+        if cleaned not in levels:
             levels.append(cleaned)
     return levels
 

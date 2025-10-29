@@ -95,4 +95,27 @@ test.describe('Relic viewer', () => {
     await page.locator('#lightbox-close').click();
     await expect(page.locator('#lightbox')).toHaveAttribute('aria-hidden', 'true');
   });
+
+  test('静的アセットが 404 を返さない', async ({ page }) => {
+    const assetStatuses = new Map<string, number>();
+
+    page.on('response', (response) => {
+      try {
+        const url = new URL(response.url());
+        if (!url.pathname.match(/\.(css|js)$/)) {
+          return;
+        }
+        assetStatuses.set(url.pathname, response.status());
+      } catch (error) {
+        // テストの安定性を優先し、URL 解析に失敗した場合は無視する
+      }
+    });
+
+    await page.goto('/sample_viewer.html');
+    await page.waitForLoadState('networkidle');
+
+    const failures = [...assetStatuses.entries()].filter(([, status]) => status >= 400);
+    expect(failures).toHaveLength(0);
+    expect(assetStatuses.size).toBeGreaterThan(0);
+  });
 });
