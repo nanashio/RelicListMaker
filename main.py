@@ -174,6 +174,7 @@ def main(
     item_color_overrides: Optional[dict[str, str]] = None,
     save_full_frames: bool = False,
     csv_column_visibility: Optional[dict[str, object]] = None,
+    item_image_view_box: Optional[str] = None,
 ) -> None:
     start_time = time.time()
     print("[INFO] 動画ごとの処理開始...")
@@ -241,6 +242,7 @@ def main(
         master_options=master_options,
         datasets=dataset_entries,
         active_dataset_index=0,
+        item_image_view_box=item_image_view_box,
     )
 
     advance("全処理完了")

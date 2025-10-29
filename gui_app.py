@@ -19,6 +19,7 @@ from tkinter import filedialog, messagebox, ttk, font
 from typing import Iterator, Optional, Sequence
 
 import main as pipeline_main
+from generate_gallery import DEFAULT_ITEM_IMAGE_VIEW_BOX
 from merge_results import MergeResultsError, merge_results
 from viewer_server import ServerContext, create_server, _open_browser
 from version_info import get_version
@@ -359,6 +360,7 @@ class RelicGuiApp:
         self.server_port_var = tk.StringVar(value="0")
         self.open_browser_var = tk.BooleanVar(value=True)
         self.save_frames_var = tk.BooleanVar(value=False)
+        self.item_image_view_box_var = tk.StringVar(value=DEFAULT_ITEM_IMAGE_VIEW_BOX)
         self.csv_column_vars: dict[str, tk.BooleanVar] = {
             "ItemColor": tk.BooleanVar(value=True),
             "RawText": tk.BooleanVar(value=True),
@@ -766,8 +768,15 @@ class RelicGuiApp:
             variable=self.save_frames_var,
         ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(0, 4))
 
+        ttk.Label(parent, text="画像表示範囲 (object-view-box)").grid(
+            row=7, column=0, sticky="w", padx=(0, 8), pady=2
+        )
+        ttk.Entry(parent, textvariable=self.item_image_view_box_var).grid(
+            row=7, column=1, columnspan=2, sticky="ew", pady=2
+        )
+
         csv_frame = ttk.LabelFrame(parent, text="CSV出力列", padding=12)
-        csv_frame.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        csv_frame.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(8, 0))
         for col_index in range(2):
             csv_frame.columnconfigure(col_index, weight=1)
 
@@ -1541,6 +1550,7 @@ class RelicGuiApp:
                         item_color_overrides=color_overrides,
                         save_full_frames=self.save_frames_var.get(),
                         csv_column_visibility=column_visibility,
+                        item_image_view_box=self.item_image_view_box_var.get(),
                     )
                 self.append_log("[GUI] 動画処理が完了しました")
             except Exception as exc:  # noqa: BLE001 - GUIログに表示するため広く捕捉
@@ -1584,6 +1594,7 @@ class RelicGuiApp:
                 merged_path = merge_results(
                     results_dir,
                     only_reviewed=self.merge_only_reviewed_var.get(),
+                    item_image_view_box=self.item_image_view_box_var.get(),
                 )
                 self.append_log(f"[GUI] 統合処理が完了しました: {merged_path}")
             except MergeResultsError as err:

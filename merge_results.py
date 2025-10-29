@@ -283,6 +283,7 @@ def merge_results(
     target_name: str = MERGED_DIR_NAME,
     *,
     only_reviewed: bool = True,
+    item_image_view_box: Optional[str] = None,
 ) -> Path:
     """results/ 配下のデータセットを統合し、新しいディレクトリに出力する.
 
@@ -290,6 +291,7 @@ def merge_results(
         results_dir: 統合元の results ディレクトリ.
         target_name: 統合結果を書き出すサブディレクトリ名.
         only_reviewed: 効果ステータスがすべてレビュー済みの行のみ統合するかどうか.
+        item_image_view_box: 生成するビューワに適用する object-view-box の指定.
     """
 
     root = Path(results_dir).resolve()
@@ -395,6 +397,7 @@ def merge_results(
         master_options=load_master_csv(),
         datasets=merged_entries + source_entries,
         active_dataset_index=active_dataset_index,
+        item_image_view_box=item_image_view_box,
     )
     print(f"[INFO] ビューワを更新しました: {viewer_path}")
 

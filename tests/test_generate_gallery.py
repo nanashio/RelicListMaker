@@ -109,7 +109,8 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
         "__JS_FILE__\n"
         "__CORE_JS__\n"
         "__DATASETS__\n"
-        "__ACTIVE_DATASET__"
+        "__ACTIVE_DATASET__\n"
+        "__ITEM_IMAGE_VIEW_BOX__"
     )
 
     monkeypatch.setattr(generate_gallery, "_load_text_asset", lambda *args, **kwargs: template)
@@ -156,6 +157,7 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
     assert datasets_json[0]["kind"] == "merged"
     assert datasets_json[0]["sources"][0]["label"] == "A"
     assert json.loads(parts[11]) == 1
+    assert parts[12] == generate_gallery.DEFAULT_ITEM_IMAGE_VIEW_BOX
     assert "?v=" in parts[7]
     assert "?v=" in parts[8]
     assert "?v=" in parts[9]
