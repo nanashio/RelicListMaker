@@ -392,6 +392,14 @@ class RelicGuiApp:
         self._tkdnd_ready = False
         self.color_options = ["none", "red", "green", "blue", "yellow"]
         self.relic_type_options = ["normal", "deep"]
+        self.relic_type_labels = {
+            "normal": "通常",
+            "deep": "深層遺物",
+        }
+        self._relic_type_from_label = {label: key for key, label in self.relic_type_labels.items()}
+        self._relic_type_display_values = [
+            self.relic_type_labels.get(key, key) for key in self.relic_type_options
+        ]
         self._dropped_videos: list[dict[str, str]] = []
         self._dropped_video_set: set[str] = set()
         self.queue_tree: Optional[ttk.Treeview] = None
@@ -561,7 +569,7 @@ class RelicGuiApp:
         self.queue_tree.heading("relic_type", text="遺物種別")
         self.queue_tree.column("name", anchor="w", width=260)
         self.queue_tree.column("color", anchor="center", width=100)
-        self.queue_tree.column("relic_type", anchor="center", width=120)
+        self.queue_tree.column("relic_type", anchor="center", width=130)
         self.queue_tree.column("fullpath", width=0, stretch=False)
         queue_scroll = ttk.Scrollbar(queue_frame, orient="vertical", command=self.queue_tree.yview)
         self.queue_tree.configure(yscrollcommand=queue_scroll.set)
@@ -1119,6 +1127,8 @@ class RelicGuiApp:
         base_name = Path(resolved).stem
         detected_color = pipeline_main.detect_item_color(base_name) or "none"
         detected_type = pipeline_main.detect_relic_type(base_name)
+        if detected_type not in self.relic_type_options:
+            detected_type = self.relic_type_options[0]
         self._dropped_videos.append(
             {"path": resolved, "color": detected_color, "relic_type": detected_type}
         )
@@ -1128,14 +1138,24 @@ class RelicGuiApp:
             return
         self._hide_inline_editors()
         self.queue_tree.delete(*self.queue_tree.get_children())
+        default_type = self.relic_type_options[0]
+        default_label = self.relic_type_labels.get(default_type, default_type)
         for entry in self._dropped_videos:
             path = entry.get("path", "")
             name = Path(path).name if path else ""
             color = entry.get("color", self.color_options[0]) or self.color_options[0]
-            relic_type = entry.get("relic_type", self.relic_type_options[0]) or self.relic_type_options[0]
+            relic_type = entry.get("relic_type", default_type) or default_type
             if relic_type not in self.relic_type_options:
-                relic_type = self.relic_type_options[0]
-            self.queue_tree.insert("", "end", iid=path, values=(name, color, relic_type, path))
+                relic_type = self._relic_type_from_label.get(relic_type, default_type)
+            if relic_type not in self.relic_type_options:
+                relic_type = default_type
+            relic_label = self.relic_type_labels.get(relic_type, default_label)
+            self.queue_tree.insert(
+                "",
+                "end",
+                iid=path,
+                values=(name, color, relic_label, path),
+            )
         self._update_queue_controls()
 
     def _schedule_results_refresh(self) -> None:
@@ -1324,11 +1344,12 @@ class RelicGuiApp:
     def _create_inline_type_editor(self) -> None:
         if self.queue_tree is None:
             return
+        default_values = tuple(self._relic_type_display_values)
         self.inline_type_combo = ttk.Combobox(
             self.queue_tree,
-            values=self.relic_type_options,
+            values=default_values,
             state="readonly",
-            width=10,
+            width=12,
         )
         self.inline_type_combo.bind("<<ComboboxSelected>>", self._on_inline_type_selected)
         self.inline_type_combo.bind("<FocusOut>", lambda _event: self._hide_inline_type_editor())
@@ -1344,12 +1365,16 @@ class RelicGuiApp:
             self._hide_inline_type_editor()
             return
         x, y, width, height = bbox
-        current = self.queue_tree.set(item, "relic_type") or self.relic_type_options[0]
+        default_type = self.relic_type_options[0]
+        default_label = self.relic_type_labels.get(default_type, default_type)
+        current_label = self.queue_tree.set(item, "relic_type") or default_label
+        current = self._relic_type_from_label.get(current_label, default_type)
         if current not in self.relic_type_options:
-            current = self.relic_type_options[0]
-        self.inline_type_combo.configure(values=self.relic_type_options)
+            current = default_type
+        display_label = self.relic_type_labels.get(current, default_label)
+        self.inline_type_combo.configure(values=tuple(self._relic_type_display_values))
         self.inline_type_combo.place(x=x, y=y, width=width, height=height)
-        self.inline_type_combo.set(current)
+        self.inline_type_combo.set(display_label)
         self.inline_type_combo.lift()
         self.inline_type_combo.focus_set()
         self._inline_type_item = item
@@ -1388,13 +1413,17 @@ class RelicGuiApp:
     def _on_inline_type_selected(self, _event=None) -> None:
         if self.queue_tree is None or self.inline_type_combo is None or self._inline_type_item is None:
             return
-        chosen = self.inline_type_combo.get() or self.relic_type_options[0]
+        default_type = self.relic_type_options[0]
+        default_label = self.relic_type_labels.get(default_type, default_type)
+        chosen_label = self.inline_type_combo.get() or default_label
+        chosen = self._relic_type_from_label.get(chosen_label, default_type)
         if chosen not in self.relic_type_options:
-            chosen = self.relic_type_options[0]
+            chosen = default_type
+        display_label = self.relic_type_labels.get(chosen, default_label)
         target = self._inline_type_item
         self._update_video_type(target, chosen)
         if self.queue_tree.exists(target):
-            self.queue_tree.set(target, "relic_type", chosen)
+            self.queue_tree.set(target, "relic_type", display_label)
         self._hide_inline_type_editor()
         self._update_queue_controls()
 
@@ -1427,6 +1456,10 @@ class RelicGuiApp:
                 break
 
     def _update_video_type(self, path: str, relic_type: str) -> None:
+        if relic_type not in self.relic_type_options:
+            relic_type = self._relic_type_from_label.get(relic_type, self.relic_type_options[0])
+        if relic_type not in self.relic_type_options:
+            relic_type = self.relic_type_options[0]
         for entry in self._dropped_videos:
             if entry.get("path") == path:
                 entry["relic_type"] = relic_type
@@ -1596,6 +1629,8 @@ class RelicGuiApp:
         relic_type_overrides = {}
         for entry in video_entries:
             relic_type = entry.get("relic_type") or ""
+            if relic_type not in self.relic_type_options:
+                relic_type = self._relic_type_from_label.get(relic_type, "")
             if relic_type in self.relic_type_options:
                 relic_type_overrides[entry["path"]] = relic_type
         column_visibility = {
