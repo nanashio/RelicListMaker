@@ -16,13 +16,19 @@ h1 { text-align: center; margin-bottom: 16px; }
 .storage-status.error { color: #b83232; }
 .storage-status.warning { color: #c17d00; }
 
-.viewbox-controls { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; margin: 0 auto 16px; padding: 10px 12px; background: #fff; border: 1px solid #ddd; border-radius: 8px; max-width: 1100px; box-sizing: border-box; }
-.viewbox-controls label { font-size: 13px; color: #333; }
-.viewbox-input { flex: 1 1 240px; min-width: 180px; padding: 6px 10px; border-radius: 6px; border: 1px solid #bbb; font-size: 13px; }
-.viewbox-input:focus { outline: 2px solid #4a90e2; outline-offset: 2px; }
+.viewbox-controls { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; align-items: stretch; margin: 0 auto 16px; padding: 12px 16px; background: #fff; border: 1px solid #ddd; border-radius: 8px; max-width: 1100px; box-sizing: border-box; }
+.viewbox-header { display: flex; gap: 8px; align-items: baseline; justify-content: center; width: 100%; color: #333; }
+.viewbox-title { font-size: 14px; font-weight: 600; }
+.viewbox-subtitle { font-size: 12px; color: #666; }
+.viewbox-fields { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; width: 100%; }
+.viewbox-field { display: flex; flex-direction: column; gap: 4px; min-width: 110px; flex: 0 1 140px; }
+.viewbox-field-label { font-size: 12px; color: #555; }
+.viewbox-number { width: 100%; padding: 6px 10px; border-radius: 6px; border: 1px solid #bbb; font-size: 13px; box-sizing: border-box; }
+.viewbox-number:focus { outline: 2px solid #4a90e2; outline-offset: 2px; }
 .viewbox-button { padding: 6px 10px; border-radius: 6px; border: 1px solid #999; background: #fff; cursor: pointer; font-size: 13px; }
 .viewbox-button:hover, .viewbox-button:focus { background: #f1f1f1; outline: none; }
-.viewbox-status { font-size: 12px; color: #555; display: none; margin-left: 8px; }
+.viewbox-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; width: 100%; }
+.viewbox-status { font-size: 12px; color: #555; display: none; }
 .viewbox-status.viewbox-status--visible { display: inline-flex; }
 .viewbox-status.viewbox-status--error { color: #b83232; }
 

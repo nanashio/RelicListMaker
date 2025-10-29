@@ -114,7 +114,10 @@ def test_merge_results_filters_duplicates_and_copies_images(sample_results: Path
     html_text = viewer_html.read_text(encoding="utf-8")
     assert f"--item-image-view-box: {DEFAULT_ITEM_IMAGE_VIEW_BOX};" in html_text
     assert 'data-default-item-image-view-box="' in html_text
-    assert 'id="viewbox-input"' in html_text
+    assert 'id="viewbox-top"' in html_text
+    assert 'id="viewbox-left"' in html_text
+    assert 'id="viewbox-height"' in html_text
+    assert 'id="viewbox-width"' in html_text
     match = re.search(r'data-datasets="([^"]*)"', html_text)
     assert match is not None
     datasets_json = html.unescape(match.group(1))

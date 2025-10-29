@@ -111,7 +111,6 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
         "__DATASETS__\n"
         "__ACTIVE_DATASET__\n"
         "__ITEM_IMAGE_VIEW_BOX__\n"
-        "__ITEM_IMAGE_VIEW_BOX__\n"
         "__ITEM_IMAGE_VIEW_BOX__"
     )
 
@@ -161,7 +160,6 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
     assert json.loads(parts[11]) == 1
     assert parts[12] == generate_gallery.DEFAULT_ITEM_IMAGE_VIEW_BOX
     assert parts[13] == generate_gallery.DEFAULT_ITEM_IMAGE_VIEW_BOX
-    assert parts[14] == generate_gallery.DEFAULT_ITEM_IMAGE_VIEW_BOX
     assert "?v=" in parts[7]
     assert "?v=" in parts[8]
     assert "?v=" in parts[9]
