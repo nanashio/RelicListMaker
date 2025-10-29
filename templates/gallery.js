@@ -11,6 +11,11 @@
         { key: 'blue', label: '青', className: 'item-color-blue' }
     ];
 
+    const VIEW_BOX_STORAGE_PREFIX = 'gallery.itemImageViewBox';
+    const VIEW_BOX_FALLBACK = 'inset(0px 180px 0px 0px)';
+    const VIEW_BOX_MAX_LENGTH = 200;
+    const VIEW_BOX_INVALID_PATTERN = /['";<>\\{}]/;
+
     const body = document.body;
     const {
         resultsCsv: initialCsvPath = '',
@@ -108,6 +113,59 @@
     }
 
     const normalizeSuppressedRecords = (records) => normalizeSuppressedLevelsFromUtils(records);
+
+    function sanitizeViewBoxValue(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        let text = value.trim();
+        if (!text) {
+            return '';
+        }
+        text = text.replace(/[\r\n]+/g, ' ');
+        if (!text || VIEW_BOX_INVALID_PATTERN.test(text)) {
+            return '';
+        }
+        if (text.length > VIEW_BOX_MAX_LENGTH) {
+            text = text.slice(0, VIEW_BOX_MAX_LENGTH);
+        }
+        return text;
+    }
+
+    function createViewBoxStorageKey(basePath) {
+        const source = typeof basePath === 'string' ? basePath.trim() : '';
+        if (!source) {
+            return VIEW_BOX_STORAGE_PREFIX;
+        }
+        return `${VIEW_BOX_STORAGE_PREFIX}:${source}`;
+    }
+
+    function readStoredViewBox(key) {
+        if (typeof window === 'undefined' || !window.localStorage || !key) {
+            return '';
+        }
+        try {
+            return window.localStorage.getItem(key) || '';
+        } catch (error) {
+            console.warn('object-view-boxの読み込みに失敗しました:', error);
+            return '';
+        }
+    }
+
+    function writeStoredViewBox(key, value) {
+        if (typeof window === 'undefined' || !window.localStorage || !key) {
+            return;
+        }
+        try {
+            if (!value) {
+                window.localStorage.removeItem(key);
+            } else {
+                window.localStorage.setItem(key, value);
+            }
+        } catch (error) {
+            console.warn('object-view-boxの保存に失敗しました:', error);
+        }
+    }
 
     const storageUtils = window.galleryStorageUtils || null;
 
@@ -383,13 +441,22 @@
         uploadCsvButton: document.getElementById('upload-csv'),
         uploadCsvInput: document.getElementById('upload-csv-input'),
         storageStatus: document.getElementById('storage-status'),
-        summary: document.getElementById('gallery-summary')
+        summary: document.getElementById('gallery-summary'),
+        viewBoxContainer: document.getElementById('viewbox-controls'),
+        viewBoxInput: document.getElementById('viewbox-input'),
+        viewBoxApplyButton: document.getElementById('viewbox-apply'),
+        viewBoxResetButton: document.getElementById('viewbox-reset'),
+        viewBoxStatus: document.getElementById('viewbox-status')
     };
+
+    const viewBoxStorageKey = createViewBoxStorageKey(initialCsvPath);
 
     if (dom.uploadCsvButton) {
         dom.uploadCsvButton.disabled = true;
         dom.uploadCsvButton.title = 'ローカルCSVのインポートは無効化されています';
     }
+
+    setupViewBoxControls();
 
     if (!dom.gallery) {
         return;
@@ -583,6 +650,105 @@
             console.warn('CSVパスの解決に失敗しました:', error);
             return trimmed.replace(/^\/+/, '');
         }
+    }
+
+    function setupViewBoxControls() {
+        const input = dom.viewBoxInput || null;
+        const rawDefault =
+            (body.dataset && body.dataset.defaultItemImageViewBox) ||
+            (input && input.defaultValue) ||
+            body.style.getPropertyValue('--item-image-view-box') ||
+            '';
+        const defaultValue = sanitizeViewBoxValue(rawDefault) || VIEW_BOX_FALLBACK;
+        const rawStored = readStoredViewBox(viewBoxStorageKey);
+        const storedValue = sanitizeViewBoxValue(rawStored);
+        if (rawStored && !storedValue) {
+            writeStoredViewBox(viewBoxStorageKey, '');
+        }
+        const initialValue = storedValue || defaultValue;
+
+        function updateStatus(message, type = 'info') {
+            const statusEl = dom.viewBoxStatus;
+            if (!statusEl) {
+                return;
+            }
+            statusEl.textContent = message;
+            const isError = type === 'error';
+            statusEl.classList.toggle('viewbox-status--error', isError);
+            statusEl.classList.toggle('viewbox-status--visible', Boolean(message));
+        }
+
+        function persistValue(value) {
+            if (!value || value === defaultValue) {
+                writeStoredViewBox(viewBoxStorageKey, '');
+            } else {
+                writeStoredViewBox(viewBoxStorageKey, value);
+            }
+        }
+
+        function applyValue(value, { persist = true } = {}) {
+            const sanitized = sanitizeViewBoxValue(value);
+            if (!sanitized) {
+                return false;
+            }
+            body.style.setProperty('--item-image-view-box', sanitized);
+            if (input && input.value !== sanitized) {
+                input.value = sanitized;
+            }
+            if (persist) {
+                persistValue(sanitized);
+            }
+            return true;
+        }
+
+        applyValue(initialValue, { persist: false });
+        if (!input) {
+            return;
+        }
+
+        const applyButton = dom.viewBoxApplyButton || null;
+        const resetButton = dom.viewBoxResetButton || null;
+
+        function clearStatus() {
+            input.setCustomValidity('');
+            updateStatus('');
+        }
+
+        function handleApply() {
+            const sanitized = sanitizeViewBoxValue(input.value);
+            if (!sanitized) {
+                input.setCustomValidity('セミコロンや引用符を含めない値を入力してください。');
+                input.reportValidity();
+                updateStatus('object-view-boxの値が不正です', 'error');
+                return;
+            }
+            clearStatus();
+            applyValue(sanitized);
+            updateStatus('画像表示範囲を適用しました');
+        }
+
+        if (applyButton) {
+            applyButton.addEventListener('click', handleApply);
+        }
+
+        if (resetButton) {
+            resetButton.addEventListener('click', () => {
+                clearStatus();
+                applyValue(defaultValue);
+                updateStatus('初期値に戻しました');
+            });
+        }
+
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                handleApply();
+            }
+        });
+
+        input.addEventListener('input', () => {
+            clearStatus();
+        });
     }
 
     const duplicates = createDuplicateManager(() => state.csvPath);

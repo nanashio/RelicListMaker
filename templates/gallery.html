@@ -6,7 +6,7 @@
     <link rel="stylesheet" href="__CSS_FILE__">
     <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==">
 </head>
-<body data-results-csv="__RESULTS_CSV__" data-img-dir="__IMAGE_DIR__" data-label-symbols="__LABEL_SYMBOLS__" data-master-csv="__MASTER_CSV__" data-master-json="__MASTER_JSON__" data-master-options="__MASTER_OPTIONS__" data-master-levels="__MASTER_LEVELS__" data-datasets="__DATASETS__" data-active-dataset="__ACTIVE_DATASET__" data-core-script="__CORE_JS__" style="--item-image-view-box: __ITEM_IMAGE_VIEW_BOX__;">
+<body data-results-csv="__RESULTS_CSV__" data-img-dir="__IMAGE_DIR__" data-label-symbols="__LABEL_SYMBOLS__" data-master-csv="__MASTER_CSV__" data-master-json="__MASTER_JSON__" data-master-options="__MASTER_OPTIONS__" data-master-levels="__MASTER_LEVELS__" data-datasets="__DATASETS__" data-active-dataset="__ACTIVE_DATASET__" data-core-script="__CORE_JS__" data-default-item-image-view-box="__ITEM_IMAGE_VIEW_BOX__" style="--item-image-view-box: __ITEM_IMAGE_VIEW_BOX__;">
     <h1>遺物一覧</h1>
     <div class="toolbar">
         <div class="dataset-selector" id="dataset-selector">
@@ -42,6 +42,13 @@
         <button id="upload-csv" type="button">CSVを読み込む</button>
         <input id="upload-csv-input" type="file" accept=".csv" hidden>
         <span id="storage-status" class="storage-status" role="status" aria-live="polite"></span>
+    </div>
+    <div class="viewbox-controls" id="viewbox-controls">
+        <label for="viewbox-input">画像表示範囲 (object-view-box)</label>
+        <input id="viewbox-input" class="viewbox-input" type="text" value="__ITEM_IMAGE_VIEW_BOX__" inputmode="text" spellcheck="false" autocomplete="off">
+        <button id="viewbox-apply" class="viewbox-button" type="button">適用</button>
+        <button id="viewbox-reset" class="viewbox-button" type="button">初期値に戻す</button>
+        <span id="viewbox-status" class="viewbox-status" role="status" aria-live="polite"></span>
     </div>
     <p id="gallery-summary" class="gallery-summary" role="status" aria-live="polite"></p>
     <p id="gallery-status" class="gallery-status" role="status"></p>
