@@ -28,18 +28,18 @@
             <option value="blue">青のみ</option>
             <option value="none">色なしのみ</option>
         </select>
-        <label class="toggle-duplicates">
+        <label class="button toggle-duplicates">
             <input type="checkbox" id="show-duplicates">
             重複を表示
         </label>
-        <label class="toggle-ocr">
+        <label class="button toggle-ocr">
             <input type="checkbox" id="show-ocr">
             OCRを表示
         </label>
     </div>
     <div class="storage-controls">
-        <button id="download-csv" type="button">CSVをダウンロード</button>
-        <button id="upload-csv" type="button">CSVを読み込む</button>
+        <button id="download-csv" class="button" type="button">CSVをダウンロード</button>
+        <button id="upload-csv" class="button" type="button">CSVを読み込む</button>
         <input id="upload-csv-input" type="file" accept=".csv" hidden>
         <span id="storage-status" class="storage-status" role="status" aria-live="polite"></span>
     </div>
