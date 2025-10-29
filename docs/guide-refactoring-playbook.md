@@ -74,4 +74,4 @@ $ python viewer_server.py --results ./results
 
 このプレイブックをベースに、プロジェクト固有のルールや検証手順を追記して自分たち専用のガイドに育ててください。
 ## 8. テストガイドライン
-詳細は `docs/testing-guide.md` を参照してください。
+詳細は `docs/guide-testing.md` を参照してください。
