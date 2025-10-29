@@ -96,10 +96,17 @@ h1 {
 .review-button,
 .duplicate-toggle,
 .favorite-toggle {
+    --control-border-color: var(--color-border-strong);
+    --control-border-color-active: var(--control-border-color);
+    --control-background: var(--color-surface);
+    --control-background-active: var(--color-hover-light);
+    --control-text-color: var(--color-text-primary);
+    --control-text-color-active: var(--control-text-color);
     padding: var(--space-sm) var(--space-lg);
     border-radius: var(--radius-md);
-    border: 1px solid var(--color-border-strong);
-    background: var(--color-surface);
+    border: 1px solid var(--control-border-color);
+    background: var(--control-background);
+    color: var(--control-text-color);
     cursor: pointer;
     font-size: 13px;
     transition: background 0.2s ease, color 0.2s ease, border 0.2s ease;
@@ -139,7 +146,54 @@ h1 {
 
 .storage-controls button,
 .viewbox-button {
-    border-color: var(--color-border-accent);
+    --control-border-color: var(--color-border-accent);
+}
+
+.review-button {
+    --control-background-active: var(--color-surface);
+}
+
+.duplicate-toggle,
+.favorite-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.duplicate-toggle {
+    --control-border-color: var(--color-info-border);
+    --control-border-color-active: var(--color-info-text);
+    --control-background: var(--color-info-background);
+    --control-background-active: var(--color-info-background-strong);
+    --control-text-color: var(--color-info-text);
+    --control-text-color-active: var(--color-info-text-strong);
+}
+
+.favorite-toggle {
+    --control-border-color: var(--color-warning-border);
+    --control-border-color-active: var(--color-warning-border-strong);
+    --control-background: var(--color-warning-background);
+    --control-background-active: var(--color-warning-background-strong);
+    --control-text-color: var(--color-warning-text);
+    --control-text-color-active: var(--color-warning-text-strong);
+}
+
+:is(
+    .storage-controls button,
+    .viewbox-button,
+    .review-button,
+    .duplicate-toggle,
+    .favorite-toggle
+):is(:hover, :focus-visible) {
+    background: var(--control-background-active);
+    border-color: var(--control-border-color-active);
+    color: var(--control-text-color-active);
+}
+
+.viewbox-button:focus-visible,
+.duplicate-toggle:focus-visible,
+.favorite-toggle:focus-visible {
+    outline: none;
 }
 
 .toolbar input[type=search],
@@ -433,34 +487,6 @@ h1 {
     flex-wrap: wrap;
 }
 
-.duplicate-toggle {
-    border: 1px solid var(--color-info-border);
-    background: var(--color-info-background);
-    color: var(--color-info-text);
-}
-
-.duplicate-toggle:hover,
-.duplicate-toggle:focus {
-    background: var(--color-info-background-strong);
-    border-color: var(--color-info-text);
-    color: var(--color-info-text-strong);
-    outline: none;
-}
-
-.favorite-toggle {
-    border: 1px solid var(--color-warning-border);
-    background: var(--color-warning-background);
-    color: var(--color-warning-text);
-}
-
-.favorite-toggle:hover,
-.favorite-toggle:focus {
-    background: var(--color-warning-background-strong);
-    border-color: var(--color-warning-border-strong);
-    color: var(--color-warning-text-strong);
-    outline: none;
-}
-
 .favorite-toggle.is-active {
     font-weight: 600;
 }
@@ -477,34 +503,33 @@ h1 {
 }
 
 .item-color-select {
+    --item-color-value: var(--color-surface);
+    --item-color-text: var(--color-text-primary);
     padding: var(--space-xs) var(--space-md);
     font-size: 13px;
     cursor: pointer;
+    background: linear-gradient(90deg, var(--item-color-value), var(--item-color-value));
+    color: var(--item-color-text);
 }
 
 .item-color-select.option-red {
-    background: linear-gradient(90deg, var(--color-item-option-red), var(--color-item-option-red));
-    color: var(--color-text-inverse);
+    --item-color-value: var(--color-item-option-red);
+    --item-color-text: var(--color-text-inverse);
 }
 
 .item-color-select.option-yellow {
-    background: linear-gradient(90deg, var(--color-item-option-yellow), var(--color-item-option-yellow));
-    color: var(--color-item-option-yellow-text);
+    --item-color-value: var(--color-item-option-yellow);
+    --item-color-text: var(--color-item-option-yellow-text);
 }
 
 .item-color-select.option-green {
-    background: linear-gradient(90deg, var(--color-item-option-green), var(--color-item-option-green));
-    color: var(--color-item-option-green-text);
+    --item-color-value: var(--color-item-option-green);
+    --item-color-text: var(--color-item-option-green-text);
 }
 
 .item-color-select.option-blue {
-    background: linear-gradient(90deg, var(--color-item-option-blue), var(--color-item-option-blue));
-    color: var(--color-item-option-blue-text);
-}
-
-.item-color-select.option-none {
-    background: var(--color-surface);
-    color: var(--color-text-primary);
+    --item-color-value: var(--color-item-option-blue);
+    --item-color-text: var(--color-item-option-blue-text);
 }
 
 .item-color-red {
@@ -534,9 +559,12 @@ h1 {
 }
 
 .item.is-duplicate .duplicate-toggle {
-    border-color: var(--color-error-border-muted);
-    background: var(--color-error-background-soft);
-    color: var(--color-error-text);
+    --control-border-color: var(--color-error-border-muted);
+    --control-border-color-active: var(--color-error-border-muted);
+    --control-background: var(--color-error-background-soft);
+    --control-background-active: var(--color-error-background-soft);
+    --control-text-color: var(--color-error-text);
+    --control-text-color-active: var(--color-error-text);
 }
 
 .item.is-favorite {
@@ -545,9 +573,12 @@ h1 {
 }
 
 .item.is-favorite .favorite-toggle {
-    border-color: var(--color-warning-border-strong);
-    background: var(--color-warning-background-strong);
-    color: var(--color-warning-text-strong);
+    --control-border-color: var(--color-warning-border-strong);
+    --control-border-color-active: var(--color-warning-border-strong);
+    --control-background: var(--color-warning-background-strong);
+    --control-background-active: var(--color-warning-background-strong);
+    --control-text-color: var(--color-warning-text-strong);
+    --control-text-color-active: var(--color-warning-text-strong);
 }
 
 .item-meta {
