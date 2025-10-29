@@ -1449,13 +1449,25 @@ class RelicGuiApp:
                 self.append_log(f"[GUI] {len(removed_names)} 件の動画をキューから削除しました: {summary}")
         self._refresh_queue_view()
 
-    def _update_video_color(self, path: str, color: str) -> None:
+    def _resolve_queue_item_path(self, item_id: str) -> str:
+        if self.queue_tree is not None and self.queue_tree.exists(item_id):
+            try:
+                path_value = self.queue_tree.set(item_id, "fullpath")
+            except tk.TclError:
+                path_value = ""
+            if isinstance(path_value, str) and path_value:
+                return path_value
+        return item_id
+
+    def _update_video_color(self, item_id: str, color: str) -> None:
+        path = self._resolve_queue_item_path(item_id)
         for entry in self._dropped_videos:
             if entry.get("path") == path:
                 entry["color"] = color
                 break
 
-    def _update_video_type(self, path: str, relic_type: str) -> None:
+    def _update_video_type(self, item_id: str, relic_type: str) -> None:
+        path = self._resolve_queue_item_path(item_id)
         if relic_type not in self.relic_type_options:
             relic_type = self._relic_type_from_label.get(relic_type, self.relic_type_options[0])
         if relic_type not in self.relic_type_options:
