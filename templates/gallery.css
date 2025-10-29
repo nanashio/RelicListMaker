@@ -16,13 +16,35 @@ h1 { text-align: center; margin-bottom: 16px; }
 .storage-status.error { color: #b83232; }
 .storage-status.warning { color: #c17d00; }
 
+.viewbox-controls { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; align-items: stretch; margin: 0 auto 16px; padding: 12px 16px; background: #fff; border: 1px solid #ddd; border-radius: 8px; max-width: 1100px; box-sizing: border-box; }
+.viewbox-header { display: flex; gap: 8px; align-items: baseline; justify-content: center; width: 100%; color: #333; }
+.viewbox-title { font-size: 14px; font-weight: 600; }
+.viewbox-subtitle { font-size: 12px; color: #666; }
+.viewbox-fields { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; width: 100%; }
+.viewbox-field { display: flex; flex-direction: column; gap: 4px; min-width: 110px; flex: 0 1 140px; }
+.viewbox-field-label { font-size: 12px; color: #555; }
+.viewbox-number { width: 100%; padding: 6px 10px; border-radius: 6px; border: 1px solid #bbb; font-size: 13px; box-sizing: border-box; }
+.viewbox-number:focus { outline: 2px solid #4a90e2; outline-offset: 2px; }
+.viewbox-button { padding: 6px 10px; border-radius: 6px; border: 1px solid #999; background: #fff; cursor: pointer; font-size: 13px; }
+.viewbox-button:hover, .viewbox-button:focus { background: #f1f1f1; outline: none; }
+.viewbox-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; width: 100%; }
+.viewbox-status { font-size: 12px; color: #555; display: none; }
+.viewbox-status.viewbox-status--visible { display: inline-flex; }
+.viewbox-status.viewbox-status--error { color: #b83232; }
+
 .gallery-summary { text-align: center; color: #333; font-size: 14px; margin: 0 auto 12px; display: none; width: 100%; }
 .gallery-status { text-align: center; color: #666; font-size: 14px; margin-bottom: 16px; display: none; }
 .gallery-status.error { color: #b83232; }
 .gallery { display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 1100px; margin: 0 auto 16px; align-items: stretch; }
 .item { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px; width: 100%; display: flex; flex-direction: row; align-items: flex-start; gap: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); box-sizing: border-box; }
 .item-left { flex: 0 1 50%; max-width: 50%; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
-.item-left img { width: 100%; height: auto; cursor: zoom-in; border-radius: 6px; }
+.item-left img {
+    width: 100%;
+    height: auto;
+    cursor: zoom-in;
+    border-radius: 6px;
+    object-view-box: var(--item-image-view-box, inset(0px 180px 0px 0px));
+}
 .item-left img:focus { outline: 2px solid #4c9aff; outline-offset: 2px; }
 
 .item-right { flex: 0 1 50%; max-width: 50%; min-width: 0; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }

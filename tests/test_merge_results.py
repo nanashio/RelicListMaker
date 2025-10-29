@@ -9,6 +9,7 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
+from generate_gallery import DEFAULT_ITEM_IMAGE_VIEW_BOX
 from merge_results import MERGED_CSV_NAME, MERGED_DIR_NAME, merge_results, _is_duplicate
 
 
@@ -111,6 +112,12 @@ def test_merge_results_filters_duplicates_and_copies_images(sample_results: Path
     viewer_html = sample_results / "viewer.html"
     assert viewer_html.exists()
     html_text = viewer_html.read_text(encoding="utf-8")
+    assert f"--item-image-view-box: {DEFAULT_ITEM_IMAGE_VIEW_BOX};" in html_text
+    assert 'data-default-item-image-view-box="' in html_text
+    assert 'id="viewbox-top"' in html_text
+    assert 'id="viewbox-left"' in html_text
+    assert 'id="viewbox-height"' in html_text
+    assert 'id="viewbox-width"' in html_text
     match = re.search(r'data-datasets="([^"]*)"', html_text)
     assert match is not None
     datasets_json = html.unescape(match.group(1))
@@ -166,6 +173,14 @@ def test_merge_results_can_include_pending_when_option_disabled(sample_results: 
     assert len(rows) == 3
     datasets = {row["Dataset"] for row in rows}
     assert datasets == {"video_a", "video_b", "video_c"}
+
+
+def test_merge_results_applies_custom_view_box(sample_results: Path) -> None:
+    custom_view_box = "inset(4px 8px 12px 16px)"
+    merge_results(sample_results, item_image_view_box=custom_view_box)
+
+    html_text = (sample_results / "viewer.html").read_text(encoding="utf-8")
+    assert f"--item-image-view-box: {custom_view_box};" in html_text
 
 
 def test_merge_results_with_real_dataset(sample_results_dir: Path) -> None:

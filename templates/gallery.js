@@ -11,6 +11,11 @@
         { key: 'blue', label: '青', className: 'item-color-blue' }
     ];
 
+    const VIEW_BOX_STORAGE_PREFIX = 'gallery.itemImageViewBox';
+    const VIEW_BOX_FALLBACK = 'inset(0px 180px 0px 0px)';
+    const VIEW_BOX_MAX_LENGTH = 200;
+    const VIEW_BOX_INVALID_PATTERN = /['";<>\\{}]/;
+
     const body = document.body;
     const {
         resultsCsv: initialCsvPath = '',
@@ -108,6 +113,170 @@
     }
 
     const normalizeSuppressedRecords = (records) => normalizeSuppressedLevelsFromUtils(records);
+
+    function sanitizeViewBoxValue(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        let text = value.trim();
+        if (!text) {
+            return '';
+        }
+        text = text.replace(/[\r\n]+/g, ' ');
+        if (!text || VIEW_BOX_INVALID_PATTERN.test(text)) {
+            return '';
+        }
+        if (text.length > VIEW_BOX_MAX_LENGTH) {
+            text = text.slice(0, VIEW_BOX_MAX_LENGTH);
+        }
+        return text;
+    }
+
+    function splitInsetArguments(value) {
+        if (typeof value !== 'string') {
+            return [];
+        }
+        const [main] = value.split(/\s+round\b/i);
+        const result = [];
+        let current = '';
+        let depth = 0;
+        for (let i = 0; i < main.length; i += 1) {
+            const char = main[i];
+            if (char === '(') {
+                depth += 1;
+                current += char;
+                continue;
+            }
+            if (char === ')') {
+                if (depth > 0) {
+                    depth -= 1;
+                }
+                current += char;
+                continue;
+            }
+            if ((char === ' ' || char === '\t') && depth === 0) {
+                const trimmed = current.trim();
+                if (trimmed) {
+                    result.push(trimmed);
+                }
+                current = '';
+                continue;
+            }
+            current += char;
+        }
+        const trimmed = current.trim();
+        if (trimmed) {
+            result.push(trimmed);
+        }
+        return result;
+    }
+
+    function normalizeInsetValues(values) {
+        if (!Array.isArray(values) || !values.length) {
+            return null;
+        }
+        if (values.length === 1) {
+            const [all] = values;
+            return [all, all, all, all];
+        }
+        if (values.length === 2) {
+            const [vertical, horizontal] = values;
+            return [vertical, horizontal, vertical, horizontal];
+        }
+        if (values.length === 3) {
+            const [top, horizontal, bottom] = values;
+            return [top, horizontal, bottom, horizontal];
+        }
+        if (values.length >= 4) {
+            return values.slice(0, 4);
+        }
+        return null;
+    }
+
+    function parseViewBoxComponents(value) {
+        const sanitized = sanitizeViewBoxValue(value);
+        if (!sanitized) {
+            return null;
+        }
+        const match = sanitized.match(/^inset\((.+)\)$/i);
+        if (!match) {
+            return null;
+        }
+        const args = splitInsetArguments(match[1]);
+        const normalized = normalizeInsetValues(args);
+        if (!normalized) {
+            return null;
+        }
+        return {
+            top: normalized[0],
+            right: normalized[1],
+            bottom: normalized[2],
+            left: normalized[3]
+        };
+    }
+
+    function parseLengthValue(value) {
+        if (typeof value !== 'string') {
+            return null;
+        }
+        const match = value.trim().match(/^(-?\d+(?:\.\d+)?)([a-z%]*)$/i);
+        if (!match) {
+            return null;
+        }
+        return {
+            value: Number.parseFloat(match[1]),
+            unit: match[2] || ''
+        };
+    }
+
+    function detectCommonUnit(lengths) {
+        if (!lengths) {
+            return '';
+        }
+        const keys = ['top', 'right', 'bottom', 'left'];
+        const units = keys
+            .map((key) => (lengths[key] && lengths[key].unit ? lengths[key].unit : ''))
+            .filter((unit) => unit);
+        if (!units.length) {
+            return '';
+        }
+        return units.every((unit) => unit === units[0]) ? units[0] : units[0];
+    }
+
+    function createViewBoxStorageKey(basePath) {
+        const source = typeof basePath === 'string' ? basePath.trim() : '';
+        if (!source) {
+            return VIEW_BOX_STORAGE_PREFIX;
+        }
+        return `${VIEW_BOX_STORAGE_PREFIX}:${source}`;
+    }
+
+    function readStoredViewBox(key) {
+        if (typeof window === 'undefined' || !window.localStorage || !key) {
+            return '';
+        }
+        try {
+            return window.localStorage.getItem(key) || '';
+        } catch (error) {
+            console.warn('object-view-boxの読み込みに失敗しました:', error);
+            return '';
+        }
+    }
+
+    function writeStoredViewBox(key, value) {
+        if (typeof window === 'undefined' || !window.localStorage || !key) {
+            return;
+        }
+        try {
+            if (!value) {
+                window.localStorage.removeItem(key);
+            } else {
+                window.localStorage.setItem(key, value);
+            }
+        } catch (error) {
+            console.warn('object-view-boxの保存に失敗しました:', error);
+        }
+    }
 
     const storageUtils = window.galleryStorageUtils || null;
 
@@ -383,13 +552,25 @@
         uploadCsvButton: document.getElementById('upload-csv'),
         uploadCsvInput: document.getElementById('upload-csv-input'),
         storageStatus: document.getElementById('storage-status'),
-        summary: document.getElementById('gallery-summary')
+        summary: document.getElementById('gallery-summary'),
+        viewBoxContainer: document.getElementById('viewbox-controls'),
+        viewBoxTopInput: document.getElementById('viewbox-top'),
+        viewBoxLeftInput: document.getElementById('viewbox-left'),
+        viewBoxHeightInput: document.getElementById('viewbox-height'),
+        viewBoxWidthInput: document.getElementById('viewbox-width'),
+        viewBoxApplyButton: document.getElementById('viewbox-apply'),
+        viewBoxResetButton: document.getElementById('viewbox-reset'),
+        viewBoxStatus: document.getElementById('viewbox-status')
     };
+
+    const viewBoxStorageKey = createViewBoxStorageKey(initialCsvPath);
 
     if (dom.uploadCsvButton) {
         dom.uploadCsvButton.disabled = true;
         dom.uploadCsvButton.title = 'ローカルCSVのインポートは無効化されています';
     }
+
+    setupViewBoxControls();
 
     if (!dom.gallery) {
         return;
@@ -582,6 +763,352 @@
         } catch (error) {
             console.warn('CSVパスの解決に失敗しました:', error);
             return trimmed.replace(/^\/+/, '');
+        }
+    }
+
+    function setupViewBoxControls() {
+        const topInput = dom.viewBoxTopInput || null;
+        const leftInput = dom.viewBoxLeftInput || null;
+        const heightInput = dom.viewBoxHeightInput || null;
+        const widthInput = dom.viewBoxWidthInput || null;
+        const applyButton = dom.viewBoxApplyButton || null;
+        const resetButton = dom.viewBoxResetButton || null;
+        const statusEl = dom.viewBoxStatus || null;
+
+        const rawDefault =
+            (body.dataset && body.dataset.defaultItemImageViewBox) ||
+            body.style.getPropertyValue('--item-image-view-box') ||
+            '';
+        const defaultValue = sanitizeViewBoxValue(rawDefault) || VIEW_BOX_FALLBACK;
+        const rawStored = readStoredViewBox(viewBoxStorageKey);
+        const storedValue = sanitizeViewBoxValue(rawStored);
+        if (rawStored && !storedValue) {
+            writeStoredViewBox(viewBoxStorageKey, '');
+        }
+
+        let initialValue = storedValue || defaultValue;
+        let lastParsedLengths = null;
+        let viewBoxUnit = '';
+        let imageDimensions = null;
+
+        function updateStatus(message, type = 'info') {
+            if (!statusEl) {
+                return;
+            }
+            statusEl.textContent = message;
+            const isError = type === 'error';
+            statusEl.classList.toggle('viewbox-status--error', isError);
+            statusEl.classList.toggle('viewbox-status--visible', Boolean(message));
+        }
+
+        function persistValue(value) {
+            if (!value || value === defaultValue) {
+                writeStoredViewBox(viewBoxStorageKey, '');
+            } else {
+                writeStoredViewBox(viewBoxStorageKey, value);
+            }
+        }
+
+        function formatNumber(value) {
+            if (!Number.isFinite(value)) {
+                return '';
+            }
+            const rounded = Math.round(value * 1000) / 1000;
+            if (Number.isInteger(rounded)) {
+                return String(rounded);
+            }
+            return rounded.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+        }
+
+        function setNumberInput(input, value) {
+            if (!input) {
+                return;
+            }
+            if (!Number.isFinite(value)) {
+                input.value = '';
+                return;
+            }
+            input.value = formatNumber(Math.max(0, value));
+        }
+
+        function ensureParsedLengths(value) {
+            const components = parseViewBoxComponents(value);
+            if (!components) {
+                return null;
+            }
+            const keys = ['top', 'right', 'bottom', 'left'];
+            const lengths = {};
+            for (const key of keys) {
+                const parsed = parseLengthValue(components[key]);
+                if (!parsed || !Number.isFinite(parsed.value)) {
+                    return null;
+                }
+                const normalizedUnit = parsed.unit || '';
+                lengths[key] = {
+                    value: parsed.value,
+                    unit: normalizedUnit
+                };
+            }
+            let detectedUnit = detectCommonUnit(lengths);
+            if (!detectedUnit) {
+                detectedUnit = viewBoxUnit || 'px';
+            }
+            if (!detectedUnit) {
+                detectedUnit = 'px';
+            }
+            keys.forEach((key) => {
+                lengths[key].unit = detectedUnit;
+            });
+            lastParsedLengths = lengths;
+            viewBoxUnit = detectedUnit;
+            return lengths;
+        }
+
+        function updateSizeInputs() {
+            if (!widthInput || !heightInput) {
+                return;
+            }
+            if (!imageDimensions || !lastParsedLengths) {
+                setNumberInput(widthInput, Number.NaN);
+                setNumberInput(heightInput, Number.NaN);
+                return;
+            }
+            const widthValue = Math.max(
+                imageDimensions.width - lastParsedLengths.left.value - lastParsedLengths.right.value,
+                0
+            );
+            const heightValue = Math.max(
+                imageDimensions.height - lastParsedLengths.top.value - lastParsedLengths.bottom.value,
+                0
+            );
+            setNumberInput(widthInput, widthValue);
+            setNumberInput(heightInput, heightValue);
+        }
+
+        function syncInputsFromParsedLengths(lengths) {
+            if (!lengths) {
+                return;
+            }
+            if (topInput) {
+                setNumberInput(topInput, lengths.top.value);
+            }
+            if (leftInput) {
+                setNumberInput(leftInput, lengths.left.value);
+            }
+            updateSizeInputs();
+        }
+
+        function applyViewBoxString(value, { persist = true, syncInputs = true } = {}) {
+            const sanitized = sanitizeViewBoxValue(value);
+            if (!sanitized) {
+                return false;
+            }
+            const lengths = ensureParsedLengths(sanitized);
+            if (!lengths) {
+                return false;
+            }
+            body.style.setProperty('--item-image-view-box', sanitized);
+            if (persist) {
+                persistValue(sanitized);
+            }
+            if (syncInputs) {
+                syncInputsFromParsedLengths(lengths);
+            } else {
+                updateSizeInputs();
+            }
+            return true;
+        }
+
+        const hasInputs = Boolean(topInput && leftInput && heightInput && widthInput);
+
+        if (!applyViewBoxString(initialValue, { persist: false, syncInputs: hasInputs })) {
+            initialValue = defaultValue;
+            if (!applyViewBoxString(defaultValue, { persist: false, syncInputs: hasInputs })) {
+                applyViewBoxString(VIEW_BOX_FALLBACK, { persist: false, syncInputs: hasInputs });
+            }
+            if (storedValue) {
+                persistValue('');
+            }
+        }
+
+        if (!hasInputs) {
+            return;
+        }
+
+        function clearStatus() {
+            updateStatus('');
+            [topInput, leftInput, heightInput, widthInput].forEach((input) => {
+                if (input) {
+                    input.setCustomValidity('');
+                }
+            });
+        }
+
+        function readNumericInput(input) {
+            if (!input) {
+                return Number.NaN;
+            }
+            const { value } = input;
+            if (value == null || value === '') {
+                return Number.NaN;
+            }
+            const parsed = Number.parseFloat(value);
+            return Number.isFinite(parsed) ? parsed : Number.NaN;
+        }
+
+        function normalizeUnit(unit) {
+            if (typeof unit === 'string' && unit.trim()) {
+                return unit.trim();
+            }
+            return 'px';
+        }
+
+        function formatInsetString(lengthValues, unit) {
+            const normalizedUnit = normalizeUnit(unit);
+            const keys = ['top', 'right', 'bottom', 'left'];
+            const parts = keys.map((key) => {
+                const number = Number.isFinite(lengthValues[key]) ? Math.max(0, lengthValues[key]) : 0;
+                const rounded = Math.round(number * 1000) / 1000;
+                const text = Number.isInteger(rounded)
+                    ? String(rounded)
+                    : rounded.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+                return `${text}${normalizedUnit}`;
+            });
+            return `inset(${parts.join(' ')})`;
+        }
+
+        function setImageDimensions(width, height) {
+            const w = Number(width);
+            const h = Number(height);
+            if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+                return;
+            }
+            const changed = !imageDimensions || imageDimensions.width !== w || imageDimensions.height !== h;
+            imageDimensions = { width: w, height: h };
+            if (changed || !widthInput.value || !heightInput.value) {
+                updateSizeInputs();
+            }
+        }
+
+        function resolveImageDimensions() {
+            if (imageDimensions && imageDimensions.width > 0 && imageDimensions.height > 0) {
+                return imageDimensions;
+            }
+            if (!dom.gallery) {
+                return imageDimensions;
+            }
+            const candidate = dom.gallery.querySelector('img');
+            if (candidate && candidate.naturalWidth && candidate.naturalHeight) {
+                setImageDimensions(candidate.naturalWidth, candidate.naturalHeight);
+            }
+            return imageDimensions;
+        }
+
+        function handleImageLoad(event) {
+            const target = event.target;
+            if (!target || target.tagName !== 'IMG') {
+                return;
+            }
+            if (dom.gallery && dom.gallery.contains(target)) {
+                setImageDimensions(target.naturalWidth, target.naturalHeight);
+            }
+        }
+
+        document.addEventListener('load', handleImageLoad, true);
+        resolveImageDimensions();
+
+        const inputs = [topInput, leftInput, heightInput, widthInput];
+        inputs.forEach((input) => {
+            if (!input) {
+                return;
+            }
+            input.addEventListener('input', () => {
+                updateStatus('');
+                input.setCustomValidity('');
+            });
+            input.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    handleApply();
+                }
+            });
+        });
+
+        function handleApply() {
+            clearStatus();
+            const dimensions = resolveImageDimensions();
+            if (!dimensions) {
+                updateStatus('画像の読み込み完了後に設定してください。', 'error');
+                return;
+            }
+
+            const topValue = readNumericInput(topInput);
+            if (!Number.isFinite(topValue) || topValue < 0) {
+                return reportInputError(topInput, '上方向の値には0以上の数値を入力してください。');
+            }
+
+            const leftValue = readNumericInput(leftInput);
+            if (!Number.isFinite(leftValue) || leftValue < 0) {
+                return reportInputError(leftInput, '左方向の値には0以上の数値を入力してください。');
+            }
+
+            const heightValue = readNumericInput(heightInput);
+            if (!Number.isFinite(heightValue) || heightValue <= 0) {
+                return reportInputError(heightInput, '縦幅には0より大きい数値を入力してください。');
+            }
+
+            const widthValue = readNumericInput(widthInput);
+            if (!Number.isFinite(widthValue) || widthValue <= 0) {
+                return reportInputError(widthInput, '横幅には0より大きい数値を入力してください。');
+            }
+
+            if (topValue + heightValue > dimensions.height + 1e-6) {
+                return reportInputError(heightInput, '縦幅が画像サイズを超えています。');
+            }
+
+            if (leftValue + widthValue > dimensions.width + 1e-6) {
+                return reportInputError(widthInput, '横幅が画像サイズを超えています。');
+            }
+
+            const rightValue = Math.max(dimensions.width - leftValue - widthValue, 0);
+            const bottomValue = Math.max(dimensions.height - topValue - heightValue, 0);
+
+            const unit = viewBoxUnit || 'px';
+            const viewBoxString = formatInsetString(
+                {
+                    top: topValue,
+                    right: rightValue,
+                    bottom: bottomValue,
+                    left: leftValue
+                },
+                unit
+            );
+
+            if (!applyViewBoxString(viewBoxString)) {
+                updateStatus('object-view-boxの適用に失敗しました。', 'error');
+                return;
+            }
+            updateStatus('画像表示範囲を適用しました');
+        }
+
+        function reportInputError(input, message) {
+            if (input) {
+                input.setCustomValidity(message);
+                input.reportValidity();
+            }
+            updateStatus(message, 'error');
+        }
+
+        if (applyButton) {
+            applyButton.addEventListener('click', handleApply);
+        }
+
+        if (resetButton) {
+            resetButton.addEventListener('click', () => {
+                clearStatus();
+                applyViewBoxString(defaultValue, { persist: true, syncInputs: true });
+                updateStatus('初期値に戻しました');
+            });
         }
     }
 
