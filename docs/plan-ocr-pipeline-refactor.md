@@ -132,8 +132,9 @@ def process_images_command(args: Namespace) -> int:
 
 各ステップで既存 API (`process_images`, `ocr_and_match`) は旧引数・戻り値を維持したラッパーとして残し、内部実装を新モジュールへ委譲することで段階的移行を可能にする。
 
-## 4. 実施状況メモ（2024-05-07）
+## 4. 実施状況メモ（2024-05-08）
 - Step 1 〜 Step 4 を実装済み。`relic_pipeline/ocr`, `matching`, `io`、`settings` を新設し、既存関数から新モジュールへ委譲する構造に切り替えた。
 - `preprocess.prepare_crop_for_ocr` は新しい `prepare_for_ocr` を呼ぶラッパーとして維持し、`ocr_and_match` は `batch_recognize` と `MatchResult` に基づく実装へ更新済み。
 - CSV 組み立てと書き出しは `relic_pipeline.io.exporter` へ移行し、`process_images` は `ExportOptions` を介して行単位に委譲する。
-- 次のステップ候補: CLI エントリ (`cli/commands.py`) の整備と設定オブジェクトの利用範囲拡張、`matching/levels` のユニットテスト追加。
+- CLI 層を切り出すため `relic_pipeline/cli/commands.py` を新設。`match_and_export.py` に `build_arg_parser` / `main` を追加し、既存処理を `process_images_command` から呼び出す構成へ整理。列表示デフォルトは `relic_pipeline.settings.DEFAULT_COLUMN_VISIBILITY` に集約し、`tests/cli/test_commands.py` で CLI の引数処理を検証。
+- 次のステップ候補: CLI コマンドを `gui_app.py` など他エントリから再利用できるようアダプタ層を整備、`matching/levels` のユニットテスト追加、設定データクラスを `match_and_export.process_images` の引数へ順次導入。
