@@ -1137,6 +1137,23 @@ class RelicGuiApp:
         if self.queue_tree is None:
             return
         self._hide_inline_editors()
+        # Windows のフルパスを iid に使うと内部的に別 ID に置き換わるケースがあるため、
+        # 選択状態をパス列から復元できるように保持しておく。
+        selected_paths: set[str] = set()
+        try:
+            current_selection = self.queue_tree.selection()
+        except tk.TclError:
+            current_selection = ()
+        for item_id in current_selection:
+            if not self.queue_tree.exists(item_id):
+                continue
+            try:
+                path_value = self.queue_tree.set(item_id, "fullpath")
+            except tk.TclError:
+                continue
+            if isinstance(path_value, str) and path_value:
+                selected_paths.add(path_value)
+
         self.queue_tree.delete(*self.queue_tree.get_children())
         default_type = self.relic_type_options[0]
         default_label = self.relic_type_labels.get(default_type, default_type)
@@ -1150,12 +1167,16 @@ class RelicGuiApp:
             if relic_type not in self.relic_type_options:
                 relic_type = default_type
             relic_label = self.relic_type_labels.get(relic_type, default_label)
-            self.queue_tree.insert(
+            item_id = self.queue_tree.insert(
                 "",
                 "end",
-                iid=path,
                 values=(name, color, relic_label, path),
             )
+            if path in selected_paths:
+                try:
+                    self.queue_tree.selection_add(item_id)
+                except tk.TclError:
+                    pass
         self._update_queue_controls()
 
     def _schedule_results_refresh(self) -> None:
