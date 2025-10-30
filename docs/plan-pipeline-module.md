@@ -5,15 +5,46 @@
 - 動画ファイル収集から HTML 出力までの依存方向を固定し、責務ごとのモジュール境界を明確にする。
 - 既存の `main()` を薄いエントリーポイントとして保ちつつ、再利用可能な `run_pipeline` API を設計する。
 
-## 実装状況まとめ（2025-10-30 現在）
-- `pipeline/inputs.py` に `_gather_video_files` / `_build_override_map` 相当の `gather_video_files` と `build_override_map` を移設し、Path ベースでの正規化を統一した。
-- `pipeline/tasks.py` で `VideoTask` dataclass、`create_tasks`、`decide_item_color` を公開し、推定色ロジックを GUI/CLI 共通化した。
-- `create_tasks` は渡された動画パスを必ず絶対パスへ正規化してからタスクを構築するため、`item_color_overrides` の絶対パス指定と確実に
-  照合できる。
-- `pipeline/progress.py` で `ProgressReporter` プロトコルを定義し、`CallbackProgressReporter` / `CliProgressReporter` / `NullProgressReporter` を実装して UI との結合度を下げた。
-- `pipeline/processors.py` で単一動画処理（フレーム抽出→OCR→CSV 整形）を `process_video` として切り出し、進行通知を引数のレポーターに移譲した。
-- `pipeline/pipeline.py` に `PipelineSettings` / `PipelineResult` / `run_pipeline` を実装し、`tasks` 引数で事前生成済みタスクを受け取れるようにした。戻り値には HTML の生成結果と経過時間を含めている。
-- `main.py` は `PipelineSettings` を組み立てて `run_pipeline` を呼ぶ薄いエントリーポイントとなり、GUI (`gui_app.py`) も同 API を共有している。
+## 実装状況サマリー（2025-11-27 現在）
+
+| 領域 | 状態 | メモ |
+| --- | --- | --- |
+| 入力正規化 (`pipeline/inputs.py`) | ✅ 完了 | `gather_video_files` / `build_override_map` を移設し、Path・文字列・`~` 指定を一貫して絶対パスへ正規化できるよう整理済み。 |
+| タスク生成 (`pipeline/tasks.py`) | ✅ 完了 | `VideoTask` dataclass と `create_tasks` / `decide_item_color` を公開し、CLI/GUI 共通で色推定とタスク構築を再利用できる。 |
+| 進行管理 (`pipeline/progress.py`) | ✅ 完了 | `ProgressReporter` プロトコルと CLI / コールバック実装を追加し、UI からの進行通知注入を可能にした。 |
+| 処理フロー (`pipeline/processors.py`) | ✅ 完了 | 動画単位の抽出→OCR→CSV 化を `process_video` に集約し、進行通知・出力ディレクトリ作成をモジュール化。 |
+| オーケストレーション (`pipeline/pipeline.py`) | ✅ 完了 | `PipelineSettings` / `PipelineResult` / `run_pipeline` を実装し、タスク引き渡しと戻り値の構造化を完了。 |
+| エントリーポイント (`main.py`) | ✅ 完了 | `run_pipeline` を呼び出す薄いラッパーに置き換え、GUI (`gui_app.py`) との API 共有ができる状態。 |
+
+### 完了済みハイライト
+- 入力収集からタスク生成までのパス正規化を統一し、上書き指定と動画パスの突き合わせを絶対パスベースで行えるようになった。
+- `ProgressReporter` 抽象を導入したことで、CLI 表示と GUI コールバックを差し替え可能な構成へ移行済み。
+- `process_video` が生成物の相対パスを返却するため、`run_pipeline` でそのまま HTML 生成用データセットへ連携できる。
+
+## 進捗ログ
+
+| 日付 | トピック | メモ |
+| --- | --- | --- |
+| 2025-11-20 | Path 正規化の拡充 | `pipeline/inputs.py` / `pipeline/tasks.py` を Path・文字列両対応に見直し、`create_tasks` が常に絶対パスを保持するよう調整した。 |
+| 2025-11-27 | 計画書リフレッシュ | 進行状況をテーブル化し、ロードマップと次アクションを `plan-gallery-refactor.md` に倣って整理。 |
+
+## 実行計画
+
+### ロードマップ概要
+
+| ステップ | 状態 | 主な内容 |
+| --- | --- | --- |
+| 1 | ✅ 完了 | `_gather_video_files` / `_build_override_map` を `pipeline/inputs.py` へ移行し、Path 正規化を一元化。 |
+| 2 | ✅ 完了 | `VideoTask` dataclass と関連ロジックを `pipeline/tasks.py` へ切り出し、色推定とタスク生成を共通化。 |
+| 3 | ✅ 完了 | `ProgressReporter` 抽象と CLI / GUI 向け実装を `pipeline/progress.py` に追加し、進行通知の責務を分離。 |
+| 4 | ✅ 完了 | 動画処理本体を `pipeline/processors.py` に整理し、進行レポート注入ポイントを固定。 |
+| 5 | ✅ 完了 | `run_pipeline` と `PipelineSettings` / `PipelineResult` を実装し、入力→処理→HTML 出力のフローをモジュール結合。 |
+| 6 | ✅ 完了 | `main.py` / `gui_app.py` を `run_pipeline` 経由の薄いラッパーに刷新し、再利用性を高めた。 |
+
+### フォーカスすべき次アクション
+1. **タスク生成まわりのテスト追加**: `create_tasks` と `decide_item_color` が相対パスや `Path` 入力でも上書き設定を解決できることを確認するユニットテストを `tests/pipeline/` 配下に整備する。
+2. **公開 API 解説の補強**: カスタムタスクを渡す利用例をドキュメントへ追記し、絶対パスへ正規化された構造体の見本を示す。
+3. **正規化ロジックの回帰テスト**: `Path` 指定や `~` 展開が想定通り解決されることを確認する回帰テストを追加し、今後のリファクタリングでも挙動を固定する。
 
 ## 現状整理（`main.py` の責務）
 
@@ -99,6 +130,3 @@ run_pipeline(settings=settings, reporter=reporter, tasks=custom_tasks)
 - タスク生成や進行レポートを単体テストしやすくなり、エッジケース（空ディレクトリ、上書き指定ミス等）を早期検知できる。
 - 将来的に並列処理やキューイングを導入する際も、`processors.py` の実装差し替えで対応しやすくなる。
 
-## 次のステップ案
-- `create_tasks` と `decide_item_color` の組み合わせを対象に、相対パス入力でも色上書きが適用されることを確認する単体テストを追加する。
-- 公開 API 例に、絶対パスへ正規化されたタスクがどのように構成されるかを解説する節を補足し、利用者がカスタムタスクを構築する際の指針を明確化する。

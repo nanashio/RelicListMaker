@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Mapping, Optional
 
 from extract_frames import extract_and_crop
 from match_and_export import process_images
@@ -16,7 +16,7 @@ def process_video(
     task: VideoTask,
     *,
     ocr_upsample: float,
-    override_colors: dict[Path, str],
+    override_colors: Mapping[Path, str],
     save_full_frames: bool,
     csv_column_visibility: Optional[dict[str, object]],
     reporter: ProgressReporter,
