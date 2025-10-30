@@ -46,14 +46,22 @@ def detect_item_color(name: str) -> Optional[str]:
 
 
 def create_video_task(video_path: Path, result_dir: Path) -> VideoTask:
-    base_name = video_path.stem
-    output_dir = result_dir / base_name
+    source_path = Path(video_path)
+    if source_path.is_absolute():
+        source_path = source_path.resolve()
+    else:
+        source_path = (Path.cwd() / source_path).resolve()
+
+    result_root = Path(result_dir).resolve()
+
+    base_name = source_path.stem
+    output_dir = result_root / base_name
     frames_dir = output_dir / "frames"
     crops_dir = output_dir / "crops"
     csv_path = output_dir / f"{base_name}.csv"
     corrections_csv = output_dir / "corrections.csv"
     return VideoTask(
-        source_path=video_path,
+        source_path=source_path,
         base_name=base_name,
         output_dir=output_dir,
         frames_dir=frames_dir,
@@ -64,7 +72,7 @@ def create_video_task(video_path: Path, result_dir: Path) -> VideoTask:
 
 
 def create_tasks(video_paths: Iterable[Path], result_dir: Path) -> list[VideoTask]:
-    return [create_video_task(path, result_dir) for path in video_paths]
+    return [create_video_task(Path(path), result_dir) for path in video_paths]
 
 
 def decide_item_color(task: VideoTask, overrides: dict[Path, str]) -> Optional[str]:

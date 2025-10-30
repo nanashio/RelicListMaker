@@ -8,6 +8,8 @@
 ## 実装状況まとめ（2025-10-30 現在）
 - `pipeline/inputs.py` に `_gather_video_files` / `_build_override_map` 相当の `gather_video_files` と `build_override_map` を移設し、Path ベースでの正規化を統一した。
 - `pipeline/tasks.py` で `VideoTask` dataclass、`create_tasks`、`decide_item_color` を公開し、推定色ロジックを GUI/CLI 共通化した。
+- `create_tasks` は渡された動画パスを必ず絶対パスへ正規化してからタスクを構築するため、`item_color_overrides` の絶対パス指定と確実に
+  照合できる。
 - `pipeline/progress.py` で `ProgressReporter` プロトコルを定義し、`CallbackProgressReporter` / `CliProgressReporter` / `NullProgressReporter` を実装して UI との結合度を下げた。
 - `pipeline/processors.py` で単一動画処理（フレーム抽出→OCR→CSV 整形）を `process_video` として切り出し、進行通知を引数のレポーターに移譲した。
 - `pipeline/pipeline.py` に `PipelineSettings` / `PipelineResult` / `run_pipeline` を実装し、`tasks` 引数で事前生成済みタスクを受け取れるようにした。戻り値には HTML の生成結果と経過時間を含めている。
