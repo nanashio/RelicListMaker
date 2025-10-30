@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional
 
 from generate_gallery import generate_html
 from relic_data import load_master_csv
@@ -13,7 +13,7 @@ from resource_paths import templates_path
 from .inputs import build_override_map, gather_video_files
 from .processors import process_video
 from .progress import NullProgressReporter, ProgressReporter
-from .tasks import create_tasks
+from .tasks import VideoTask, create_tasks
 
 DEFAULT_VIDEO_DIR = "videos"
 DEFAULT_RESULT_DIR = "results"
@@ -47,7 +47,11 @@ class PipelineResult:
     elapsed_seconds: float
 
 
-def run_pipeline(settings: PipelineSettings, reporter: Optional[ProgressReporter] = None) -> PipelineResult:
+def run_pipeline(
+    settings: PipelineSettings,
+    reporter: Optional[ProgressReporter] = None,
+    tasks: Optional[Iterable[VideoTask]] = None,
+) -> PipelineResult:
     reporter = reporter or NullProgressReporter()
     start_time = time.time()
     print("[INFO] 動画ごとの処理開始...")
@@ -59,19 +63,24 @@ def run_pipeline(settings: PipelineSettings, reporter: Optional[ProgressReporter
     master_options = load_master_csv(master_src)
     dataset_entries: list[dict[str, str]] = []
 
-    video_dir_path = settings.video_dir
-    selected_videos = gather_video_files(video_dir_path, settings.video_files)
     override_map = build_override_map(settings.item_color_overrides)
 
-    total_steps = len(selected_videos) * 2 + 1 if selected_videos else 1
+    if tasks is None:
+        video_dir_path = settings.video_dir
+        selected_videos = gather_video_files(video_dir_path, settings.video_files)
+        tasks_to_run = create_tasks(selected_videos, result_dir)
+    else:
+        tasks_to_run = list(tasks)
+
+    total_steps = len(tasks_to_run) * 2 + 1 if tasks_to_run else 1
     reporter.prepare(total_steps)
     reporter.step("動画処理を準備中...")
 
-    if not selected_videos:
+    if not tasks_to_run:
         print("[WARN] 処理対象の動画が見つかりません。")
         reporter.step("処理対象の動画が見つかりませんでした")
 
-    for task in create_tasks(selected_videos, result_dir):
+    for task in tasks_to_run:
         entry = process_video(
             task,
             ocr_upsample=settings.ocr_upsample,

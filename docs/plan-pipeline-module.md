@@ -5,6 +5,14 @@
 - 動画ファイル収集から HTML 出力までの依存方向を固定し、責務ごとのモジュール境界を明確にする。
 - 既存の `main()` を薄いエントリーポイントとして保ちつつ、再利用可能な `run_pipeline` API を設計する。
 
+## 実装状況まとめ（2025-10-30 現在）
+- `pipeline/inputs.py` に `_gather_video_files` / `_build_override_map` 相当の `gather_video_files` と `build_override_map` を移設し、Path ベースでの正規化を統一した。
+- `pipeline/tasks.py` で `VideoTask` dataclass、`create_tasks`、`decide_item_color` を公開し、推定色ロジックを GUI/CLI 共通化した。
+- `pipeline/progress.py` で `ProgressReporter` プロトコルを定義し、`CallbackProgressReporter` / `CliProgressReporter` / `NullProgressReporter` を実装して UI との結合度を下げた。
+- `pipeline/processors.py` で単一動画処理（フレーム抽出→OCR→CSV 整形）を `process_video` として切り出し、進行通知を引数のレポーターに移譲した。
+- `pipeline/pipeline.py` に `PipelineSettings` / `PipelineResult` / `run_pipeline` を実装し、`tasks` 引数で事前生成済みタスクを受け取れるようにした。戻り値には HTML の生成結果と経過時間を含めている。
+- `main.py` は `PipelineSettings` を組み立てて `run_pipeline` を呼ぶ薄いエントリーポイントとなり、GUI (`gui_app.py`) も同 API を共有している。
+
 ## 現状整理（`main.py` の責務）
 
 ### ユーティリティ関数と役割
@@ -29,7 +37,7 @@ pipeline/
   tasks.py        # VideoTask 定義とタスク派生ロジック（_create_video_task, _decide_item_color を移行）
   progress.py     # ProgressReporter 抽象・report/advance 集約、UI/CLI 連携ポイント
   processors.py   # _process_single_video の分割版。抽出・OCR 呼び出しと結果整形を担当
-  pipeline.py     # run_pipeline(tasks, reporters, settings) のエントリーポイント
+  pipeline.py     # run_pipeline(settings, reporter, tasks) のエントリーポイント
 ```
 - 依存方向は **入力収集 → タスク生成 → 処理 → HTML 出力** の一方向を維持する。
   - `inputs.py` はファイルシステム情報のみを扱い、下位モジュールに依存しない。
@@ -43,13 +51,16 @@ pipeline/
 2. **タスク生成の分離**: `VideoTask` dataclass と `_create_video_task` / `_decide_item_color` を `pipeline/tasks.py` へ移し、入力ステップから得た動画リストを `create_tasks()`（仮）でまとめて生成する。
 3. **進行レポート抽象化**: `report` / `advance` 関数を `pipeline/progress.py` に抽出し、CLI 用（標準出力）と GUI 用（コールバックラッパー）の 2 実装を用意する。
 4. **処理フローの再編**: `_process_single_video` を分割し、抽出／OCR 処理呼び出しと HTML 出力準備を `pipeline/processors.py` に配置する。進行レポートは `ProgressReporter` を介して通知する。
-5. **パイプライン統合**: `pipeline/pipeline.py` に `run_pipeline(settings, reporters)` を実装し、入力取得→タスク展開→処理→`generate_html` の流れを記述する。
+5. **パイプライン統合**: `pipeline/pipeline.py` に `run_pipeline(settings, reporter, tasks=None)` を実装し、入力取得→タスク展開→処理→`generate_html` の流れを記述する。
 6. **`main()` の薄型化**: 上記 API を利用するよう `main()` を更新し、CLI 引数や環境設定をまとめて `run_pipeline` に渡すだけの構造へ変更する。GUI 連携も同 API を再利用できるようにする。
 
 ## 公開 API 方針
 ```python
-from pipeline.pipeline import run_pipeline, PipelineSettings
-from pipeline.progress import CliProgressReporter, CallbackProgressReporter
+from pathlib import Path
+
+from pipeline.pipeline import PipelineSettings, run_pipeline
+from pipeline.progress import CallbackProgressReporter, CliProgressReporter
+from pipeline.tasks import create_tasks
 
 settings = PipelineSettings(
     video_dir="videos",
@@ -61,10 +72,18 @@ settings = PipelineSettings(
 )
 
 reporter = CliProgressReporter(callback=optional_progress_callback)
+# 標準の入力収集を使う場合
 run_pipeline(settings=settings, reporter=reporter)
+
+# 事前にタスクを構築して渡す場合
+custom_tasks = create_tasks(
+    video_paths=[Path("videos/sample.mp4")],
+    result_dir=settings.result_dir,
+)
+run_pipeline(settings=settings, reporter=reporter, tasks=custom_tasks)
 ```
 - `PipelineSettings` は `main()` が現在受け取っているオプションを集約するデータクラスとし、テストからも再利用しやすくする。
-- `run_pipeline(tasks=None, reporter=None)` のように、事前に生成したタスクを渡せる拡張余地を残す。タスクを省略した場合は `inputs` → `tasks` の順に生成する。
+- `run_pipeline(settings, reporter=None, tasks=None)` の形で、事前に生成したタスクを渡せるようにした。タスクを省略した場合は `inputs` → `tasks` の順に生成する。
 - 進行レポーターは `CliProgressReporter`（標準出力主体）と `CallbackProgressReporter`（GUI からのコールバック受け入れ）など複数実装を提供し、`run_pipeline` 内では抽象インターフェースのみを参照する。
 - `run_pipeline` は最終的に `generate_html` から返ってくる主要成果物（CSV パスや HTML パス）を返値として返却し、外部の UI から結果パスを容易に参照できるようにする。
 
