@@ -131,3 +131,9 @@ def process_images_command(args: Namespace) -> int:
 - **Step 4: 出力** — `process_images` の CSV 組み立てを `io/exporter` へ移譲。旧関数は `build_row` / `write_csv` を呼ぶ構造に切り替え、CLI からの呼び出しシグネチャを変更せずに差し替える。
 
 各ステップで既存 API (`process_images`, `ocr_and_match`) は旧引数・戻り値を維持したラッパーとして残し、内部実装を新モジュールへ委譲することで段階的移行を可能にする。
+
+## 4. 実施状況メモ（2024-05-07）
+- Step 1 〜 Step 4 を実装済み。`relic_pipeline/ocr`, `matching`, `io`、`settings` を新設し、既存関数から新モジュールへ委譲する構造に切り替えた。
+- `preprocess.prepare_crop_for_ocr` は新しい `prepare_for_ocr` を呼ぶラッパーとして維持し、`ocr_and_match` は `batch_recognize` と `MatchResult` に基づく実装へ更新済み。
+- CSV 組み立てと書き出しは `relic_pipeline.io.exporter` へ移行し、`process_images` は `ExportOptions` を介して行単位に委譲する。
+- 次のステップ候補: CLI エントリ (`cli/commands.py`) の整備と設定オブジェクトの利用範囲拡張、`matching/levels` のユニットテスト追加。
