@@ -30,6 +30,7 @@
 | 2025-11-20 | Path 正規化の拡充 | `pipeline/inputs.py` / `pipeline/tasks.py` を Path・文字列両対応に見直し、`create_tasks` が常に絶対パスを保持するよう調整した。 |
 | 2025-11-27 | 計画書リフレッシュ | 進行状況をテーブル化し、ロードマップと次アクションを `plan-gallery-refactor.md` に倣って整理。 |
 | 2025-12-05 | 入力/タスクのユニットテスト整備 | `tests/pipeline/` を新設し、動画列挙・上書き解決・色推定の回帰テストを追加。README に API 使用例を追加し、外部スクリプトからの再利用手順を明確化。 |
+| 2025-12-06 | 進行レポーターのユニットテスト追加 | `tests/pipeline/test_progress.py` を追加し、`CallbackProgressReporter` と `CliProgressReporter` の通知回数・例外耐性を検証。 |
 
 ## 実行計画
 
@@ -45,9 +46,9 @@
 | 6 | ✅ 完了 | `main.py` / `gui_app.py` を `run_pipeline` 経由の薄いラッパーに刷新し、再利用性を高めた。 |
 
 ### フォーカスすべき次アクション
-1. **進行レポーターのカバレッジ拡充**: `CliProgressReporter` / `CallbackProgressReporter` の例外耐性や通知回数を確認するユニットテストを追加し、GUI 連携時の回帰を防止する。
-2. **`process_video` の I/O 疎通テスト**: 小さなダミー画像セットを用意し、フレーム抽出と CSV 出力が想定どおり行われることを検証する統合テストを `tests/pipeline/` に追加する。
-3. **タスクオーバーライドのドキュメント化**: README の API セクションに、色上書き辞書を渡すケーススタディを追記し、運用フローに合わせたガイドを作成する。
+1. ✅ **進行レポーターのカバレッジ拡充**: `tests/pipeline/test_progress.py` で `CliProgressReporter` / `CallbackProgressReporter` の通知と例外ハンドリングを検証済み。
+2. ⏭ **`process_video` の I/O 疎通テスト**: 小さなダミー画像セットを用意し、フレーム抽出と CSV 出力が想定どおり行われることを検証する統合テストを `tests/pipeline/` に追加する。
+3. ⏭ **タスクオーバーライドのドキュメント化**: README の API セクションに、色上書き辞書を渡すケーススタディを追記し、運用フローに合わせたガイドを作成する。
 
 ## 現状整理（`main.py` の責務）
 
