@@ -18,7 +18,13 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk, font
 from typing import Iterator, Optional, Sequence
 
-import main as pipeline_main
+from pipeline import (
+    DEFAULT_OCR_UPSAMPLE,
+    CallbackProgressReporter,
+    PipelineSettings,
+    detect_item_color,
+    run_pipeline,
+)
 from merge_results import MergeResultsError, merge_results
 from viewer_server import ServerContext, create_server, _open_browser
 from version_info import get_version
@@ -354,7 +360,7 @@ class RelicGuiApp:
         self.base_dir = _default_base_dir()
         self.video_dir_var = tk.StringVar(value="videos")
         self.results_dir_var = tk.StringVar(value="results")
-        self.ocr_upsample_var = tk.StringVar(value=str(pipeline_main.OCR_UPSAMPLE))
+        self.ocr_upsample_var = tk.StringVar(value=str(DEFAULT_OCR_UPSAMPLE))
         self.server_host_var = tk.StringVar(value="127.0.0.1")
         self.server_port_var = tk.StringVar(value="0")
         self.open_browser_var = tk.BooleanVar(value=True)
@@ -1111,7 +1117,7 @@ class RelicGuiApp:
             return
         self._dropped_video_set.add(resolved)
         base_name = Path(resolved).stem
-        detected = pipeline_main.detect_item_color(base_name) or "none"
+        detected = detect_item_color(base_name) or "none"
         self._dropped_videos.append({"path": resolved, "color": detected})
 
     def _refresh_queue_view(self) -> None:
@@ -1532,16 +1538,17 @@ class RelicGuiApp:
         def worker() -> None:
             try:
                 with redirect_streams(self.log_queue):
-                    pipeline_main.main(
+                    settings = PipelineSettings(
                         video_dir=video_dir,
                         result_dir=results_dir,
                         ocr_upsample=ocr_value,
-                        progress_callback=progress_callback,
                         video_files=videos_to_process,
                         item_color_overrides=color_overrides,
                         save_full_frames=self.save_frames_var.get(),
                         csv_column_visibility=column_visibility,
                     )
+                    reporter = CallbackProgressReporter(callback=progress_callback)
+                    run_pipeline(settings=settings, reporter=reporter)
                 self.append_log("[GUI] 動画処理が完了しました")
             except Exception as exc:  # noqa: BLE001 - GUIログに表示するため広く捕捉
                 self.append_log("[ERROR] 動画処理中にエラーが発生しました")
