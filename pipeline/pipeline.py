@@ -22,11 +22,11 @@ DEFAULT_OCR_UPSAMPLE = 1.5
 
 @dataclass
 class PipelineSettings:
-    video_dir: Path = field(default_factory=lambda: Path(DEFAULT_VIDEO_DIR))
-    result_dir: Path = field(default_factory=lambda: Path(DEFAULT_RESULT_DIR))
+    video_dir: Path | str = field(default_factory=lambda: Path(DEFAULT_VIDEO_DIR))
+    result_dir: Path | str = field(default_factory=lambda: Path(DEFAULT_RESULT_DIR))
     ocr_upsample: float = DEFAULT_OCR_UPSAMPLE
-    video_files: Optional[list[str]] = None
-    item_color_overrides: Optional[dict[str, str]] = None
+    video_files: Optional[Iterable[str | Path]] = None
+    item_color_overrides: Optional[dict[str | Path, str]] = None
     save_full_frames: bool = False
     csv_column_visibility: Optional[dict[str, object]] = None
     item_image_view_box: Optional[str] = None

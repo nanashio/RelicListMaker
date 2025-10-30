@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Mapping, Optional
 
 
 COLOR_KEYWORDS = {
@@ -45,14 +45,18 @@ def detect_item_color(name: str) -> Optional[str]:
     return None
 
 
-def create_video_task(video_path: Path, result_dir: Path) -> VideoTask:
-    source_path = Path(video_path)
+def create_video_task(video_path: Path | str, result_dir: Path | str) -> VideoTask:
+    source_path = Path(video_path).expanduser()
     if source_path.is_absolute():
         source_path = source_path.resolve()
     else:
         source_path = (Path.cwd() / source_path).resolve()
 
-    result_root = Path(result_dir).resolve()
+    result_root = Path(result_dir).expanduser()
+    if result_root.is_absolute():
+        result_root = result_root.resolve(strict=False)
+    else:
+        result_root = (Path.cwd() / result_root).resolve(strict=False)
 
     base_name = source_path.stem
     output_dir = result_root / base_name
@@ -71,11 +75,11 @@ def create_video_task(video_path: Path, result_dir: Path) -> VideoTask:
     )
 
 
-def create_tasks(video_paths: Iterable[Path], result_dir: Path) -> list[VideoTask]:
-    return [create_video_task(Path(path), result_dir) for path in video_paths]
+def create_tasks(video_paths: Iterable[Path | str], result_dir: Path | str) -> list[VideoTask]:
+    return [create_video_task(path, result_dir) for path in video_paths]
 
 
-def decide_item_color(task: VideoTask, overrides: dict[Path, str]) -> Optional[str]:
+def decide_item_color(task: VideoTask, overrides: Mapping[Path, str]) -> Optional[str]:
     override = overrides.get(task.source_path)
     if override is not None:
         return None if override == "none" else override
