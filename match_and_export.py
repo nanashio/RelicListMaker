@@ -55,6 +55,32 @@ DEFAULT_COLUMN_VISIBILITY: dict[str, bool] = {
 }
 
 
+def _ensure_effect_slots(
+    row: dict[str, object], slot_range: range, column_flags: dict[str, bool]
+) -> None:
+    """不足している効果スロットの初期値を補完する."""
+
+    for idx in slot_range:
+        effect_key = f"Effect{idx}"
+        level_key = f"Effect{idx}Level"
+        status_key = f"Effect{idx}Status"
+
+        row.setdefault(effect_key, "-")
+        row.setdefault(level_key, "")
+        row.setdefault(status_key, "pending")
+
+        if column_flags.get("LevelOptions", True):
+            row.setdefault(f"Effect{idx}LevelOptions", "")
+        if column_flags.get("LevelCorrection", True):
+            row.setdefault(f"Effect{idx}LevelCorrection", "")
+        if column_flags.get("RawText", True):
+            row.setdefault(f"RawText{idx}", "")
+        if column_flags.get("Score", True):
+            row.setdefault(f"Effect{idx}Score", "")
+        if column_flags.get("Source", True):
+            row.setdefault(f"Effect{idx}Source", "")
+
+
 def scale_crop_boxes(boxes, scale=1.0):
     """拡大倍率に応じてcrop座標をスケーリング"""
     scaled = []
