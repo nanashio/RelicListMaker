@@ -115,6 +115,40 @@ python preprocess.py path/to/image.png --out preprocessed/
 ```
 生成された出力を確認し、しきい値やリサイズ係数などの調整に活用してください。
 
+### パイプライン API を直接呼び出す
+`pipeline` パッケージでは、CLI や GUI 以外のスクリプトからも解析処理を再利用できるように `run_pipeline` API を公開しています。
+標準の入力収集を利用する場合は、動画ディレクトリと結果ディレクトリを `PipelineSettings` へ指定するだけで処理を開始できます。
+
+```python
+from pipeline.pipeline import PipelineSettings, run_pipeline
+from pipeline.progress import CliProgressReporter
+
+settings = PipelineSettings(
+    video_dir="videos",
+    result_dir="results",
+    ocr_upsample=1.5,
+)
+
+reporter = CliProgressReporter()
+result = run_pipeline(settings=settings, reporter=reporter)
+print("viewer.html:", result.viewer_path)
+```
+
+既存の動画列挙処理ではなく、任意の動画を明示的に処理したい場合は `pipeline.tasks.create_tasks` でタスクを構築してから `run_pipeline`
+へ渡してください。タスクはすべて絶対パスに正規化されるため、上書き色指定（`item_color_overrides`）も絶対パスで渡すと一致判定が確実になります。
+
+```python
+from pathlib import Path
+
+from pipeline.pipeline import PipelineSettings, run_pipeline
+from pipeline.tasks import create_tasks
+
+settings = PipelineSettings(result_dir="results")
+custom_tasks = create_tasks([Path("videos/sample.mp4")], result_dir=settings.result_dir)
+
+run_pipeline(settings=settings, reporter=None, tasks=custom_tasks)
+```
+
 ## ライセンス
 - 配布物には Tesseract OCR (Apache License 2.0) が同梱されています。再配布時にはリポジトリ直下の `LICENSE` を同梱し、Tesseract OCR のライセンス要件に従ってください。詳細は `docs/THIRD_PARTY_LICENSES.md` も参照してください。
 
