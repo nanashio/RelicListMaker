@@ -2,9 +2,8 @@ import cv2
 import os
 import argparse
 
-DEFAULT_RESIZE_SCALE = 1.5
-GAUSSIAN_KERNEL_SIZE = (3, 3)
-MEDIAN_KERNEL_SIZE = 3
+from relic_pipeline.ocr.preprocess import prepare_for_ocr
+from relic_pipeline.settings import DEFAULT_RESIZE_SCALE
 
 
 def upscale_image(img, scale=2.0):
@@ -17,20 +16,12 @@ def prepare_crop_for_ocr(crop, resize_scale=DEFAULT_RESIZE_SCALE, apply_threshol
     if crop is None or crop.size == 0:
         return crop
 
-    processed = crop
-    if resize_scale and resize_scale != 1.0:
-        processed = upscale_image(processed, scale=resize_scale)
-
-    gray = cv2.cvtColor(processed, cv2.COLOR_BGR2GRAY) if processed.ndim == 3 else processed
-    blurred = cv2.GaussianBlur(gray, GAUSSIAN_KERNEL_SIZE, 0)
-
-    if apply_threshold:
-        _, blurred = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-    if denoise:
-        blurred = cv2.medianBlur(blurred, MEDIAN_KERNEL_SIZE)
-
-    return blurred
+    return prepare_for_ocr(
+        crop,
+        resize_scale=resize_scale,
+        apply_threshold=apply_threshold,
+        denoise=denoise,
+    )
 
 
 def preprocess_for_ocr(img_path, out_dir="preprocessed", scale=DEFAULT_RESIZE_SCALE, save=True):

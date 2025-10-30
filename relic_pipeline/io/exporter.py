@@ -1,0 +1,178 @@
+"""CSV export helpers for OCR pipeline results."""
+
+from __future__ import annotations
+
+import csv
+import re
+from pathlib import Path
+from typing import Iterable, Mapping, MutableMapping, Sequence
+
+from ..matching.levels import detect_level_from_text, find_level_candidates
+from ..matching.effects import MatchResult
+from ..settings import ExportOptions
+
+LEVEL_OPTIONS_SEPARATOR = " | "
+
+
+def normalize_column_visibility(
+    overrides: Mapping[str, object] | None,
+    *,
+    defaults: MutableMapping[str, bool],
+) -> MutableMapping[str, bool]:
+    """Merge CLI overrides with the default column visibility flags."""
+
+    flags = defaults.copy()
+    if not overrides:
+        return flags
+    for key, value in overrides.items():
+        try:
+            flags[key] = bool(value)
+        except Exception:
+            continue
+    return flags
+
+
+def _serialize_level_options(levels: Sequence[str]) -> str:
+    filtered = [level for level in levels if level]
+    if not filtered:
+        return ""
+    ordered: list[str] = []
+    for level in filtered:
+        if level not in ordered:
+            ordered.append(level)
+    return LEVEL_OPTIONS_SEPARATOR.join(ordered)
+
+
+def _ensure_effect_slots(row: MutableMapping[str, object], options: ExportOptions) -> None:
+    column_flags = options.column_visibility
+    for idx in options.slot_range:
+        effect_key = f"Effect{idx}"
+        level_key = f"Effect{idx}Level"
+        status_key = f"Effect{idx}Status"
+
+        row.setdefault(effect_key, "-")
+        row.setdefault(level_key, "")
+        row.setdefault(status_key, "pending")
+
+        if column_flags.get("LevelOptions", True):
+            row.setdefault(f"Effect{idx}LevelOptions", "")
+        if column_flags.get("LevelCorrection", True):
+            row.setdefault(f"Effect{idx}LevelCorrection", "")
+        if column_flags.get("RawText", True):
+            row.setdefault(f"RawText{idx}", "")
+        if column_flags.get("Score", True):
+            row.setdefault(f"Effect{idx}Score", 0.0)
+        if column_flags.get("Source", True):
+            row.setdefault(f"Effect{idx}Source", "")
+
+
+def build_row(
+    image_name: str,
+    matches: Sequence[MatchResult],
+    *,
+    options: ExportOptions,
+) -> dict[str, object]:
+    """Construct a CSV row for a single image."""
+
+    column_flags = options.column_visibility
+    row: dict[str, object] = {"Image": image_name, "Duplicate": False}
+
+    if column_flags.get("ItemColor", True):
+        row["ItemColor"] = options.item_color or "none"
+
+    level_map = options.level_map or {}
+
+    for idx, match in zip(options.slot_range, matches):
+        effect_key = f"Effect{idx}"
+        row[effect_key] = match.matched_text
+        row[f"Effect{idx}Status"] = "pending"
+        row.setdefault(f"Effect{idx}Level", "")
+
+        if column_flags.get("RawText", True):
+            row[f"RawText{idx}"] = match.raw_text
+        if column_flags.get("Score", True):
+            row[f"Effect{idx}Score"] = match.score
+        if column_flags.get("Source", True):
+            row[f"Effect{idx}Source"] = match.source
+
+        if level_map:
+            candidates = find_level_candidates(match.matched_text, level_map=level_map)
+            if candidates:
+                detected_level = detect_level_from_text(match.raw_text, candidates=candidates)
+                row[f"Effect{idx}Level"] = detected_level or ""
+                if column_flags.get("LevelOptions", True):
+                    row[f"Effect{idx}LevelOptions"] = _serialize_level_options(candidates)
+
+        if column_flags.get("LevelCorrection", True):
+            row.setdefault(f"Effect{idx}LevelCorrection", "")
+
+    _ensure_effect_slots(row, options)
+
+    for hidden_key in ("Dataset", "DatasetFolder", "SourceCsv", "SourceImage", "BaseImage"):
+        if not column_flags.get(hidden_key, True):
+            row.pop(hidden_key, None)
+
+    return row
+
+
+def _infer_slot_range(rows: Sequence[Mapping[str, object]]) -> range:
+    max_slot = 0
+    slot_pattern = re.compile(r"^Effect(\d+)$")
+    for row in rows:
+        for key in row.keys():
+            match = slot_pattern.match(key)
+            if match:
+                slot_index = int(match.group(1))
+                max_slot = max(max_slot, slot_index)
+    return range(1, max_slot + 1)
+
+
+def write_csv(
+    rows: Iterable[Mapping[str, object]],
+    *,
+    path: Path,
+    column_flags: Mapping[str, bool],
+) -> None:
+    """Write OCR rows to CSV using the configured column flags."""
+
+    row_list = list(rows)
+    if not row_list:
+        return
+
+    slot_range = _infer_slot_range(row_list)
+
+    fieldnames: list[str] = ["Image", "Duplicate"]
+    if column_flags.get("ItemColor", True):
+        fieldnames.append("ItemColor")
+
+    for idx in slot_range:
+        fieldnames.append(f"Effect{idx}")
+        fieldnames.append(f"Effect{idx}Level")
+        if column_flags.get("LevelOptions", True):
+            fieldnames.append(f"Effect{idx}LevelOptions")
+        fieldnames.append(f"Effect{idx}Status")
+
+    if column_flags.get("RawText", True):
+        for idx in slot_range:
+            fieldnames.append(f"RawText{idx}")
+    if column_flags.get("Score", True):
+        for idx in slot_range:
+            fieldnames.append(f"Effect{idx}Score")
+    if column_flags.get("Source", True):
+        for idx in slot_range:
+            fieldnames.append(f"Effect{idx}Source")
+    if column_flags.get("LevelCorrection", True):
+        for idx in slot_range:
+            fieldnames.append(f"Effect{idx}LevelCorrection")
+
+    for row in row_list:
+        for key in row.keys():
+            if key not in fieldnames:
+                fieldnames.append(key)
+
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in row_list:
+            writer.writerow(row)
+
