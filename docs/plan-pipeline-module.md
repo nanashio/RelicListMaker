@@ -22,6 +22,8 @@
 - `process_video` が生成物の相対パスを返却するため、`run_pipeline` でそのまま HTML 生成用データセットへ連携できる。
 - `tests/pipeline/` に入力正規化とタスク生成のユニットテストを追加し、相対パス指定や `none` 上書きなどの回帰を防止できるようにした。
 - README に `run_pipeline` / `create_tasks` の利用例を追記し、CLI 以外からの再利用方法を共有した。
+- `process_video` の疎通テストを `tests/pipeline/test_processors.py` に追加し、依存モジュール呼び出しと戻り値整形を検証できるようになった。
+- README に色上書き辞書の渡し方を追記し、運用時のケーススタディを参照できるようにした。
 
 ## 進捗ログ
 
@@ -31,6 +33,7 @@
 | 2025-11-27 | 計画書リフレッシュ | 進行状況をテーブル化し、ロードマップと次アクションを `plan-gallery-refactor.md` に倣って整理。 |
 | 2025-12-05 | 入力/タスクのユニットテスト整備 | `tests/pipeline/` を新設し、動画列挙・上書き解決・色推定の回帰テストを追加。README に API 使用例を追加し、外部スクリプトからの再利用手順を明確化。 |
 | 2025-12-06 | 進行レポーターのユニットテスト追加 | `tests/pipeline/test_progress.py` を追加し、`CallbackProgressReporter` と `CliProgressReporter` の通知回数・例外耐性を検証。 |
+| 2025-12-07 | `process_video` 疎通テストとドキュメント整備 | 依存関数をモックして I/O フローと戻り値を検証する `tests/pipeline/test_processors.py` を追加。README に色上書き辞書の具体例を追記し、運用ガイドを拡充。 |
 
 ## 実行計画
 
@@ -47,8 +50,10 @@
 
 ### フォーカスすべき次アクション
 1. ✅ **進行レポーターのカバレッジ拡充**: `tests/pipeline/test_progress.py` で `CliProgressReporter` / `CallbackProgressReporter` の通知と例外ハンドリングを検証済み。
-2. ⏭ **`process_video` の I/O 疎通テスト**: 小さなダミー画像セットを用意し、フレーム抽出と CSV 出力が想定どおり行われることを検証する統合テストを `tests/pipeline/` に追加する。
-3. ⏭ **タスクオーバーライドのドキュメント化**: README の API セクションに、色上書き辞書を渡すケーススタディを追記し、運用フローに合わせたガイドを作成する。
+2. ✅ **`process_video` の I/O 疎通テスト**: 依存関数をモックした統合テスト `tests/pipeline/test_processors.py` を追加し、フレーム抽出・OCR 呼び出し・戻り値整形を検証完了。
+3. ✅ **タスクオーバーライドのドキュメント化**: README に色上書き辞書のケーススタディを追記し、運用フローに沿ったガイドを提供済み。
+
+現在フォローすべき追加アクションはありません。継続的な改善項目が挙がった際に本計画を更新してください。
 
 ## 現状整理（`main.py` の責務）
 
