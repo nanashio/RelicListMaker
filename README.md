@@ -149,6 +149,30 @@ custom_tasks = create_tasks([Path("videos/sample.mp4")], result_dir=settings.res
 run_pipeline(settings=settings, reporter=None, tasks=custom_tasks)
 ```
 
+### アイテム色の上書き設定を渡す
+
+OCR 推定色を明示的に指定したい場合は、`PipelineSettings.item_color_overrides` に動画パスと色名のマッピングを渡します。色名には `red` / `green` / `blue` / `yellow` など `pipeline.tasks.COLOR_KEYWORDS` で定義された値を使用してください。値を `"none"` にすると、色指定を無効化して HTML 側のフィルタ初期値を未設定にできます。
+
+```python
+from pathlib import Path
+
+from pipeline.pipeline import PipelineSettings, run_pipeline
+
+overrides = {
+    # 絶対パスで渡すと辞書突き合わせが確実になります
+    Path("videos/emerald_run.mp4").resolve(): "green",
+    Path("videos/generic_clip.mp4").resolve(): "none",
+}
+
+settings = PipelineSettings(
+    video_dir="videos",
+    result_dir="results",
+    item_color_overrides=overrides,
+)
+
+run_pipeline(settings=settings)
+```
+
 ## ライセンス
 - 配布物には Tesseract OCR (Apache License 2.0) が同梱されています。再配布時にはリポジトリ直下の `LICENSE` を同梱し、Tesseract OCR のライセンス要件に従ってください。詳細は `docs/THIRD_PARTY_LICENSES.md` も参照してください。
 
