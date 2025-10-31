@@ -11,6 +11,30 @@ from ..matching.levels import detect_level_from_text, find_level_candidates
 from ..matching.effects import MatchResult
 from ..settings import ExportOptions
 
+_TRUE_VALUES = {"1", "true", "t", "yes", "y", "on"}
+_FALSE_VALUES = {"0", "false", "f", "no", "n", "off"}
+
+
+def parse_column_flag_value(value: object) -> bool | None:
+    """Convert CLI/GUI supplied values into booleans for column flags."""
+
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return bool(value)
+
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in _TRUE_VALUES:
+            return True
+        if lowered in _FALSE_VALUES:
+            return False
+        if lowered == "":
+            return None
+
+    return None
+
 LEVEL_OPTIONS_SEPARATOR = " | "
 
 
@@ -24,11 +48,16 @@ def normalize_column_visibility(
     flags = defaults.copy()
     if not overrides:
         return flags
-    for key, value in overrides.items():
-        try:
-            flags[key] = bool(value)
-        except Exception:
+
+    for raw_key, raw_value in overrides.items():
+        key = str(raw_key)
+        parsed = parse_column_flag_value(raw_value)
+        if parsed is None:
+            print(
+                f"[WARN] 列 `{key}` の値を True/False に解釈できません: {raw_value!r}"
+            )
             continue
+        flags[key] = parsed
     return flags
 
 

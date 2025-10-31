@@ -5,20 +5,8 @@ from __future__ import annotations
 from argparse import Namespace
 from typing import Callable, Mapping, MutableMapping, Sequence
 
-from ..io import normalize_column_visibility
+from ..io import normalize_column_visibility, parse_column_flag_value
 from ..settings import DEFAULT_COLUMN_VISIBILITY, DEFAULT_RESIZE_SCALE
-
-_TRUE_VALUES = {"1", "true", "t", "yes", "y", "on"}
-_FALSE_VALUES = {"0", "false", "f", "no", "n", "off"}
-
-
-def _parse_bool(raw: str) -> bool:
-    lowered = raw.strip().lower()
-    if lowered in _TRUE_VALUES:
-        return True
-    if lowered in _FALSE_VALUES:
-        return False
-    raise ValueError(raw)
 
 
 def _coerce_column_overrides(raw: object) -> MutableMapping[str, bool]:
@@ -26,7 +14,14 @@ def _coerce_column_overrides(raw: object) -> MutableMapping[str, bool]:
         return {}
 
     if isinstance(raw, Mapping):
-        return {str(key): bool(value) for key, value in raw.items()}
+        overrides: dict[str, bool] = {}
+        for key, value in raw.items():
+            parsed = parse_column_flag_value(value)
+            if parsed is None:
+                print(f"[WARN] 列 `{key}` の値を True/False に解釈できません: {value!r}")
+                continue
+            overrides[str(key)] = parsed
+        return overrides
 
     if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes)):
         overrides: dict[str, bool] = {}
@@ -42,10 +37,11 @@ def _coerce_column_overrides(raw: object) -> MutableMapping[str, bool]:
             if not key:
                 print(f"[WARN] 列名が空です: {entry}")
                 continue
-            try:
-                overrides[key] = _parse_bool(raw_value)
-            except ValueError:
+            parsed = parse_column_flag_value(raw_value)
+            if parsed is None:
                 print(f"[WARN] 列 `{key}` の値を True/False に解釈できません: {raw_value}")
+                continue
+            overrides[key] = parsed
         return overrides
 
     print(f"[WARN] 列表示設定の型を処理できません: {type(raw)!r}")
