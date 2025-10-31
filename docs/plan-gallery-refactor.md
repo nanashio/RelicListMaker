@@ -22,6 +22,7 @@
 | --- | --- | --- |
 | 2025-10-26 | モジュール分割完了 | `templates/gallery/` 配下のモジュール分割を確認し、`index.js` エントリポイントからの依存が解決されていることをレビュー済み。 |
 | 2025-10-28 | ドキュメント整理 | フォーカス事項・未解決課題・テストフローを最新化し、後続作業者が参照できるよう整理した。 |
+| 2025-10-29 | テスト/フィクスチャ検証 | `npm run test:all` を実行し、Python/Node テストは成功。Playwright はブラウザバイナリ未取得により失敗したため、`docs/guide-testing.md` に従って代替手順（`pytest` + `node --test`）を充足済みであることを記録。合わせて `tests/browser/serve_fixture.py` が `templates/gallery/index.js` の `MODULE_DEPENDENCIES` と同一リストをコピーしていることを再確認し、更新不要と判断。 |
 
 ## 実行計画
 
@@ -36,8 +37,8 @@
 | 6 | ✅ 完了 | エントリポイント刷新とモジュール読込方式の最終統合。 |
 
 ### フォーカスすべき次アクション
-1. **回帰テストの継続**: 各ステップ完了時に `npm run test:all` を実行し、ES Modules 化後のリグレッションを監視する。代替フローや Playwright 省略時の手順は `docs/guide-testing.md` と整合させる。
-2. **ブラウザフィクスチャの確認**: Playwright フィクスチャが新しいエントリポイント (`gallery/index.js`) を正しく取り込めているかを今後の変更時にもチェックする。必要に応じて `tests/browser/` 配下のフィクスチャ更新履歴を追記する。
+1. **回帰テストの継続**: 各ステップ完了時に `npm run test:all` を実行し、ES Modules 化後のリグレッションを監視する。Playwright のブラウザ未取得環境では `docs/guide-testing.md` の代替フロー（`pytest` / `node --test`）を用いて最低限の回帰確認を確保する。
+2. **ブラウザフィクスチャの確認**: Playwright フィクスチャが新しいエントリポイント (`gallery/index.js`) を正しく取り込めているかを今後の変更時にもチェックする。2025-10-29 時点では `tests/browser/serve_fixture.py` の複製対象が `MODULE_DEPENDENCIES` と一致していることを再確認済み。必要に応じて `tests/browser/` 配下のフィクスチャ更新履歴を追記する。
 3. **配布バンドルの最適化検討**: モジュール統合が完了したため、必要であればビルド／バンドル戦略（Vite 等）の導入可否を評価し、判断結果を本ドキュメントへ記録する。
 4. **旧テンプレートの洗い出し**: `gallery.js` を直接読み込むレガシー HTML が残っていないか確認し、新依存構成への移行手順を整理する。
 5. **現行構成の確認（2025-10-26）**: `templates/gallery/` 配下の各モジュール（`utils/dom.js`、`render/galleryView.js`、`events/galleryEvents.js` など）が計画通り分割済みであり、`templates/gallery/index.js` から依存解決されていることをレビューで確認した。直近で追加のリファクタリングは不要と判断。
