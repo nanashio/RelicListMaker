@@ -9,9 +9,8 @@ if str(ROOT_DIR) not in sys.path:
 if "cv2" not in sys.modules:
     sys.modules["cv2"] = types.SimpleNamespace()
 
-from pathlib import Path
-
-from match_and_export import _ensure_effect_slots
+from relic_pipeline.io.exporter import _ensure_effect_slots
+from relic_pipeline.settings import DEFAULT_COLUMN_VISIBILITY, ExportOptions
 from relic_data import load_master_effects_and_levels, normalize_master_values
 
 
@@ -45,7 +44,14 @@ def test_ensure_effect_slots_adds_placeholder_values():
     row = {"Effect1": "効果A", "Effect1Status": "approved"}
     slot_range = range(1, 4)
 
-    _ensure_effect_slots(row, slot_range, {})
+    options = ExportOptions(
+        column_visibility=dict(DEFAULT_COLUMN_VISIBILITY),
+        slot_range=slot_range,
+        level_map=None,
+        item_color=None,
+    )
+
+    _ensure_effect_slots(row, options)
 
     assert row["Effect1"] == "効果A"
     assert row["Effect1Status"] == "approved"
@@ -54,7 +60,7 @@ def test_ensure_effect_slots_adds_placeholder_values():
     assert row["Effect2Status"] == "pending"
     assert row["Effect2Level"] == ""
     assert row["RawText2"] == ""
-    assert row["Effect2Score"] == ""
+    assert row["Effect2Score"] == 0.0
     assert row["Effect2Source"] == ""
     assert row["Effect2LevelOptions"] == ""
     assert row["Effect2LevelCorrection"] == ""
