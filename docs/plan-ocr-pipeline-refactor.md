@@ -118,7 +118,7 @@ def process_images_command(args: Namespace) -> int:
 1. **前処理層の置き換え**: `prepare_crop_for_ocr` を `ocr/preprocess.prepare_for_ocr` へ移設し、旧関数は新実装を呼ぶ薄いラッパーとして残す。既存 API (`prepare_crop_for_ocr(crop, resize_scale, ...)`) の引数互換を維持し、`settings` オブジェクト導入は後段に回す。
 2. **OCR 層の抽象化**: `ocr_and_match` 内の `pytesseract` 呼び出しを `ocr/reader.recognize_effect_text` へ委譲し、`batch_recognize` が返すテキスト列を `MatchResult` のリストとして扱う。最終的に CLI 層から新モジュールを呼び出す構造へ移行する。
 3. **辞書マッチング層の分割**: `matching/effects` と `matching/levels` を導入し、`process_images` 内の候補検索とレベル解析ロジックを移管。`MatchResult` データクラスを導入し、既存の辞書・補正マップ・スコア計算を集約。
-4. **CSV 出力層の抽出**: `process_images` の `row` 組み立てと CSV 書き出し処理を `io/exporter` へ切り出し、列可視化設定 (`column_visibility`) を `ExportOptions` に集約。
+4. **CSV 出力層の抽出**: `process_images` の `row` 組み立てと CSV 書き出し処理を `io/exporter` へ切り出し、列可視化設定 (`column_visibility`) を `ExportOptions` に集約。列フラグの変換は `parse_column_flag_value` で一元化。
 
 ### 共有設定の扱い
 - `OCRSettings`, `MatchingSettings`, `ExportOptions` などのデータクラスを `relic_pipeline/settings.py` に用意し、段階的に既存関数へ注入する。
@@ -128,13 +128,14 @@ def process_images_command(args: Namespace) -> int:
 - **Step 1: 前処理** — `prepare_crop_for_ocr` を新モジュールへ移し、旧関数は新関数呼び出しのラッパーとして維持。
 - **Step 2: OCR** — `ocr_and_match` を `batch_recognize` ベースに改修し、戻り値を `MatchResult` のシーケンスへ統一。CSV ロジックは `MatchResult` を直接消費し、必要に応じて `MatchResult.to_dict()` を呼び出す。
 - **Step 3: マッチング** — `find_best_effect` 等に処理を委譲し、旧ロジックを呼ぶラッパー関数で API 互換性を確保。`process.extractOne` のスコアリングは新モジュールから呼び出し、テスト整備後に旧実装を廃止。
-- **Step 4: 出力** — `process_images` の CSV 組み立てを `io/exporter` へ移譲。旧関数は `build_row` / `write_csv` を呼ぶ構造に切り替え、CLI からの呼び出しシグネチャを変更せずに差し替える。
+- **Step 4: 出力** — `process_images` の CSV 組み立てを `io/exporter` へ移譲。旧関数は `build_row` / `write_csv` を呼ぶ構造に切り替え、CLI からの呼び出しシグネチャを変更せずに差し替える。列表示フラグは共通関数 `parse_column_flag_value` で CLI／GUI 双方の入力を正しく解釈する。
 
 各ステップで既存 API (`process_images`, `ocr_and_match`) は旧引数・戻り値を維持したラッパーとして残し、内部実装を新モジュールへ委譲することで段階的移行を可能にする。
 
-## 4. 実施状況メモ（2025-10-31）
+## 4. 実施状況メモ（2025-11-01 更新）
 - Step 1 〜 Step 4 を実装済み。`relic_pipeline/ocr`, `matching`, `io`、`settings` を新設し、既存関数から新モジュールへ委譲する構造に切り替えた。
 - `preprocess.prepare_crop_for_ocr` は新しい `prepare_for_ocr` を呼ぶラッパーとして維持し、`ocr_and_match` は `batch_recognize` の結果を `MatchResult` として返却するよう整理した。`process_images` はこのシーケンスを直接 `build_row` へ渡す構造となった。
 - CSV 組み立てと書き出しは `relic_pipeline.io.exporter` へ移行し、`process_images` は `ExportOptions` を介して行単位に委譲する。
 - CLI 層を切り出すため `relic_pipeline/cli/commands.py` を新設。`match_and_export.py` に `build_arg_parser` / `main` を追加し、既存処理を `process_images_command` から呼び出す構成へ整理。列表示デフォルトは `relic_pipeline.settings.DEFAULT_COLUMN_VISIBILITY` に集約し、`tests/cli/test_commands.py` で CLI の引数処理を検証。
 - 次のステップ候補: CLI コマンドを `gui_app.py` など他エントリから再利用できるようアダプタ層を整備、`matching/levels` のユニットテスト追加、`MatchResult` ベースの API を GUI 側へ展開し、辞書補正レイヤーの単体テストを強化。
+- 2025-11-01: `relic_pipeline.io.exporter` に `parse_column_flag_value` を追加し、`normalize_column_visibility` と CLI の列表示フラグ処理を共通化。文字列や数値で渡されたフラグも期待通りに反映されることを `tests/cli/test_commands.py` で確認。
