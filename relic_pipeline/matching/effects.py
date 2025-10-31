@@ -7,6 +7,8 @@ from typing import Callable, Mapping, Sequence
 
 from rapidfuzz import process
 
+from ..settings import MatchingSettings
+
 
 @dataclass(slots=True)
 class MatchResult:
@@ -79,4 +81,24 @@ def find_best_effect(
     best_match, score, _ = match
     score_value = float(score) if score is not None else 0.0
     return MatchResult(raw_text=text, matched_text=best_match, score=score_value, source="dictionary")
+
+
+def resolve_effect(text: str, *, settings: MatchingSettings) -> MatchResult:
+    """Combine manual corrections and dictionary lookup for a single OCR text."""
+
+    corrections = settings.corrections or {}
+    correction = apply_corrections(
+        text,
+        corrections=corrections,
+        default_score=settings.correction_score,
+    )
+    if correction:
+        return correction
+
+    dictionary = settings.dictionary or ()
+    return find_best_effect(
+        text,
+        dictionary=dictionary,
+        scorer=settings.scorer,
+    )
 

@@ -17,7 +17,7 @@ from tesseract_bundle import (
 
 from relic_pipeline.cli.commands import process_images_command
 from relic_pipeline.io import build_row, load_corrections, normalize_column_visibility, write_csv
-from relic_pipeline.matching import MatchResult, apply_corrections, find_best_effect
+from relic_pipeline.matching import MatchResult, resolve_effect
 from relic_pipeline.ocr.reader import batch_recognize
 from relic_pipeline.settings import (
     DEFAULT_COLUMN_VISIBILITY,
@@ -122,19 +122,7 @@ def ocr_and_match(
         )
 
         for position, text in zip(valid_positions, recognized_texts):
-            correction = apply_corrections(
-                text,
-                corrections=matching_settings.corrections,
-                default_score=matching_settings.correction_score,
-            )
-            if correction:
-                match_result = correction
-            else:
-                match_result = find_best_effect(
-                    text,
-                    dictionary=matching_settings.dictionary,
-                    scorer=matching_settings.scorer,
-                )
+            match_result = resolve_effect(text, settings=matching_settings)
             results[position] = match_result
 
         return results
