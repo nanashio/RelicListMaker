@@ -24,10 +24,9 @@ def test_ocr_and_match_returns_match_results(monkeypatch):
         assert len(crops) == 1
         return ["dummy text"]
 
-    def fake_apply_corrections(text, *, corrections, default_score):  # pragma: no cover - simple stub
-        return None
-
-    def fake_find_best_effect(text, *, dictionary, scorer):  # pragma: no cover - simple stub
+    def fake_resolve_effect(text, *, settings):  # pragma: no cover - simple stub
+        assert text == "dummy text"
+        assert list(settings.dictionary) == ["Dummy"]
         return MatchResult(raw_text=text, matched_text="Resolved", score=87.0, source="dictionary")
 
     monkeypatch.setattr(
@@ -36,8 +35,7 @@ def test_ocr_and_match_returns_match_results(monkeypatch):
         types.SimpleNamespace(imread=fake_imread),
     )
     monkeypatch.setattr(match_and_export, "batch_recognize", fake_batch_recognize)
-    monkeypatch.setattr(match_and_export, "apply_corrections", fake_apply_corrections)
-    monkeypatch.setattr(match_and_export, "find_best_effect", fake_find_best_effect)
+    monkeypatch.setattr(match_and_export, "resolve_effect", fake_resolve_effect)
 
     results = match_and_export.ocr_and_match(
         "dummy.png",
