@@ -67,7 +67,7 @@ def ocr_and_match(
     upsample=DEFAULT_UPSAMPLE,
     preprocess=True,
     crop_boxes=None,
-):
+) -> list[MatchResult]:
     boxes = crop_boxes or scale_crop_boxes(BASE_CROP_BOXES, scale)
 
     try:
@@ -75,7 +75,7 @@ def ocr_and_match(
         if img_cv is None:
             raise FileNotFoundError(f"画像を読み込めませんでした: {img_path}")
 
-        results: list[dict[str, object]] = []
+        results: list[MatchResult] = []
         valid_crops: list[object] = []
         valid_positions: list[int] = []
 
@@ -83,17 +83,24 @@ def ocr_and_match(
             crop = img_cv[y1:y2, x1:x2]
             if crop is None or crop.size == 0:
                 results.append(
-                    {
-                        "match": "No image",
-                        "score": 0.0,
-                        "raw": "",
-                        "source": "error",
-                    }
+                    MatchResult(
+                        raw_text="",
+                        matched_text="No image",
+                        score=0.0,
+                        source="error",
+                    )
                 )
                 continue
 
             valid_positions.append(len(results))
-            results.append({})
+            results.append(
+                MatchResult(
+                    raw_text="",
+                    matched_text="",
+                    score=0.0,
+                    source="pending",
+                )
+            )
             valid_crops.append(crop)
 
         if not valid_crops:
@@ -128,15 +135,21 @@ def ocr_and_match(
                     dictionary=matching_settings.dictionary,
                     scorer=matching_settings.scorer,
                 )
-            results[position] = match_result.to_dict()
+            results[position] = match_result
 
         return results
     except Exception as err:
         print(f"OCR error: {err}")
         fallback_length = len(boxes)
         return [
-            {"match": "Error", "score": 0.0, "raw": "", "source": "error"}
-        ] * fallback_length
+            MatchResult(
+                raw_text="",
+                matched_text="Error",
+                score=0.0,
+                source="error",
+            )
+            for _ in range(fallback_length)
+        ]
 
 def process_images(
     image_dir="crops",
@@ -189,7 +202,7 @@ def process_images(
         if not fname.endswith(".png"):
             continue
         img_path = os.path.join(image_dir, fname)
-        matches_payload = ocr_and_match(
+        match_results = ocr_and_match(
             img_path,
             dictionary,
             corrections_map=corrections_map,
@@ -198,8 +211,6 @@ def process_images(
             preprocess=preprocess,
             crop_boxes=crop_boxes,
         )
-
-        match_results = [MatchResult.from_mapping(match) for match in matches_payload]
         row = build_row(fname, match_results, options=export_options)
         rows.append(row)
 
