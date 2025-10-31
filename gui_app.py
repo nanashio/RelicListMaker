@@ -398,6 +398,7 @@ class RelicGuiApp:
         self._tkdnd_ready = False
         self.color_options = ["none", "red", "green", "blue", "yellow"]
         self._dropped_videos: list[dict[str, str]] = []
+        self._queue_item_paths: dict[str, str] = {}
         self._dropped_video_set: set[str] = set()
         self.queue_tree: Optional[ttk.Treeview] = None
         self.queue_selection_var: tk.StringVar = tk.StringVar(value="ドラッグ＆ドロップで動画を追加してください")
@@ -1124,13 +1125,45 @@ class RelicGuiApp:
         if self.queue_tree is None:
             return
         self._hide_inline_color_editor()
+        current_selection = set()
+        if self.queue_tree.selection():
+            for item in self.queue_tree.selection():
+                path_value = self._queue_item_paths.get(item, "")
+                if path_value:
+                    current_selection.add(path_value)
+
         self.queue_tree.delete(*self.queue_tree.get_children())
-        for entry in self._dropped_videos:
+        self._queue_item_paths.clear()
+        for index, entry in enumerate(self._dropped_videos):
             path = entry.get("path", "")
             name = Path(path).name if path else ""
             color = entry.get("color", self.color_options[0]) or self.color_options[0]
-            self.queue_tree.insert("", "end", iid=path, values=(name, color, path))
+            item_id = f"video-{index}"
+            self._queue_item_paths[item_id] = path
+            self.queue_tree.insert("", "end", iid=item_id, values=(name, color, path))
+
+        if current_selection:
+            restored_items = [
+                item_id
+                for item_id, path_value in self._queue_item_paths.items()
+                if path_value in current_selection
+            ]
+            if restored_items:
+                self.queue_tree.selection_set(restored_items)
         self._update_queue_controls()
+
+    def _get_queue_item_path(self, item: str) -> str:
+        if not item:
+            return ""
+        cached = self._queue_item_paths.get(item)
+        if cached is not None:
+            return cached
+        if self.queue_tree is None or not self.queue_tree.exists(item):
+            return ""
+        value = self.queue_tree.set(item, "fullpath")
+        if value:
+            self._queue_item_paths[item] = value
+        return value
 
     def _schedule_results_refresh(self) -> None:
         if self._results_refresh_pending:
@@ -1246,7 +1279,7 @@ class RelicGuiApp:
             message = "ドラッグ＆ドロップで動画を追加してください" if not self._dropped_videos else "動画を選択してください"
             self.queue_selection_var.set(message)
             return
-        first_path = self.queue_tree.set(selected[0], "fullpath")
+        first_path = self._get_queue_item_path(selected[0])
         self.queue_selection_var.set(first_path)
 
     def _on_queue_selection(self, _event=None) -> None:
@@ -1319,9 +1352,7 @@ class RelicGuiApp:
         if chosen not in self.color_options:
             chosen = self.color_options[0]
         target = self._inline_color_item
-        target_path = ""
-        if self.queue_tree.exists(target):
-            target_path = self.queue_tree.set(target, "fullpath")
+        target_path = self._get_queue_item_path(target)
         if not target_path:
             self.append_log(f"[WARN] 動画のフルパスを取得できず色を更新できませんでした: {target}")
             self._hide_inline_color_editor()
@@ -1345,7 +1376,8 @@ class RelicGuiApp:
         selected = self.queue_tree.selection()
         if not selected:
             return
-        remove_paths = {self.queue_tree.set(item, "fullpath") for item in selected}
+        remove_paths = {self._get_queue_item_path(item) for item in selected}
+        remove_paths.discard("")
         if remove_paths:
             self._dropped_videos = [entry for entry in self._dropped_videos if entry.get("path") not in remove_paths]
             for path_value in remove_paths:

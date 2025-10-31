@@ -31,6 +31,7 @@ def test_inline_color_selection_updates_queue_entry_color() -> None:
         assert inline_combo is not None
 
         item_id = queue_tree.get_children()[0]
+        assert app._queue_item_paths[item_id] == sample_path
         app._show_inline_color_editor(item_id)
         root.update_idletasks()
 
