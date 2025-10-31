@@ -1319,8 +1319,17 @@ class RelicGuiApp:
         if chosen not in self.color_options:
             chosen = self.color_options[0]
         target = self._inline_color_item
-        self._update_video_color(target, chosen)
+        target_path = ""
         if self.queue_tree.exists(target):
+            target_path = self.queue_tree.set(target, "fullpath")
+        if not target_path:
+            self.append_log(f"[WARN] 動画のフルパスを取得できず色を更新できませんでした: {target}")
+            self._hide_inline_color_editor()
+            return
+        updated = self._update_video_color(target_path, chosen)
+        if not updated:
+            self.append_log(f"[WARN] 色を更新できる動画が見つかりませんでした: {target_path}")
+        elif self.queue_tree.exists(target):
             self.queue_tree.set(target, "color", chosen)
         self._hide_inline_color_editor()
         self._update_queue_controls()
@@ -1347,11 +1356,12 @@ class RelicGuiApp:
                 self.append_log(f"[GUI] {len(removed_names)} 件の動画をキューから削除しました: {summary}")
         self._refresh_queue_view()
 
-    def _update_video_color(self, path: str, color: str) -> None:
+    def _update_video_color(self, path: str, color: str) -> bool:
         for entry in self._dropped_videos:
             if entry.get("path") == path:
                 entry["color"] = color
-                break
+                return True
+        return False
 
     def _resolve_input_path(self, value: str) -> Path:
         raw = Path(value.strip()) if value else Path()
