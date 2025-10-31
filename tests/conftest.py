@@ -1,9 +1,24 @@
 from __future__ import annotations
 
 import shutil
+import sys
+import types
 from pathlib import Path
 
 import pytest
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+if "cv2" not in sys.modules:
+    sys.modules["cv2"] = types.SimpleNamespace()
+
+# `match_and_export` をテスト全体でインポートしておくことで、
+# `tests/pipeline/test_processors.py` が挿入するスタブより先に
+# 実装モジュールをロードし、プライベート関数の互換性テストが可能になる。
+import match_and_export  # noqa: F401  pylint: disable=unused-import
 
 
 @pytest.fixture
