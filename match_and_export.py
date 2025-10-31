@@ -1,5 +1,7 @@
+import argparse
 import os
 from pathlib import Path
+from typing import Sequence
 
 import cv2
 import pytesseract
@@ -13,10 +15,12 @@ from tesseract_bundle import (
     system_tesseract_reason,
 )
 
+from relic_pipeline.cli.commands import process_images_command
 from relic_pipeline.io import build_row, load_corrections, normalize_column_visibility, write_csv
 from relic_pipeline.matching import MatchResult, apply_corrections, find_best_effect
 from relic_pipeline.ocr.reader import batch_recognize
 from relic_pipeline.settings import (
+    DEFAULT_COLUMN_VISIBILITY,
     DEFAULT_OCR_CONFIG,
     DEFAULT_RESIZE_SCALE,
     ExportOptions,
@@ -40,45 +44,6 @@ BASE_CROP_BOXES = [
 OCR_CONFIG = DEFAULT_OCR_CONFIG
 DEFAULT_UPSAMPLE = DEFAULT_RESIZE_SCALE
 CORRECTION_SCORE = 100.0
-DEFAULT_COLUMN_VISIBILITY: dict[str, bool] = {
-    "ItemColor": True,
-    "RawText": True,
-    "Score": True,
-    "Source": True,
-    "LevelOptions": True,
-    "LevelCorrection": True,
-    "Dataset": True,
-    "DatasetFolder": True,
-    "SourceCsv": True,
-    "SourceImage": True,
-    "BaseImage": True,
-}
-
-
-def _ensure_effect_slots(
-    row: dict[str, object], slot_range: range, column_flags: dict[str, bool]
-) -> None:
-    """不足している効果スロットの初期値を補完する."""
-
-    for idx in slot_range:
-        effect_key = f"Effect{idx}"
-        level_key = f"Effect{idx}Level"
-        status_key = f"Effect{idx}Status"
-
-        row.setdefault(effect_key, "-")
-        row.setdefault(level_key, "")
-        row.setdefault(status_key, "pending")
-
-        if column_flags.get("LevelOptions", True):
-            row.setdefault(f"Effect{idx}LevelOptions", "")
-        if column_flags.get("LevelCorrection", True):
-            row.setdefault(f"Effect{idx}LevelCorrection", "")
-        if column_flags.get("RawText", True):
-            row.setdefault(f"RawText{idx}", "")
-        if column_flags.get("Score", True):
-            row.setdefault(f"Effect{idx}Score", "")
-        if column_flags.get("Source", True):
-            row.setdefault(f"Effect{idx}Source", "")
 
 
 def scale_crop_boxes(boxes, scale=1.0):
@@ -250,4 +215,72 @@ def process_images(
         return
 
     print(f"[✓] CSV出力完了: {output_path}")
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="クロップ済み画像に対してOCRと辞書マッチングを実行し、CSVを生成します。"
+    )
+    parser.add_argument(
+        "image_dir",
+        nargs="?",
+        default="crops",
+        help="OCR 対象の画像ディレクトリ",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        dest="output_path",
+        default="results.csv",
+        help="出力先CSVパス",
+    )
+    parser.add_argument(
+        "--scale",
+        type=float,
+        default=1.0,
+        help="クロップ領域の倍率 (BASE_CROP_BOXES に適用)",
+    )
+    parser.add_argument(
+        "--upsample",
+        type=float,
+        default=DEFAULT_UPSAMPLE,
+        help="OCR 前処理時のアップサンプリング倍率",
+    )
+    parser.add_argument(
+        "--no-preprocess",
+        dest="preprocess",
+        action="store_false",
+        help="前処理をスキップする場合に指定",
+    )
+    parser.set_defaults(preprocess=True)
+    parser.add_argument(
+        "--corrections",
+        dest="corrections_csv",
+        default=None,
+        help="フィードバックCSVのパス",
+    )
+    parser.add_argument(
+        "--item-color",
+        dest="item_color",
+        default=None,
+        help="CSV に埋め込むアイテム色の固定値",
+    )
+    parser.add_argument(
+        "--column",
+        dest="column_visibility",
+        action="append",
+        metavar="NAME=BOOL",
+        help="列の表示/非表示を上書き (例: --column RawText=false)",
+    )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+    return process_images_command(args, runner=process_images)
+
+
+if __name__ == "__main__":  # pragma: no cover - CLI entry point
+    raise SystemExit(main())
 

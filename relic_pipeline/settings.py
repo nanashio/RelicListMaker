@@ -9,6 +9,20 @@ DEFAULT_OCR_LANG = "jpn"
 DEFAULT_OCR_CONFIG = "--oem 3 --psm 6 -c preserve_interword_spaces=1"
 DEFAULT_RESIZE_SCALE = 1.5
 
+DEFAULT_COLUMN_VISIBILITY: dict[str, bool] = {
+    "ItemColor": True,
+    "RawText": True,
+    "Score": True,
+    "Source": True,
+    "LevelOptions": True,
+    "LevelCorrection": True,
+    "Dataset": True,
+    "DatasetFolder": True,
+    "SourceCsv": True,
+    "SourceImage": True,
+    "BaseImage": True,
+}
+
 
 @dataclass(slots=True)
 class OCRSettings:
