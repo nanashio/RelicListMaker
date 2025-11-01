@@ -399,7 +399,10 @@ class RelicGuiApp:
         self.color_options = ["none", "red", "green", "blue", "yellow"]
         self._dropped_videos: list[dict[str, str]] = []
         self._dropped_video_set: set[str] = set()
+        self._queue_item_paths: dict[str, str] = {}
         self.queue_tree: Optional[ttk.Treeview] = None
+        self._inline_hide_after: Optional[str] = None
+        self._inline_last_item: Optional[str] = None
         self.queue_selection_var: tk.StringVar = tk.StringVar(value="ドラッグ＆ドロップで動画を追加してください")
         self._settings_window: Optional[tk.Toplevel] = None
         self.results_tree: Optional[ttk.Treeview] = None
@@ -1125,11 +1128,14 @@ class RelicGuiApp:
             return
         self._hide_inline_color_editor()
         self.queue_tree.delete(*self.queue_tree.get_children())
+        self._queue_item_paths.clear()
         for entry in self._dropped_videos:
             path = entry.get("path", "")
             name = Path(path).name if path else ""
             color = entry.get("color", self.color_options[0]) or self.color_options[0]
-            self.queue_tree.insert("", "end", iid=path, values=(name, color, path))
+            item_id = self.queue_tree.insert("", "end", values=(name, color, path))
+            if path:
+                self._queue_item_paths[item_id] = path
         self._update_queue_controls()
 
     def _schedule_results_refresh(self) -> None:
@@ -1276,27 +1282,36 @@ class RelicGuiApp:
             width=8,
         )
         self.inline_color_combo.bind("<<ComboboxSelected>>", self._on_inline_color_selected)
-        self.inline_color_combo.bind("<FocusOut>", lambda _event: self._hide_inline_color_editor())
+        self.inline_color_combo.bind("<FocusOut>", self._on_inline_color_focus_out)
         self.inline_color_combo.bind("<Escape>", lambda _event: self._hide_inline_color_editor())
         self.inline_color_combo.place_forget()
 
     def _show_inline_color_editor(self, item: str) -> None:
         if self.queue_tree is None or self.inline_color_combo is None:
             return
-        bbox = self.queue_tree.bbox(item, "color")
-        if not bbox:
-            self._hide_inline_color_editor()
-            return
-        x, y, width, height = bbox
         current = self.queue_tree.set(item, "color") or self.color_options[0]
         if current not in self.color_options:
             current = self.color_options[0]
         self.inline_color_combo.configure(values=self.color_options)
-        self.inline_color_combo.place(x=x, y=y, width=width, height=height)
         self.inline_color_combo.set(current)
-        self.inline_color_combo.lift()
-        self.inline_color_combo.focus_set()
         self._inline_color_item = item
+        self._inline_last_item = item
+        if self._inline_hide_after is not None:
+            try:
+                self.root.after_cancel(self._inline_hide_after)
+            except tk.TclError:
+                pass
+            self._inline_hide_after = None
+
+        bbox = self.queue_tree.bbox(item, "color")
+        if bbox:
+            x, y, width, height = bbox
+            self.inline_color_combo.place(x=x, y=y, width=width, height=height)
+            self.inline_color_combo.lift()
+            try:
+                self.inline_color_combo.focus_set()
+            except tk.TclError:
+                pass
 
         def _open_dropdown() -> None:
             try:
@@ -1304,21 +1319,55 @@ class RelicGuiApp:
             except tk.TclError:
                 pass
 
-        self.root.after_idle(_open_dropdown)
+        if bbox:
+            self.root.after_idle(_open_dropdown)
+        else:
+            self.inline_color_combo.place_forget()
+
+    def _on_inline_color_focus_out(self, _event=None) -> None:
+        if self.inline_color_combo is None:
+            return
+        if self._inline_hide_after is not None:
+            try:
+                self.root.after_cancel(self._inline_hide_after)
+            except tk.TclError:
+                pass
+        try:
+            self._inline_hide_after = self.root.after(80, self._hide_inline_color_editor)
+        except tk.TclError:
+            self._inline_hide_after = None
 
     def _hide_inline_color_editor(self) -> None:
         if self.inline_color_combo is None:
             return
+        if self._inline_hide_after is not None:
+            try:
+                self.root.after_cancel(self._inline_hide_after)
+            except tk.TclError:
+                pass
+            self._inline_hide_after = None
         self.inline_color_combo.place_forget()
         self._inline_color_item = None
+        # フォーカスが移動した後でも直前の行を参照できるように保持
+        if self._inline_last_item is None and self.queue_tree is not None:
+            current_focus = self.queue_tree.focus()
+            if current_focus:
+                self._inline_last_item = current_focus
 
     def _on_inline_color_selected(self, _event=None) -> None:
-        if self.queue_tree is None or self.inline_color_combo is None or self._inline_color_item is None:
+        if self.queue_tree is None or self.inline_color_combo is None:
+            return
+        target = self._inline_color_item or self._inline_last_item
+        if not target:
+            # フォーカスされた行を最終手段として利用
+            target = self.queue_tree.focus() or (
+                self.queue_tree.selection()[0] if self.queue_tree.selection() else ""
+            )
+        if not target:
             return
         chosen = self.inline_color_combo.get() or self.color_options[0]
         if chosen not in self.color_options:
             chosen = self.color_options[0]
-        target = self._inline_color_item
         self._update_video_color(target, chosen)
         if self.queue_tree.exists(target):
             self.queue_tree.set(target, "color", chosen)
@@ -1347,9 +1396,22 @@ class RelicGuiApp:
                 self.append_log(f"[GUI] {len(removed_names)} 件の動画をキューから削除しました: {summary}")
         self._refresh_queue_view()
 
-    def _update_video_color(self, path: str, color: str) -> None:
+    def _update_video_color(self, item_id: str, color: str) -> None:
+        if self.queue_tree is None:
+            return
+
+        resolved_path = self._queue_item_paths.get(item_id, "")
+
+        if not resolved_path and item_id and self.queue_tree.exists(item_id):
+            resolved_path = self.queue_tree.set(item_id, "fullpath")
+            if resolved_path:
+                self._queue_item_paths[item_id] = resolved_path
+
+        if not resolved_path:
+            resolved_path = item_id
+
         for entry in self._dropped_videos:
-            if entry.get("path") == path:
+            if entry.get("path") == resolved_path:
                 entry["color"] = color
                 break
 
