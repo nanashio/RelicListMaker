@@ -272,20 +272,6 @@
                         return;
                     }
 
-                    const colorSelect = event.target.closest('.item-color-select');
-                    if (colorSelect) {
-                        event.preventDefault();
-                        toggleItemColor(colorSelect);
-                        return;
-                    }
-
-                    const relicTypeSelect = event.target.closest('.item-relic-type-select');
-                    if (relicTypeSelect) {
-                        event.preventDefault();
-                        toggleItemRelicType(relicTypeSelect);
-                        return;
-                    }
-
                     const button = event.target.closest('.review-button');
                     if (!button) {
                         return;
@@ -300,13 +286,11 @@
                 dom.gallery.addEventListener('change', (event) => {
                     const relicTypeSelect = event.target.closest('.item-relic-type-select');
                     if (relicTypeSelect) {
-                        event.preventDefault();
                         toggleItemRelicType(relicTypeSelect);
                         return;
                     }
                     const colorSelect = event.target.closest('.item-color-select');
                     if (colorSelect) {
-                        event.preventDefault();
                         toggleItemColor(colorSelect);
                         return;
                     }
