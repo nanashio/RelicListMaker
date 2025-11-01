@@ -2,18 +2,25 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Iterable, Optional
 
 from generate_gallery import generate_html
-from relic_data import load_master_csv
+from relic_data import load_master_csv, normalize_master_values
 from resource_paths import templates_path
 
-from .inputs import build_override_map, gather_video_files
+from .inputs import build_override_map, build_path_value_map, gather_video_files
 from .processors import process_video
 from .progress import NullProgressReporter, ProgressReporter
-from .tasks import VideoTask, create_tasks
+from .tasks import (
+    DEFAULT_RELIC_TYPE,
+    RELIC_TYPE_DEEP,
+    VideoTask,
+    create_tasks,
+    detect_relic_type,
+    normalize_relic_type,
+)
 
 DEFAULT_VIDEO_DIR = "videos"
 DEFAULT_RESULT_DIR = "results"
@@ -27,6 +34,7 @@ class PipelineSettings:
     ocr_upsample: float = DEFAULT_OCR_UPSAMPLE
     video_files: Optional[Iterable[str | Path]] = None
     item_color_overrides: Optional[dict[str | Path, str]] = None
+    relic_type_overrides: Optional[dict[str | Path, str]] = None
     save_full_frames: bool = False
     csv_column_visibility: Optional[dict[str, object]] = None
     item_image_view_box: Optional[str] = None
@@ -59,11 +67,15 @@ def run_pipeline(
     result_dir = settings.result_dir
     result_dir.mkdir(parents=True, exist_ok=True)
 
-    master_src = templates_path("master_relics.csv")
-    master_options = load_master_csv(master_src)
+    master_paths = {
+        DEFAULT_RELIC_TYPE: templates_path("master_relics.csv"),
+        RELIC_TYPE_DEEP: templates_path("master_relics_deep.csv"),
+    }
+    master_options: list[str] = []
     dataset_entries: list[dict[str, str]] = []
 
     override_map = build_override_map(settings.item_color_overrides)
+    type_override_map = build_path_value_map(settings.relic_type_overrides)
 
     if tasks is None:
         video_dir_path = settings.video_dir
@@ -71,6 +83,37 @@ def run_pipeline(
         tasks_to_run = create_tasks(selected_videos, result_dir)
     else:
         tasks_to_run = list(tasks)
+
+    adjusted_tasks: list[VideoTask] = []
+    used_types: set[str] = set()
+    for task in tasks_to_run:
+        override_type = type_override_map.get(task.source_path)
+        normalized_override = (
+            normalize_relic_type(override_type) if override_type is not None else None
+        )
+        inferred_type = detect_relic_type(task.base_name)
+        chosen_type = normalized_override if normalized_override is not None else inferred_type
+        if chosen_type not in master_paths:
+            chosen_type = DEFAULT_RELIC_TYPE
+        used_types.add(chosen_type)
+        if getattr(task, "relic_type", DEFAULT_RELIC_TYPE) != chosen_type:
+            task = replace(task, relic_type=chosen_type)
+        adjusted_tasks.append(task)
+
+    if adjusted_tasks:
+        tasks_to_run = adjusted_tasks
+    else:
+        tasks_to_run = []
+
+    if not used_types:
+        used_types.add(DEFAULT_RELIC_TYPE)
+
+    for relic_type in used_types:
+        master_path = master_paths.get(relic_type)
+        if master_path:
+            master_options.extend(load_master_csv(master_path))
+
+    master_options = normalize_master_values(master_options)
 
     total_steps = len(tasks_to_run) * 2 + 1 if tasks_to_run else 1
     reporter.prepare(total_steps)

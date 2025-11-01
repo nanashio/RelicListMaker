@@ -8,7 +8,7 @@ from .pipeline import (
     run_pipeline,
 )
 from .progress import CallbackProgressReporter, CliProgressReporter, NullProgressReporter, ProgressReporter
-from .tasks import detect_item_color
+from .tasks import detect_item_color, detect_relic_type, normalize_relic_type
 
 __all__ = [
     "DEFAULT_OCR_UPSAMPLE",
@@ -22,4 +22,6 @@ __all__ = [
     "NullProgressReporter",
     "ProgressReporter",
     "detect_item_color",
+    "detect_relic_type",
+    "normalize_relic_type",
 ]

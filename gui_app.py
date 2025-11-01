@@ -23,6 +23,8 @@ from pipeline import (
     CallbackProgressReporter,
     PipelineSettings,
     detect_item_color,
+    detect_relic_type,
+    normalize_relic_type,
     run_pipeline,
 )
 from merge_results import MergeResultsError, merge_results
@@ -397,12 +399,17 @@ class RelicGuiApp:
         self._merge_progress_token: Optional[int] = None
         self._tkdnd_ready = False
         self.color_options = ["none", "red", "green", "blue", "yellow"]
+        self.relic_type_options = ["通常", "深層遺物"]
+        self._relic_type_value_map = {"通常": "normal", "深層遺物": "deep"}
+        self._relic_type_display_map = {value: label for label, value in self._relic_type_value_map.items()}
         self._dropped_videos: list[dict[str, str]] = []
         self._dropped_video_set: set[str] = set()
         self._queue_item_paths: dict[str, str] = {}
         self.queue_tree: Optional[ttk.Treeview] = None
         self._inline_hide_after: Optional[str] = None
+        self._inline_type_hide_after: Optional[str] = None
         self._inline_last_item: Optional[str] = None
+        self._inline_type_last_item: Optional[str] = None
         self.queue_selection_var: tk.StringVar = tk.StringVar(value="ドラッグ＆ドロップで動画を追加してください")
         self._settings_window: Optional[tk.Toplevel] = None
         self.results_tree: Optional[ttk.Treeview] = None
@@ -558,16 +565,18 @@ class RelicGuiApp:
 
         self.queue_tree = ttk.Treeview(
             queue_frame,
-            columns=("name", "color", "fullpath"),
-            displaycolumns=("name", "color"),
+            columns=("name", "color", "relic_type", "fullpath"),
+            displaycolumns=("name", "color", "relic_type"),
             show="headings",
             selectmode="extended",
             height=6,
         )
         self.queue_tree.heading("name", text="動画")
         self.queue_tree.heading("color", text="item_color")
+        self.queue_tree.heading("relic_type", text="遺物タイプ")
         self.queue_tree.column("name", anchor="w", width=260)
         self.queue_tree.column("color", anchor="center", width=100)
+        self.queue_tree.column("relic_type", anchor="center", width=120)
         self.queue_tree.column("fullpath", width=0, stretch=False)
         queue_scroll = ttk.Scrollbar(queue_frame, orient="vertical", command=self.queue_tree.yview)
         self.queue_tree.configure(yscrollcommand=queue_scroll.set)
@@ -582,6 +591,9 @@ class RelicGuiApp:
         self.inline_color_combo: Optional[ttk.Combobox] = None
         self._inline_color_item: Optional[str] = None
         self._create_inline_color_editor()
+        self.inline_type_combo: Optional[ttk.Combobox] = None
+        self._inline_type_item: Optional[str] = None
+        self._create_inline_relic_type_editor()
 
         self.queue_selection_var.set("ドラッグ＆ドロップで動画を追加してください")
         selection_label = ttk.Label(queue_frame, textvariable=self.queue_selection_var, anchor="w")
@@ -1121,19 +1133,35 @@ class RelicGuiApp:
         self._dropped_video_set.add(resolved)
         base_name = Path(resolved).stem
         detected = detect_item_color(base_name) or "none"
-        self._dropped_videos.append({"path": resolved, "color": detected})
+        relic_type = detect_relic_type(base_name)
+        self._dropped_videos.append(
+            {
+                "path": resolved,
+                "color": detected,
+                "relic_type": normalize_relic_type(relic_type),
+            }
+        )
 
     def _refresh_queue_view(self) -> None:
         if self.queue_tree is None:
             return
         self._hide_inline_color_editor()
+        self._hide_inline_relic_type_editor()
         self.queue_tree.delete(*self.queue_tree.get_children())
         self._queue_item_paths.clear()
         for entry in self._dropped_videos:
             path = entry.get("path", "")
             name = Path(path).name if path else ""
             color = entry.get("color", self.color_options[0]) or self.color_options[0]
-            item_id = self.queue_tree.insert("", "end", values=(name, color, path))
+            relic_value = normalize_relic_type(entry.get("relic_type"))
+            display_type = self._relic_type_display_map.get(
+                relic_value, self.relic_type_options[0]
+            )
+            item_id = self.queue_tree.insert(
+                "",
+                "end",
+                values=(name, color, display_type, path),
+            )
             if path:
                 self._queue_item_paths[item_id] = path
         self._update_queue_controls()
@@ -1264,13 +1292,19 @@ class RelicGuiApp:
         region = self.queue_tree.identify("region", event.x, event.y)
         if region != "cell":
             self._hide_inline_color_editor()
+            self._hide_inline_relic_type_editor()
             return
         column = self.queue_tree.identify_column(event.x)
         item = self.queue_tree.identify_row(event.y)
         if column == "#2" and item:
+            self._hide_inline_relic_type_editor()
             self.root.after_idle(lambda: self._show_inline_color_editor(item))
+        elif column == "#3" and item:
+            self._hide_inline_color_editor()
+            self.root.after_idle(lambda: self._show_inline_relic_type_editor(item))
         else:
             self._hide_inline_color_editor()
+            self._hide_inline_relic_type_editor()
 
     def _create_inline_color_editor(self) -> None:
         if self.queue_tree is None:
@@ -1285,6 +1319,22 @@ class RelicGuiApp:
         self.inline_color_combo.bind("<FocusOut>", self._on_inline_color_focus_out)
         self.inline_color_combo.bind("<Escape>", lambda _event: self._hide_inline_color_editor())
         self.inline_color_combo.place_forget()
+
+    def _create_inline_relic_type_editor(self) -> None:
+        if self.queue_tree is None:
+            return
+        self.inline_type_combo = ttk.Combobox(
+            self.queue_tree,
+            values=self.relic_type_options,
+            state="readonly",
+            width=12,
+        )
+        self.inline_type_combo.bind("<<ComboboxSelected>>", self._on_inline_type_selected)
+        self.inline_type_combo.bind("<FocusOut>", self._on_inline_type_focus_out)
+        self.inline_type_combo.bind(
+            "<Escape>", lambda _event: self._hide_inline_relic_type_editor()
+        )
+        self.inline_type_combo.place_forget()
 
     def _show_inline_color_editor(self, item: str) -> None:
         if self.queue_tree is None or self.inline_color_combo is None:
@@ -1324,6 +1374,45 @@ class RelicGuiApp:
         else:
             self.inline_color_combo.place_forget()
 
+    def _show_inline_relic_type_editor(self, item: str) -> None:
+        if self.queue_tree is None or self.inline_type_combo is None:
+            return
+        current_display = self.queue_tree.set(item, "relic_type") or self.relic_type_options[0]
+        current_value = self._relic_type_value_map.get(current_display, current_display)
+        normalized = normalize_relic_type(current_value)
+        display_label = self._relic_type_display_map.get(normalized, self.relic_type_options[0])
+        self.inline_type_combo.configure(values=self.relic_type_options)
+        self.inline_type_combo.set(display_label)
+        self._inline_type_item = item
+        self._inline_type_last_item = item
+        if self._inline_type_hide_after is not None:
+            try:
+                self.root.after_cancel(self._inline_type_hide_after)
+            except tk.TclError:
+                pass
+            self._inline_type_hide_after = None
+
+        bbox = self.queue_tree.bbox(item, "relic_type")
+        if bbox:
+            x, y, width, height = bbox
+            self.inline_type_combo.place(x=x, y=y, width=width, height=height)
+            self.inline_type_combo.lift()
+            try:
+                self.inline_type_combo.focus_set()
+            except tk.TclError:
+                pass
+
+        def _open_dropdown() -> None:
+            try:
+                self.inline_type_combo.event_generate("<Alt-Down>")
+            except tk.TclError:
+                pass
+
+        if bbox:
+            self.root.after_idle(_open_dropdown)
+        else:
+            self.inline_type_combo.place_forget()
+
     def _on_inline_color_focus_out(self, _event=None) -> None:
         if self.inline_color_combo is None:
             return
@@ -1336,6 +1425,21 @@ class RelicGuiApp:
             self._inline_hide_after = self.root.after(80, self._hide_inline_color_editor)
         except tk.TclError:
             self._inline_hide_after = None
+
+    def _on_inline_type_focus_out(self, _event=None) -> None:
+        if self.inline_type_combo is None:
+            return
+        if self._inline_type_hide_after is not None:
+            try:
+                self.root.after_cancel(self._inline_type_hide_after)
+            except tk.TclError:
+                pass
+        try:
+            self._inline_type_hide_after = self.root.after(
+                80, self._hide_inline_relic_type_editor
+            )
+        except tk.TclError:
+            self._inline_type_hide_after = None
 
     def _hide_inline_color_editor(self) -> None:
         if self.inline_color_combo is None:
@@ -1353,6 +1457,22 @@ class RelicGuiApp:
             current_focus = self.queue_tree.focus()
             if current_focus:
                 self._inline_last_item = current_focus
+
+    def _hide_inline_relic_type_editor(self) -> None:
+        if self.inline_type_combo is None:
+            return
+        if self._inline_type_hide_after is not None:
+            try:
+                self.root.after_cancel(self._inline_type_hide_after)
+            except tk.TclError:
+                pass
+            self._inline_type_hide_after = None
+        self.inline_type_combo.place_forget()
+        self._inline_type_item = None
+        if self._inline_type_last_item is None and self.queue_tree is not None:
+            current_focus = self.queue_tree.focus()
+            if current_focus:
+                self._inline_type_last_item = current_focus
 
     def _on_inline_color_selected(self, _event=None) -> None:
         if self.queue_tree is None or self.inline_color_combo is None:
@@ -1374,14 +1494,36 @@ class RelicGuiApp:
         self._hide_inline_color_editor()
         self._update_queue_controls()
 
+    def _on_inline_type_selected(self, _event=None) -> None:
+        if self.queue_tree is None or self.inline_type_combo is None:
+            return
+        target = self._inline_type_item or self._inline_type_last_item
+        if not target:
+            target = self.queue_tree.focus() or (
+                self.queue_tree.selection()[0] if self.queue_tree.selection() else ""
+            )
+        if not target:
+            return
+        chosen_label = self.inline_type_combo.get() or self.relic_type_options[0]
+        chosen_value = self._relic_type_value_map.get(chosen_label, chosen_label)
+        normalized = normalize_relic_type(chosen_value)
+        display_label = self._relic_type_display_map.get(normalized, self.relic_type_options[0])
+        self._update_video_relic_type(target, normalized)
+        if self.queue_tree.exists(target):
+            self.queue_tree.set(target, "relic_type", display_label)
+        self._hide_inline_relic_type_editor()
+        self._update_queue_controls()
+
     def _on_queue_scroll_event(self, _event=None) -> None:
         self._hide_inline_color_editor()
+        self._hide_inline_relic_type_editor()
 
 
     def _remove_selected_videos(self) -> None:
         if self.queue_tree is None:
             return
         self._hide_inline_color_editor()
+        self._hide_inline_relic_type_editor()
         selected = self.queue_tree.selection()
         if not selected:
             return
@@ -1413,6 +1555,27 @@ class RelicGuiApp:
         for entry in self._dropped_videos:
             if entry.get("path") == resolved_path:
                 entry["color"] = color
+                break
+
+    def _update_video_relic_type(self, item_id: str, relic_type: str) -> None:
+        if self.queue_tree is None:
+            return
+
+        resolved_path = self._queue_item_paths.get(item_id, "")
+
+        if not resolved_path and item_id and self.queue_tree.exists(item_id):
+            resolved_path = self.queue_tree.set(item_id, "fullpath")
+            if resolved_path:
+                self._queue_item_paths[item_id] = resolved_path
+
+        if not resolved_path:
+            resolved_path = item_id
+
+        normalized = normalize_relic_type(relic_type)
+
+        for entry in self._dropped_videos:
+            if entry.get("path") == resolved_path:
+                entry["relic_type"] = normalized
                 break
 
     def _resolve_input_path(self, value: str) -> Path:
@@ -1576,6 +1739,11 @@ class RelicGuiApp:
             for entry in video_entries
             if entry.get("color") not in (None, "", "none")
         }
+        type_overrides = {
+            entry["path"]: normalize_relic_type(entry.get("relic_type"))
+            for entry in video_entries
+            if entry.get("path")
+        }
         column_visibility = {
             key: var.get()
             for key, var in self.csv_column_vars.items()
@@ -1606,6 +1774,7 @@ class RelicGuiApp:
                         ocr_upsample=ocr_value,
                         video_files=videos_to_process,
                         item_color_overrides=color_overrides,
+                        relic_type_overrides=type_overrides,
                         save_full_frames=self.save_frames_var.get(),
                         csv_column_visibility=column_visibility,
                     )

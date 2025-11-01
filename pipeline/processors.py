@@ -7,9 +7,16 @@ from typing import Mapping, Optional
 
 from extract_frames import extract_and_crop
 from match_and_export import process_images
+from resource_paths import templates_path
 
 from .progress import ProgressReporter
-from .tasks import VideoTask, decide_item_color
+from .tasks import DEFAULT_RELIC_TYPE, RELIC_TYPE_DEEP, VideoTask, decide_item_color
+
+
+def _resolve_master_csv(relic_type: str) -> str:
+    if relic_type == RELIC_TYPE_DEEP:
+        return str(templates_path("master_relics_deep.csv"))
+    return str(templates_path("master_relics.csv"))
 
 
 def process_video(
@@ -42,6 +49,8 @@ def process_video(
     item_color = decide_item_color(task, override_colors)
 
     reporter.step(f"{video_name} のOCR/マッチング中...")
+    master_csv_path = _resolve_master_csv(getattr(task, "relic_type", DEFAULT_RELIC_TYPE))
+
     process_images(
         image_dir=str(task.crops_dir),
         output_path=str(task.csv_path),
@@ -51,6 +60,7 @@ def process_video(
         corrections_csv=str(task.corrections_csv),
         item_color=item_color,
         column_visibility=csv_column_visibility,
+        master_csv_path=master_csv_path,
     )
     reporter.advance(f"{video_name} のOCR/マッチング完了")
     print(f"[✓] {task.crops_dir} の結果を {task.csv_path} に出力しました")
@@ -61,4 +71,5 @@ def process_video(
         "csv": os.path.relpath(task.csv_path, result_dir),
         "img_dir": os.path.relpath(task.crops_dir, result_dir),
         "folder": os.path.relpath(task.output_dir, result_dir),
+        "relic_type": getattr(task, "relic_type", DEFAULT_RELIC_TYPE),
     }

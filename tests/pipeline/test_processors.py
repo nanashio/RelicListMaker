@@ -90,6 +90,7 @@ def test_process_video_creates_outputs_and_invokes_dependencies(tmp_path: Path, 
         corrections_csv: str,
         item_color: str | None,
         column_visibility: dict[str, object] | None,
+        master_csv_path: str,
     ) -> None:
         calls.append((
             "process",
@@ -99,6 +100,7 @@ def test_process_video_creates_outputs_and_invokes_dependencies(tmp_path: Path, 
                 f"scale={scale}",
                 f"upsample={upsample}",
                 f"color={item_color}",
+                master_csv_path,
             ),
         ))
         Path(output_path).write_text("csv")
@@ -135,6 +137,7 @@ def test_process_video_creates_outputs_and_invokes_dependencies(tmp_path: Path, 
     assert calls[1][1][0] == str(task.crops_dir)
     assert "upsample=2.0" in calls[1][1][3]
     assert "color=green" in calls[1][1][4]
+    assert calls[1][1][5].endswith("master_relics.csv")
 
     expected_rel_csv = Path(entry["csv"])
     expected_rel_img = Path(entry["img_dir"])

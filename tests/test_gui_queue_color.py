@@ -113,3 +113,39 @@ def test_inline_color_selection_after_editor_hidden() -> None:
         assert app._dropped_videos[0]["color"] == "blue"
     finally:
         root.destroy()
+
+
+def test_inline_relic_type_selection_updates_entry() -> None:
+    """遺物タイプ列の変更が内部データへ反映される."""
+    try:
+        root = tk.Tk()
+    except tk.TclError as exc:  # pragma: no cover - 実行環境依存
+        pytest.skip(f"Tkが利用できません: {exc}")
+
+    root.withdraw()
+    app = RelicGuiApp(root)
+
+    try:
+        sample_path = "/tmp/deep_run.mp4"
+        app._dropped_videos = [
+            {"path": sample_path, "color": "none", "relic_type": "normal"}
+        ]
+        app._dropped_video_set = {sample_path}
+        app._refresh_queue_view()
+        root.update_idletasks()
+
+        queue_tree = app.queue_tree
+        inline_type = app.inline_type_combo
+        assert queue_tree is not None
+        assert inline_type is not None
+
+        item_id = queue_tree.get_children()[0]
+        app._show_inline_relic_type_editor(item_id)
+        root.update_idletasks()
+
+        inline_type.set("深層遺物")
+        app._on_inline_type_selected()
+
+        assert app._dropped_videos[0]["relic_type"] == "deep"
+    finally:
+        root.destroy()

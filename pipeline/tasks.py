@@ -18,6 +18,15 @@ COLOR_KEYWORDS = {
 }
 
 
+DEFAULT_RELIC_TYPE = "normal"
+RELIC_TYPE_DEEP = "deep"
+_RELIC_TYPE_KEYWORDS = (
+    "deep",
+    "深層",
+    "深淵",
+)
+
+
 @dataclass(frozen=True)
 class VideoTask:
     source_path: Path
@@ -27,6 +36,7 @@ class VideoTask:
     crops_dir: Path
     csv_path: Path
     corrections_csv: Path
+    relic_type: str = DEFAULT_RELIC_TYPE
 
 
 def detect_item_color(name: str) -> Optional[str]:
@@ -72,6 +82,7 @@ def create_video_task(video_path: Path | str, result_dir: Path | str) -> VideoTa
         crops_dir=crops_dir,
         csv_path=csv_path,
         corrections_csv=corrections_csv,
+        relic_type=detect_relic_type(base_name),
     )
 
 
@@ -84,3 +95,30 @@ def decide_item_color(task: VideoTask, overrides: Mapping[Path, str]) -> Optiona
     if override is not None:
         return None if override == "none" else override
     return detect_item_color(task.base_name)
+
+
+def normalize_relic_type(value: Optional[str]) -> str:
+    if value is None:
+        return DEFAULT_RELIC_TYPE
+    text = str(value).strip()
+    if not text:
+        return DEFAULT_RELIC_TYPE
+    lowered = text.casefold()
+    if lowered in {RELIC_TYPE_DEEP, DEFAULT_RELIC_TYPE}:
+        return lowered
+    if any(keyword in lowered for keyword in _RELIC_TYPE_KEYWORDS):
+        return RELIC_TYPE_DEEP
+    if any(keyword in text for keyword in ("深層遺物", "深層")):
+        return RELIC_TYPE_DEEP
+    return DEFAULT_RELIC_TYPE
+
+
+def detect_relic_type(name: str) -> str:
+    if not name:
+        return DEFAULT_RELIC_TYPE
+    lowered = name.casefold()
+    if any(keyword in lowered for keyword in _RELIC_TYPE_KEYWORDS):
+        return RELIC_TYPE_DEEP
+    if "深層" in name:
+        return RELIC_TYPE_DEEP
+    return DEFAULT_RELIC_TYPE
