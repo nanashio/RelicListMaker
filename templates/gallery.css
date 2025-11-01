@@ -525,6 +525,12 @@ h1 {
     gap: var(--space-xs);
 }
 
+.item-relic-type-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
 .item-color-label {
     font-size: 12px;
     color: var(--color-text-secondary);
@@ -558,6 +564,35 @@ h1 {
 .item-color-select.option-blue {
     --item-color-value: var(--color-item-option-blue);
     --item-color-text: var(--color-item-option-blue-text);
+}
+
+.item-relic-type-select {
+    font-size: 13px;
+    padding: var(--space-xs) var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.item-relic-type-select:focus {
+    outline: none;
+    border-color: var(--color-focus);
+    box-shadow: 0 0 0 3px rgba(56, 132, 255, 0.25);
+}
+
+.item-relic-type-select.option-normal {
+    background: linear-gradient(90deg, rgba(76, 175, 80, 0.2), rgba(76, 175, 80, 0.2));
+}
+
+.item-relic-type-select.option-deep {
+    background: linear-gradient(90deg, rgba(33, 150, 243, 0.2), rgba(33, 150, 243, 0.2));
+}
+
+.item-relic-type-select.option-none {
+    background: var(--color-surface);
 }
 
 .item-color-red {

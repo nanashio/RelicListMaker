@@ -1854,7 +1854,7 @@ describe('gallery item factory', () => {
     assert.equal(bindCalls.length, 1, 'bindImage should be called once');
 
     const controls = leftColumn.children[1];
-    const metaInfo = controls.children[3];
+    const metaInfo = controls.querySelector('.item-meta');
     const datasetBadge = metaInfo.querySelector('.dataset-label');
     assert.ok(datasetBadge, 'dataset badge should exist for merged dataset');
     assert.equal(datasetBadge.textContent, 'Merged A');
@@ -1957,11 +1957,13 @@ describe('record action handlers', () => {
       applyFilters: () => {},
       buildGallery: () => {},
       applyItemColor: () => {},
+      applyItemRelicType: () => {},
       updateFavoriteVisuals: () => {},
       updateDuplicateVisuals: () => {},
       refreshItemCaches: () => {},
       getItemContext: () => ({ item, record, recordIndex: 0 }),
       normalizeItemColor: (value) => (value ? value.toLowerCase() : ''),
+      normalizeItemRelicType: (value) => (value ? value.toLowerCase() : ''),
       isRecordDuplicate: (targetRecord) => Boolean(targetRecord.__duplicate),
       isRecordFavorite: (targetRecord) => Boolean(targetRecord.__favorite),
       setRecordDuplicate: (_index, next) => {
@@ -1978,6 +1980,16 @@ describe('record action handlers', () => {
         const current = record.ItemColor || '';
         const changed = current !== nextColor;
         record.ItemColor = nextColor;
+        return changed;
+      },
+      setRecordItemRelicType: (_index, nextType) => {
+        const current = record.RelicType || '';
+        const changed = current !== nextType;
+        if (nextType) {
+          record.RelicType = nextType;
+        } else {
+          delete record.RelicType;
+        }
         return changed;
       },
       recordStatusChange: () => false,
@@ -2049,6 +2061,32 @@ describe('record action handlers', () => {
     assert.deepEqual(colorCalls, [[item, '']]);
     assert.equal(scheduleCalls.length, 1);
     assert.equal(filterCalls.length, 1);
+  });
+
+  test('toggleItemRelicType toggles type assignment per item', () => {
+    const record = { RelicType: 'normal' };
+    const item = new MockElement('div', 'item');
+    const select = new MockElement('select');
+    select.value = 'deep';
+    const scheduleCalls = [];
+    const filterCalls = [];
+    const relicTypeCalls = [];
+    const deps = buildBaseDeps(record, item, {
+      scheduleSave: () => scheduleCalls.push(null),
+      applyFilters: () => filterCalls.push(null),
+      applyItemRelicType: (target, value) => relicTypeCalls.push([target, value])
+    });
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.toggleItemRelicType(select);
+    assert.equal(record.RelicType, 'deep');
+    assert.deepEqual(relicTypeCalls, [[item, 'deep']]);
+    assert.equal(scheduleCalls.length, 1);
+    assert.equal(filterCalls.length, 1);
+
+    // Selecting the same value toggles back to empty
+    handlers.toggleItemRelicType(select);
+    assert.equal(record.RelicType, undefined);
+    assert.deepEqual(relicTypeCalls.slice(-1), [[item, '']]);
   });
 
   test('toggleFavorite updates visuals and schedules save', () => {

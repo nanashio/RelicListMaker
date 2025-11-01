@@ -11,6 +11,12 @@
         { key: 'blue', label: '青', className: 'item-color-blue' }
     ];
 
+    const ITEM_RELIC_TYPE_OPTIONS = [
+        { key: '', label: '未設定' },
+        { key: 'normal', label: '通常' },
+        { key: 'deep', label: '深層遺物' }
+    ];
+
     const RELIC_TYPE_ALL = 'all';
     const RELIC_TYPE_MERGED = 'merged';
     const RELIC_TYPE_LABELS = {
@@ -873,6 +879,14 @@
         return favoriteFlags.set(recordIndex, isFavorite);
     }
 
+    function normalizeRecordRelicType(value) {
+        const normalized = normalizeRelicTypeValue(value);
+        if (normalized === 'normal' || normalized === 'deep') {
+            return normalized;
+        }
+        return '';
+    }
+
     function setRecordItemColor(recordIndex, colorKey) {
         const record = getRecordByIndex(recordIndex);
         if (!record) {
@@ -888,6 +902,26 @@
         }
         if (Object.prototype.hasOwnProperty.call(record, 'ItemColor')) {
             delete record.ItemColor;
+            return true;
+        }
+        return false;
+    }
+
+    function setRecordItemRelicType(recordIndex, relicType) {
+        const record = getRecordByIndex(recordIndex);
+        if (!record) {
+            return false;
+        }
+        const normalized = normalizeRecordRelicType(relicType);
+        if (normalized) {
+            if (record.RelicType === normalized) {
+                return false;
+            }
+            record.RelicType = normalized;
+            return true;
+        }
+        if (Object.prototype.hasOwnProperty.call(record, 'RelicType')) {
+            delete record.RelicType;
             return true;
         }
         return false;
@@ -1424,6 +1458,7 @@
                   dom,
                   duplicates,
                   itemColorOptions: ITEM_COLOR_OPTIONS,
+                  relicTypeOptions: ITEM_RELIC_TYPE_OPTIONS,
                   createEffect,
                   bindImage,
                   createElement,
@@ -1454,6 +1489,8 @@
         updateDuplicateVisuals,
         applyItemColor,
         normalizeItemColor,
+        applyItemRelicType,
+        normalizeItemRelicType,
         refreshItemCaches
     } = galleryView;
 
@@ -1469,6 +1506,8 @@
         updateDuplicateVisuals,
         applyItemColor,
         normalizeItemColor,
+        applyItemRelicType,
+        normalizeItemRelicType,
         refreshItemCaches,
         getRecordByIndex,
         isRecordDuplicate,
@@ -1476,6 +1515,7 @@
         setRecordDuplicate,
         setRecordFavorite,
         setRecordItemColor,
+        setRecordItemRelicType,
         recordStatusChange,
         updateRecordCorrection,
         updateRecordLevelCorrection,
