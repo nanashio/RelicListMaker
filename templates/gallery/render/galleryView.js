@@ -237,6 +237,7 @@
             addEnhancer(syncDuplicateState);
             addEnhancer(syncFavoriteState);
             addEnhancer(syncItemColorState);
+            addEnhancer(syncItemRelicTypeState);
             addEnhancer(refreshItemCaches);
 
             if (Array.isArray(additionalEnhancers)) {
@@ -253,6 +254,7 @@
                 syncDuplicateState,
                 syncFavoriteState,
                 syncItemColorState,
+                syncItemRelicTypeState,
                 refreshItemCaches,
                 additionalEnhancers: additionalItemEnhancers
             });
@@ -274,6 +276,9 @@
             bindImage,
             createEffect,
             colorOptions,
+            relicTypeOptions: Array.isArray(config.relicTypeOptions)
+                ? config.relicTypeOptions.slice()
+                : [],
             getImagePath: (imageName) => joinPath(state.imageDir || '.', imageName),
             getDisplayName: (imageName) => getFileName(imageName),
             getLabelSymbols: () => (Array.isArray(state.labelSymbols) ? state.labelSymbols.slice() : []),
@@ -525,6 +530,20 @@
             return option ? option.key : '';
         }
 
+        function normalizeItemRelicType(value) {
+            const text = (value || '').toString().trim().toLowerCase();
+            if (!text) {
+                return '';
+            }
+            if (text === 'normal' || text === '通常') {
+                return 'normal';
+            }
+            if (text === 'deep' || text === '深層' || text === '深層遺物') {
+                return 'deep';
+            }
+            return '';
+        }
+
         function applyItemColor(item, colorKey) {
             if (!item) {
                 return;
@@ -549,6 +568,25 @@
                 const value = normalized || '';
                 select.value = value;
                 select.classList.remove('option-red', 'option-yellow', 'option-green', 'option-blue', 'option-none');
+                select.classList.add(value ? `option-${value}` : 'option-none');
+            }
+        }
+
+        function applyItemRelicType(item, relicType) {
+            if (!item) {
+                return;
+            }
+            const normalized = normalizeItemRelicType(relicType);
+            if (normalized) {
+                item.dataset.relicType = normalized;
+            } else {
+                delete item.dataset.relicType;
+            }
+            const select = item.querySelector('.item-relic-type-select');
+            if (select) {
+                const value = normalized || '';
+                select.value = value;
+                select.classList.remove('option-normal', 'option-deep', 'option-none');
                 select.classList.add(value ? `option-${value}` : 'option-none');
             }
         }
@@ -587,7 +625,7 @@
 
             const button = item.querySelector('.duplicate-toggle');
             if (button) {
-                button.textContent = value ? '重複を解除' : '重複として隠す';
+                button.textContent = value ? '重複を解除' : '重複';
                 button.setAttribute('aria-pressed', value ? 'true' : 'false');
             }
         }
@@ -614,6 +652,15 @@
             const context = getItemContext(item);
             const colorKey = context ? context.record.ItemColor : '';
             applyItemColor(item, colorKey);
+        }
+
+        function syncItemRelicTypeState(item) {
+            if (!item) {
+                return;
+            }
+            const context = getItemContext(item);
+            const relicType = context ? context.record.RelicType : '';
+            applyItemRelicType(item, relicType);
         }
 
         function legacyBuildItemCaches(baseTokens, effectEntries) {
@@ -787,33 +834,35 @@
                 typeof filterItemsFn === 'function' || typeof evaluateItemVisibilityFn === 'function';
 
             if (shouldUseFilterUtils) {
-                const itemStates = state.items.map((item) => {
-                    if (!item) {
-                        return {
-                            duplicate: false,
-                            searchCache: '',
-                            statusCache: '',
-                            effectStates: [],
-                            favorite: false,
-                            itemColor: ''
-                        };
-                    }
+            const itemStates = state.items.map((item) => {
+                if (!item) {
                     return {
-                        duplicate: item.dataset.duplicate === 'true',
-                        searchCache: item.dataset.searchCache || '',
-                        statusCache: item.dataset.statusCache || '',
-                        effectStates: (item.dataset.effectStates || '').split(',').filter(Boolean),
-                        favorite: item.dataset.favorite === 'true',
-                        itemColor: normalizeItemColor(item.dataset.itemColor || '')
+                        duplicate: false,
+                        searchCache: '',
+                        statusCache: '',
+                        effectStates: [],
+                        favorite: false,
+                        itemColor: '',
+                        relicType: ''
                     };
-                });
-
-                const options = {
-                    term,
-                    filter,
-                    colorFilter,
-                    includeDuplicates: showDuplicates
+                }
+                return {
+                    duplicate: item.dataset.duplicate === 'true',
+                    searchCache: item.dataset.searchCache || '',
+                    statusCache: item.dataset.statusCache || '',
+                    effectStates: (item.dataset.effectStates || '').split(',').filter(Boolean),
+                    favorite: item.dataset.favorite === 'true',
+                    itemColor: normalizeItemColor(item.dataset.itemColor || ''),
+                    relicType: normalizeItemRelicType(item.dataset.relicType || '')
                 };
+            });
+
+            const options = {
+                term,
+                filter,
+                colorFilter,
+                includeDuplicates: showDuplicates
+            };
 
                 const visibility = typeof filterItemsFn === 'function' ? filterItemsFn(itemStates, options) : null;
 
@@ -848,6 +897,8 @@
             updateDuplicateVisuals,
             applyItemColor,
             normalizeItemColor,
+            applyItemRelicType,
+            normalizeItemRelicType,
             refreshItemCaches
         };
     }

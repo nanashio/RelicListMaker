@@ -16,6 +16,7 @@
             syncDuplicateState,
             syncFavoriteState,
             syncItemColorState,
+            syncItemRelicTypeState,
             refreshItemCaches,
             baseEnhancers = [],
             additionalEnhancers = [],
@@ -39,6 +40,7 @@
             addEnhancer(syncDuplicateState);
             addEnhancer(syncFavoriteState);
             addEnhancer(syncItemColorState);
+            addEnhancer(syncItemRelicTypeState);
             addEnhancer(refreshItemCaches);
         }
 

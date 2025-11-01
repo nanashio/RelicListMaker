@@ -7,6 +7,7 @@
             bindImage = () => {},
             createEffect,
             colorOptions = [],
+            relicTypeOptions: relicTypeOptionsConfig = [],
             getImagePath = (imageName) => imageName,
             getDisplayName = (imageName) => imageName,
             getLabelSymbols = () => [],
@@ -38,6 +39,9 @@
                 : () => (typeof document !== 'undefined' ? document.createDocumentFragment() : null);
 
         const normalizedColorOptions = Array.isArray(colorOptions) ? colorOptions.slice() : [];
+        const normalizedRelicTypeOptions = Array.isArray(relicTypeOptionsConfig)
+            ? relicTypeOptionsConfig.slice()
+            : [];
         const resolvedDatasetState = datasetState && typeof datasetState === 'object' ? datasetState : {};
         const itemEnhancers = Array.isArray(itemEnhancersConfig)
             ? itemEnhancersConfig.filter((fn) => typeof fn === 'function')
@@ -162,6 +166,7 @@
             controls.appendChild(createDuplicateButton(context.imageName));
             controls.appendChild(createFavoriteButton(context.imageName));
             controls.appendChild(createColorControls(context.recordIndex));
+            controls.appendChild(createRelicTypeControls(context.recordIndex));
             controls.appendChild(createItemMetaInfo(context));
             return controls;
         }
@@ -186,14 +191,13 @@
 
         function createColorControls(recordIndex) {
             const container = createElement('div', 'item-color-controls');
-            const label = createElement('label', 'item-color-label', '色');
             const selectId = `item-color-${recordIndex}`;
-            label.setAttribute('for', selectId);
 
             const select = createElement('select', 'item-color-select');
             select.id = selectId;
             select.dataset.action = 'set-item-color';
             select.dataset.recordIndex = String(recordIndex);
+            select.setAttribute('aria-label', '色');
 
             const emptyOption = createElement('option');
             emptyOption.value = '';
@@ -207,7 +211,27 @@
                 select.appendChild(colorOption);
             });
 
-            container.appendChild(label);
+            container.appendChild(select);
+            return container;
+        }
+
+        function createRelicTypeControls(recordIndex) {
+            const container = createElement('div', 'item-relic-type-controls');
+            const selectId = `item-relic-type-${recordIndex}`;
+
+            const select = createElement('select', 'item-relic-type-select');
+            select.id = selectId;
+            select.dataset.action = 'set-item-relic-type';
+            select.dataset.recordIndex = String(recordIndex);
+            select.setAttribute('aria-label', '種別');
+
+            normalizedRelicTypeOptions.forEach((option) => {
+                const relicOption = createElement('option');
+                relicOption.value = option.key;
+                relicOption.textContent = option.label;
+                select.appendChild(relicOption);
+            });
+
             container.appendChild(select);
             return container;
         }

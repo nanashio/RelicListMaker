@@ -85,6 +85,8 @@ def _normalize_dataset_entries(datasets, output_dir: str):
         img_dir = None
         folder = ""
 
+        relic_type = None
+
         if isinstance(entry, dict):
             raw_label = entry.get("label") or entry.get("name")
             if raw_label is not None:
@@ -92,6 +94,7 @@ def _normalize_dataset_entries(datasets, output_dir: str):
             csv_path = entry.get("csv") or entry.get("results_csv") or entry.get("results")
             img_dir = entry.get("imgDir") or entry.get("img_dir") or entry.get("images") or entry.get("image_dir")
             folder = str(entry.get("folder") or "").strip()
+            relic_type = entry.get("relicType") or entry.get("relic_type")
         elif isinstance(entry, (list, tuple)):
             if entry:
                 csv_path = entry[0]
@@ -150,6 +153,10 @@ def _normalize_dataset_entries(datasets, output_dir: str):
                 entry_data["kind"] = raw_kind.strip()
             if "sources" in entry:
                 entry_data["sources"] = entry["sources"]
+            if relic_type is not None:
+                normalized_relic_type = str(relic_type).strip()
+                if normalized_relic_type:
+                    entry_data["relicType"] = normalized_relic_type
 
         normalized.append(entry_data)
 
@@ -329,6 +336,7 @@ def generate_html(
                 "folder": "",
                 "kind": "merged",
                 "sources": merged_sources,
+                "relicType": "merged",
             }
             dataset_entries = [merged_entry] + dataset_entries
             if active_dataset_index >= 0:

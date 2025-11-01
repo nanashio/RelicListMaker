@@ -164,6 +164,7 @@
 
             const {
                 switchDataset = () => {},
+                setRelicTypeFilter = () => {},
                 buildGallery = () => {},
                 applyFilters = () => {},
                 setOcrVisibility = () => {},
@@ -173,12 +174,15 @@
                 updateDuplicateVisuals = () => {},
                 applyItemColor = () => {},
                 normalizeItemColor = (value) => value,
+                applyItemRelicType = () => {},
+                normalizeItemRelicType = (value) => value,
                 refreshItemCaches = () => {},
                 isRecordDuplicate = () => false,
                 isRecordFavorite = () => false,
                 setRecordDuplicate = () => false,
                 setRecordFavorite = () => false,
                 setRecordItemColor = () => false,
+                setRecordItemRelicType = () => false,
                 recordStatusChange = () => false,
                 updateRecordCorrection = () => false,
                 updateRecordLevelCorrection = () => false,
@@ -194,16 +198,19 @@
                 applyFilters,
                 buildGallery,
                 applyItemColor,
+                applyItemRelicType,
                 updateFavoriteVisuals,
                 updateDuplicateVisuals,
                 refreshItemCaches,
                 getItemContext,
                 normalizeItemColor,
+                normalizeItemRelicType,
                 isRecordDuplicate,
                 isRecordFavorite,
                 setRecordDuplicate,
                 setRecordFavorite,
                 setRecordItemColor,
+                setRecordItemRelicType,
                 recordStatusChange,
                 updateRecordCorrection,
                 updateRecordLevelCorrection,
@@ -227,10 +234,17 @@
                 toggleDuplicate,
                 toggleFavorite,
                 toggleItemColor,
+                toggleItemRelicType,
                 changeEffectCorrection,
                 changeEffectLevel,
                 toggleReviewStatus
             } = recordActions;
+
+            if (dom.relicTypeSelect) {
+                dom.relicTypeSelect.addEventListener('change', (event) => {
+                    setRelicTypeFilter(event.target.value);
+                });
+            }
 
             if (dom.datasetSelect) {
                 dom.datasetSelect.addEventListener('change', (event) => {
@@ -258,13 +272,6 @@
                         return;
                     }
 
-                    const colorSelect = event.target.closest('.item-color-select');
-                    if (colorSelect) {
-                        event.preventDefault();
-                        toggleItemColor(colorSelect);
-                        return;
-                    }
-
                     const button = event.target.closest('.review-button');
                     if (!button) {
                         return;
@@ -277,6 +284,16 @@
                 });
 
                 dom.gallery.addEventListener('change', (event) => {
+                    const relicTypeSelect = event.target.closest('.item-relic-type-select');
+                    if (relicTypeSelect) {
+                        toggleItemRelicType(relicTypeSelect);
+                        return;
+                    }
+                    const colorSelect = event.target.closest('.item-color-select');
+                    if (colorSelect) {
+                        toggleItemColor(colorSelect);
+                        return;
+                    }
                     const correctionInput = event.target.closest('.correction-input');
                     if (correctionInput) {
                         const effect = correctionInput.closest('.effect');

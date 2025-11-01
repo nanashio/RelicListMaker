@@ -6,16 +6,19 @@
             applyFilters,
             buildGallery,
             applyItemColor,
+            applyItemRelicType,
             updateFavoriteVisuals,
             updateDuplicateVisuals,
             refreshItemCaches,
             getItemContext,
             normalizeItemColor,
+            normalizeItemRelicType,
             isRecordDuplicate,
             isRecordFavorite,
             setRecordDuplicate,
             setRecordFavorite,
             setRecordItemColor,
+            setRecordItemRelicType,
             recordStatusChange,
             updateRecordCorrection,
             updateRecordLevelCorrection,
@@ -46,6 +49,7 @@
             setRecordDuplicate,
             setRecordFavorite,
             setRecordItemColor,
+            setRecordItemRelicType,
             recordStatusChange,
             updateRecordCorrection,
             updateRecordLevelCorrection,
@@ -75,6 +79,8 @@
         const safeApplyFilters = typeof applyFilters === 'function' ? applyFilters : () => {};
         const safeBuildGallery = typeof buildGallery === 'function' ? buildGallery : () => {};
         const safeApplyItemColor = typeof applyItemColor === 'function' ? applyItemColor : () => {};
+        const safeApplyItemRelicType =
+            typeof applyItemRelicType === 'function' ? applyItemRelicType : () => {};
         const safeUpdateFavoriteVisuals =
             typeof updateFavoriteVisuals === 'function' ? updateFavoriteVisuals : () => {};
         const safeUpdateDuplicateVisuals =
@@ -82,6 +88,8 @@
         const safeRefreshItemCaches = typeof refreshItemCaches === 'function' ? refreshItemCaches : () => {};
         const normalizeColor =
             typeof normalizeItemColor === 'function' ? normalizeItemColor : (value) => value;
+        const normalizeRelicType =
+            typeof normalizeItemRelicType === 'function' ? normalizeItemRelicType : (value) => value;
 
         function getItemActionContext(control) {
             if (!control) {
@@ -219,6 +227,23 @@
                 safeScheduleSave();
             }
             safeApplyItemColor(item, nextColor);
+            safeApplyFilters();
+        }
+
+        function toggleItemRelicType(control) {
+            const context = getItemActionContext(control);
+            if (!context) {
+                return;
+            }
+            const { item, record, recordIndex } = context;
+            const targetType = normalizeRelicType((control.value || '').trim());
+            const currentType = normalizeRelicType(record ? record.RelicType : '');
+            const nextType = currentType === targetType ? '' : targetType;
+            const recordChanged = setRecordItemRelicType(recordIndex, nextType);
+            if (recordChanged) {
+                safeScheduleSave();
+            }
+            safeApplyItemRelicType(item, nextType);
             safeApplyFilters();
         }
 
@@ -364,6 +389,7 @@
             toggleDuplicate,
             toggleFavorite,
             toggleItemColor,
+            toggleItemRelicType,
             changeEffectCorrection,
             changeEffectLevel,
             toggleReviewStatus

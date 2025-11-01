@@ -22,7 +22,8 @@
             label: '',
             folder: '',
             kind: '',
-            sources: []
+            sources: [],
+            relicType: ''
         };
 
         const cloneSources = (sources) => {
@@ -122,6 +123,7 @@
             dataset.folder = next.folder || '';
             dataset.kind = next.kind || '';
             dataset.sources = cloneSources(next.sources);
+            dataset.relicType = next.relicType || '';
             if (dataset.kind === 'merged') {
                 core.csvPath = next.csvPath || 'merged-dataset.csv';
                 core.imageDir = '';

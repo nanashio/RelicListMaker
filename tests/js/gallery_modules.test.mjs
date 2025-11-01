@@ -1854,7 +1854,7 @@ describe('gallery item factory', () => {
     assert.equal(bindCalls.length, 1, 'bindImage should be called once');
 
     const controls = leftColumn.children[1];
-    const metaInfo = controls.children[3];
+    const metaInfo = controls.querySelector('.item-meta');
     const datasetBadge = metaInfo.querySelector('.dataset-label');
     assert.ok(datasetBadge, 'dataset badge should exist for merged dataset');
     assert.equal(datasetBadge.textContent, 'Merged A');
@@ -1957,11 +1957,13 @@ describe('record action handlers', () => {
       applyFilters: () => {},
       buildGallery: () => {},
       applyItemColor: () => {},
+      applyItemRelicType: () => {},
       updateFavoriteVisuals: () => {},
       updateDuplicateVisuals: () => {},
       refreshItemCaches: () => {},
       getItemContext: () => ({ item, record, recordIndex: 0 }),
       normalizeItemColor: (value) => (value ? value.toLowerCase() : ''),
+      normalizeItemRelicType: (value) => (value ? value.toLowerCase() : ''),
       isRecordDuplicate: (targetRecord) => Boolean(targetRecord.__duplicate),
       isRecordFavorite: (targetRecord) => Boolean(targetRecord.__favorite),
       setRecordDuplicate: (_index, next) => {
@@ -1978,6 +1980,16 @@ describe('record action handlers', () => {
         const current = record.ItemColor || '';
         const changed = current !== nextColor;
         record.ItemColor = nextColor;
+        return changed;
+      },
+      setRecordItemRelicType: (_index, nextType) => {
+        const current = record.RelicType || '';
+        const changed = current !== nextType;
+        if (nextType) {
+          record.RelicType = nextType;
+        } else {
+          delete record.RelicType;
+        }
         return changed;
       },
       recordStatusChange: () => false,
@@ -2049,6 +2061,32 @@ describe('record action handlers', () => {
     assert.deepEqual(colorCalls, [[item, '']]);
     assert.equal(scheduleCalls.length, 1);
     assert.equal(filterCalls.length, 1);
+  });
+
+  test('toggleItemRelicType toggles type assignment per item', () => {
+    const record = { RelicType: 'normal' };
+    const item = new MockElement('div', 'item');
+    const select = new MockElement('select');
+    select.value = 'deep';
+    const scheduleCalls = [];
+    const filterCalls = [];
+    const relicTypeCalls = [];
+    const deps = buildBaseDeps(record, item, {
+      scheduleSave: () => scheduleCalls.push(null),
+      applyFilters: () => filterCalls.push(null),
+      applyItemRelicType: (target, value) => relicTypeCalls.push([target, value])
+    });
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.toggleItemRelicType(select);
+    assert.equal(record.RelicType, 'deep');
+    assert.deepEqual(relicTypeCalls, [[item, 'deep']]);
+    assert.equal(scheduleCalls.length, 1);
+    assert.equal(filterCalls.length, 1);
+
+    // Selecting the same value toggles back to empty
+    handlers.toggleItemRelicType(select);
+    assert.equal(record.RelicType, undefined);
+    assert.deepEqual(relicTypeCalls.slice(-1), [[item, '']]);
   });
 
   test('toggleFavorite updates visuals and schedules save', () => {
@@ -2428,6 +2466,184 @@ describe('gallery events', () => {
     assert.equal(buildGalleryCalls.length, 1);
     assert.equal(scheduleSaveCalls.length, 1);
     assert.deepEqual(duplicates.setCalls, [['image.png', true]]);
+  });
+
+  test('item color select change updates record without preventing default behaviour', () => {
+    const record = {};
+    const item = new MockElement('div', 'item');
+    item.dataset.recordIndex = '0';
+    const controls = new MockElement('div', 'item-controls');
+    const select = new MockElement('select', 'item-color-select');
+    select.dataset.recordIndex = '0';
+    controls.appendChild(select);
+    item.appendChild(controls);
+    dom.gallery.appendChild(item);
+
+    const scheduleSaveCalls = [];
+    const filterCalls = [];
+    const applyItemColorCalls = [];
+
+    galleryEvents.attachEventHandlers({
+      switchDataset: () => {},
+      buildGallery: () => {},
+      applyFilters: () => filterCalls.push(null),
+      setOcrVisibility: () => {},
+      getOcrToggleState: () => false,
+      getItemContext: () => ({ item, record, recordIndex: 0 }),
+      updateFavoriteVisuals: () => {},
+      updateDuplicateVisuals: () => {},
+      applyItemColor: (target, color) => {
+        applyItemColorCalls.push([target, color]);
+        select.value = color || '';
+      },
+      normalizeItemColor: (value) => value || '',
+      applyItemRelicType: () => {},
+      normalizeItemRelicType: (value) => value || '',
+      refreshItemCaches: () => {},
+      getRecordByIndex: () => record,
+      isRecordDuplicate: () => false,
+      isRecordFavorite: () => false,
+      setRecordDuplicate: () => false,
+      setRecordFavorite: () => false,
+      setRecordItemColor: (_index, nextColor) => {
+        record.ItemColor = nextColor;
+        return true;
+      },
+      setRecordItemRelicType: () => false,
+      recordStatusChange: () => false,
+      updateRecordCorrection: () => false,
+      updateRecordLevelCorrection: () => false,
+      updateRecordLevelValue: () => false,
+      updateRecordLevelOptions: () => false,
+      updateRecordLevelSuppressed: () => false,
+      scheduleSave: () => scheduleSaveCalls.push(null)
+    });
+
+    const clickHandlers = dom.gallery.eventListeners.click || [];
+    assert.equal(clickHandlers.length > 0, true);
+    const clickEvent = {
+      target: select,
+      preventDefault: () => {
+        clickEvent.prevented = true;
+      }
+    };
+    clickHandlers[0](clickEvent);
+    assert.equal(clickEvent.prevented, undefined);
+    assert.equal(scheduleSaveCalls.length, 0);
+    assert.equal(applyItemColorCalls.length, 0);
+    assert.equal(record.ItemColor, undefined);
+
+    const changeHandlers = dom.gallery.eventListeners.change || [];
+    assert.equal(changeHandlers.length > 0, true);
+    const previousValue = select.value;
+    select.value = 'red';
+    const changeEvent = {
+      target: select,
+      prevented: false,
+      preventDefault() {
+        this.prevented = true;
+      }
+    };
+    changeHandlers[0](changeEvent);
+    if (changeEvent.prevented) {
+      select.value = previousValue;
+    }
+
+    assert.equal(changeEvent.prevented, false);
+    assert.equal(record.ItemColor, 'red');
+    assert.equal(scheduleSaveCalls.length, 1);
+    assert.equal(filterCalls.length, 1);
+    assert.deepEqual(applyItemColorCalls, [[item, 'red']]);
+    assert.equal(select.value, 'red');
+  });
+
+  test('item relic type select change updates record without preventing default behaviour', () => {
+    const record = {};
+    const item = new MockElement('div', 'item');
+    item.dataset.recordIndex = '0';
+    const controls = new MockElement('div', 'item-controls');
+    const select = new MockElement('select', 'item-relic-type-select');
+    select.dataset.recordIndex = '0';
+    controls.appendChild(select);
+    item.appendChild(controls);
+    dom.gallery.appendChild(item);
+
+    const scheduleSaveCalls = [];
+    const filterCalls = [];
+    const applyRelicTypeCalls = [];
+
+    galleryEvents.attachEventHandlers({
+      switchDataset: () => {},
+      buildGallery: () => {},
+      applyFilters: () => filterCalls.push(null),
+      setOcrVisibility: () => {},
+      getOcrToggleState: () => false,
+      getItemContext: () => ({ item, record, recordIndex: 0 }),
+      updateFavoriteVisuals: () => {},
+      updateDuplicateVisuals: () => {},
+      applyItemColor: () => {},
+      normalizeItemColor: (value) => value || '',
+      applyItemRelicType: (target, value) => {
+        applyRelicTypeCalls.push([target, value]);
+        select.value = value || '';
+      },
+      normalizeItemRelicType: (value) => value || '',
+      refreshItemCaches: () => {},
+      getRecordByIndex: () => record,
+      isRecordDuplicate: () => false,
+      isRecordFavorite: () => false,
+      setRecordDuplicate: () => false,
+      setRecordFavorite: () => false,
+      setRecordItemColor: () => false,
+      setRecordItemRelicType: (_index, value) => {
+        record.RelicType = value;
+        return true;
+      },
+      recordStatusChange: () => false,
+      updateRecordCorrection: () => false,
+      updateRecordLevelCorrection: () => false,
+      updateRecordLevelValue: () => false,
+      updateRecordLevelOptions: () => false,
+      updateRecordLevelSuppressed: () => false,
+      scheduleSave: () => scheduleSaveCalls.push(null)
+    });
+
+    const clickHandlers = dom.gallery.eventListeners.click || [];
+    assert.equal(clickHandlers.length > 0, true);
+    const clickEvent = {
+      target: select,
+      preventDefault: () => {
+        clickEvent.prevented = true;
+      }
+    };
+    clickHandlers[0](clickEvent);
+    assert.equal(clickEvent.prevented, undefined);
+    assert.equal(scheduleSaveCalls.length, 0);
+    assert.equal(applyRelicTypeCalls.length, 0);
+    assert.equal(record.RelicType, undefined);
+
+    const changeHandlers = dom.gallery.eventListeners.change || [];
+    assert.equal(changeHandlers.length > 0, true);
+    const previousValue = select.value;
+    select.value = 'deep';
+    const changeEvent = {
+      target: select,
+      prevented: false,
+      preventDefault() {
+        this.prevented = true;
+      }
+    };
+    changeHandlers[0](changeEvent);
+    if (changeEvent.prevented) {
+      select.value = previousValue;
+    }
+
+    assert.equal(changeEvent.prevented, false);
+    assert.equal(record.RelicType, 'deep');
+    assert.equal(scheduleSaveCalls.length, 1);
+    assert.equal(filterCalls.length, 1);
+    assert.deepEqual(applyRelicTypeCalls, [[item, 'deep']]);
+    assert.equal(select.value, 'deep');
   });
 
   test('correction input change updates record state', () => {
