@@ -186,14 +186,13 @@
 
         function createColorControls(recordIndex) {
             const container = createElement('div', 'item-color-controls');
-            const label = createElement('label', 'item-color-label', '色');
             const selectId = `item-color-${recordIndex}`;
-            label.setAttribute('for', selectId);
 
             const select = createElement('select', 'item-color-select');
             select.id = selectId;
             select.dataset.action = 'set-item-color';
             select.dataset.recordIndex = String(recordIndex);
+            select.setAttribute('aria-label', '色');
 
             const emptyOption = createElement('option');
             emptyOption.value = '';
@@ -207,7 +206,6 @@
                 select.appendChild(colorOption);
             });
 
-            container.appendChild(label);
             container.appendChild(select);
             return container;
         }

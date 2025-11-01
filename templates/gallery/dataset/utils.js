@@ -40,6 +40,7 @@
         let folder = '';
         let kind = '';
         let sources = [];
+        let relicType = '';
 
         if (typeof entry === 'string') {
             csv = entry;
@@ -64,6 +65,7 @@
             }
             const rawSources = entry.sources ?? entry.merge ?? entry.mergeSources ?? entry.children ?? null;
             sources = normalizeDatasetSources(rawSources);
+            relicType = entry.relicType ?? entry.relic_type ?? '';
         } else {
             csv = String(entry);
         }
@@ -73,6 +75,11 @@
         imgDir = typeof imgDir === 'string' ? imgDir.trim() : '';
         folder = typeof folder === 'string' ? folder.trim() : '';
         kind = typeof kind === 'string' ? kind.trim().toLowerCase() : '';
+        relicType = typeof relicType === 'string' ? relicType.trim().toLowerCase() : '';
+
+        if (!relicType && kind === 'merged') {
+            relicType = 'merged';
+        }
 
         const hasCsv = Boolean(csv);
         const acceptsEmptyCsv = kind === 'merged' && sources.length > 0;
@@ -87,7 +94,8 @@
             folder,
             index,
             kind,
-            sources
+            sources,
+            relicType
         };
     }
 
@@ -202,7 +210,8 @@
             kind,
             csvPath,
             imageDir,
-            sources
+            sources,
+            relicType
         };
     }
 

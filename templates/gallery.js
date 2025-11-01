@@ -11,6 +11,14 @@
         { key: 'blue', label: '青', className: 'item-color-blue' }
     ];
 
+    const RELIC_TYPE_ALL = 'all';
+    const RELIC_TYPE_MERGED = 'merged';
+    const RELIC_TYPE_LABELS = {
+        [RELIC_TYPE_ALL]: 'すべて',
+        normal: '通常',
+        deep: '深層遺物'
+    };
+
     const VIEW_BOX_STORAGE_PREFIX = 'gallery.itemImageViewBox';
     const VIEW_BOX_FALLBACK = 'inset(0px 180px 0px 0px)';
     const VIEW_BOX_MAX_LENGTH = 200;
@@ -113,6 +121,26 @@
     }
 
     const normalizeSuppressedRecords = (records) => normalizeSuppressedLevelsFromUtils(records);
+
+    function normalizeRelicTypeValue(value) {
+        if (value == null) {
+            return '';
+        }
+        const text = String(value).trim().toLowerCase();
+        if (!text) {
+            return '';
+        }
+        if (text === 'normal' || text === '通常') {
+            return 'normal';
+        }
+        if (text === 'deep' || text === '深層' || text === '深層遺物') {
+            return 'deep';
+        }
+        if (text === 'merged' || text === 'all' || text === '統合') {
+            return RELIC_TYPE_MERGED;
+        }
+        return text;
+    }
 
     function sanitizeViewBoxValue(value) {
         if (typeof value !== 'string') {
@@ -539,6 +567,8 @@
         gallery: document.getElementById('gallery'),
         datasetSelector: document.getElementById('dataset-selector'),
         datasetSelect: document.getElementById('dataset-select'),
+        relicTypeSelector: document.getElementById('relic-type-selector'),
+        relicTypeSelect: document.getElementById('relic-type-select'),
         galleryStatus: document.getElementById('gallery-status'),
         searchInput: document.getElementById('search-input'),
         filterSelect: document.getElementById('filter-status'),
@@ -564,6 +594,8 @@
     };
 
     const viewBoxStorageKey = createViewBoxStorageKey(initialCsvPath);
+
+    let activeRelicType = RELIC_TYPE_ALL;
 
     if (dom.uploadCsvButton) {
         dom.uploadCsvButton.disabled = true;
@@ -644,6 +676,130 @@
     });
 
     const { clampDatasetIndex, getCurrentDataset, prepareInitialDataset, switchDataset } = datasetManager;
+
+    function getDatasetRelicType(dataset) {
+        if (!dataset) {
+            return '';
+        }
+        return normalizeRelicTypeValue(dataset.relicType || '');
+    }
+
+    function getAvailableRelicTypes() {
+        const types = new Set();
+        if (!Array.isArray(datasetState.list)) {
+            return types;
+        }
+        datasetState.list.forEach((dataset) => {
+            const type = getDatasetRelicType(dataset);
+            if (type && type !== RELIC_TYPE_MERGED) {
+                types.add(type);
+            }
+        });
+        return types;
+    }
+
+    function getFilteredDatasetIndexes(filterType) {
+        const list = Array.isArray(datasetState.list) ? datasetState.list : [];
+        if (!list.length) {
+            return [];
+        }
+        const normalized = filterType === RELIC_TYPE_ALL ? RELIC_TYPE_ALL : normalizeRelicTypeValue(filterType);
+        if (normalized === RELIC_TYPE_ALL) {
+            return list.map((_, index) => index);
+        }
+        const indexes = [];
+        list.forEach((dataset, index) => {
+            const type = getDatasetRelicType(dataset);
+            if (type === normalized) {
+                indexes.push(index);
+            }
+        });
+        return indexes;
+    }
+
+    function updateRelicTypeSelector() {
+        if (!dom.relicTypeSelector || !dom.relicTypeSelect) {
+            return;
+        }
+        const availableTypes = Array.from(getAvailableRelicTypes());
+        if (availableTypes.length <= 1) {
+            activeRelicType = RELIC_TYPE_ALL;
+            clearElementChildren(dom.relicTypeSelect);
+            dom.relicTypeSelect.value = RELIC_TYPE_ALL;
+            dom.relicTypeSelect.title = RELIC_TYPE_LABELS[RELIC_TYPE_ALL];
+            setElementHidden(dom.relicTypeSelector, true);
+            return;
+        }
+
+        const options = [RELIC_TYPE_ALL, ...availableTypes];
+        const needsRebuild =
+            dom.relicTypeSelect.options.length !== options.length ||
+            options.some((type, index) => dom.relicTypeSelect.options[index].value !== type);
+
+        if (needsRebuild) {
+            clearElementChildren(dom.relicTypeSelect);
+            options.forEach((type) => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = RELIC_TYPE_LABELS[type] || type;
+                dom.relicTypeSelect.appendChild(option);
+            });
+        }
+
+        if (!options.includes(activeRelicType)) {
+            activeRelicType = RELIC_TYPE_ALL;
+        }
+
+        dom.relicTypeSelect.value = activeRelicType;
+        dom.relicTypeSelect.title = RELIC_TYPE_LABELS[activeRelicType] || activeRelicType;
+        setElementHidden(dom.relicTypeSelector, false);
+    }
+
+    function rebuildDatasetOptions(selectedIndex) {
+        if (!dom.datasetSelector || !dom.datasetSelect) {
+            return;
+        }
+        const indexes = getFilteredDatasetIndexes(activeRelicType);
+        clearElementChildren(dom.datasetSelect);
+        if (!indexes.length) {
+            setElementHidden(dom.datasetSelector, true);
+            return;
+        }
+        indexes.forEach((datasetIndex) => {
+            const option = document.createElement('option');
+            option.value = String(datasetIndex);
+            option.textContent = datasetOptionLabel(datasetState.list[datasetIndex], datasetIndex);
+            dom.datasetSelect.appendChild(option);
+        });
+        const normalizedSelected = indexes.includes(selectedIndex) ? selectedIndex : indexes[0];
+        dom.datasetSelect.value = String(normalizedSelected);
+        dom.datasetSelect.title = datasetOptionLabel(datasetState.list[normalizedSelected], normalizedSelected);
+        setElementHidden(dom.datasetSelector, false);
+    }
+
+    function setActiveRelicType(value) {
+        const requested = value === RELIC_TYPE_ALL ? RELIC_TYPE_ALL : normalizeRelicTypeValue(value);
+        const available = getAvailableRelicTypes();
+        let nextType = requested;
+        if (nextType !== RELIC_TYPE_ALL && !available.has(nextType)) {
+            nextType = RELIC_TYPE_ALL;
+        }
+        if (nextType !== activeRelicType) {
+            activeRelicType = nextType;
+        }
+        updateRelicTypeSelector();
+        const indexes = getFilteredDatasetIndexes(activeRelicType);
+        if (!indexes.length) {
+            rebuildDatasetOptions(-1);
+            return;
+        }
+        const currentIndex = clampDatasetIndex(datasetState.activeIndex);
+        const targetIndex = indexes.includes(currentIndex) ? currentIndex : indexes[0];
+        rebuildDatasetOptions(targetIndex);
+        if (targetIndex !== currentIndex) {
+            void switchDataset(targetIndex);
+        }
+    }
 
     const appFactory = window.galleryAppFactory || null;
 
@@ -1303,6 +1459,7 @@
 
     attachEventHandlers({
         switchDataset,
+        setRelicTypeFilter: setActiveRelicType,
         buildGallery,
         applyFilters,
         setOcrVisibility,
@@ -1348,37 +1505,51 @@
         if (!dom.datasetSelector || !dom.datasetSelect) {
             return;
         }
-        if (!datasetState.list.length) {
-            setElementHidden(dom.datasetSelector, true);
+        const currentIndex = clampDatasetIndex(datasetState.activeIndex);
+        const currentDataset = datasetState.list && datasetState.list[currentIndex];
+        const currentType = getDatasetRelicType(currentDataset);
+        const availableTypes = getAvailableRelicTypes();
+        if (
+            currentType &&
+            currentType !== RELIC_TYPE_MERGED &&
+            activeRelicType !== RELIC_TYPE_ALL &&
+            activeRelicType !== currentType &&
+            availableTypes.has(currentType)
+        ) {
+            activeRelicType = currentType;
+        }
+        updateRelicTypeSelector();
+        if (!Array.isArray(datasetState.list) || !datasetState.list.length) {
             clearElementChildren(dom.datasetSelect);
+            setElementHidden(dom.datasetSelector, true);
             return;
         }
-
-        clearElementChildren(dom.datasetSelect);
-        datasetState.list.forEach((dataset, index) => {
-            const option = document.createElement('option');
-            option.value = String(index);
-            option.textContent = datasetOptionLabel(dataset, index);
-            dom.datasetSelect.appendChild(option);
-        });
-        setElementHidden(dom.datasetSelector, false);
-        const currentIndex = clampDatasetIndex(datasetState.activeIndex);
-        dom.datasetSelect.value = String(currentIndex);
-        dom.datasetSelect.title = datasetOptionLabel(getCurrentDataset(), currentIndex);
+        rebuildDatasetOptions(currentIndex);
     }
 
     function updateDatasetIndicator() {
         if (!dom.datasetSelector || !dom.datasetSelect) {
             return;
         }
-        if (!datasetState.list.length) {
+        const currentIndex = clampDatasetIndex(datasetState.activeIndex);
+        const currentDataset = datasetState.list && datasetState.list[currentIndex];
+        const currentType = getDatasetRelicType(currentDataset);
+        const availableTypes = getAvailableRelicTypes();
+        if (
+            currentType &&
+            currentType !== RELIC_TYPE_MERGED &&
+            activeRelicType !== RELIC_TYPE_ALL &&
+            activeRelicType !== currentType &&
+            availableTypes.has(currentType)
+        ) {
+            activeRelicType = currentType;
+        }
+        updateRelicTypeSelector();
+        if (!Array.isArray(datasetState.list) || !datasetState.list.length) {
             setElementHidden(dom.datasetSelector, true);
             return;
         }
-        const currentIndex = clampDatasetIndex(datasetState.activeIndex);
-        setElementHidden(dom.datasetSelector, false);
-        dom.datasetSelect.value = String(currentIndex);
-        dom.datasetSelect.title = datasetOptionLabel(getCurrentDataset(), currentIndex);
+        rebuildDatasetOptions(currentIndex);
     }
 
     function parseLabelSymbols(jsonText) {

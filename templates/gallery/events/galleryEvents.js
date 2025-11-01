@@ -164,6 +164,7 @@
 
             const {
                 switchDataset = () => {},
+                setRelicTypeFilter = () => {},
                 buildGallery = () => {},
                 applyFilters = () => {},
                 setOcrVisibility = () => {},
@@ -231,6 +232,12 @@
                 changeEffectLevel,
                 toggleReviewStatus
             } = recordActions;
+
+            if (dom.relicTypeSelect) {
+                dom.relicTypeSelect.addEventListener('change', (event) => {
+                    setRelicTypeFilter(event.target.value);
+                });
+            }
 
             if (dom.datasetSelect) {
                 dom.datasetSelect.addEventListener('change', (event) => {

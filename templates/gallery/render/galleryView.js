@@ -587,7 +587,7 @@
 
             const button = item.querySelector('.duplicate-toggle');
             if (button) {
-                button.textContent = value ? '重複を解除' : '重複として隠す';
+                button.textContent = value ? '重複を解除' : '重複';
                 button.setAttribute('aria-pressed', value ? 'true' : 'false');
             }
         }
