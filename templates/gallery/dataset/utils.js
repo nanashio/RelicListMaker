@@ -87,16 +87,21 @@
             return null;
         }
 
-        return {
+        const entryData = {
             label,
             csv,
             imgDir,
             folder,
             index,
             kind,
-            sources,
-            relicType
+            sources
         };
+
+        if (relicType) {
+            entryData.relicType = relicType;
+        }
+
+        return entryData;
     }
 
     function parseDatasets(jsonText) {
@@ -200,19 +205,25 @@
         const label = dataset.label || '';
         const folder = dataset.folder || '';
         const kind = dataset.kind || '';
+        const relicType = dataset.relicType || '';
         const sources = cloneDatasetSources(dataset.sources);
         const isMerged = kind === 'merged' && sources.length > 0;
         const csvPath = isMerged ? dataset.csv || 'merged-dataset.csv' : dataset.csv || '';
         const imageDir = isMerged ? '' : dataset.imgDir || '';
-        return {
+        const descriptor = {
             label,
             folder,
             kind,
             csvPath,
             imageDir,
-            sources,
-            relicType
+            sources
         };
+
+        if (relicType) {
+            descriptor.relicType = relicType;
+        }
+
+        return descriptor;
     }
 
     function createDatasetUtils() {

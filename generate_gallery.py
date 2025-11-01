@@ -154,7 +154,9 @@ def _normalize_dataset_entries(datasets, output_dir: str):
             if "sources" in entry:
                 entry_data["sources"] = entry["sources"]
             if relic_type is not None:
-                entry_data["relicType"] = str(relic_type).strip()
+                normalized_relic_type = str(relic_type).strip()
+                if normalized_relic_type:
+                    entry_data["relicType"] = normalized_relic_type
 
         normalized.append(entry_data)
 
