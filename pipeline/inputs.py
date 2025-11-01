@@ -47,13 +47,18 @@ def gather_video_files(
     return resolved
 
 
-def build_override_map(overrides: Optional[dict[str | Path, str]]) -> dict[Path, str]:
-    """UI などから渡された色上書き設定を絶対パスへ正規化する."""
-    if not overrides:
+def build_path_value_map(mapping: Optional[dict[str | Path, str]]) -> dict[Path, str]:
+    """パスをキーとする辞書を絶対パスへ正規化して返す."""
+    if not mapping:
         return {}
 
     result: dict[Path, str] = {}
-    for raw_path, value in overrides.items():
+    for raw_path, value in mapping.items():
         path_obj = Path(raw_path).expanduser()
         result[_ensure_absolute(path_obj)] = value
     return result
+
+
+def build_override_map(overrides: Optional[dict[str | Path, str]]) -> dict[Path, str]:
+    """UI などから渡された色上書き設定を絶対パスへ正規化する."""
+    return build_path_value_map(overrides)
