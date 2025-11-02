@@ -2009,6 +2009,7 @@ describe('record action handlers', () => {
       updateInputValueAttribute: () => {},
       updateLevelInputAvailability: () => {},
       applyMasterLevelOptions: () => {},
+      applyMasterDataForRelicType: () => {},
       ...extra
     };
   }
@@ -2071,10 +2072,12 @@ describe('record action handlers', () => {
     const scheduleCalls = [];
     const filterCalls = [];
     const relicTypeCalls = [];
+    const masterDataCalls = [];
     const deps = buildBaseDeps(record, item, {
       scheduleSave: () => scheduleCalls.push(null),
       applyFilters: () => filterCalls.push(null),
-      applyItemRelicType: (target, value) => relicTypeCalls.push([target, value])
+      applyItemRelicType: (target, value) => relicTypeCalls.push([target, value]),
+      applyMasterDataForRelicType: (value, context) => masterDataCalls.push([value, context])
     });
     const handlers = handlerFactory.createRecordActionHandlers(deps);
     handlers.toggleItemRelicType(select);
@@ -2082,11 +2085,13 @@ describe('record action handlers', () => {
     assert.deepEqual(relicTypeCalls, [[item, 'deep']]);
     assert.equal(scheduleCalls.length, 1);
     assert.equal(filterCalls.length, 1);
+    assert.deepEqual(masterDataCalls, [['deep', { item, record, recordIndex: 0 }]]);
 
     // Selecting the same value toggles back to empty
     handlers.toggleItemRelicType(select);
     assert.equal(record.RelicType, undefined);
     assert.deepEqual(relicTypeCalls.slice(-1), [[item, '']]);
+    assert.deepEqual(masterDataCalls.slice(-1), [['', { item, record, recordIndex: 0 }]]);
   });
 
   test('toggleFavorite updates visuals and schedules save', () => {
@@ -2444,6 +2449,8 @@ describe('gallery events', () => {
       },
       setRecordFavorite: () => false,
       setRecordItemColor: () => false,
+      setRecordItemRelicType: () => false,
+      applyMasterDataForRelicType: () => {},
       recordStatusChange: () => false,
       updateRecordCorrection: () => false,
       updateRecordLevelCorrection: () => false,
@@ -2510,6 +2517,7 @@ describe('gallery events', () => {
         return true;
       },
       setRecordItemRelicType: () => false,
+      applyMasterDataForRelicType: () => {},
       recordStatusChange: () => false,
       updateRecordCorrection: () => false,
       updateRecordLevelCorrection: () => false,
@@ -2599,6 +2607,7 @@ describe('gallery events', () => {
         record.RelicType = value;
         return true;
       },
+      applyMasterDataForRelicType: () => {},
       recordStatusChange: () => false,
       updateRecordCorrection: () => false,
       updateRecordLevelCorrection: () => false,

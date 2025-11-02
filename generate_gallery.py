@@ -204,11 +204,17 @@ def _merge_level_maps(
     return merged
 
 
+KNOWN_RELIC_TYPES: Dict[str, str] = {
+    "normal": "master_relics.csv",
+    "deep": "master_relics_deep.csv",
+}
+
+
 def _collect_master_data_by_type(
     dataset_entries: Sequence[dict],
     output_dir: str,
 ) -> tuple[Dict[str, List[str]], Dict[str, Dict[str, List[str]]], Dict[str, str]]:
-    relic_types: set[str] = set()
+    relic_types: set[str] = set(KNOWN_RELIC_TYPES.keys())
     for entry in dataset_entries or []:
         if not isinstance(entry, dict):
             continue
@@ -222,6 +228,8 @@ def _collect_master_data_by_type(
 
     for relic_type in sorted(relic_types):
         csv_path = _resolve_master_csv_for_type(relic_type)
+        if not csv_path and relic_type in KNOWN_RELIC_TYPES:
+            csv_path = str(templates_path(KNOWN_RELIC_TYPES[relic_type]))
         if not csv_path or not os.path.exists(csv_path):
             continue
         effects, levels = load_master_effects_and_levels(csv_path)

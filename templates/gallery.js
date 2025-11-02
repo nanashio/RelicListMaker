@@ -929,6 +929,59 @@
         });
     }
 
+    function applyMasterDataForRelicType(relicType, context = {}) {
+        const requested = normalizeRelicTypeValue(relicType);
+        const fallback = normalizeRelicTypeValue(datasetState.relicType || '');
+        const targetType = requested || fallback || '';
+
+        applyMasterDataForType(targetType);
+
+        const { item } = context || {};
+        if (!item || typeof item.querySelectorAll !== 'function') {
+            return;
+        }
+
+        const effects = item.querySelectorAll('.effect');
+        effects.forEach((effect) => {
+            if (!effect || typeof effect.querySelector !== 'function') {
+                return;
+            }
+            const levelInput = effect.querySelector('.level-input');
+            if (!levelInput) {
+                return;
+            }
+            const correctionInput = effect.querySelector('.correction-input');
+            const effectName =
+                (correctionInput && typeof correctionInput.value === 'string' && correctionInput.value.trim()) ||
+                effect.dataset.predictionValue ||
+                effect.dataset.raw ||
+                '';
+
+            applyMasterLevelOptions(effect, levelInput, effectName, {
+                setCorrectionLevelCandidates,
+                rebuildLevelSelectOptions,
+                sanitizeLevelList,
+                sortLevelsAscending
+            });
+
+            const baseJson = effect.dataset.levelOptionsBaseJson || '';
+            let baseOptions = [];
+            if (baseJson) {
+                try {
+                    const parsed = JSON.parse(baseJson);
+                    if (Array.isArray(parsed)) {
+                        baseOptions = parsed;
+                    }
+                } catch (_error) {
+                    baseOptions = sanitizeLevelList(baseJson.split('|'));
+                }
+            }
+            updateLevelInputAvailability(levelInput, baseOptions);
+        });
+
+        refreshItemCaches(item);
+    }
+
     function setActiveRelicType(value) {
         const requested = value === RELIC_TYPE_ALL ? RELIC_TYPE_ALL : normalizeRelicTypeValue(value);
         const available = getAvailableRelicTypes();
@@ -1662,6 +1715,7 @@
         setRecordFavorite,
         setRecordItemColor,
         setRecordItemRelicType,
+        applyMasterDataForRelicType,
         recordStatusChange,
         updateRecordCorrection,
         updateRecordLevelCorrection,

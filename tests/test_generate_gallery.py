@@ -219,6 +219,19 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
     monkeypatch.setattr(generate_gallery, "_copy_static_asset", fake_copy_static_asset)
     monkeypatch.setattr(generate_gallery, "_copy_gallery_modules", lambda output_dir: None)
 
+    def fake_load_master_effects_and_levels(path):
+        candidate = Path(path)
+        if candidate.resolve() == master_csv.resolve():
+            return (["Mystic Strike"], {"Mystic Strike": ["Alpha", "Beta"]})
+        basename = candidate.name
+        if basename == "master_relics.csv":
+            return (["Default Effect"], {"Default Effect": ["F1"]})
+        if basename == "master_relics_deep.csv":
+            return (["Deep Effect"], {"Deep Effect": ["D1"]})
+        return ([], {})
+
+    monkeypatch.setattr(generate_gallery, "load_master_effects_and_levels", fake_load_master_effects_and_levels)
+
     datasets = [
         {"csv": "a/results.csv", "imgDir": "a/images", "label": "A"},
     ]
@@ -243,11 +256,85 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
     assert parts[3] == html.escape(expected_master_csv_rel, quote=True)
     assert parts[4] == html.escape(expected_master_json_rel, quote=True)
     assert json.loads(html.unescape(parts[5])) == []
-    assert json.loads(html.unescape(parts[6])) == {}
+    master_options_map = json.loads(html.unescape(parts[6]))
+    assert master_options_map == {"deep": ["Deep Effect"], "normal": ["Default Effect"]}
     master_levels = json.loads(html.unescape(parts[7]))
-    assert master_levels == {"Mystic Strike": ["Alpha", "Beta"]}
+    assert master_levels.get("Mystic Strike") == ["Alpha", "Beta"]
+    assert master_levels.get("Default Effect") == ["F1"]
+    assert master_levels.get("Deep Effect") == ["D1"]
+    master_levels_by_type = json.loads(html.unescape(parts[8]))
+    assert master_levels_by_type == {
+        "deep": {"Deep Effect": ["D1"]},
+        "normal": {"Default Effect": ["F1"]},
+    }
     assert parts[15] == html.escape(generate_gallery.DEFAULT_ITEM_IMAGE_VIEW_BOX, quote=True)
     assert copied_assets.count("gallery.css") == 1
+
+
+def test_generate_html_embeds_known_master_types(monkeypatch, tmp_path):
+    results_csv = tmp_path / "results.csv"
+    results_csv.write_text("id,label\n", encoding="utf-8")
+    output_html = tmp_path / "viewer" / "index.html"
+
+    template = "\n".join(
+        [
+            "__MASTER_OPTIONS__",
+            "__MASTER_OPTIONS_MAP__",
+            "__MASTER_LEVELS__",
+            "__MASTER_LEVELS_BY_TYPE__",
+            "__MASTER_CSV_MAP__",
+        ]
+    )
+
+    monkeypatch.setattr(generate_gallery, "_load_text_asset", lambda *args, **kwargs: template)
+    monkeypatch.setattr(generate_gallery, "_copy_static_asset", lambda *args, **kwargs: ("app.js", str(tmp_path / "dummy.js")))
+    monkeypatch.setattr(generate_gallery, "_copy_gallery_modules", lambda output_dir: None)
+    monkeypatch.setattr(generate_gallery, "load_master_csv", lambda path: [])
+    monkeypatch.setattr(generate_gallery, "load_master_json", lambda path: [])
+
+    loaded_paths = []
+
+    def fake_load_master_effects_and_levels(path):
+        basename = os.path.basename(path)
+        loaded_paths.append(basename)
+        if basename == "master_relics.csv":
+            return (["Normal Effect"], {"Normal Effect": ["N1"]})
+        if basename == "master_relics_deep.csv":
+            return (["Deep Effect"], {"Deep Effect": ["D1"]})
+        return ([], {})
+
+    monkeypatch.setattr(generate_gallery, "load_master_effects_and_levels", fake_load_master_effects_and_levels)
+
+    generate_gallery.generate_html(
+        str(results_csv),
+        "images",
+        str(output_html),
+        datasets=[{"csv": "results.csv", "imgDir": "images", "label": "A"}],
+    )
+
+    html_output = output_html.read_text(encoding="utf-8")
+    parts = [html.unescape(part) for part in html_output.splitlines()]
+
+    assert json.loads(parts[0]) == ["Normal Effect", "Deep Effect"]
+
+    options_map = json.loads(parts[1])
+    assert set(options_map.keys()) == {"normal", "deep"}
+    assert options_map["normal"] == ["Normal Effect"]
+    assert options_map["deep"] == ["Deep Effect"]
+
+    levels_map = json.loads(parts[3])
+    assert levels_map == {
+        "deep": {"Deep Effect": ["D1"]},
+        "normal": {"Normal Effect": ["N1"]},
+    }
+
+    csv_map = json.loads(parts[4])
+    assert csv_map.keys() == {"normal", "deep"}
+    assert csv_map["normal"].endswith("master_relics.csv")
+    assert csv_map["deep"].endswith("master_relics_deep.csv")
+
+    assert "master_relics.csv" in loaded_paths
+    assert "master_relics_deep.csv" in loaded_paths
 
 
 def test_generate_html_respects_asset_overrides(monkeypatch, tmp_path):

@@ -35,7 +35,8 @@
             getEffectIndexes,
             updateInputValueAttribute,
             updateLevelInputAvailability,
-            applyMasterLevelOptions
+            applyMasterLevelOptions,
+            applyMasterDataForRelicType
         } = deps;
 
         if (!duplicates || typeof duplicates.set !== 'function') {
@@ -66,7 +67,8 @@
             getEffectIndexes,
             updateInputValueAttribute,
             updateLevelInputAvailability,
-            applyMasterLevelOptions
+            applyMasterLevelOptions,
+            applyMasterDataForRelicType
         };
 
         Object.entries(requiredFunctions).forEach(([name, fn]) => {
@@ -81,6 +83,8 @@
         const safeApplyItemColor = typeof applyItemColor === 'function' ? applyItemColor : () => {};
         const safeApplyItemRelicType =
             typeof applyItemRelicType === 'function' ? applyItemRelicType : () => {};
+        const safeApplyMasterDataForRelicType =
+            typeof applyMasterDataForRelicType === 'function' ? applyMasterDataForRelicType : () => {};
         const safeUpdateFavoriteVisuals =
             typeof updateFavoriteVisuals === 'function' ? updateFavoriteVisuals : () => {};
         const safeUpdateDuplicateVisuals =
@@ -244,6 +248,7 @@
                 safeScheduleSave();
             }
             safeApplyItemRelicType(item, nextType);
+            safeApplyMasterDataForRelicType(nextType, { item, record, recordIndex });
             safeApplyFilters();
         }
 
