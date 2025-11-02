@@ -546,6 +546,11 @@ h1 {
     color: var(--item-color-text);
 }
 
+.item-color-select option {
+    color: var(--color-text-primary);
+    background-color: var(--color-surface);
+}
+
 .item-color-select.option-red {
     --item-color-value: var(--color-item-option-red);
     --item-color-text: var(--color-text-inverse);
