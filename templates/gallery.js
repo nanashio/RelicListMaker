@@ -109,7 +109,8 @@
         parseLevelTokens,
         parseMasterOptions,
         parseMasterLevels,
-        normalizeSuppressedLevels: normalizeSuppressedLevelsFromUtils
+        normalizeSuppressedLevels: normalizeSuppressedLevelsFromUtils,
+        normalizeRelicTypeColumns
     } = dataUtils;
 
     const dataUtilsMissing = [
@@ -121,7 +122,8 @@
         ['parseLevelTokens', parseLevelTokens],
         ['parseMasterOptions', parseMasterOptions],
         ['parseMasterLevels', parseMasterLevels],
-        ['normalizeSuppressedLevels', normalizeSuppressedLevelsFromUtils]
+        ['normalizeSuppressedLevels', normalizeSuppressedLevelsFromUtils],
+        ['normalizeRelicTypeColumns', normalizeRelicTypeColumns]
     ].filter(([, value]) => typeof value !== 'function');
 
     if (dataUtilsMissing.length) {
@@ -1945,6 +1947,10 @@
         const normalized = normalizeSuppressedRecords(records);
         if (Array.isArray(normalized)) {
             records = normalized;
+        }
+        const relicNormalized = normalizeRelicTypeColumns(records);
+        if (Array.isArray(relicNormalized)) {
+            records = relicNormalized;
         }
         ensureLabelCoverage(records);
         stateApi.setRecords(records);

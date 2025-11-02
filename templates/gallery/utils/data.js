@@ -303,6 +303,40 @@
         return records.map((record) => normalizeRecordLevelSuppression(record));
     }
 
+    function normalizeRecordRelicTypeField(record) {
+        if (!record || typeof record !== 'object') {
+            return record;
+        }
+        if (Object.prototype.hasOwnProperty.call(record, 'RelicType')) {
+            return record;
+        }
+        const keys = Object.keys(record);
+        for (let index = 0; index < keys.length; index += 1) {
+            const key = keys[index];
+            if (typeof key !== 'string' || !key) {
+                continue;
+            }
+            const normalizedKey = key.trim().toLowerCase();
+            if (normalizedKey === 'relic_type' || normalizedKey === 'relictype') {
+                if (!Object.prototype.hasOwnProperty.call(record, 'RelicType')) {
+                    record.RelicType = record[key];
+                }
+                if (key !== 'RelicType') {
+                    delete record[key];
+                }
+                break;
+            }
+        }
+        return record;
+    }
+
+    function normalizeRelicTypeColumns(records) {
+        if (!Array.isArray(records)) {
+            return [];
+        }
+        return records.map((record) => normalizeRecordRelicTypeField(record));
+    }
+
     window.galleryDataUtils = {
         sanitizeLevelList,
         normalizeEffectName,
@@ -313,6 +347,8 @@
         parseMasterOptions,
         parseMasterLevels,
         normalizeSuppressedLevels,
-        normalizeRecordLevelSuppression
+        normalizeRecordLevelSuppression,
+        normalizeRecordRelicTypeField,
+        normalizeRelicTypeColumns
     };
 })();
