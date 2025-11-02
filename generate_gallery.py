@@ -163,6 +163,88 @@ def _normalize_dataset_entries(datasets, output_dir: str):
     return normalized
 
 
+def _normalize_relic_type_key(value: Optional[str]) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip().lower()
+    if not text:
+        return ""
+    if text in {"normal", "通常"}:
+        return "normal"
+    if text in {"deep", "深層", "深層遺物"}:
+        return "deep"
+    if text in {"merged", "all", "統合"}:
+        return "merged"
+    return text
+
+
+def _resolve_master_csv_for_type(relic_type: str) -> Optional[str]:
+    if relic_type == "deep":
+        return str(templates_path("master_relics_deep.csv"))
+    if relic_type == "normal":
+        return str(templates_path("master_relics.csv"))
+    return None
+
+
+def _merge_level_maps(
+    base: Optional[Dict[str, List[str]]],
+    addition: Optional[Dict[str, List[str]]],
+) -> Dict[str, List[str]]:
+    merged: Dict[str, List[str]] = {}
+    if base:
+        for key, values in base.items():
+            merged[key] = list(values)
+    if not addition:
+        return merged
+    for key, values in addition.items():
+        existing = merged.setdefault(key, [])
+        for value in values:
+            if value not in existing:
+                existing.append(value)
+    return merged
+
+
+def _collect_master_data_by_type(
+    dataset_entries: Sequence[dict],
+    output_dir: str,
+) -> tuple[Dict[str, List[str]], Dict[str, Dict[str, List[str]]], Dict[str, str]]:
+    relic_types: set[str] = set()
+    for entry in dataset_entries or []:
+        if not isinstance(entry, dict):
+            continue
+        normalized = _normalize_relic_type_key(entry.get("relicType") or entry.get("relic_type"))
+        if normalized and normalized != "merged":
+            relic_types.add(normalized)
+
+    options_map: Dict[str, List[str]] = {}
+    levels_map: Dict[str, Dict[str, List[str]]] = {}
+    csv_map: Dict[str, str] = {}
+
+    for relic_type in sorted(relic_types):
+        csv_path = _resolve_master_csv_for_type(relic_type)
+        if not csv_path or not os.path.exists(csv_path):
+            continue
+        effects, levels = load_master_effects_and_levels(csv_path)
+        if effects:
+            options_map[relic_type] = effects
+        if levels:
+            levels_map[relic_type] = levels
+        try:
+            rel_path = os.path.relpath(csv_path, output_dir)
+        except ValueError:
+            rel_path = os.path.basename(csv_path)
+        if os.sep != "/":
+            rel_path = rel_path.replace(os.sep, "/")
+        csv_map[relic_type] = rel_path
+
+    # Levels map values should be plain dicts for JSON serialization.
+    levels_map_serializable: Dict[str, Dict[str, List[str]]] = {}
+    for key, mapping in levels_map.items():
+        levels_map_serializable[key] = {effect: list(values) for effect, values in mapping.items()}
+
+    return options_map, levels_map_serializable, csv_map
+
+
 def _resolve_asset_path(default_path: str, override: Optional[str]) -> str:
     if not override:
         return default_path
@@ -272,6 +354,7 @@ def generate_html(
     master_csv_rel_path = ""
     master_json_rel_path = ""
     master_levels_map: Dict[str, List[str]] = {}
+    master_effects_from_csv: List[str] = []
 
     master_csv_abs: Optional[str] = None
     if master_csv_path:
@@ -289,6 +372,9 @@ def generate_html(
         else:
             print(f"[!] 既定のマスターデータ(CSV)が見つかりません: {fallback_csv}")
 
+    if master_csv_abs:
+        master_effects_from_csv, master_levels_map = load_master_effects_and_levels(master_csv_abs)
+
     if not master_options and master_json_path:
         if os.path.isabs(master_json_path):
             master_json_abs = master_json_path
@@ -300,13 +386,28 @@ def generate_html(
         else:
             print(f"[!] マスターデータ(JSON)が見つかりません: {master_json_abs}")
 
+    if not master_options and master_effects_from_csv:
+        master_options = master_effects_from_csv
+
     if not master_options and master_csv_abs:
         master_options = load_master_csv(master_csv_abs)
 
-    if master_csv_abs:
-        _, master_levels_map = load_master_effects_and_levels(master_csv_abs)
-
     dataset_entries = _normalize_dataset_entries(datasets, output_dir)
+
+    master_options_by_type, master_levels_by_type, master_csv_map = _collect_master_data_by_type(
+        dataset_entries,
+        output_dir,
+    )
+
+    aggregated_options: List[str] = list(master_options or [])
+    for options in master_options_by_type.values():
+        aggregated_options.extend(options)
+    master_options = normalize_master_values(aggregated_options)
+
+    combined_levels = _merge_level_maps(master_levels_map, None)
+    for levels in master_levels_by_type.values():
+        combined_levels = _merge_level_maps(combined_levels, levels)
+    master_levels_map = combined_levels
 
     merged_entry = None
     has_explicit_merged = any(
@@ -417,7 +518,10 @@ def generate_html(
     html_output = html_output.replace("__MASTER_CSV__", _escape_attr(master_csv_rel_path))
     html_output = html_output.replace("__MASTER_JSON__", _escape_attr(master_json_rel_path))
     html_output = html_output.replace("__MASTER_OPTIONS__", _escape_attr(json.dumps(embed_options, ensure_ascii=False)))
+    html_output = html_output.replace("__MASTER_OPTIONS_MAP__", _escape_attr(json.dumps(master_options_by_type, ensure_ascii=False)))
     html_output = html_output.replace("__MASTER_LEVELS__", _escape_attr(json.dumps(master_levels_map, ensure_ascii=False)))
+    html_output = html_output.replace("__MASTER_LEVELS_BY_TYPE__", _escape_attr(json.dumps(master_levels_by_type, ensure_ascii=False)))
+    html_output = html_output.replace("__MASTER_CSV_MAP__", _escape_attr(json.dumps(master_csv_map, ensure_ascii=False)))
     html_output = html_output.replace("__CSS_FILE__", _escape_attr(css_reference))
     html_output = html_output.replace("__JS_FILE__", _escape_attr(index_reference))
     html_output = html_output.replace("__CORE_JS__", _escape_attr(core_js_reference))

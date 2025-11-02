@@ -104,7 +104,10 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
         "__MASTER_CSV__\n"
         "__MASTER_JSON__\n"
         "__MASTER_OPTIONS__\n"
+        "__MASTER_OPTIONS_MAP__\n"
         "__MASTER_LEVELS__\n"
+        "__MASTER_LEVELS_BY_TYPE__\n"
+        "__MASTER_CSV_MAP__\n"
         "__CSS_FILE__\n"
         "__JS_FILE__\n"
         "__CORE_JS__\n"
@@ -127,7 +130,7 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
     monkeypatch.setattr(generate_gallery, "_copy_gallery_modules", lambda output_dir: None)
     monkeypatch.setattr(generate_gallery, "load_master_csv", lambda path: [])
     monkeypatch.setattr(generate_gallery, "load_master_json", lambda path: {})
-    monkeypatch.setattr(generate_gallery, "load_master_effects_and_levels", lambda path: ({}, {}))
+    monkeypatch.setattr(generate_gallery, "load_master_effects_and_levels", lambda path: ([], {}))
     monkeypatch.setattr(generate_gallery, "normalize_master_values", lambda values: ["A", "B"])
 
     datasets = [
@@ -153,11 +156,12 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
     assert parts[1] == "a/images"
     assert "★" in html.unescape(parts[2])
     assert "A" in html.unescape(parts[5])
-    datasets_json = json.loads(html.unescape(parts[10]))
+    assert json.loads(html.unescape(parts[6])) == {}
+    datasets_json = json.loads(html.unescape(parts[13]))
     assert datasets_json[0]["label"] == "全データセット（統合）"
     assert datasets_json[0]["kind"] == "merged"
     assert datasets_json[0]["sources"][0]["label"] == "A"
-    assert json.loads(parts[11]) == 1
+    assert json.loads(parts[14]) == 1
 
 
 def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_path):
@@ -187,7 +191,10 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
             "__MASTER_CSV__",
             "__MASTER_JSON__",
             "__MASTER_OPTIONS__",
+            "__MASTER_OPTIONS_MAP__",
             "__MASTER_LEVELS__",
+            "__MASTER_LEVELS_BY_TYPE__",
+            "__MASTER_CSV_MAP__",
             "__CSS_FILE__",
             "__JS_FILE__",
             "__CORE_JS__",
@@ -236,9 +243,10 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
     assert parts[3] == html.escape(expected_master_csv_rel, quote=True)
     assert parts[4] == html.escape(expected_master_json_rel, quote=True)
     assert json.loads(html.unescape(parts[5])) == []
-    master_levels = json.loads(html.unescape(parts[6]))
+    assert json.loads(html.unescape(parts[6])) == {}
+    master_levels = json.loads(html.unescape(parts[7]))
     assert master_levels == {"Mystic Strike": ["Alpha", "Beta"]}
-    assert parts[12] == html.escape(generate_gallery.DEFAULT_ITEM_IMAGE_VIEW_BOX, quote=True)
+    assert parts[15] == html.escape(generate_gallery.DEFAULT_ITEM_IMAGE_VIEW_BOX, quote=True)
     assert copied_assets.count("gallery.css") == 1
 
 
