@@ -369,6 +369,7 @@ class RelicGuiApp:
         self.save_frames_var = tk.BooleanVar(value=False)
         self.csv_column_vars: dict[str, tk.BooleanVar] = {
             "ItemColor": tk.BooleanVar(value=True),
+            "RelicType": tk.BooleanVar(value=True),
             "RawText": tk.BooleanVar(value=True),
             "Score": tk.BooleanVar(value=True),
             "Source": tk.BooleanVar(value=True),
@@ -800,6 +801,7 @@ class RelicGuiApp:
         ]
         optional_specs = [
             ("ItemColor", "ItemColor"),
+            ("RelicType", "RelicType"),
             ("Effect[n]Source", "Source"),
             ("Dataset", "Dataset"),
             ("DatasetFolder", "DatasetFolder"),

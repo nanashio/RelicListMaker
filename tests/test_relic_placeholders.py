@@ -9,7 +9,7 @@ if str(ROOT_DIR) not in sys.path:
 if "cv2" not in sys.modules:
     sys.modules["cv2"] = types.SimpleNamespace()
 
-from relic_pipeline.io.exporter import _ensure_effect_slots
+from relic_pipeline.io.exporter import _ensure_effect_slots, write_csv
 from relic_pipeline.settings import DEFAULT_COLUMN_VISIBILITY, ExportOptions
 from relic_data import load_master_effects_and_levels, normalize_master_values
 
@@ -64,3 +64,14 @@ def test_ensure_effect_slots_adds_placeholder_values():
     assert row["Effect2Source"] == ""
     assert row["Effect2LevelOptions"] == ""
     assert row["Effect2LevelCorrection"] == ""
+
+
+def test_write_csv_includes_relic_type_column(tmp_path: Path):
+    column_flags = dict(DEFAULT_COLUMN_VISIBILITY)
+    rows = [{"Image": "sample.png", "Duplicate": False, "RelicType": "deep"}]
+    output = tmp_path / "results.csv"
+
+    write_csv(rows, path=output, column_flags=column_flags)
+
+    header = output.read_text(encoding="utf-8").splitlines()[0].split(",")
+    assert "RelicType" in header

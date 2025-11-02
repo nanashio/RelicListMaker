@@ -91,6 +91,7 @@ def test_process_video_creates_outputs_and_invokes_dependencies(tmp_path: Path, 
         item_color: str | None,
         column_visibility: dict[str, object] | None,
         master_csv_path: str,
+        relic_type: str | None,
     ) -> None:
         calls.append((
             "process",
@@ -101,6 +102,7 @@ def test_process_video_creates_outputs_and_invokes_dependencies(tmp_path: Path, 
                 f"upsample={upsample}",
                 f"color={item_color}",
                 master_csv_path,
+                f"type={relic_type}",
             ),
         ))
         Path(output_path).write_text("csv")
@@ -138,6 +140,7 @@ def test_process_video_creates_outputs_and_invokes_dependencies(tmp_path: Path, 
     assert "upsample=2.0" in calls[1][1][3]
     assert "color=green" in calls[1][1][4]
     assert calls[1][1][5].endswith("master_relics.csv")
+    assert calls[1][1][6] == "type=normal"
 
     expected_rel_csv = Path(entry["csv"])
     expected_rel_img = Path(entry["img_dir"])
