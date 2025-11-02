@@ -307,26 +307,46 @@
         if (!record || typeof record !== 'object') {
             return record;
         }
-        if (Object.prototype.hasOwnProperty.call(record, 'RelicType')) {
-            return record;
-        }
+
+        const canonicalKey = 'RelicType';
+        const normalizedTarget = 'relictype';
         const keys = Object.keys(record);
+        let hasCanonical = Object.prototype.hasOwnProperty.call(record, canonicalKey);
+        let normalizedVariantFound = false;
+
         for (let index = 0; index < keys.length; index += 1) {
             const key = keys[index];
-            if (typeof key !== 'string' || !key) {
+            if (typeof key !== 'string') {
                 continue;
             }
-            const normalizedKey = key.trim().toLowerCase();
-            if (normalizedKey === 'relic_type' || normalizedKey === 'relictype') {
-                if (!Object.prototype.hasOwnProperty.call(record, 'RelicType')) {
-                    record.RelicType = record[key];
+            if (key === canonicalKey) {
+                hasCanonical = true;
+                continue;
+            }
+            const trimmedKey = key.trim();
+            if (!trimmedKey) {
+                continue;
+            }
+            const simplifiedKey = trimmedKey.toLowerCase().replace(/[\s_-]+/g, '');
+            if (simplifiedKey === normalizedTarget) {
+                normalizedVariantFound = true;
+                if (!hasCanonical) {
+                    record[canonicalKey] = record[key];
+                    hasCanonical = Object.prototype.hasOwnProperty.call(record, canonicalKey);
                 }
-                if (key !== 'RelicType') {
+                if (Object.prototype.hasOwnProperty.call(record, key)) {
                     delete record[key];
                 }
-                break;
             }
         }
+
+        if (!hasCanonical) {
+            if (!normalizedVariantFound) {
+                return record;
+            }
+            record[canonicalKey] = record[canonicalKey] || '';
+        }
+
         return record;
     }
 

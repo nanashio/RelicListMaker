@@ -504,18 +504,38 @@ describe('gallery data utils', () => {
     assert.equal(Object.prototype.hasOwnProperty.call(normalized, 'relic_type'), false);
   });
 
+  test('normalizeRecordRelicTypeField renames space separated key to RelicType', () => {
+    const record = { Image: 'space.png', 'Relic Type': 'normal' };
+    const normalized = dataUtils.normalizeRecordRelicTypeField(record);
+    assert.equal(normalized.RelicType, 'normal');
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized, 'Relic Type'), false);
+  });
+
+  test('normalizeRecordRelicTypeField keeps canonical value when duplicate legacy keys exist', () => {
+    const record = { Image: 'keep.png', RelicType: 'deep', 'relic-type': 'normal' };
+    const normalized = dataUtils.normalizeRecordRelicTypeField(record);
+    assert.equal(normalized.RelicType, 'deep');
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized, 'relic-type'), false);
+  });
+
   test('normalizeRelicTypeColumns converts legacy keys without overriding existing values', () => {
     const records = [
-      { Image: 'normal.png', RelicType: 'normal' },
+      { Image: 'normal.png', RelicType: 'normal', 'relic type': 'legacy' },
       { Image: 'deep.png', relictype: 'deep' },
+      { Image: 'space.png', 'Relic Type': 'normal' },
+      { Image: 'dash.png', 'relic-type': 'deep' },
       { Image: 'other.png', Note: 'keep' }
     ];
     const normalized = dataUtils.normalizeRelicTypeColumns(records);
     assert.equal(normalized[0].RelicType, 'normal');
-    assert.equal(Object.prototype.hasOwnProperty.call(normalized[0], 'relictype'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized[0], 'relic type'), false);
     assert.equal(normalized[1].RelicType, 'deep');
     assert.equal(Object.prototype.hasOwnProperty.call(normalized[1], 'relictype'), false);
-    assert.equal(normalized[2].Note, 'keep');
+    assert.equal(normalized[2].RelicType, 'normal');
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized[2], 'Relic Type'), false);
+    assert.equal(normalized[3].RelicType, 'deep');
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized[3], 'relic-type'), false);
+    assert.equal(normalized[4].Note, 'keep');
   });
 });
 
