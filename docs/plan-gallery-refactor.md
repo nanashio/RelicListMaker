@@ -151,7 +151,7 @@
 
 ### HTML テンプレート処理レイヤ
 - `generate_gallery.py::generate_html` は `templates/gallery.html` を `_load_text_asset` で読み込み、`__RESULTS_CSV__` や `__CSS_FILE__` などのプレースホルダーを `json.dumps` 済みの値で順次置換する。
-- `_copy_static_asset` と `_cache_busted_path` を介し、`gallery/index.js`・`gallery.js`・`gallery.css` を出力先へコピーしてから、タイムスタンプに基づくクエリパラメータを付与して参照リンクを書き換える。
+- `gallery_assets.copy_static_asset` と `gallery_assets.cache_bust_reference` を介し、`gallery/index.js`・`gallery.js`・`gallery.css` を出力先へコピーしてから、タイムスタンプに基づくクエリパラメータを付与して参照リンクを書き換える。
 - HTML への埋め込みは data-* 属性に集約されており、テンプレート入れ替え時はここで提供するキー（結果 CSV、画像ディレクトリ、マスター定義、データセット一覧、表示範囲など）を互換的に維持する必要がある。
 
 ### データ整形レイヤ
@@ -160,7 +160,7 @@
 - 複数データセットが渡された場合は、暗黙の統合エントリを生成し `sources` を保持することでテンプレート側の merged 表示へ引き渡す。ここがデータ整形レイヤの最終境界となり、以降のテンプレート差し替えでも JSON 形式を維持すれば互換性を保てる。
 
 ### ファイル出力レイヤ
-- 静的アセット（CSS・JS）は `_copy_static_asset` でコピーし、`ADDITIONAL_GALLERY_SCRIPTS` に列挙したモジュール群を `_copy_gallery_modules` がまるごと複製する。コピー先のディレクトリ作成まで同関数が面倒を見る。
+- 静的アセット（CSS・JS）は `gallery_assets.copy_static_asset` でコピーし、`ADDITIONAL_GALLERY_SCRIPTS` に列挙したモジュール群を `gallery_assets.copy_gallery_modules` がまるごと複製する。コピー先のディレクトリ作成まで同関数が面倒を見る。
 - 最終的な HTML は `generate_html` 末尾で `with open(output_html, "w", encoding="utf-8")` により書き出される。ここではテンプレート置換後のテキストをそのまま出力し、それ以外の副作用（ログ出力のみ）を持たないため、ファイル出力レイヤは純粋に I/O のみを担当している。
 - これら 3 つのレイヤが境界として機能し、テンプレート変更時は「データ整形→テンプレート埋め込み→ファイル出力」の順序を壊さないことが、生成パイプラインの保守容易性に直結する。
 
@@ -204,7 +204,7 @@
 ### コード分析
 - `generate_html` はマスター辞書読み込み、データセット正規化、静的アセットコピー、テンプレートプレースホルダー置換、HTML 書き出しを単一関数で担っている。
 - `_normalize_dataset_entries` の戻り値を加工して `datasets_payload` を生成する過程で、JSON エンコードや `object-view-box` 補正などデータ整形とテンプレート整形が混在している。
-- `_copy_static_asset` と `_copy_gallery_modules` は I/O 例外処理や `_cache_busted_path` の付与ロジックと結びつき、`generate_html` 内に密結合している。
+- `gallery_assets.copy_static_asset` と `gallery_assets.copy_gallery_modules` は I/O 例外処理や `gallery_assets.cache_bust_reference` の付与ロジックと結びつき、`generate_html` 内に密結合している。
 - テンプレート置換は `replace` の多段適用で実装されており、プレースホルダーが増えるたびに可読性が低下する恐れがある。
 
 ### 問題点
@@ -214,13 +214,13 @@
 
 ### 優先度
 - **最優先 (P0)**: データ整形とテンプレート変換を独立関数に切り出し、`generate_html` をオーケストレーション専用にする。
-- **高優先度 (P1)**: 静的アセットコピーとキャッシュバスター処理を別モジュール（仮称 `gallery_assets.py`）へ移し、I/O 責務を分離する。
+- **高優先度 (P1)**: 静的アセットコピーとキャッシュバスター処理を別モジュール `gallery_assets.py` へ移し、I/O 責務を分離する。
 - **中優先度 (P2)**: マスター辞書収集とデータセット統合をユーティリティ化し、`main.py` やパイプライン構築時に再利用できるようにする。
 
 ### 小ステップ
 1. `generate_gallery.py` にセクションコメントと docstring を追加し、現行の責務境界を明示する。
 2. データ整形処理を純粋関数（例: `build_gallery_payload`）として切り出し、`tests/test_generate_gallery.py` から直接検証可能にする。
-3. アセットコピー処理を新モジュールに移管し、`prepare_gallery_assets`（仮称）でパス解決とキャッシュバスター付与を一元化する。I/O 例外には専用例外を導入する。
+3. アセットコピー処理を新モジュールに移管し、`gallery_assets.prepare_gallery_assets` でパス解決とキャッシュバスター付与を一元化する。I/O 例外は `FileNotFoundError` をラップして通知する方針を検討する。
 4. テンプレート置換を担うヘルパー（例: `render_gallery_template`）を追加し、プレースホルダー管理を辞書マッピングに変更する。
 5. `generate_html` を 1〜4 の関数を順番に呼び出す薄いオーケストレーションに限定し、戻り値を HTML 出力パスへ統一する。
 6. リファクタリング後は `pytest tests/test_generate_gallery.py` と `npm run test:node` を実行し、結果を `docs/guide-refactoring-progress-log.md` に記録する。
