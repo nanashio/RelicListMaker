@@ -23,6 +23,7 @@
 | 2025-10-26 | モジュール分割完了 | `templates/gallery/` 配下のモジュール分割を確認し、`index.js` エントリポイントからの依存が解決されていることをレビュー済み。 |
 | 2025-10-28 | ドキュメント整理 | フォーカス事項・未解決課題・テストフローを最新化し、後続作業者が参照できるよう整理した。 |
 | 2025-10-29 | テスト/フィクスチャ検証 | `npm run test:all` を実行し、Python/Node テストは成功。Playwright はブラウザバイナリ未取得により失敗したため、`docs/guide-testing.md` に従って代替手順（`pytest` + `node --test`）を充足済みであることを記録。合わせて `tests/browser/serve_fixture.py` が `templates/gallery/index.js` の `MODULE_DEPENDENCIES` と同一リストをコピーしていることを再確認し、更新不要と判断。 |
+| 2025-11-03 | Python 生成スクリプト調査 | `generate_gallery.py::generate_html` の責務集中を分析し、データ整形・アセットコピー・テンプレート変換の分割計画を本ドキュメントへ追加。今後のテスト方針（`pytest` + `npm run test:node`）と進捗記録手順を整理した。 |
 
 ## 実行計画
 
@@ -196,4 +197,34 @@
   1. `datasets/builder.py` 追加時に純粋ロジック部分へ `pytest` ベースのユニットテストを作成し、`ProcessedVideoResult` の各ケース（絶対パス・相対パス・画像無し）を網羅する。
   2. 続いて `generate_gallery.py` のプレースホルダー置換を検証するテストを追加し、テンプレート差し替え時の退行を防ぐ。
   3. 最後に GUI からの呼び出しを想定した結合テストを検討し、`viewer_server.py` 経由の E2E テストは既存 Playwright シナリオで補完する。
+
+## 追加メモ: generate_gallery.py リファクタリング計画（2025-11-03）
+
+### コード分析
+- `generate_html` はマスター辞書読み込み、データセット正規化、静的アセットコピー、テンプレートプレースホルダー置換、HTML 書き出しを単一関数で担っている。
+- `_normalize_dataset_entries` の戻り値を加工して `datasets_payload` を生成する過程で、JSON エンコードや `object-view-box` 補正などデータ整形とテンプレート整形が混在している。
+- `_copy_static_asset` と `_copy_gallery_modules` は I/O 例外処理や `_cache_busted_path` の付与ロジックと結びつき、`generate_html` 内に密結合している。
+- テンプレート置換は `replace` の多段適用で実装されており、プレースホルダーが増えるたびに可読性が低下する恐れがある。
+
+### 問題点
+1. **責務の集中**: データ整形、辞書収集、アセットコピー、テンプレート変換、ファイル出力が 1 関数に集約され単体テストが難しい。
+2. **結合度の高さ**: I/O とテンプレート整形が混在しており、モックや例外分類が煩雑。
+3. **エラーハンドリングの曖昧さ**: データバリデーションとファイル操作失敗が同一経路で伝播し、呼び出し元のリカバリ設計が困難。
+
+### 優先度
+- **最優先 (P0)**: データ整形とテンプレート変換を独立関数に切り出し、`generate_html` をオーケストレーション専用にする。
+- **高優先度 (P1)**: 静的アセットコピーとキャッシュバスター処理を別モジュール（仮称 `gallery_assets.py`）へ移し、I/O 責務を分離する。
+- **中優先度 (P2)**: マスター辞書収集とデータセット統合をユーティリティ化し、`main.py` やパイプライン構築時に再利用できるようにする。
+
+### 小ステップ
+1. `generate_gallery.py` にセクションコメントと docstring を追加し、現行の責務境界を明示する。
+2. データ整形処理を純粋関数（例: `build_gallery_payload`）として切り出し、`tests/test_generate_gallery.py` から直接検証可能にする。
+3. アセットコピー処理を新モジュールに移管し、`prepare_gallery_assets`（仮称）でパス解決とキャッシュバスター付与を一元化する。I/O 例外には専用例外を導入する。
+4. テンプレート置換を担うヘルパー（例: `render_gallery_template`）を追加し、プレースホルダー管理を辞書マッピングに変更する。
+5. `generate_html` を 1〜4 の関数を順番に呼び出す薄いオーケストレーションに限定し、戻り値を HTML 出力パスへ統一する。
+6. リファクタリング後は `pytest tests/test_generate_gallery.py` と `npm run test:node` を実行し、結果を `docs/guide-refactoring-progress-log.md` に記録する。
+
+### テストと周知
+- Playwright 未導入環境では `pytest` + `node --test tests/js/gallery_modules.test.mjs` を代替手順とする。
+- 進捗とテスト結果は `docs/guide-refactoring-progress-log.md` に追記し、関連チームへ共有する。
 
