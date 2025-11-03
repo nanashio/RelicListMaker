@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import contextlib
 import csv
-import io
 import queue
 import shutil
 import sys
@@ -18,29 +17,23 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk, font
 from typing import Iterator, Optional, Sequence
 
+from gui_adapters import (
+    DND_FILES,
+    HAS_TKDND,
+    TkinterDnD,
+    get_windows_drop_support,
+    redirect_streams,
+)
+from gui_services import BackgroundTaskRunner, GuiState, PipelineExecutor
+from merge_results import MergeResultsError
 from pipeline import (
     DEFAULT_OCR_UPSAMPLE,
-    CallbackProgressReporter,
-    PipelineSettings,
     detect_item_color,
     detect_relic_type,
     normalize_relic_type,
-    run_pipeline,
 )
-from merge_results import MergeResultsError, merge_results
-from viewer_server import ServerContext, create_server, _open_browser
+from viewer_server import ServerContext, _open_browser
 from version_info import get_version
-
-
-try:
-    from tkinterdnd2 import DND_FILES, TkinterDnD  # type: ignore
-
-    _HAS_DND = True
-except Exception:  # noqa: BLE001 - optional dependency
-    TkinterDnD = None
-    DND_FILES = "DND_Files"
-    _HAS_DND = False
-
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".wmv", ".m4v"}
 
 
@@ -117,9 +110,6 @@ def _windows_cli_output(argv: Sequence[str] | None) -> Iterator[None]:
         new_stderr.close()
         if attached:
             kernel32.FreeConsole()
-
-
-_WINDOWS_DROP_SUPPORT = None
 
 
 _REVIEWED_STATUSES = {"pass", "corrected"}
@@ -207,96 +197,12 @@ def _summarize_review_state(csv_path: Path) -> str:
     return "未レビュー含む"
 
 
-if sys.platform.startswith("win") and ctypes is not None and hasattr(wintypes, "LRESULT"):
-    class _WindowsDropSupport:
-        WM_DROPFILES = 0x0233
-        GWL_WNDPROC = -4
-
-        def __init__(self) -> None:
-            self._user32 = ctypes.windll.user32
-            self._shell32 = ctypes.windll.shell32
-            self._targets: dict[int, dict[str, object]] = {}
-            self._wndproc_factory = ctypes.WINFUNCTYPE(
-                wintypes.LRESULT,
-                wintypes.HWND,
-                wintypes.UINT,
-                wintypes.WPARAM,
-                wintypes.LPARAM,
-            )
-            self._set_window_long = self._user32.SetWindowLongPtrW
-            self._set_window_long.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_void_p]
-            self._set_window_long.restype = ctypes.c_void_p
-            self._call_window_proc = self._user32.CallWindowProcW
-            self._call_window_proc.argtypes = [ctypes.c_void_p, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
-            self._call_window_proc.restype = wintypes.LRESULT
-            self._shell32.DragAcceptFiles.argtypes = [wintypes.HWND, wintypes.BOOL]
-            self._shell32.DragAcceptFiles.restype = None
-            self._shell32.DragQueryFileW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_wchar_p, ctypes.c_uint]
-            self._shell32.DragQueryFileW.restype = ctypes.c_uint
-            self._shell32.DragFinish.argtypes = [ctypes.c_void_p]
-            self._shell32.DragFinish.restype = None
-
-        def register(self, widget: tk.Misc, callback) -> None:
-            hwnd = int(widget.winfo_id())
-            entry = self._targets.get(hwnd)
-            if entry is None:
-                callbacks: list = []
-                entry = {"widget": widget, "callbacks": callbacks}
-
-                def wnd_proc(h_wnd, msg, w_param, l_param):
-                    if msg == self.WM_DROPFILES:
-                        paths = self._extract_paths(w_param)
-                        if paths:
-                            for cb in list(callbacks):
-                                widget.after(0, cb, list(paths))
-                        return 0
-                    return self._call_window_proc(entry["old_proc"], h_wnd, msg, w_param, l_param)
-
-                proc = self._wndproc_factory(wnd_proc)
-                old_proc = self._set_window_long(
-                    wintypes.HWND(hwnd),
-                    self.GWL_WNDPROC,
-                    ctypes.cast(proc, ctypes.c_void_p),
-                )
-                self._shell32.DragAcceptFiles(wintypes.HWND(hwnd), True)
-                entry.update({"proc": proc, "old_proc": old_proc})
-                self._targets[hwnd] = entry
-            else:
-                callbacks = entry["callbacks"]
-
-            if callback not in callbacks:
-                callbacks.append(callback)
-
-        def unregister(self, widget: tk.Misc) -> None:
-            hwnd = int(widget.winfo_id())
-            entry = self._targets.get(hwnd)
-            if not entry:
-                return
-            entry["callbacks"] = []
-            self._set_window_long(wintypes.HWND(hwnd), self.GWL_WNDPROC, entry["old_proc"])
-            self._shell32.DragAcceptFiles(wintypes.HWND(hwnd), False)
-            self._targets.pop(hwnd, None)
-
-        def _extract_paths(self, h_drop) -> list[str]:
-            count = self._shell32.DragQueryFileW(h_drop, 0xFFFFFFFF, None, 0)
-            paths: list[str] = []
-            for index in range(count):
-                length = self._shell32.DragQueryFileW(h_drop, index, None, 0) + 1
-                buffer = ctypes.create_unicode_buffer(length)
-                self._shell32.DragQueryFileW(h_drop, index, buffer, length)
-                paths.append(buffer.value)
-            self._shell32.DragFinish(h_drop)
-            return paths
-
-
-    def _get_windows_drop_support() -> "_WindowsDropSupport | None":
-        global _WINDOWS_DROP_SUPPORT
-        if _WINDOWS_DROP_SUPPORT is None:
-            _WINDOWS_DROP_SUPPORT = _WindowsDropSupport()
-        return _WINDOWS_DROP_SUPPORT
+if sys.platform.startswith("win"):
+    import ctypes
+    from ctypes import wintypes
 else:
-    def _get_windows_drop_support() -> None:
-        return None
+    ctypes = None
+    wintypes = None
 
 
 def _default_base_dir() -> Path:
@@ -309,42 +215,6 @@ def _default_base_dir() -> Path:
         except OSError:
             return Path.cwd()
     return Path(__file__).resolve().parent
-
-
-class QueueWriter(io.TextIOBase):
-    """標準出力をGUIログに流すための擬似ファイル."""
-
-    def __init__(self, target_queue: "queue.Queue[str]") -> None:
-        super().__init__()
-        self._queue = target_queue
-
-    def write(self, data: str) -> int:
-        if not data:
-            return 0
-        self._queue.put(data)
-        return len(data)
-
-    def flush(self) -> None:
-        # queue.Queue はスレッドセーフなため特別な flush は不要
-        return None
-
-
-@contextlib.contextmanager
-def redirect_streams(target_queue: "queue.Queue[str]"):
-    """標準出力・標準エラーをGUIログにリダイレクトするコンテキスト."""
-
-    writer = QueueWriter(target_queue)
-    original_stdout = sys.stdout
-    original_stderr = sys.stderr
-    try:
-        sys.stdout = writer
-        sys.stderr = writer
-        yield
-    finally:
-        sys.stdout = original_stdout
-        sys.stderr = original_stderr
-
-
 class RelicGuiApp:
     """RelicListMaker パイプラインのGUIフロントエンド."""
 
@@ -385,11 +255,11 @@ class RelicGuiApp:
         self.results_status_var = tk.StringVar(value="結果フォルダを読み込んでください")
         self.log_visible_var = tk.BooleanVar(value=False)
 
-        self.pipeline_thread: Optional[threading.Thread] = None
         self.server_context: Optional[ServerContext] = None
         self.server_thread: Optional[threading.Thread] = None
         self.log_queue: "queue.Queue[str]" = queue.Queue()
-        self.merge_thread: Optional[threading.Thread] = None
+        self.executor = PipelineExecutor()
+        self.background_tasks = BackgroundTaskRunner()
         self.progress_var = tk.StringVar(value="待機中")
         self.progress_bar: Optional[ttk.Progressbar] = None
         self._progress_tasks: list[dict[str, object]] = []
@@ -403,9 +273,28 @@ class RelicGuiApp:
         self.relic_type_options = ["通常", "深層遺物"]
         self._relic_type_value_map = {"通常": "normal", "深層遺物": "deep"}
         self._relic_type_display_map = {value: label for label, value in self._relic_type_value_map.items()}
-        self._dropped_videos: list[dict[str, str]] = []
         self._dropped_video_set: set[str] = set()
         self._queue_item_paths: dict[str, str] = {}
+        try:
+            initial_ocr = float(self.ocr_upsample_var.get())
+        except ValueError:
+            initial_ocr = DEFAULT_OCR_UPSAMPLE
+        try:
+            initial_port = int(self.server_port_var.get().strip() or "0")
+        except ValueError:
+            initial_port = 0
+        self.state = GuiState(
+            base_dir=self.base_dir,
+            video_dir=self._resolve_input_path(self.video_dir_var.get()),
+            results_dir=self._resolve_input_path(self.results_dir_var.get()),
+            queue_entries=[],
+            ocr_upsample=initial_ocr,
+            save_full_frames=self.save_frames_var.get(),
+            column_visibility={key: var.get() for key, var in self.csv_column_vars.items()},
+            merge_only_reviewed=self.merge_only_reviewed_var.get(),
+            server_host=self.server_host_var.get().strip() or "127.0.0.1",
+            server_port=initial_port,
+        )
         self.queue_tree: Optional[ttk.Treeview] = None
         self._inline_hide_after: Optional[str] = None
         self._inline_type_hide_after: Optional[str] = None
@@ -425,6 +314,28 @@ class RelicGuiApp:
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.after(self.POLL_INTERVAL_MS, self._process_log_queue)
         self._refresh_results_list()
+
+    @property
+    def _dropped_videos(self) -> list[dict[str, object]]:
+        """後方互換性のために旧インターフェースを保持する."""
+
+        return self.state.queue_entries
+
+    @_dropped_videos.setter
+    def _dropped_videos(self, entries: Sequence[dict[str, object]] | None) -> None:
+        """テストや旧コードからの直接代入をサポートし、状態を同期する."""
+
+        normalized: list[dict[str, object]] = []
+        if entries:
+            for entry in entries:
+                if isinstance(entry, dict):
+                    normalized.append(dict(entry))
+        self.state.queue_entries = normalized
+        self._dropped_video_set = {
+            str(entry.get("path"))
+            for entry in normalized
+            if entry.get("path")
+        }
 
     def _apply_japanese_fonts(self) -> None:
         """Tkの標準フォントを日本語表示に適したフォントへ切り替える."""
@@ -554,12 +465,20 @@ class RelicGuiApp:
         self.main_frame = main_frame
         main_frame.grid(row=base_row, column=0, sticky="nsew")
         self.root.rowconfigure(base_row, weight=1)
-
         main_frame.columnconfigure(0, weight=1)
 
-        queue_frame = ttk.LabelFrame(main_frame, text="動画処理", padding=12)
+        self._build_queue_section(main_frame)
+        self._build_results_section(main_frame)
+        self._build_log_section(main_frame)
+
+        self._refresh_progress_display()
+        self._refresh_queue_view()
+        self._update_log_visibility()
+
+    def _build_queue_section(self, parent: ttk.Frame) -> ttk.LabelFrame:
+        queue_frame = ttk.LabelFrame(parent, text="動画処理", padding=12)
         queue_frame.grid(row=0, column=0, sticky="nsew")
-        main_frame.rowconfigure(0, weight=1)
+        parent.rowconfigure(0, weight=1)
         for col_index in range(3):
             queue_frame.columnconfigure(col_index, weight=1)
         queue_frame.rowconfigure(0, weight=1)
@@ -589,11 +508,12 @@ class RelicGuiApp:
         self.queue_tree.bind("<Button-4>", self._on_queue_scroll_event, add="+")
         self.queue_tree.bind("<Button-5>", self._on_queue_scroll_event, add="+")
         self.queue_tree.bind("<Configure>", self._on_queue_scroll_event, add="+")
-        self.inline_color_combo: Optional[ttk.Combobox] = None
-        self._inline_color_item: Optional[str] = None
+
+        self.inline_color_combo = None
+        self._inline_color_item = None
         self._create_inline_color_editor()
-        self.inline_type_combo: Optional[ttk.Combobox] = None
-        self._inline_type_item: Optional[str] = None
+        self.inline_type_combo = None
+        self._inline_type_item = None
         self._create_inline_relic_type_editor()
 
         self.queue_selection_var.set("ドラッグ＆ドロップで動画を追加してください")
@@ -602,14 +522,23 @@ class RelicGuiApp:
 
         self.run_button = ttk.Button(queue_frame, text="動画処理を実行", command=self.on_run_pipeline)
         self.run_button.grid(row=2, column=0, columnspan=2, sticky="ew", padx=(0, 8), pady=(8, 0))
-
         ttk.Button(queue_frame, text="選択動画を削除", command=self._remove_selected_videos).grid(
             row=2, column=2, sticky="ew", pady=(8, 0)
         )
 
-        actions_frame = ttk.LabelFrame(main_frame, text="処理結果の確認", padding=12)
+        progress_frame = ttk.Frame(queue_frame, padding=8)
+        progress_frame.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(12, 0))
+        progress_frame.columnconfigure(0, weight=1)
+        self.progress_bar = ttk.Progressbar(progress_frame, orient="horizontal", mode="indeterminate")
+        self.progress_bar.grid(row=0, column=0, sticky="ew")
+        ttk.Label(progress_frame, textvariable=self.progress_var).grid(row=1, column=0, sticky="w", pady=(8, 0))
+
+        return queue_frame
+
+    def _build_results_section(self, parent: ttk.Frame) -> ttk.LabelFrame:
+        actions_frame = ttk.LabelFrame(parent, text="処理結果の確認", padding=12)
         actions_frame.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
-        main_frame.rowconfigure(1, weight=1)
+        parent.rowconfigure(1, weight=1)
         actions_frame.columnconfigure(0, weight=1)
         actions_frame.columnconfigure(1, weight=0)
         actions_frame.rowconfigure(2, weight=1)
@@ -621,7 +550,6 @@ class RelicGuiApp:
 
         self.server_start_button = ttk.Button(buttons_frame, text="ビューワを開く", command=self.on_start_server)
         self.server_start_button.grid(row=0, column=0, sticky="ew", padx=(4, 2), pady=4)
-
         self.merge_button = ttk.Button(buttons_frame, text="統合結果を生成", command=self.on_merge_results)
         self.merge_button.grid(row=0, column=1, sticky="ew", padx=(2, 4), pady=4)
 
@@ -658,16 +586,12 @@ class RelicGuiApp:
         tree.configure(yscrollcommand=results_scroll.set)
         self.results_tree = tree
 
-        progress_frame = ttk.Frame(queue_frame, padding=8)
-        progress_frame.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(12, 0))
-        progress_frame.columnconfigure(0, weight=1)
-        self.progress_bar = ttk.Progressbar(progress_frame, orient="horizontal", mode="indeterminate")
-        self.progress_bar.grid(row=0, column=0, sticky="ew")
-        ttk.Label(progress_frame, textvariable=self.progress_var).grid(row=1, column=0, sticky="w", pady=(8, 0))
+        return actions_frame
 
-        log_frame = ttk.LabelFrame(main_frame, text="ログ", padding=12)
+    def _build_log_section(self, parent: ttk.Frame) -> ttk.LabelFrame:
+        log_frame = ttk.LabelFrame(parent, text="ログ", padding=12)
         log_frame.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
-        main_frame.rowconfigure(2, weight=1)
+        parent.rowconfigure(2, weight=1)
         self.log_frame = log_frame
 
         self.log_text = tk.Text(log_frame, height=20, state="disabled", wrap="word")
@@ -678,9 +602,7 @@ class RelicGuiApp:
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
 
-        self._refresh_progress_display()
-        self._refresh_queue_view()
-        self._update_log_visibility()
+        return log_frame
 
     def _create_menubar(self) -> None:
         """アプリケーションのメニューバーを初期化する。"""
@@ -969,7 +891,7 @@ class RelicGuiApp:
 
 
     def _install_windows_drop(self, widget: tk.Misc) -> bool:
-        support = _get_windows_drop_support()
+        support = get_windows_drop_support()
         if support is None:
             return False
 
@@ -999,6 +921,8 @@ class RelicGuiApp:
     def _ensure_tkdnd_available(self) -> bool:
         if self._tkdnd_ready:
             return True
+        if not HAS_TKDND:
+            return False
         try:
             self.root.tk.call('package', 'require', 'tkdnd')
         except tk.TclError:
@@ -1101,8 +1025,8 @@ class RelicGuiApp:
             summary = ", ".join(skipped_dirs)
             self.append_log(f"[WARN] 対応する動画が見つからないフォルダをスキップしました: {summary}")
 
-        if self._dropped_videos:
-            self.append_log(f"[GUI] 現在の処理対象: {len(self._dropped_videos)} 件")
+        if self.state.queue_entries:
+            self.append_log(f"[GUI] 現在の処理対象: {len(self.state.queue_entries)} 件")
 
         self._refresh_queue_view()
 
@@ -1136,7 +1060,7 @@ class RelicGuiApp:
         base_name = Path(resolved).stem
         detected = detect_item_color(base_name) or "none"
         relic_type = detect_relic_type(base_name)
-        self._dropped_videos.append(
+        self.state.queue_entries.append(
             {
                 "path": resolved,
                 "color": detected,
@@ -1151,7 +1075,7 @@ class RelicGuiApp:
         self._hide_inline_relic_type_editor()
         self.queue_tree.delete(*self.queue_tree.get_children())
         self._queue_item_paths.clear()
-        for entry in self._dropped_videos:
+        for entry in self.state.queue_entries:
             path = entry.get("path", "")
             name = Path(path).name if path else ""
             color = entry.get("color", self.color_options[0]) or self.color_options[0]
@@ -1279,7 +1203,11 @@ class RelicGuiApp:
             return
         selected = self.queue_tree.selection()
         if not selected:
-            message = "ドラッグ＆ドロップで動画を追加してください" if not self._dropped_videos else "動画を選択してください"
+            message = (
+                "ドラッグ＆ドロップで動画を追加してください"
+                if not self.state.queue_entries
+                else "動画を選択してください"
+            )
             self.queue_selection_var.set(message)
             return
         first_path = self.queue_tree.set(selected[0], "fullpath")
@@ -1531,7 +1459,9 @@ class RelicGuiApp:
             return
         remove_paths = {self.queue_tree.set(item, "fullpath") for item in selected}
         if remove_paths:
-            self._dropped_videos = [entry for entry in self._dropped_videos if entry.get("path") not in remove_paths]
+            self.state.queue_entries = [
+                entry for entry in self.state.queue_entries if entry.get("path") not in remove_paths
+            ]
             for path_value in remove_paths:
                 self._dropped_video_set.discard(path_value)
             removed_names = [Path(path_value).name for path_value in remove_paths]
@@ -1554,7 +1484,7 @@ class RelicGuiApp:
         if not resolved_path:
             resolved_path = item_id
 
-        for entry in self._dropped_videos:
+        for entry in self.state.queue_entries:
             if entry.get("path") == resolved_path:
                 entry["color"] = color
                 break
@@ -1575,7 +1505,7 @@ class RelicGuiApp:
 
         normalized = normalize_relic_type(relic_type)
 
-        for entry in self._dropped_videos:
+        for entry in self.state.queue_entries:
             if entry.get("path") == resolved_path:
                 entry["relic_type"] = normalized
                 break
@@ -1585,6 +1515,46 @@ class RelicGuiApp:
         if raw.is_absolute():
             return raw.resolve()
         return (self.base_dir / raw).resolve()
+
+    def _update_state_from_form(self, *, include_port: bool = False) -> None:
+        """エントリ値からアプリ状態を更新する."""
+
+        self.state.video_dir = self._resolve_input_path(self.video_dir_var.get())
+        self.state.results_dir = self._resolve_input_path(self.results_dir_var.get())
+        self.state.save_full_frames = self.save_frames_var.get()
+        self.state.column_visibility = {key: var.get() for key, var in self.csv_column_vars.items()}
+        self.state.merge_only_reviewed = self.merge_only_reviewed_var.get()
+        self.state.server_host = self.server_host_var.get().strip() or "127.0.0.1"
+        try:
+            self.state.ocr_upsample = float(self.ocr_upsample_var.get())
+        except ValueError as exc:
+            raise ValueError("ocr") from exc
+
+        if include_port:
+            port_text = self.server_port_var.get().strip()
+            if port_text:
+                try:
+                    self.state.server_port = int(port_text)
+                except ValueError as exc:
+                    raise ValueError("port") from exc
+            else:
+                self.state.server_port = 0
+
+    def _snapshot_state(self) -> GuiState:
+        """現在の状態を独立したコピーとして取得する."""
+
+        return GuiState(
+            base_dir=self.state.base_dir,
+            video_dir=self.state.video_dir,
+            results_dir=self.state.results_dir,
+            queue_entries=[dict(entry) for entry in self.state.queue_entries],
+            ocr_upsample=self.state.ocr_upsample,
+            save_full_frames=self.state.save_full_frames,
+            column_visibility=dict(self.state.column_visibility),
+            merge_only_reviewed=self.state.merge_only_reviewed,
+            server_host=self.state.server_host,
+            server_port=self.state.server_port,
+        )
 
     def _to_user_value(self, path: Path) -> str:
         resolved = path.resolve()
@@ -1718,41 +1688,31 @@ class RelicGuiApp:
             self.root.after(self.POLL_INTERVAL_MS, self._process_log_queue)
 
     def on_run_pipeline(self) -> None:
-        if self.pipeline_thread and self.pipeline_thread.is_alive():
+        if self.background_tasks.is_running("pipeline"):
             messagebox.showinfo("処理中", "現在、動画処理が実行中です。完了をお待ちください。")
             return
 
         try:
-            ocr_value = float(self.ocr_upsample_var.get())
-        except ValueError:
-            messagebox.showerror("入力エラー", "OCRアップサンプルは数値で指定してください。")
+            self._update_state_from_form()
+        except ValueError as exc:
+            if exc.args and exc.args[0] == "ocr":
+                messagebox.showerror("入力エラー", "OCRアップサンプルは数値で指定してください。")
+            else:
+                messagebox.showerror("入力エラー", "設定値の解析に失敗しました。")
             return
 
-        video_dir = str(self._resolve_input_path(self.video_dir_var.get()))
-        results_dir = str(self._resolve_input_path(self.results_dir_var.get()))
-        video_entries = list(self._dropped_videos)
-        if not video_entries:
+        if not self.state.queue_entries:
             messagebox.showinfo("動画未選択", "先に動画をドラッグ＆ドロップしてください。")
             return
 
-        videos_to_process = [entry["path"] for entry in video_entries]
-        color_overrides = {
-            entry["path"]: entry.get("color", "none")
-            for entry in video_entries
-            if entry.get("color") not in (None, "", "none")
-        }
-        type_overrides = {
-            entry["path"]: normalize_relic_type(entry.get("relic_type"))
-            for entry in video_entries
-            if entry.get("path")
-        }
-        column_visibility = {
-            key: var.get()
-            for key, var in self.csv_column_vars.items()
-        }
+        state_snapshot = self._snapshot_state()
+        video_dir = str(state_snapshot.video_dir)
+        results_dir = str(state_snapshot.results_dir)
 
         self.run_button.configure(state="disabled")
-        self.append_log(f"[GUI] 動画処理を開始します: {video_dir} -> {results_dir} ({len(videos_to_process)} 件)")
+        self.append_log(
+            f"[GUI] 動画処理を開始します: {video_dir} -> {results_dir} ({len(state_snapshot.queue_entries)} 件)"
+        )
         token = self._start_progress("動画処理を準備中...")
         self._pipeline_progress_token = token
 
@@ -1770,79 +1730,87 @@ class RelicGuiApp:
         def worker() -> None:
             try:
                 with redirect_streams(self.log_queue):
-                    settings = PipelineSettings(
-                        video_dir=video_dir,
-                        result_dir=results_dir,
-                        ocr_upsample=ocr_value,
-                        video_files=videos_to_process,
-                        item_color_overrides=color_overrides,
-                        relic_type_overrides=type_overrides,
-                        save_full_frames=self.save_frames_var.get(),
-                        csv_column_visibility=column_visibility,
-                    )
-                    reporter = CallbackProgressReporter(callback=progress_callback)
-                    run_pipeline(settings=settings, reporter=reporter)
+                    self.executor.execute_pipeline(state_snapshot, progress_callback=progress_callback)
                 self.append_log("[GUI] 動画処理が完了しました")
             except Exception as exc:  # noqa: BLE001 - GUIログに表示するため広く捕捉
                 self.append_log("[ERROR] 動画処理中にエラーが発生しました")
                 self.append_log(traceback.format_exc())
-                self.root.after(0, lambda: messagebox.showerror("処理失敗", f"動画処理でエラーが発生しました: {exc}"))
+                self.root.after(
+                    0,
+                    lambda: messagebox.showerror("処理失敗", f"動画処理でエラーが発生しました: {exc}"),
+                )
             finally:
+                self.background_tasks.mark_finished("pipeline")
                 self.root.after(0, self._on_pipeline_finished)
 
-        self.pipeline_thread = threading.Thread(target=worker, daemon=True)
-        self.pipeline_thread.start()
+        try:
+            self.background_tasks.start("pipeline", worker)
+        except RuntimeError:
+            self.run_button.configure(state="normal")
+            messagebox.showinfo("処理中", "現在、動画処理が実行中です。完了をお待ちください。")
 
     def _on_pipeline_finished(self) -> None:
         self.run_button.configure(state="normal")
-        self.pipeline_thread = None
         if self._pipeline_progress_token is not None:
             self._stop_progress(self._pipeline_progress_token)
             self._pipeline_progress_token = None
-        if self._dropped_videos:
+        if self.state.queue_entries:
             self.append_log('[GUI] キューをクリアしました')
-        self._dropped_videos.clear()
+        self.state.queue_entries.clear()
         self._dropped_video_set.clear()
         self._refresh_queue_view()
         self._schedule_results_refresh()
 
     def on_merge_results(self) -> None:
-        if self.merge_thread and self.merge_thread.is_alive():
+        if self.background_tasks.is_running("merge"):
             messagebox.showinfo("統合処理中", "現在、統合処理が実行中です。完了をお待ちください。")
             return
 
-        results_dir = str(self._resolve_input_path(self.results_dir_var.get()))
+        try:
+            self._update_state_from_form()
+        except ValueError:
+            messagebox.showerror("入力エラー", "設定値の解析に失敗しました。")
+            return
+
+        state_snapshot = self._snapshot_state()
+        results_dir = str(state_snapshot.results_dir)
         self.merge_button.configure(state="disabled")
         self.append_log(
             "[GUI] 統合処理を開始します: "
-            f"{results_dir} (レビュー済みのみ={self.merge_only_reviewed_var.get()})"
+            f"{results_dir} (レビュー済みのみ={state_snapshot.merge_only_reviewed})"
         )
         self._merge_progress_token = self._start_progress("統合処理実行中...")
 
         def worker() -> None:
             try:
-                merged_path = merge_results(
-                    results_dir,
-                    only_reviewed=self.merge_only_reviewed_var.get(),
-                )
+                merged_path = self.executor.merge_results(state_snapshot)
                 self.append_log(f"[GUI] 統合処理が完了しました: {merged_path}")
             except MergeResultsError as err:
                 self.append_log("[ERROR] 統合処理に失敗しました")
                 self.append_log(str(err))
-                self.root.after(0, lambda: messagebox.showerror("統合処理失敗", f"統合処理に失敗しました: {err}"))
+                self.root.after(
+                    0,
+                    lambda: messagebox.showerror("統合処理失敗", f"統合処理に失敗しました: {err}"),
+                )
             except Exception as exc:  # noqa: BLE001 - GUIログに出すため
                 self.append_log("[ERROR] 統合処理中に予期しないエラーが発生しました")
                 self.append_log(traceback.format_exc())
-                self.root.after(0, lambda: messagebox.showerror("統合処理失敗", f"統合処理でエラーが発生しました: {exc}"))
+                self.root.after(
+                    0,
+                    lambda: messagebox.showerror("統合処理失敗", f"統合処理でエラーが発生しました: {exc}"),
+                )
             finally:
+                self.background_tasks.mark_finished("merge")
                 self.root.after(0, self._on_merge_finished)
 
-        self.merge_thread = threading.Thread(target=worker, daemon=True)
-        self.merge_thread.start()
+        try:
+            self.background_tasks.start("merge", worker)
+        except RuntimeError:
+            self.merge_button.configure(state="normal")
+            messagebox.showinfo("統合処理中", "現在、統合処理が実行中です。完了をお待ちください。")
 
     def _on_merge_finished(self) -> None:
         self.merge_button.configure(state="normal")
-        self.merge_thread = None
         if self._merge_progress_token is not None:
             self._stop_progress(self._merge_progress_token)
             self._merge_progress_token = None
@@ -1853,21 +1821,19 @@ class RelicGuiApp:
             self._open_viewer_in_browser(self.server_context, force=True)
             return
 
-        host = self.server_host_var.get().strip() or "127.0.0.1"
-        port_text = self.server_port_var.get().strip()
         try:
-            port = int(port_text) if port_text else 0
-        except ValueError:
-            messagebox.showerror("入力エラー", "ポート番号は整数で指定してください。")
+            self._update_state_from_form(include_port=True)
+        except ValueError as exc:
+            if exc.args and exc.args[0] == "port":
+                messagebox.showerror("入力エラー", "ポート番号は整数で指定してください。")
+            else:
+                messagebox.showerror("入力エラー", "設定値の解析に失敗しました。")
             return
 
+        state_snapshot = self._snapshot_state()
+
         try:
-            context = create_server(
-                results_dir=str(self._resolve_input_path(self.results_dir_var.get())),
-                host=host,
-                port=port,
-                video=None,
-            )
+            context = self.executor.start_server(state_snapshot)
         except Exception as exc:  # noqa: BLE001 - 詳細をGUIに表示するため
             self.append_log("[ERROR] サーバーの起動に失敗しました")
             self.append_log(traceback.format_exc())
@@ -1906,7 +1872,7 @@ class RelicGuiApp:
         self.server_start_button.configure(state="normal")
 
     def on_close(self) -> None:
-        if self.pipeline_thread and self.pipeline_thread.is_alive():
+        if self.background_tasks.is_running("pipeline"):
             if not messagebox.askokcancel("終了確認", "動画処理が実行中です。アプリを終了しますか？"):
                 return
 
@@ -1920,12 +1886,12 @@ class RelicGuiApp:
                 self.server_thread = None
                 self.server_start_button.configure(text="ビューワを開く")
                 self.server_start_button.configure(state="normal")
-    
-        if self.merge_thread and self.merge_thread.is_alive():
-            try:
-                self.merge_thread.join(timeout=1)
-            except Exception:
-                pass
+
+        try:
+            self.background_tasks.join("pipeline", timeout=1)
+            self.background_tasks.join("merge", timeout=1)
+        except Exception:
+            pass
 
         self._close_settings_dialog()
         self.root.destroy()
