@@ -315,6 +315,28 @@ class RelicGuiApp:
         self.root.after(self.POLL_INTERVAL_MS, self._process_log_queue)
         self._refresh_results_list()
 
+    @property
+    def _dropped_videos(self) -> list[dict[str, object]]:
+        """後方互換性のために旧インターフェースを保持する."""
+
+        return self.state.queue_entries
+
+    @_dropped_videos.setter
+    def _dropped_videos(self, entries: Sequence[dict[str, object]] | None) -> None:
+        """テストや旧コードからの直接代入をサポートし、状態を同期する."""
+
+        normalized: list[dict[str, object]] = []
+        if entries:
+            for entry in entries:
+                if isinstance(entry, dict):
+                    normalized.append(dict(entry))
+        self.state.queue_entries = normalized
+        self._dropped_video_set = {
+            str(entry.get("path"))
+            for entry in normalized
+            if entry.get("path")
+        }
+
     def _apply_japanese_fonts(self) -> None:
         """Tkの標準フォントを日本語表示に適したフォントへ切り替える."""
         try:
