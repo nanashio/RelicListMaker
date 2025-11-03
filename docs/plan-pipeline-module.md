@@ -19,7 +19,7 @@
 ### 完了済みハイライト
 - 入力収集からタスク生成までのパス正規化を統一し、上書き指定と動画パスの突き合わせを絶対パスベースで行えるようになった。
 - `ProgressReporter` 抽象を導入したことで、CLI 表示と GUI コールバックを差し替え可能な構成へ移行済み。
-- `process_video` が生成物の相対パスを返却するため、`run_pipeline` でそのまま HTML 生成用データセットへ連携できる。
+- `process_video` が `ProcessedVideoResult` を返却し、`datasets/builder.py::build_dataset_entries` を介して HTML 生成用データセットへ連携できる構成に更新された。
 - `tests/pipeline/` に入力正規化とタスク生成のユニットテストを追加し、相対パス指定や `none` 上書きなどの回帰を防止できるようにした。
 - README に `run_pipeline` / `create_tasks` の利用例を追記し、CLI 以外からの再利用方法を共有した。
 - `process_video` の疎通テストを `tests/pipeline/test_processors.py` に追加し、依存モジュール呼び出しと戻り値整形を検証できるようになった。

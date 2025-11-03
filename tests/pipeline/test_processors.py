@@ -30,6 +30,7 @@ if "match_and_export" not in sys.modules:
     match_stub.process_images = _stub_process_images  # type: ignore[attr-defined]
     sys.modules["match_and_export"] = match_stub
 
+import datasets.builder as dataset_builder
 import pipeline.processors as processors
 import pipeline.tasks as tasks
 
@@ -142,10 +143,11 @@ def test_process_video_creates_outputs_and_invokes_dependencies(tmp_path: Path, 
     assert calls[1][1][5].endswith("master_relics.csv")
     assert calls[1][1][6] == "type=normal"
 
-    expected_rel_csv = Path(entry["csv"])
-    expected_rel_img = Path(entry["img_dir"])
-    expected_rel_folder = Path(entry["folder"])
+    assert isinstance(entry, dataset_builder.ProcessedVideoResult)
+    assert entry.label == task.base_name
+    assert entry.relic_type == "normal"
+    assert entry.metadata is None
 
-    assert expected_rel_csv == Path(task.base_name) / f"{task.base_name}.csv"
-    assert expected_rel_img == Path(task.base_name) / "crops"
-    assert expected_rel_folder == Path(task.base_name)
+    assert entry.csv_path == task.csv_path
+    assert entry.crops_dir == task.crops_dir
+    assert entry.output_dir == task.output_dir
