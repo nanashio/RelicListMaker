@@ -1,10 +1,13 @@
-import os
+"""ギャラリーHTML生成のオーケストレーションロジック."""
+from __future__ import annotations
+
 import html
 import json
-import shutil
-import time
+import os
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
 
+import gallery_assets
 from relic_data import load_master_csv, load_master_json, load_master_effects_and_levels, normalize_master_values
 from resource_paths import templates_path
 
@@ -20,26 +23,25 @@ TEMPLATE_CSS_PATH = str(templates_path("gallery.css"))
 TEMPLATE_INDEX_JS_PATH = str(templates_path("gallery/index.js"))
 TEMPLATE_CORE_JS_PATH = str(templates_path("gallery.js"))
 
-ADDITIONAL_GALLERY_SCRIPTS = [
-    "gallery/utils/dom.js",
-    "gallery/utils/data.js",
-    "gallery/utils/records.js",
-    "gallery/dataset/utils.js",
-    "gallery/utils/filter.js",
-    "gallery/state/store.js",
-    "gallery/app/stateApi.js",
-    "gallery/dataset/manager.js",
-    "gallery/storage/utils.js",
-    "gallery/storage/manager.js",
-    "gallery/app/controller.js",
-    "gallery/render/effectViewModel.js",
-    "gallery/render/effectFactory.js",
-    "gallery/render/itemEnhancers.js",
-    "gallery/render/itemFactory.js",
-    "gallery/render/galleryView.js",
-    "gallery/events/recordActionHandlers.js",
-    "gallery/events/galleryEvents.js"
-]
+
+@dataclass
+class GalleryPayload:
+    """テンプレートへ埋め込むデータ一式と警告情報."""
+
+    results_csv: str
+    image_dir: str
+    label_symbols: List[str]
+    master_csv: str
+    master_json: str
+    master_options: List[str]
+    master_options_by_type: Dict[str, List[str]]
+    master_levels: Dict[str, List[str]]
+    master_levels_by_type: Dict[str, Dict[str, List[str]]]
+    master_csv_map: Dict[str, str]
+    datasets: List[dict]
+    active_dataset_index: int
+    item_image_view_box: str
+    warnings: List[str] = field(default_factory=list)
 
 
 def _escape_attr(value: str) -> str:
@@ -245,7 +247,6 @@ def _collect_master_data_by_type(
             rel_path = rel_path.replace(os.sep, "/")
         csv_map[relic_type] = rel_path
 
-    # Levels map values should be plain dicts for JSON serialization.
     levels_map_serializable: Dict[str, Dict[str, List[str]]] = {}
     for key, mapping in levels_map.items():
         levels_map_serializable[key] = {effect: list(values) for effect, values in mapping.items()}
@@ -271,94 +272,52 @@ def _load_text_asset(default_path: str, override: Optional[str] = None) -> str:
         raise FileNotFoundError(f"HTMLテンプレートが見つかりません: {path}") from exc
 
 
-def _copy_static_asset(
-    default_path: str,
+def build_gallery_payload(
+    *,
+    results_path: str,
+    img_dir: Optional[str],
     output_dir: str,
-    override: Optional[str] = None,
-    target_relative_path: Optional[str] = None,
-) -> tuple[str, str]:
-    source = _resolve_asset_path(default_path, override)
-    if target_relative_path:
-        relative_path = target_relative_path
-    else:
-        relative_path = os.path.basename(source)
-    destination = os.path.join(output_dir, relative_path)
-    os.makedirs(os.path.dirname(destination), exist_ok=True)
-    try:
-        shutil.copyfile(source, destination)
-    except FileNotFoundError as exc:
-        raise FileNotFoundError(f"静的アセットが見つかりません: {source}") from exc
-    normalized = relative_path.replace(os.sep, "/")
-    return normalized, destination
+    label_symbols: Optional[Sequence[str]],
+    master_csv_path: Optional[str],
+    master_json_path: Optional[str],
+    master_options: Optional[Sequence[str]],
+    datasets,
+    active_dataset_index: int,
+    item_image_view_box: Optional[str],
+) -> GalleryPayload:
+    output_dir_abs = os.path.abspath(output_dir) if output_dir else os.getcwd()
+    warnings: List[str] = []
 
-
-
-
-def _copy_gallery_modules(output_dir: str) -> None:
-    for relative in ADDITIONAL_GALLERY_SCRIPTS:
-        source_path = templates_path(relative)
-        destination = os.path.join(output_dir, relative.replace("/", os.sep))
-        os.makedirs(os.path.dirname(destination), exist_ok=True)
-        shutil.copyfile(str(source_path), destination)
-
-
-def _cache_busted_path(relative_path: str, target_path: Optional[str]) -> str:
-    if not relative_path or not target_path:
-        return relative_path
-    try:
-        version = str(int(os.path.getmtime(target_path)))
-    except OSError:
-        return relative_path
-    separator = '&' if '?' in relative_path else '?'
-    return f"{relative_path}{separator}v={version}"
-
-
-def generate_html(
-    results_path,
-    img_dir,
-    output_html,
-    label_symbols=None,
-    master_csv_path: Optional[str] = None,
-    master_json_path: Optional[str] = None,
-    template_path: Optional[str] = None,
-    css_template_path: Optional[str] = None,
-    js_template_path: Optional[str] = None,
-    css_output_name: Optional[str] = None,
-    js_output_name: Optional[str] = None,
-    master_options: Optional[Sequence[str]] = None,
-    datasets=None,
-    active_dataset_index: int = 0,
-    item_image_view_box: Optional[str] = None,
-    css_relative_override: Optional[str] = None,
-    js_relative_override: Optional[str] = None,
-):
-    label_symbols = _sanitize_symbols(label_symbols) or _sanitize_symbols(LABEL_SYMBOLS)
-    if not label_symbols:
-        label_symbols = ["①", "②", "③"]
-
-    output_dir = os.path.dirname(os.path.abspath(output_html)) or "."
-    os.makedirs(output_dir, exist_ok=True)
+    normalized_symbols = _sanitize_symbols(label_symbols) or _sanitize_symbols(LABEL_SYMBOLS)
+    if not normalized_symbols:
+        normalized_symbols = ["①", "②", "③"]
 
     results_abs_path = os.path.abspath(results_path)
-    results_rel_path = os.path.relpath(results_abs_path, output_dir)
-
+    try:
+        results_rel_path = os.path.relpath(results_abs_path, output_dir_abs)
+    except ValueError:
+        results_rel_path = os.path.basename(results_abs_path)
     if not os.path.exists(results_abs_path):
-        print(f"[!] 結果ファイルが見つかりません: {results_path}")
+        warnings.append(f"[!] 結果ファイルが見つかりません: {results_path}")
 
+    img_rel_dir = "."
+    img_abs_dir: Optional[str] = None
     if img_dir:
         if os.path.isabs(img_dir):
-            img_rel_dir = os.path.relpath(img_dir, output_dir)
             img_abs_dir = img_dir
+            try:
+                img_rel_dir = os.path.relpath(img_abs_dir, output_dir_abs)
+            except ValueError:
+                img_rel_dir = os.path.basename(img_abs_dir)
         else:
             img_rel_dir = img_dir
-            img_abs_dir = os.path.abspath(os.path.join(output_dir, img_dir))
-        if not os.path.exists(img_abs_dir):
-            print(f"[!] 画像ディレクトリが見つかりません: {img_abs_dir}")
-    else:
-        img_rel_dir = "."
+            img_abs_dir = os.path.abspath(os.path.join(output_dir_abs, img_dir))
+        if img_abs_dir and not os.path.exists(img_abs_dir):
+            warnings.append(f"[!] 画像ディレクトリが見つかりません: {img_abs_dir}")
 
-    master_options = normalize_master_values(master_options)
     resolved_view_box = _normalize_item_image_view_box(item_image_view_box)
+
+    master_options_list = normalize_master_values(master_options)
     master_csv_rel_path = ""
     master_json_rel_path = ""
     master_levels_map: Dict[str, List[str]] = {}
@@ -366,51 +325,66 @@ def generate_html(
 
     master_csv_abs: Optional[str] = None
     if master_csv_path:
-        candidate = master_csv_path if os.path.isabs(master_csv_path) else os.path.abspath(os.path.join(output_dir, master_csv_path))
+        candidate = master_csv_path if os.path.isabs(master_csv_path) else os.path.abspath(
+            os.path.join(output_dir_abs, master_csv_path)
+        )
         if os.path.exists(candidate):
             master_csv_abs = candidate
-            master_csv_rel_path = os.path.relpath(candidate, output_dir)
+            try:
+                master_csv_rel_path = os.path.relpath(candidate, output_dir_abs)
+            except ValueError:
+                master_csv_rel_path = os.path.basename(candidate)
         else:
-            print(f"[!] マスターデータ(CSV)が見つかりません: {candidate}")
+            warnings.append(f"[!] マスターデータ(CSV)が見つかりません: {candidate}")
     if master_csv_abs is None:
-        fallback_csv = DEFAULT_MASTER_CSV if os.path.isabs(DEFAULT_MASTER_CSV) else os.path.abspath(os.path.join(output_dir, DEFAULT_MASTER_CSV))
+        fallback_csv = (
+            DEFAULT_MASTER_CSV
+            if os.path.isabs(DEFAULT_MASTER_CSV)
+            else os.path.abspath(os.path.join(output_dir_abs, DEFAULT_MASTER_CSV))
+        )
         if os.path.exists(fallback_csv):
             master_csv_abs = fallback_csv
-            master_csv_rel_path = os.path.relpath(fallback_csv, output_dir)
+            try:
+                master_csv_rel_path = os.path.relpath(fallback_csv, output_dir_abs)
+            except ValueError:
+                master_csv_rel_path = os.path.basename(fallback_csv)
         else:
-            print(f"[!] 既定のマスターデータ(CSV)が見つかりません: {fallback_csv}")
+            warnings.append(f"[!] 既定のマスターデータ(CSV)が見つかりません: {fallback_csv}")
 
     if master_csv_abs:
         master_effects_from_csv, master_levels_map = load_master_effects_and_levels(master_csv_abs)
 
-    if not master_options and master_json_path:
+    if not master_options_list and master_json_path:
         if os.path.isabs(master_json_path):
             master_json_abs = master_json_path
         else:
-            master_json_abs = os.path.abspath(os.path.join(output_dir, master_json_path))
+            master_json_abs = os.path.abspath(os.path.join(output_dir_abs, master_json_path))
         if os.path.exists(master_json_abs):
-            master_json_rel_path = os.path.relpath(master_json_abs, output_dir)
-            master_options = load_master_json(master_json_abs)
+            try:
+                master_json_rel_path = os.path.relpath(master_json_abs, output_dir_abs)
+            except ValueError:
+                master_json_rel_path = os.path.basename(master_json_abs)
+            master_options_list = load_master_json(master_json_abs)
         else:
-            print(f"[!] マスターデータ(JSON)が見つかりません: {master_json_abs}")
+            warnings.append(f"[!] マスターデータ(JSON)が見つかりません: {master_json_abs}")
 
-    if not master_options and master_effects_from_csv:
-        master_options = master_effects_from_csv
+    if not master_options_list and master_effects_from_csv:
+        master_options_list = master_effects_from_csv
 
-    if not master_options and master_csv_abs:
-        master_options = load_master_csv(master_csv_abs)
+    if not master_options_list and master_csv_abs:
+        master_options_list = load_master_csv(master_csv_abs)
 
-    dataset_entries = _normalize_dataset_entries(datasets, output_dir)
+    dataset_entries = _normalize_dataset_entries(datasets, output_dir_abs)
 
     master_options_by_type, master_levels_by_type, master_csv_map = _collect_master_data_by_type(
         dataset_entries,
-        output_dir,
+        output_dir_abs,
     )
 
-    aggregated_options: List[str] = list(master_options or [])
+    aggregated_options: List[str] = list(master_options_list or [])
     for options in master_options_by_type.values():
         aggregated_options.extend(options)
-    master_options = normalize_master_values(aggregated_options)
+    master_options_list = normalize_master_values(aggregated_options)
 
     combined_levels = _merge_level_maps(master_levels_map, None)
     for levels in master_levels_by_type.values():
@@ -451,7 +425,10 @@ def generate_html(
             if active_dataset_index >= 0:
                 active_dataset_index += 1
 
-    active_dataset_index = max(0, min(active_dataset_index, len(dataset_entries) - 1)) if dataset_entries else -1
+    if dataset_entries:
+        active_dataset_index = max(0, min(active_dataset_index, len(dataset_entries) - 1))
+    else:
+        active_dataset_index = -1
 
     if dataset_entries and active_dataset_index >= 0:
         active_dataset = dataset_entries[active_dataset_index]
@@ -459,83 +436,124 @@ def generate_html(
         img_entry = active_dataset.get("imgDir") or ""
 
         if csv_entry:
-            active_csv_abs = os.path.abspath(os.path.join(output_dir, csv_entry))
+            active_csv_abs = os.path.abspath(os.path.join(output_dir_abs, csv_entry))
             results_abs_path = active_csv_abs
             results_rel_path = csv_entry
             if not os.path.exists(active_csv_abs):
-                print(f"[!] データセットCSVが見つかりません: {active_csv_abs}")
+                warnings.append(f"[!] データセットCSVが見つかりません: {active_csv_abs}")
 
         if img_entry:
             img_rel_dir = img_entry
-            img_abs_dir = os.path.abspath(os.path.join(output_dir, img_entry))
+            img_abs_dir = os.path.abspath(os.path.join(output_dir_abs, img_entry))
             if not os.path.exists(img_abs_dir):
-                print(f"[!] データセット画像ディレクトリが見つかりません: {img_abs_dir}")
+                warnings.append(f"[!] データセット画像ディレクトリが見つかりません: {img_abs_dir}")
+
+    return GalleryPayload(
+        results_csv=results_rel_path,
+        image_dir=img_rel_dir,
+        label_symbols=list(normalized_symbols),
+        master_csv=master_csv_rel_path,
+        master_json=master_json_rel_path,
+        master_options=list(master_options_list or []),
+        master_options_by_type=master_options_by_type,
+        master_levels=master_levels_map,
+        master_levels_by_type=master_levels_by_type,
+        master_csv_map=master_csv_map,
+        datasets=dataset_entries,
+        active_dataset_index=active_dataset_index,
+        item_image_view_box=resolved_view_box,
+        warnings=warnings,
+    )
+
+
+def render_gallery_template(template: str, replacements: Dict[str, str]) -> str:
+    rendered = template
+    for placeholder, value in replacements.items():
+        rendered = rendered.replace(placeholder, value)
+    return rendered
+
+
+def generate_html(
+    results_path,
+    img_dir,
+    output_html,
+    label_symbols=None,
+    master_csv_path: Optional[str] = None,
+    master_json_path: Optional[str] = None,
+    template_path: Optional[str] = None,
+    css_template_path: Optional[str] = None,
+    js_template_path: Optional[str] = None,
+    css_output_name: Optional[str] = None,
+    js_output_name: Optional[str] = None,
+    master_options: Optional[Sequence[str]] = None,
+    datasets=None,
+    active_dataset_index: int = 0,
+    item_image_view_box: Optional[str] = None,
+    css_relative_override: Optional[str] = None,
+    js_relative_override: Optional[str] = None,
+):
+    output_dir = os.path.dirname(os.path.abspath(output_html)) or "."
+    os.makedirs(output_dir, exist_ok=True)
+
+    payload = build_gallery_payload(
+        results_path=results_path,
+        img_dir=img_dir,
+        output_dir=output_dir,
+        label_symbols=label_symbols,
+        master_csv_path=master_csv_path,
+        master_json_path=master_json_path,
+        master_options=master_options,
+        datasets=datasets,
+        active_dataset_index=active_dataset_index,
+        item_image_view_box=item_image_view_box,
+    )
+
+    for message in payload.warnings:
+        print(message)
 
     html_template = _load_text_asset(TEMPLATE_HTML_PATH, template_path)
-    if css_relative_override is not None:
-        css_relative = css_relative_override.replace('\\', '/')
-        if '://' in css_relative_override:
-            css_abs_path = None
-        elif os.path.isabs(css_relative_override):
-            css_abs_path = css_relative_override
-        else:
-            candidate = os.path.join(output_dir, css_relative)
-            css_abs_path = candidate if os.path.exists(candidate) else None
-    else:
-        css_relative, css_abs_path = _copy_static_asset(
-            TEMPLATE_CSS_PATH,
-            output_dir,
-            override=css_template_path,
-            target_relative_path=css_output_name,
-        )
-    css_reference = _cache_busted_path(css_relative, css_abs_path)
 
-    index_relative, index_abs_path = _copy_static_asset(
-        TEMPLATE_INDEX_JS_PATH,
+    assets = gallery_assets.prepare_gallery_assets(
         output_dir,
-        target_relative_path='gallery/index.js',
+        css_template_path=TEMPLATE_CSS_PATH,
+        css_override_template=css_template_path,
+        css_output_name=css_output_name,
+        css_relative_override=css_relative_override,
+        index_template_path=TEMPLATE_INDEX_JS_PATH,
+        index_relative_path="gallery/index.js",
+        core_template_path=TEMPLATE_CORE_JS_PATH,
+        core_override_template=js_template_path,
+        core_output_name=js_output_name,
+        core_relative_override=js_relative_override,
+        modules=gallery_assets.ADDITIONAL_GALLERY_SCRIPTS,
     )
-    index_reference = _cache_busted_path(index_relative, index_abs_path)
 
-    if js_relative_override is not None:
-        core_js_relative = js_relative_override.replace('\\', '/')
-        if '://' in js_relative_override:
-            core_js_abs_path = None
-        elif os.path.isabs(js_relative_override):
-            core_js_abs_path = js_relative_override
-        else:
-            candidate_js = os.path.join(output_dir, core_js_relative)
-            core_js_abs_path = candidate_js if os.path.exists(candidate_js) else None
-    else:
-        core_js_relative, core_js_abs_path = _copy_static_asset(
-            TEMPLATE_CORE_JS_PATH,
-            output_dir,
-            override=js_template_path,
-            target_relative_path=js_output_name,
-        )
-    core_js_reference = _cache_busted_path(core_js_relative, core_js_abs_path)
+    css_reference = gallery_assets.cache_bust_reference(assets.css)
+    index_reference = gallery_assets.cache_bust_reference(assets.index_js)
+    core_js_reference = gallery_assets.cache_bust_reference(assets.core_js)
 
-    _copy_gallery_modules(output_dir)
+    embed_options = payload.master_options if not payload.master_json else []
 
-    html_output = html_template
-    embed_options = master_options if not master_json_rel_path else []
+    replacements = {
+        "__RESULTS_CSV__": _escape_attr(payload.results_csv),
+        "__IMAGE_DIR__": _escape_attr(payload.image_dir),
+        "__LABEL_SYMBOLS__": _escape_attr(json.dumps(payload.label_symbols, ensure_ascii=False)),
+        "__MASTER_CSV__": _escape_attr(payload.master_csv),
+        "__MASTER_JSON__": _escape_attr(payload.master_json),
+        "__MASTER_OPTIONS__": _escape_attr(json.dumps(embed_options, ensure_ascii=False)),
+        "__MASTER_OPTIONS_MAP__": _escape_attr(json.dumps(payload.master_options_by_type, ensure_ascii=False)),
+        "__MASTER_LEVELS__": _escape_attr(json.dumps(payload.master_levels, ensure_ascii=False)),
+        "__MASTER_LEVELS_BY_TYPE__": _escape_attr(json.dumps(payload.master_levels_by_type, ensure_ascii=False)),
+        "__MASTER_CSV_MAP__": _escape_attr(json.dumps(payload.master_csv_map, ensure_ascii=False)),
+        "__CSS_FILE__": _escape_attr(css_reference),
+        "__JS_FILE__": _escape_attr(index_reference),
+        "__CORE_JS__": _escape_attr(core_js_reference),
+        "__DATASETS__": _escape_attr(json.dumps(payload.datasets, ensure_ascii=False)),
+        "__ACTIVE_DATASET__": _escape_attr(str(payload.active_dataset_index)),
+        "__ITEM_IMAGE_VIEW_BOX__": _escape_attr(payload.item_image_view_box),
+    }
 
-    html_output = html_output.replace("__RESULTS_CSV__", _escape_attr(results_rel_path))
-    html_output = html_output.replace("__IMAGE_DIR__", _escape_attr(img_rel_dir))
-    html_output = html_output.replace("__LABEL_SYMBOLS__", _escape_attr(json.dumps(label_symbols, ensure_ascii=False)))
-    html_output = html_output.replace("__MASTER_CSV__", _escape_attr(master_csv_rel_path))
-    html_output = html_output.replace("__MASTER_JSON__", _escape_attr(master_json_rel_path))
-    html_output = html_output.replace("__MASTER_OPTIONS__", _escape_attr(json.dumps(embed_options, ensure_ascii=False)))
-    html_output = html_output.replace("__MASTER_OPTIONS_MAP__", _escape_attr(json.dumps(master_options_by_type, ensure_ascii=False)))
-    html_output = html_output.replace("__MASTER_LEVELS__", _escape_attr(json.dumps(master_levels_map, ensure_ascii=False)))
-    html_output = html_output.replace("__MASTER_LEVELS_BY_TYPE__", _escape_attr(json.dumps(master_levels_by_type, ensure_ascii=False)))
-    html_output = html_output.replace("__MASTER_CSV_MAP__", _escape_attr(json.dumps(master_csv_map, ensure_ascii=False)))
-    html_output = html_output.replace("__CSS_FILE__", _escape_attr(css_reference))
-    html_output = html_output.replace("__JS_FILE__", _escape_attr(index_reference))
-    html_output = html_output.replace("__CORE_JS__", _escape_attr(core_js_reference))
-    html_output = html_output.replace("__DATASETS__", _escape_attr(json.dumps(dataset_entries, ensure_ascii=False)))
-    html_output = html_output.replace("__ACTIVE_DATASET__", _escape_attr(str(active_dataset_index)))
-    html_output = html_output.replace("__ITEM_IMAGE_VIEW_BOX__", _escape_attr(resolved_view_box))
+    html_output = render_gallery_template(html_template, replacements)
 
     with open(output_html, "w", encoding="utf-8") as handle:
         handle.write(html_output)
