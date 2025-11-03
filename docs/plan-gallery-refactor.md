@@ -25,6 +25,7 @@
 | 2025-10-29 | テスト/フィクスチャ検証 | `npm run test:all` を実行し、Python/Node テストは成功。Playwright はブラウザバイナリ未取得により失敗したため、`docs/guide-testing.md` に従って代替手順（`pytest` + `node --test`）を充足済みであることを記録。合わせて `tests/browser/serve_fixture.py` が `templates/gallery/index.js` の `MODULE_DEPENDENCIES` と同一リストをコピーしていることを再確認し、更新不要と判断。 |
 | 2025-11-03 | Python 生成スクリプト調査 | `generate_gallery.py::generate_html` の責務集中を分析し、データ整形・アセットコピー・テンプレート変換の分割計画を本ドキュメントへ追加。今後のテスト方針（`pytest` + `npm run test:node`）と進捗記録手順を整理した。 |
 | 2025-11-04 | 生成スクリプト実装・検証 | `gallery_assets.py` を新設してアセット準備を集約し、`build_gallery_payload`・`render_gallery_template` を導入。`pytest` と `npm run test:node` は成功、Playwright はブラウザ未取得のため失敗（代替手順適用済み）と記録。 |
+| 2025-11-05 | データセットビルダー導入 | `datasets/builder.py` を追加し、`ProcessedVideoResult` / `DatasetBuildResult` と `build_dataset_entries` を実装。`pipeline/processors.py`・`pipeline/pipeline.py` を更新してビルダー経由でデータセットを生成し、`tests/test_dataset_builder.py` を新設。`pytest` で回帰確認済み。 |
 
 ## 実行計画
 
@@ -45,6 +46,7 @@
 4. **旧テンプレートの洗い出し**: `gallery.js` を直接読み込むレガシー HTML が残っていないか確認し、新依存構成への移行手順を整理する。
 5. **現行構成の確認（2025-10-26）**: `templates/gallery/` 配下の各モジュール（`utils/dom.js`、`render/galleryView.js`、`events/galleryEvents.js` など）が計画通り分割済みであり、`templates/gallery/index.js` から依存解決されていることをレビューで確認した。直近で追加のリファクタリングは不要と判断。
 6. **ドキュメント更新の継続**: この計画書と関連ドキュメントに、完了したステップ・新たに発生した課題・対応中のリスクを継続的に反映する。
+7. ✅ **データセット生成フローの共通化（2025-11-05）**: `datasets/builder.py` と `build_dataset_entries` を導入し、パイプライン・GUI で共有できるデータセット整形 API を確立。`ProcessVideoResult` は相対パス変換をビルダーへ移譲し、HTML 生成との接続点が単純化された。
 
 ### 完了済みハイライト
 - **初期化と基盤整備**: `viewer_server.py` を含む読み込み経路を確認し、新規モジュールを `generate_gallery.py` やブラウザフィクスチャへ反映。
@@ -59,6 +61,7 @@
 - **テスト体制の強化**: `tests/js/gallery_modules.test.mjs` でフィルタ・アイテム生成・効果レベル処理などのシナリオを網羅し、保存トリガーや候補リセットを検証。
 - **状態管理と永続化の抽象化**: `app/stateApi.js` と `storage/manager.js` を導入し、`gallery.js` から直接状態や OPFS 実装へアクセスしない構造に更新。描画・イベント層へ API を注入し、Node テストでモック差し替えが容易な設計に整えた。
 - **ES Modules エントリポイントの整備**: `templates/gallery/index.js` を追加し、HTML テンプレートを `<script type="module">` で読み込む構成に更新。動的 import で `gallery.js` を初期化しつつ依存モジュールの読み込み順序を保証し、`generate_gallery.py` と Playwright フィクスチャを新構成に合わせて更新した。
+- **データセット生成のモジュール化**: `datasets/builder.py` を経由して `ProcessedVideoResult` を `build_dataset_entries` で集約し、`pipeline/pipeline.py` から HTML 生成へ渡すデータ構造を統一。Python ユニットテストで相対パス整形とメタデータ統合を検証済み。
 
 ### 参考メモ（完了タスク詳細）
 - `render/itemFactory.js` で画像列・操作列をコンポーネント分割し、プレースホルダー生成を委譲。
@@ -164,40 +167,21 @@
 - 最終的な HTML は `generate_html` 末尾で `with open(output_html, "w", encoding="utf-8")` により書き出される。ここではテンプレート置換後のテキストをそのまま出力し、それ以外の副作用（ログ出力のみ）を持たないため、ファイル出力レイヤは純粋に I/O のみを担当している。
 - これら 3 つのレイヤが境界として機能し、テンプレート変更時は「データ整形→テンプレート埋め込み→ファイル出力」の順序を壊さないことが、生成パイプラインの保守容易性に直結する。
 
-## データセット構築ユーティリティの検討
+## データセット構築ユーティリティの実装状況（2025-11-05）
 
-### 現状の課題
-- `main.py`（`main()` 終盤）で `dataset_entries` の構築とデフォルト CSV／画像ディレクトリの決定を直書きしており、動画処理ロジックと HTML 生成の責務が密結合になっている。
-- GUI アプリやテストから `main()` を再利用する際、データセット組み立てだけを差し替える術がなく、結果的に副作用の多いメインルーチンを呼ぶ必要がある。
+### 実装概要
+- `datasets/builder.py` に `ProcessedVideoResult` / `DatasetBuildResult` と `build_dataset_entries` を追加し、動画処理結果からギャラリー向けデータセットを生成する責務を専用モジュールへ集約した。
+- `ProcessedVideoResult` は `label`・`csv_path`・`crops_dir`・`output_dir`・`relic_type`・`metadata` を保持し、生成時にパスの絶対化とラベル整形を完了させるデータクラスとして実装。
+- `build_dataset_entries` は `base_dir` を基準に相対パスを算出しつつ、`metadata` に含まれる `kind` や `sources` をマージする。`csv` / `img_dir` / `folder` など主要キーは保護し、戻り値としてデフォルト CSV パス・画像ディレクトリ・アクティブインデックスを `DatasetBuildResult` で返却する。
+- `pipeline/processors.py` は `ProcessedVideoResult` を返却するよう更新し、相対パス整形はビルダーへ委譲。`pipeline/pipeline.py` では `build_dataset_entries` の結果を `generate_html` に渡す構成へ切り替えた。
 
-### 移設案
-- `datasets/builder.py` を新設し、`build_dataset_entries`（仮称）を公開関数として切り出す。想定シグネチャ：
-  ```python
-  def build_dataset_entries(
-      base_dir: Path | str,
-      results: Sequence[ProcessedVideoResult],
-      *,
-      default_csv_name: str = "results.csv",
-  ) -> DatasetBuildResult:
-  ```
-  - `ProcessedVideoResult` は `label` / `csv_path` / `crops_dir` / `output_dir` を保持するデータクラス（`main._process_single_video` の戻り値を具現化）。
-  - `DatasetBuildResult` は `datasets`（`generate_html` へ渡すリスト）と `default_csv_path`・`default_img_dir`・`active_index` を含む構造体とする。
-- `main.py` は `_process_single_video` を維持しつつ、収集した結果を `build_dataset_entries` に渡して HTML 生成パラメータを受け取るだけに留める。これにより CLI／GUI／テストが同一ユーティリティを共有できる。
-- 将来的に CSV のみ／画像のみの入力や、既存フォルダからのバッチ生成にも対応できるよう、`results` 引数には最終パスが揃っていれば良いという緩い契約を採用する。
+### テスト整備
+- `tests/test_dataset_builder.py` を新設し、ラベルのトリミング、相対パス整形、メタデータ統合、空結果時のデフォルト値などを検証。
+- `tests/pipeline/test_processors.py` を更新し、`ProcessVideoResult` が想定どおりのパス情報とリリックタイプを保持することを確認した。
 
-### インターフェース検討メモ
-- 入力 CSV パスは `base_dir` からの相対パスを許容しつつ、関数内で `Path.resolve()` を行い、戻り値に両方（絶対・相対）を保持する。
-- 画像ディレクトリが未生成の場合（`save_full_frames=False` など）でも空文字列を許容し、呼び出し側がログ出力を制御できるようにする。
-- 明示的な `kind`／`sources` を上書きするため、`ProcessedVideoResult` に `metadata: dict[str, Any] | None` を持たせ、必要に応じて `build_dataset_entries` がマージする設計を検討する。
-
-## テスト観点の拡張と準備
-
-- **テンプレート差し替え検証**: `_load_text_asset` やプレースホルダー置換が失敗した際に例外ではなく欠落した文字列が生成されるリスクがあるため、`generate_gallery.py` を対象としたスモールテストで主要プレースホルダーが埋まるかを検証する。テンプレートを差し替える場合はモックテンプレートを用意し、`data-*` 属性の整合性をチェックする仕組みを追加予定。
-- **複数データセット対応**: `_normalize_dataset_entries` の振る舞いと統合データセット自動生成を単体テスト化する。`build_dataset_entries` 導入後は同関数の戻り値を使って `generate_html` を呼び出す統合テストを段階的に追加する計画。
-- **段階的な単体テスト導入ステップ**:
-  1. `datasets/builder.py` 追加時に純粋ロジック部分へ `pytest` ベースのユニットテストを作成し、`ProcessedVideoResult` の各ケース（絶対パス・相対パス・画像無し）を網羅する。
-  2. 続いて `generate_gallery.py` のプレースホルダー置換を検証するテストを追加し、テンプレート差し替え時の退行を防ぐ。
-  3. 最後に GUI からの呼び出しを想定した結合テストを検討し、`viewer_server.py` 経由の E2E テストは既存 Playwright シナリオで補完する。
+### 今後の確認ポイント
+- GUI や既存結果ディレクトリ再利用パスでの挙動をカバーする追加シナリオテストが必要になった場合は、本節に追記して対応状況を管理する。
+- `ProcessedVideoResult.metadata` に `imgDir` など異なるキー表記が渡されるケースが発生した場合、互換マッピングの追加を検討する。
 
 ## 追加メモ: generate_gallery.py リファクタリング計画（2025-11-03）
 

@@ -4,8 +4,9 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Any, Iterable, Optional
 
+from datasets.builder import DatasetBuildResult, ProcessedVideoResult, build_dataset_entries
 from generate_gallery import generate_html
 from relic_data import load_master_csv, normalize_master_values
 from resource_paths import templates_path
@@ -49,7 +50,7 @@ class PipelineSettings:
 @dataclass(frozen=True)
 class PipelineResult:
     viewer_path: Path
-    datasets: list[dict[str, str]]
+    datasets: list[dict[str, Any]]
     default_csv_path: Path
     default_img_dir: str
     elapsed_seconds: float
@@ -72,7 +73,7 @@ def run_pipeline(
         RELIC_TYPE_DEEP: templates_path("master_relics_deep.csv"),
     }
     master_options: list[str] = []
-    dataset_entries: list[dict[str, str]] = []
+    processed_results: list[ProcessedVideoResult] = []
 
     override_map = build_override_map(settings.item_color_overrides)
     type_override_map = build_path_value_map(settings.relic_type_overrides)
@@ -124,7 +125,7 @@ def run_pipeline(
         reporter.step("処理対象の動画が見つかりませんでした")
 
     for task in tasks_to_run:
-        entry = process_video(
+        result = process_video(
             task,
             ocr_upsample=settings.ocr_upsample,
             override_colors=override_map,
@@ -132,26 +133,26 @@ def run_pipeline(
             csv_column_visibility=settings.csv_column_visibility,
             reporter=reporter,
         )
-        dataset_entries.append(entry)
+        processed_results.append(result)
 
-    if dataset_entries:
-        default_csv_path = (result_dir / dataset_entries[0]["csv"]).resolve()
-        default_img_dir = dataset_entries[0]["img_dir"]
-    else:
-        default_csv_path = (result_dir / "results.csv").resolve()
-        default_img_dir = ""
+    dataset_build: DatasetBuildResult = build_dataset_entries(
+        result_dir,
+        processed_results,
+        default_csv_name="results.csv",
+        active_index=0,
+    )
 
     viewer_path = result_dir / "viewer.html"
     reporter.step("HTML を生成中...")
     generate_html(
-        str(default_csv_path),
-        default_img_dir,
+        str(dataset_build.default_csv_path),
+        dataset_build.default_img_dir,
         str(viewer_path),
         master_csv_path=None,
         master_json_path="",
         master_options=master_options,
-        datasets=dataset_entries,
-        active_dataset_index=0,
+        datasets=dataset_build.datasets,
+        active_dataset_index=dataset_build.active_index,
         item_image_view_box=settings.item_image_view_box,
     )
 
@@ -161,8 +162,8 @@ def run_pipeline(
 
     return PipelineResult(
         viewer_path=viewer_path,
-        datasets=dataset_entries,
-        default_csv_path=default_csv_path,
-        default_img_dir=default_img_dir,
+        datasets=dataset_build.datasets,
+        default_csv_path=dataset_build.default_csv_path,
+        default_img_dir=dataset_build.default_img_dir,
         elapsed_seconds=elapsed,
     )

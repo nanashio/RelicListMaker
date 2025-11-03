@@ -1,13 +1,14 @@
 """動画ごとの処理フロー."""
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Mapping, Optional
 
 from extract_frames import extract_and_crop
 from match_and_export import process_images
 from resource_paths import templates_path
+
+from datasets.builder import ProcessedVideoResult
 
 from .progress import ProgressReporter
 from .tasks import DEFAULT_RELIC_TYPE, RELIC_TYPE_DEEP, VideoTask, decide_item_color
@@ -27,8 +28,8 @@ def process_video(
     save_full_frames: bool,
     csv_column_visibility: Optional[dict[str, object]],
     reporter: ProgressReporter,
-) -> dict[str, str]:
-    """単一動画の処理を実行し、HTML 生成用のエントリを返す."""
+) -> ProcessedVideoResult:
+    """単一動画の処理を実行し、HTML 生成用の結果情報を返す."""
     task.output_dir.mkdir(parents=True, exist_ok=True)
     if save_full_frames:
         task.frames_dir.mkdir(exist_ok=True)
@@ -67,11 +68,10 @@ def process_video(
     reporter.advance(f"{video_name} のOCR/マッチング完了")
     print(f"[✓] {task.crops_dir} の結果を {task.csv_path} に出力しました")
 
-    result_dir = task.output_dir.parent
-    return {
-        "label": task.base_name,
-        "csv": os.path.relpath(task.csv_path, result_dir),
-        "img_dir": os.path.relpath(task.crops_dir, result_dir),
-        "folder": os.path.relpath(task.output_dir, result_dir),
-        "relic_type": task_relic_type,
-    }
+    return ProcessedVideoResult(
+        label=task.base_name,
+        csv_path=task.csv_path,
+        crops_dir=task.crops_dir,
+        output_dir=task.output_dir,
+        relic_type=task_relic_type,
+    )
