@@ -38,7 +38,10 @@
         masterCsv: masterCsvPath = '',
         masterJson: masterJsonPath = '',
         masterOptions: masterOptionsJson = '[]',
+        masterOptionsMap: masterOptionsMapJson = '{}',
         masterLevels: masterLevelsJson = '{}',
+        masterLevelsMap: masterLevelsMapJson = '{}',
+        masterCsvMap: masterCsvMapJson = '{}',
         datasets: datasetsJson = '[]',
         activeDataset: activeDatasetAttr = ''
     } = body.dataset || {};
@@ -106,7 +109,8 @@
         parseLevelTokens,
         parseMasterOptions,
         parseMasterLevels,
-        normalizeSuppressedLevels: normalizeSuppressedLevelsFromUtils
+        normalizeSuppressedLevels: normalizeSuppressedLevelsFromUtils,
+        normalizeRelicTypeColumns
     } = dataUtils;
 
     const dataUtilsMissing = [
@@ -118,7 +122,8 @@
         ['parseLevelTokens', parseLevelTokens],
         ['parseMasterOptions', parseMasterOptions],
         ['parseMasterLevels', parseMasterLevels],
-        ['normalizeSuppressedLevels', normalizeSuppressedLevelsFromUtils]
+        ['normalizeSuppressedLevels', normalizeSuppressedLevelsFromUtils],
+        ['normalizeRelicTypeColumns', normalizeRelicTypeColumns]
     ].filter(([, value]) => typeof value !== 'function');
 
     if (dataUtilsMissing.length) {
@@ -127,6 +132,95 @@
     }
 
     const normalizeSuppressedRecords = (records) => normalizeSuppressedLevelsFromUtils(records);
+
+    function parseJsonObject(jsonText) {
+        if (typeof jsonText !== 'string') {
+            return {};
+        }
+        try {
+            const parsed = JSON.parse(jsonText);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                return parsed;
+            }
+        } catch (error) {
+            console.warn('JSONの解析に失敗しました:', error);
+        }
+        return {};
+    }
+
+    function parseMasterOptionsByTypeJson(jsonText) {
+        const result = {};
+        const source = parseJsonObject(jsonText);
+        Object.keys(source).forEach((key) => {
+            const normalizedType = normalizeRelicTypeValue(key);
+            if (!normalizedType || normalizedType === RELIC_TYPE_MERGED) {
+                return;
+            }
+            const raw = source[key];
+            if (!Array.isArray(raw)) {
+                return;
+            }
+            const sanitized = raw
+                .map((value) => {
+                    if (typeof value === 'string') {
+                        return value.trim();
+                    }
+                    return '';
+                })
+                .filter((value) => value);
+            if (sanitized.length) {
+                result[normalizedType] = Array.from(new Set(sanitized));
+            }
+        });
+        return result;
+    }
+
+    function parseMasterLevelsByTypeJson(jsonText) {
+        const result = {};
+        const source = parseJsonObject(jsonText);
+        Object.keys(source).forEach((key) => {
+            const normalizedType = normalizeRelicTypeValue(key);
+            if (!normalizedType || normalizedType === RELIC_TYPE_MERGED) {
+                return;
+            }
+            const parsed = parseMasterLevels(source[key]);
+            if (parsed instanceof Map && parsed.size) {
+                result[normalizedType] = parsed;
+            }
+        });
+        return result;
+    }
+
+    function parseMasterCsvByTypeJson(jsonText) {
+        const result = {};
+        const source = parseJsonObject(jsonText);
+        Object.keys(source).forEach((key) => {
+            const normalizedType = normalizeRelicTypeValue(key);
+            if (!normalizedType || normalizedType === RELIC_TYPE_MERGED) {
+                return;
+            }
+            const value = source[key];
+            if (typeof value === 'string' && value.trim()) {
+                result[normalizedType] = value.trim();
+            }
+        });
+        return result;
+    }
+
+    function cloneLevelsMap(levels) {
+        if (!(levels instanceof Map)) {
+            return null;
+        }
+        const clone = new Map();
+        levels.forEach((value, key) => {
+            if (Array.isArray(value)) {
+                clone.set(key, value.slice());
+            } else {
+                clone.set(key, []);
+            }
+        });
+        return clone;
+    }
 
     function normalizeRelicTypeValue(value) {
         if (value == null) {
@@ -568,6 +662,9 @@
     const activeDatasetIndex = parseDatasetIndex(activeDatasetAttr, datasets.length);
     const preloadedMasterLevels = parseMasterLevels(masterLevelsJson);
     const hasPreloadedMasterLevels = preloadedMasterLevels instanceof Map && preloadedMasterLevels.size > 0;
+    const masterOptionsByType = parseMasterOptionsByTypeJson(masterOptionsMapJson);
+    const masterLevelsByType = parseMasterLevelsByTypeJson(masterLevelsMapJson);
+    const masterCsvByType = parseMasterCsvByTypeJson(masterCsvMapJson);
 
     const dom = {
         gallery: document.getElementById('gallery'),
@@ -654,6 +751,11 @@
     if (!state.masterJsonPath && state.masterOptions.length) {
         ensureMasterDatalist();
     }
+
+    const defaultMasterOptions = Array.isArray(state.masterOptions) ? state.masterOptions.slice() : [];
+    const defaultMasterLevelsMap = cloneLevelsMap(preloadedMasterLevels);
+    const defaultMasterCsvPath = state.masterCsvPath || '';
+    const defaultMasterJsonPath = state.masterJsonPath || '';
 
     function handleStateChange() {
         updateDatasetIndicator();
@@ -781,6 +883,105 @@
         dom.datasetSelect.value = String(normalizedSelected);
         dom.datasetSelect.title = datasetOptionLabel(datasetState.list[normalizedSelected], normalizedSelected);
         setElementHidden(dom.datasetSelector, false);
+    }
+
+    function applyMasterDataForType(relicType) {
+        const normalizedType = normalizeRelicTypeValue(relicType);
+        const lookupKey = normalizedType && normalizedType !== RELIC_TYPE_MERGED ? normalizedType : '';
+
+        const nextOptions = lookupKey && Array.isArray(masterOptionsByType[lookupKey])
+            ? masterOptionsByType[lookupKey].slice()
+            : defaultMasterOptions.slice();
+        stateApi.setMasterOptions(nextOptions);
+        setupMasterOptions();
+        stateApi.markMasterDatalistPrepared(false);
+        ensureMasterDatalist();
+
+        let nextLevels = null;
+        if (lookupKey && masterLevelsByType[lookupKey] instanceof Map) {
+            nextLevels = cloneLevelsMap(masterLevelsByType[lookupKey]);
+        }
+        if (!nextLevels) {
+            nextLevels = cloneLevelsMap(defaultMasterLevelsMap);
+        }
+
+        if (nextLevels) {
+            stateApi.setMasterLevels(nextLevels);
+            stateApi.setMasterLevelsLoaded(true);
+        } else {
+            stateApi.setMasterLevels(null);
+            stateApi.setMasterLevelsLoaded(false);
+        }
+        stateApi.clearMasterLevelsPromise();
+
+        let nextCsvPath = defaultMasterCsvPath;
+        if (lookupKey && typeof masterCsvByType[lookupKey] === 'string') {
+            const candidate = masterCsvByType[lookupKey].trim();
+            if (candidate) {
+                nextCsvPath = candidate;
+            }
+        }
+        const resolvedCsvPath = normalizedType === RELIC_TYPE_MERGED ? defaultMasterCsvPath : nextCsvPath;
+
+        stateStore.update({
+            core: {
+                masterCsvPath: resolvedCsvPath || '',
+                masterJsonPath: defaultMasterJsonPath
+            }
+        });
+    }
+
+    function applyMasterDataForRelicType(relicType, context = {}) {
+        const requested = normalizeRelicTypeValue(relicType);
+        const fallback = normalizeRelicTypeValue(datasetState.relicType || '');
+        const targetType = requested || fallback || '';
+
+        applyMasterDataForType(targetType);
+
+        const { item } = context || {};
+        if (!item || typeof item.querySelectorAll !== 'function') {
+            return;
+        }
+
+        const effects = item.querySelectorAll('.effect');
+        effects.forEach((effect) => {
+            if (!effect || typeof effect.querySelector !== 'function') {
+                return;
+            }
+            const levelInput = effect.querySelector('.level-input');
+            if (!levelInput) {
+                return;
+            }
+            const correctionInput = effect.querySelector('.correction-input');
+            const effectName =
+                (correctionInput && typeof correctionInput.value === 'string' && correctionInput.value.trim()) ||
+                effect.dataset.predictionValue ||
+                effect.dataset.raw ||
+                '';
+
+            applyMasterLevelOptions(effect, levelInput, effectName, {
+                setCorrectionLevelCandidates,
+                rebuildLevelSelectOptions,
+                sanitizeLevelList,
+                sortLevelsAscending
+            });
+
+            const baseJson = effect.dataset.levelOptionsBaseJson || '';
+            let baseOptions = [];
+            if (baseJson) {
+                try {
+                    const parsed = JSON.parse(baseJson);
+                    if (Array.isArray(parsed)) {
+                        baseOptions = parsed;
+                    }
+                } catch (_error) {
+                    baseOptions = sanitizeLevelList(baseJson.split('|'));
+                }
+            }
+            updateLevelInputAvailability(levelInput, baseOptions);
+        });
+
+        refreshItemCaches(item);
     }
 
     function setActiveRelicType(value) {
@@ -1516,6 +1717,7 @@
         setRecordFavorite,
         setRecordItemColor,
         setRecordItemRelicType,
+        applyMasterDataForRelicType,
         recordStatusChange,
         updateRecordCorrection,
         updateRecordLevelCorrection,
@@ -1609,6 +1811,8 @@
 
     function applyDatasetState(descriptor) {
         stateStore.updateDescriptor(descriptor);
+        const targetType = descriptor && typeof descriptor === 'object' ? descriptor.relicType : datasetState.relicType;
+        applyMasterDataForType(targetType);
     }
 
     function updateSaveAvailability() {
@@ -1743,6 +1947,10 @@
         const normalized = normalizeSuppressedRecords(records);
         if (Array.isArray(normalized)) {
             records = normalized;
+        }
+        const relicNormalized = normalizeRelicTypeColumns(records);
+        if (Array.isArray(relicNormalized)) {
+            records = relicNormalized;
         }
         ensureLabelCoverage(records);
         stateApi.setRecords(records);

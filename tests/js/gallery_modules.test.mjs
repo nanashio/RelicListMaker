@@ -496,6 +496,47 @@ describe('gallery data utils', () => {
     assert.equal(Object.prototype.hasOwnProperty.call(normalized[1], 'Effect2LevelSuppressed'), false);
     assert.equal(normalized[1].Effect2Level, 'Remain');
   });
+
+  test('normalizeRecordRelicTypeField maps snake_case field to RelicType', () => {
+    const record = { Image: 'deep.png', relic_type: 'deep' };
+    const normalized = dataUtils.normalizeRecordRelicTypeField(record);
+    assert.equal(normalized.RelicType, 'deep');
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized, 'relic_type'), false);
+  });
+
+  test('normalizeRecordRelicTypeField renames space separated key to RelicType', () => {
+    const record = { Image: 'space.png', 'Relic Type': 'normal' };
+    const normalized = dataUtils.normalizeRecordRelicTypeField(record);
+    assert.equal(normalized.RelicType, 'normal');
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized, 'Relic Type'), false);
+  });
+
+  test('normalizeRecordRelicTypeField keeps canonical value when duplicate legacy keys exist', () => {
+    const record = { Image: 'keep.png', RelicType: 'deep', 'relic-type': 'normal' };
+    const normalized = dataUtils.normalizeRecordRelicTypeField(record);
+    assert.equal(normalized.RelicType, 'deep');
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized, 'relic-type'), false);
+  });
+
+  test('normalizeRelicTypeColumns converts legacy keys without overriding existing values', () => {
+    const records = [
+      { Image: 'normal.png', RelicType: 'normal', 'relic type': 'legacy' },
+      { Image: 'deep.png', relictype: 'deep' },
+      { Image: 'space.png', 'Relic Type': 'normal' },
+      { Image: 'dash.png', 'relic-type': 'deep' },
+      { Image: 'other.png', Note: 'keep' }
+    ];
+    const normalized = dataUtils.normalizeRelicTypeColumns(records);
+    assert.equal(normalized[0].RelicType, 'normal');
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized[0], 'relic type'), false);
+    assert.equal(normalized[1].RelicType, 'deep');
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized[1], 'relictype'), false);
+    assert.equal(normalized[2].RelicType, 'normal');
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized[2], 'Relic Type'), false);
+    assert.equal(normalized[3].RelicType, 'deep');
+    assert.equal(Object.prototype.hasOwnProperty.call(normalized[3], 'relic-type'), false);
+    assert.equal(normalized[4].Note, 'keep');
+  });
 });
 
 describe('gallery record utils', () => {
@@ -2009,6 +2050,7 @@ describe('record action handlers', () => {
       updateInputValueAttribute: () => {},
       updateLevelInputAvailability: () => {},
       applyMasterLevelOptions: () => {},
+      applyMasterDataForRelicType: () => {},
       ...extra
     };
   }
@@ -2071,10 +2113,12 @@ describe('record action handlers', () => {
     const scheduleCalls = [];
     const filterCalls = [];
     const relicTypeCalls = [];
+    const masterDataCalls = [];
     const deps = buildBaseDeps(record, item, {
       scheduleSave: () => scheduleCalls.push(null),
       applyFilters: () => filterCalls.push(null),
-      applyItemRelicType: (target, value) => relicTypeCalls.push([target, value])
+      applyItemRelicType: (target, value) => relicTypeCalls.push([target, value]),
+      applyMasterDataForRelicType: (value, context) => masterDataCalls.push([value, context])
     });
     const handlers = handlerFactory.createRecordActionHandlers(deps);
     handlers.toggleItemRelicType(select);
@@ -2082,11 +2126,13 @@ describe('record action handlers', () => {
     assert.deepEqual(relicTypeCalls, [[item, 'deep']]);
     assert.equal(scheduleCalls.length, 1);
     assert.equal(filterCalls.length, 1);
+    assert.deepEqual(masterDataCalls, [['deep', { item, record, recordIndex: 0 }]]);
 
     // Selecting the same value toggles back to empty
     handlers.toggleItemRelicType(select);
     assert.equal(record.RelicType, undefined);
     assert.deepEqual(relicTypeCalls.slice(-1), [[item, '']]);
+    assert.deepEqual(masterDataCalls.slice(-1), [['', { item, record, recordIndex: 0 }]]);
   });
 
   test('toggleFavorite updates visuals and schedules save', () => {
@@ -2444,6 +2490,8 @@ describe('gallery events', () => {
       },
       setRecordFavorite: () => false,
       setRecordItemColor: () => false,
+      setRecordItemRelicType: () => false,
+      applyMasterDataForRelicType: () => {},
       recordStatusChange: () => false,
       updateRecordCorrection: () => false,
       updateRecordLevelCorrection: () => false,
@@ -2510,6 +2558,7 @@ describe('gallery events', () => {
         return true;
       },
       setRecordItemRelicType: () => false,
+      applyMasterDataForRelicType: () => {},
       recordStatusChange: () => false,
       updateRecordCorrection: () => false,
       updateRecordLevelCorrection: () => false,
@@ -2599,6 +2648,7 @@ describe('gallery events', () => {
         record.RelicType = value;
         return true;
       },
+      applyMasterDataForRelicType: () => {},
       recordStatusChange: () => false,
       updateRecordCorrection: () => false,
       updateRecordLevelCorrection: () => false,

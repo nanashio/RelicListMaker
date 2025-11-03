@@ -149,6 +149,7 @@ def process_images(
     item_color=None,
     column_visibility=None,
     master_csv_path=None,
+    relic_type=None,
 ):
     global _TESSERACT_NOTICE_SHOWN
     if not _TESSERACT_NOTICE_SHOWN:
@@ -186,6 +187,7 @@ def process_images(
         slot_range=slot_range,
         level_map=level_map,
         item_color=item_color,
+        relic_type=relic_type,
     )
 
     rows: list[dict[str, object]] = []

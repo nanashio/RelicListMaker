@@ -11,6 +11,7 @@ DEFAULT_RESIZE_SCALE = 1.5
 
 DEFAULT_COLUMN_VISIBILITY: dict[str, bool] = {
     "ItemColor": True,
+    "RelicType": True,
     "RawText": True,
     "Score": True,
     "Source": True,
@@ -54,4 +55,5 @@ class ExportOptions:
     slot_range: range
     level_map: Mapping[str, Sequence[str]] | None = None
     item_color: str | None = None
+    relic_type: str | None = None
 

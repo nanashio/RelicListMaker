@@ -303,6 +303,60 @@
         return records.map((record) => normalizeRecordLevelSuppression(record));
     }
 
+    function normalizeRecordRelicTypeField(record) {
+        if (!record || typeof record !== 'object') {
+            return record;
+        }
+
+        const canonicalKey = 'RelicType';
+        const normalizedTarget = 'relictype';
+        const keys = Object.keys(record);
+        let hasCanonical = Object.prototype.hasOwnProperty.call(record, canonicalKey);
+        let normalizedVariantFound = false;
+
+        for (let index = 0; index < keys.length; index += 1) {
+            const key = keys[index];
+            if (typeof key !== 'string') {
+                continue;
+            }
+            if (key === canonicalKey) {
+                hasCanonical = true;
+                continue;
+            }
+            const trimmedKey = key.trim();
+            if (!trimmedKey) {
+                continue;
+            }
+            const simplifiedKey = trimmedKey.toLowerCase().replace(/[\s_-]+/g, '');
+            if (simplifiedKey === normalizedTarget) {
+                normalizedVariantFound = true;
+                if (!hasCanonical) {
+                    record[canonicalKey] = record[key];
+                    hasCanonical = Object.prototype.hasOwnProperty.call(record, canonicalKey);
+                }
+                if (Object.prototype.hasOwnProperty.call(record, key)) {
+                    delete record[key];
+                }
+            }
+        }
+
+        if (!hasCanonical) {
+            if (!normalizedVariantFound) {
+                return record;
+            }
+            record[canonicalKey] = record[canonicalKey] || '';
+        }
+
+        return record;
+    }
+
+    function normalizeRelicTypeColumns(records) {
+        if (!Array.isArray(records)) {
+            return [];
+        }
+        return records.map((record) => normalizeRecordRelicTypeField(record));
+    }
+
     window.galleryDataUtils = {
         sanitizeLevelList,
         normalizeEffectName,
@@ -313,6 +367,8 @@
         parseMasterOptions,
         parseMasterLevels,
         normalizeSuppressedLevels,
-        normalizeRecordLevelSuppression
+        normalizeRecordLevelSuppression,
+        normalizeRecordRelicTypeField,
+        normalizeRelicTypeColumns
     };
 })();

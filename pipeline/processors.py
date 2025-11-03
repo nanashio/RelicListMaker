@@ -49,7 +49,8 @@ def process_video(
     item_color = decide_item_color(task, override_colors)
 
     reporter.step(f"{video_name} のOCR/マッチング中...")
-    master_csv_path = _resolve_master_csv(getattr(task, "relic_type", DEFAULT_RELIC_TYPE))
+    task_relic_type = getattr(task, "relic_type", DEFAULT_RELIC_TYPE)
+    master_csv_path = _resolve_master_csv(task_relic_type)
 
     process_images(
         image_dir=str(task.crops_dir),
@@ -61,6 +62,7 @@ def process_video(
         item_color=item_color,
         column_visibility=csv_column_visibility,
         master_csv_path=master_csv_path,
+        relic_type=task_relic_type,
     )
     reporter.advance(f"{video_name} のOCR/マッチング完了")
     print(f"[✓] {task.crops_dir} の結果を {task.csv_path} に出力しました")
@@ -71,5 +73,5 @@ def process_video(
         "csv": os.path.relpath(task.csv_path, result_dir),
         "img_dir": os.path.relpath(task.crops_dir, result_dir),
         "folder": os.path.relpath(task.output_dir, result_dir),
-        "relic_type": getattr(task, "relic_type", DEFAULT_RELIC_TYPE),
+        "relic_type": task_relic_type,
     }

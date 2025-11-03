@@ -108,6 +108,8 @@ def build_row(
 
     if column_flags.get("ItemColor", True):
         row["ItemColor"] = options.item_color or "none"
+    if column_flags.get("RelicType", True):
+        row["RelicType"] = options.relic_type or ""
 
     level_map = options.level_map or {}
 
@@ -137,7 +139,14 @@ def build_row(
 
     _ensure_effect_slots(row, options)
 
-    for hidden_key in ("Dataset", "DatasetFolder", "SourceCsv", "SourceImage", "BaseImage"):
+    for hidden_key in (
+        "Dataset",
+        "DatasetFolder",
+        "SourceCsv",
+        "SourceImage",
+        "BaseImage",
+        "RelicType",
+    ):
         if not column_flags.get(hidden_key, True):
             row.pop(hidden_key, None)
 
@@ -173,6 +182,8 @@ def write_csv(
     fieldnames: list[str] = ["Image", "Duplicate"]
     if column_flags.get("ItemColor", True):
         fieldnames.append("ItemColor")
+    if column_flags.get("RelicType", True):
+        fieldnames.append("RelicType")
 
     for idx in slot_range:
         fieldnames.append(f"Effect{idx}")
