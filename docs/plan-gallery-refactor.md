@@ -26,6 +26,7 @@
 | 2025-11-03 | Python 生成スクリプト調査 | `generate_gallery.py::generate_html` の責務集中を分析し、データ整形・アセットコピー・テンプレート変換の分割計画を本ドキュメントへ追加。今後のテスト方針（`pytest` + `npm run test:node`）と進捗記録手順を整理した。 |
 | 2025-11-04 | 生成スクリプト実装・検証 | `gallery_assets.py` を新設してアセット準備を集約し、`build_gallery_payload`・`render_gallery_template` を導入。`pytest` と `npm run test:node` は成功、Playwright はブラウザ未取得のため失敗（代替手順適用済み）と記録。 |
 | 2025-11-05 | データセットビルダー導入 | `datasets/builder.py` を追加し、`ProcessedVideoResult` / `DatasetBuildResult` と `build_dataset_entries` を実装。`pipeline/processors.py`・`pipeline/pipeline.py` を更新してビルダー経由でデータセットを生成し、`tests/test_dataset_builder.py` を新設。`pytest` で回帰確認済み。 |
+| 2025-11-06 | 旧テンプレート確認 | レガシー HTML が `templates/gallery.js` を直接読み込んでいないかリポジトリ全体を検索し、`gallery/index.js` 経由の構成のみが残っていることを確認。追加リファクタリングは不要と判断し、現行モジュール群の維持方針を共有。 |
 
 ## 実行計画
 
@@ -43,7 +44,7 @@
 1. **回帰テストの継続**: 各ステップ完了時に `npm run test:all` を実行し、ES Modules 化後のリグレッションを監視する。Playwright のブラウザ未取得環境では `docs/guide-testing.md` の代替フロー（`pytest` / `node --test`）を用いて最低限の回帰確認を確保する。最新の実行（2025-11-04）は Python/Node が成功し、Playwright はブラウザバイナリ不足で失敗したため、環境差異の記録とフォローアップを継続する。
 2. **ブラウザフィクスチャの確認**: Playwright フィクスチャが新しいエントリポイント (`gallery/index.js`) を正しく取り込めているかを今後の変更時にもチェックする。2025-10-29 時点では `tests/browser/serve_fixture.py` の複製対象が `MODULE_DEPENDENCIES` と一致していることを再確認済み。必要に応じて `tests/browser/` 配下のフィクスチャ更新履歴を追記する。
 3. **配布バンドルの最適化検討**: モジュール統合が完了したため、必要であればビルド／バンドル戦略（Vite 等）の導入可否を評価し、判断結果を本ドキュメントへ記録する。新しいアセット準備モジュールの導入に伴い、コピー対象とバンドル戦略の見直しを行う際は `gallery_assets.py` の API 更新もセットで検討する。
-4. **旧テンプレートの洗い出し**: `gallery.js` を直接読み込むレガシー HTML が残っていないか確認し、新依存構成への移行手順を整理する。
+4. ✅ **旧テンプレートの洗い出し（2025-11-06）**: `gallery.js` を直接読み込むレガシー HTML が残っていないか `rg "gallery.js" -n` 等で確認し、`gallery/index.js` を経由する新構成のみが利用されていることを再確認。追加の移行作業は不要と判断。
 5. **現行構成の確認（2025-10-26）**: `templates/gallery/` 配下の各モジュール（`utils/dom.js`、`render/galleryView.js`、`events/galleryEvents.js` など）が計画通り分割済みであり、`templates/gallery/index.js` から依存解決されていることをレビューで確認した。直近で追加のリファクタリングは不要と判断。
 6. **ドキュメント更新の継続**: この計画書と関連ドキュメントに、完了したステップ・新たに発生した課題・対応中のリスクを継続的に反映する。
 7. ✅ **データセット生成フローの共通化（2025-11-05）**: `datasets/builder.py` と `build_dataset_entries` を導入し、パイプライン・GUI で共有できるデータセット整形 API を確立。`ProcessVideoResult` は相対パス変換をビルダーへ移譲し、HTML 生成との接続点が単純化された。
