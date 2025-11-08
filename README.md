@@ -174,5 +174,5 @@ run_pipeline(settings=settings)
 ```
 
 ## ライセンス
-- 配布物には Tesseract OCR (Apache License 2.0) が同梱されています。再配布時にはリポジトリ直下の `LICENSE` を同梱し、Tesseract OCR のライセンス要件に従ってください。詳細は `docs/THIRD_PARTY_LICENSES.md` も参照してください。
+- 配布物には Tesseract OCR (Apache License 2.0) が同梱されています。再配布時にはリポジトリ直下の `LICENSE` を同梱し、Tesseract OCR のライセンス要件に従ってください。詳細は `docs/reference-third-party-licenses.md` も参照してください。
 
