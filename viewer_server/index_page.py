@@ -10,7 +10,7 @@ from urllib.parse import quote
 
 from .assets import load_text_asset
 
-_TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "templates" / "viewer" / "index.html"
+_TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "templates" / "index.html"
 
 
 @lru_cache(maxsize=1)
