@@ -86,4 +86,4 @@ PS> .\RelicListMaker.exe
 
 ## ライセンス注意
 - Tesseract OCR は Apache License 2.0 です。同梱する際は upstream の `LICENSE` と `NOTICE` を配布物に含めてください。
-- 詳細や追加のサードパーティー情報は `docs/THIRD_PARTY_LICENSES.md` を参照してください。
+- 詳細や追加のサードパーティー情報は `docs/reference-third-party-licenses.md` を参照してください。
