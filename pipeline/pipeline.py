@@ -26,6 +26,7 @@ from .tasks import (
 DEFAULT_VIDEO_DIR = "videos"
 DEFAULT_RESULT_DIR = "results"
 DEFAULT_OCR_UPSAMPLE = 1.5
+DEFAULT_OCR_ENGINE = "tesseract"
 
 
 @dataclass
@@ -33,6 +34,8 @@ class PipelineSettings:
     video_dir: Path | str = field(default_factory=lambda: Path(DEFAULT_VIDEO_DIR))
     result_dir: Path | str = field(default_factory=lambda: Path(DEFAULT_RESULT_DIR))
     ocr_upsample: float = DEFAULT_OCR_UPSAMPLE
+    ocr_engine: str = DEFAULT_OCR_ENGINE
+    gcp_credentials: str | None = None
     video_files: Optional[Iterable[str | Path]] = None
     item_color_overrides: Optional[dict[str | Path, str]] = None
     relic_type_overrides: Optional[dict[str | Path, str]] = None
@@ -45,6 +48,12 @@ class PipelineSettings:
             self.video_dir = Path(self.video_dir)
         if not isinstance(self.result_dir, Path):
             self.result_dir = Path(self.result_dir)
+        engine = (self.ocr_engine or DEFAULT_OCR_ENGINE).strip().lower()
+        if engine not in {"tesseract", "vision"}:
+            engine = DEFAULT_OCR_ENGINE
+        self.ocr_engine = engine
+        if self.gcp_credentials:
+            self.gcp_credentials = str(Path(self.gcp_credentials).expanduser())
 
 
 @dataclass(frozen=True)
@@ -128,6 +137,8 @@ def run_pipeline(
         result = process_video(
             task,
             ocr_upsample=settings.ocr_upsample,
+            ocr_engine=settings.ocr_engine,
+            gcp_credentials=settings.gcp_credentials,
             override_colors=override_map,
             save_full_frames=settings.save_full_frames,
             csv_column_visibility=settings.csv_column_visibility,

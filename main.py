@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Callable, Optional
 
 from pipeline import (
+    DEFAULT_OCR_ENGINE as PIPELINE_DEFAULT_OCR_ENGINE,
     DEFAULT_OCR_UPSAMPLE as PIPELINE_DEFAULT_OCR_UPSAMPLE,
     DEFAULT_RESULT_DIR as PIPELINE_DEFAULT_RESULT_DIR,
     DEFAULT_VIDEO_DIR as PIPELINE_DEFAULT_VIDEO_DIR,
@@ -31,6 +32,8 @@ def main(
     video_dir=VIDEO_DIR,
     result_dir=DEFAULT_RESULT_DIR,
     ocr_upsample=OCR_UPSAMPLE,
+    ocr_engine: str = PIPELINE_DEFAULT_OCR_ENGINE,
+    gcp_credentials: str | None = None,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
     video_files: Optional[list[str]] = None,
     item_color_overrides: Optional[dict[str, str]] = None,
@@ -43,6 +46,8 @@ def main(
         video_dir=video_dir,
         result_dir=result_dir,
         ocr_upsample=ocr_upsample,
+        ocr_engine=ocr_engine,
+        gcp_credentials=gcp_credentials,
         video_files=video_files,
         item_color_overrides=item_color_overrides,
         relic_type_overrides=relic_type_overrides,

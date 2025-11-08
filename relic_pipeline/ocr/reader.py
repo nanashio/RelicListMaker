@@ -8,8 +8,9 @@ import cv2
 import numpy as np
 import pytesseract
 
+from .google_vision import detect_text as vision_detect_text
 from .preprocess import prepare_for_ocr
-from ..settings import OCRSettings
+from ..settings import DEFAULT_OCR_ENGINE, OCRSettings
 
 
 def clean_ocr_text(text: str) -> str:
@@ -22,10 +23,21 @@ def clean_ocr_text(text: str) -> str:
     return " ".join(lines)
 
 
-def recognize_effect_text(image: np.ndarray, *, lang: str, config: str) -> str:
-    """Run pytesseract on a prepared image and return the cleaned text."""
+def recognize_effect_text(
+    image: np.ndarray,
+    *,
+    lang: str,
+    config: str,
+    engine: str = DEFAULT_OCR_ENGINE,
+) -> str:
+    """Run the configured OCR engine on a prepared image and return the cleaned text."""
 
-    raw_text = pytesseract.image_to_string(image, lang=lang, config=config)
+    if engine == "tesseract":
+        raw_text = pytesseract.image_to_string(image, lang=lang, config=config)
+    elif engine in {"vision", "google", "google-vision"}:
+        raw_text = vision_detect_text(image, mode="document")
+    else:  # pragma: no cover - defensive branch for unsupported engines
+        raise ValueError(f"Unsupported OCR engine: {engine}")
     return clean_ocr_text(raw_text)
 
 
@@ -63,6 +75,7 @@ def batch_recognize(crops: Sequence[np.ndarray], *, settings: OCRSettings) -> li
                 prepared,
                 lang=settings.lang,
                 config=settings.config,
+                engine=settings.engine,
             )
         )
     return texts

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from gui_services import BackgroundTaskRunner, GuiState, PipelineExecutor
-from pipeline import PipelineSettings
+from pipeline import DEFAULT_OCR_ENGINE, PipelineSettings
 
 
 class DummyReporter:
@@ -29,6 +29,7 @@ def build_state(tmp_path: Path) -> GuiState:
         results_dir=results_dir,
         queue_entries=entries,
         ocr_upsample=2.0,
+        ocr_engine="vision",
         save_full_frames=True,
         column_visibility={"ItemColor": True, "RawText": True},
         merge_only_reviewed=False,
@@ -75,6 +76,8 @@ def test_pipeline_executor_builds_settings(tmp_path: Path) -> None:
     assert settings.video_files == state.videos_to_process()
     assert settings.item_color_overrides == state.color_overrides()
     assert settings.relic_type_overrides == state.type_overrides()
+    assert settings.ocr_engine == state.ocr_engine
+    assert settings.gcp_credentials is None
     assert settings.save_full_frames is True
     assert settings.csv_column_visibility == dict(state.column_visibility)
 
@@ -85,6 +88,7 @@ def test_pipeline_executor_builds_settings(tmp_path: Path) -> None:
 
 def test_pipeline_executor_merge_and_server(tmp_path: Path) -> None:
     state = build_state(tmp_path)
+    state.ocr_engine = DEFAULT_OCR_ENGINE
     merge_calls: dict[str, object] = {}
     server_calls: dict[str, object] = {}
 

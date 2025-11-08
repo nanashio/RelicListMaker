@@ -67,6 +67,7 @@ def ocr_and_match(
     upsample=DEFAULT_UPSAMPLE,
     preprocess=True,
     crop_boxes=None,
+    ocr_engine: str = "tesseract",
 ) -> list[MatchResult]:
     boxes = crop_boxes or scale_crop_boxes(BASE_CROP_BOXES, scale)
 
@@ -109,6 +110,7 @@ def ocr_and_match(
         ocr_settings = OCRSettings(
             lang="jpn",
             config=OCR_CONFIG,
+            engine=ocr_engine,
             preprocess=preprocess,
             resize_scale=upsample,
         )
@@ -150,18 +152,32 @@ def process_images(
     column_visibility=None,
     master_csv_path=None,
     relic_type=None,
+    ocr_engine: str = "tesseract",
+    gcp_credentials: str | None = None,
 ):
     global _TESSERACT_NOTICE_SHOWN
-    if not _TESSERACT_NOTICE_SHOWN:
-        if is_system_tesseract_preferred():
-            reason = system_tesseract_reason()
-            if reason == "wsl":
-                print("[INFO] WSL 環境のためシステムにインストールされた Tesseract を利用します")
-            elif reason and reason != "missing":
-                print("[INFO] システムにインストール済みの Tesseract を利用します")
-        _TESSERACT_NOTICE_SHOWN = True
-    version = pytesseract.get_tesseract_version()
-    print(f"Tesseract Ver: {version}")
+    normalized_engine = ocr_engine.lower()
+    if normalized_engine in {"vision", "google", "google-vision"}:
+        if gcp_credentials:
+            cred_path = Path(gcp_credentials).expanduser()
+            if cred_path.exists():
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(cred_path)
+            else:
+                print(f"[WARN] 指定した認証ファイルが見つかりません: {cred_path}")
+        print("[INFO] Google Cloud Vision API を利用して OCR を実行します")
+    elif normalized_engine == "tesseract":
+        if not _TESSERACT_NOTICE_SHOWN:
+            if is_system_tesseract_preferred():
+                reason = system_tesseract_reason()
+                if reason == "wsl":
+                    print("[INFO] WSL 環境のためシステムにインストールされた Tesseract を利用します")
+                elif reason and reason != "missing":
+                    print("[INFO] システムにインストール済みの Tesseract を利用します")
+            _TESSERACT_NOTICE_SHOWN = True
+        version = pytesseract.get_tesseract_version()
+        print(f"Tesseract Ver: {version}")
+    else:
+        raise ValueError(f"サポートされていない OCR エンジンです: {ocr_engine}")
 
     master_path = master_csv_path or DICTIONARY_PATH
 
@@ -203,6 +219,7 @@ def process_images(
             upsample=upsample,
             preprocess=preprocess,
             crop_boxes=crop_boxes,
+            ocr_engine=normalized_engine,
         )
         row = build_row(fname, match_results, options=export_options)
         rows.append(row)
@@ -275,6 +292,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="append",
         metavar="NAME=BOOL",
         help="列の表示/非表示を上書き (例: --column RawText=false)",
+    )
+    parser.add_argument(
+        "--ocr-engine",
+        dest="ocr_engine",
+        choices=["tesseract", "vision"],
+        default="tesseract",
+        help="OCR エンジンを選択します (デフォルト: tesseract)",
+    )
+    parser.add_argument(
+        "--gcp-credentials",
+        dest="gcp_credentials",
+        default=None,
+        help="Google Cloud Vision API 用の認証 JSON パス",
     )
     return parser
 

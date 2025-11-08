@@ -7,6 +7,7 @@ from typing import Callable, Mapping, MutableMapping, Sequence
 
 DEFAULT_OCR_LANG = "jpn"
 DEFAULT_OCR_CONFIG = "--oem 3 --psm 6 -c preserve_interword_spaces=1"
+DEFAULT_OCR_ENGINE = "tesseract"
 DEFAULT_RESIZE_SCALE = 1.5
 
 DEFAULT_COLUMN_VISIBILITY: dict[str, bool] = {
@@ -27,10 +28,11 @@ DEFAULT_COLUMN_VISIBILITY: dict[str, bool] = {
 
 @dataclass(slots=True)
 class OCRSettings:
-    """Parameters that control OCR preprocessing and Tesseract execution."""
+    """Parameters that control OCR preprocessing and OCR engine execution."""
 
     lang: str = DEFAULT_OCR_LANG
     config: str = DEFAULT_OCR_CONFIG
+    engine: str = DEFAULT_OCR_ENGINE
     preprocess: bool = True
     resize_scale: float = DEFAULT_RESIZE_SCALE
     apply_threshold: bool = True

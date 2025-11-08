@@ -7,7 +7,12 @@ from pathlib import Path
 from typing import Callable, Mapping
 
 from merge_results import merge_results
-from pipeline import CallbackProgressReporter, PipelineSettings, run_pipeline
+from pipeline import (
+    DEFAULT_OCR_ENGINE,
+    CallbackProgressReporter,
+    PipelineSettings,
+    run_pipeline,
+)
 from viewer_server import ServerContext, create_server
 
 
@@ -20,6 +25,8 @@ class GuiState:
     results_dir: Path
     queue_entries: list[dict[str, str]] = field(default_factory=list)
     ocr_upsample: float = 1.0
+    ocr_engine: str = DEFAULT_OCR_ENGINE
+    gcp_credentials: str | None = None
     save_full_frames: bool = False
     column_visibility: Mapping[str, bool] = field(default_factory=dict)
     merge_only_reviewed: bool = True
@@ -77,6 +84,8 @@ class PipelineExecutor:
             video_dir=str(state.video_dir),
             result_dir=str(state.results_dir),
             ocr_upsample=state.ocr_upsample,
+            ocr_engine=state.ocr_engine,
+            gcp_credentials=state.gcp_credentials,
             video_files=state.videos_to_process(),
             item_color_overrides=state.color_overrides(),
             relic_type_overrides=state.type_overrides(),

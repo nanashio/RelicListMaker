@@ -27,6 +27,7 @@ from gui_adapters import (
 from gui_services import BackgroundTaskRunner, GuiState, PipelineExecutor
 from merge_results import MergeResultsError
 from pipeline import (
+    DEFAULT_OCR_ENGINE,
     DEFAULT_OCR_UPSAMPLE,
     detect_item_color,
     detect_relic_type,
@@ -233,6 +234,7 @@ class RelicGuiApp:
         self.video_dir_var = tk.StringVar(value="videos")
         self.results_dir_var = tk.StringVar(value="results")
         self.ocr_upsample_var = tk.StringVar(value=str(DEFAULT_OCR_UPSAMPLE))
+        self.ocr_engine_var = tk.StringVar(value=DEFAULT_OCR_ENGINE)
         self.server_host_var = tk.StringVar(value="127.0.0.1")
         self.server_port_var = tk.StringVar(value="0")
         self.open_browser_var = tk.BooleanVar(value=True)
@@ -289,6 +291,7 @@ class RelicGuiApp:
             results_dir=self._resolve_input_path(self.results_dir_var.get()),
             queue_entries=[],
             ocr_upsample=initial_ocr,
+            ocr_engine=self.ocr_engine_var.get(),
             save_full_frames=self.save_frames_var.get(),
             column_visibility={key: var.get() for key, var in self.csv_column_vars.items()},
             merge_only_reviewed=self.merge_only_reviewed_var.get(),
@@ -692,26 +695,42 @@ class RelicGuiApp:
         ttk.Label(parent, text="OCRアップサンプル").grid(row=2, column=0, sticky="w", padx=(0, 8), pady=2)
         ttk.Entry(parent, textvariable=self.ocr_upsample_var, width=10).grid(row=2, column=1, sticky="w", pady=2)
 
-        ttk.Label(parent, text="サーバーホスト").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=2)
-        ttk.Entry(parent, textvariable=self.server_host_var, width=16).grid(row=3, column=1, sticky="w", pady=2)
+        ttk.Label(parent, text="OCRエンジン").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=2)
+        engine_frame = ttk.Frame(parent)
+        engine_frame.grid(row=3, column=1, columnspan=2, sticky="w", pady=2)
+        ttk.Radiobutton(
+            engine_frame,
+            text="Tesseract",
+            value="tesseract",
+            variable=self.ocr_engine_var,
+        ).pack(side="left", padx=(0, 8))
+        ttk.Radiobutton(
+            engine_frame,
+            text="Google Cloud Vision",
+            value="vision",
+            variable=self.ocr_engine_var,
+        ).pack(side="left")
 
-        ttk.Label(parent, text="サーバーポート").grid(row=4, column=0, sticky="w", padx=(0, 8), pady=2)
-        ttk.Entry(parent, textvariable=self.server_port_var, width=10).grid(row=4, column=1, sticky="w", pady=2)
+        ttk.Label(parent, text="サーバーホスト").grid(row=4, column=0, sticky="w", padx=(0, 8), pady=2)
+        ttk.Entry(parent, textvariable=self.server_host_var, width=16).grid(row=4, column=1, sticky="w", pady=2)
+
+        ttk.Label(parent, text="サーバーポート").grid(row=5, column=0, sticky="w", padx=(0, 8), pady=2)
+        ttk.Entry(parent, textvariable=self.server_port_var, width=10).grid(row=5, column=1, sticky="w", pady=2)
 
         ttk.Checkbutton(
             parent,
             text="サーバー起動時にブラウザを開く",
             variable=self.open_browser_var,
-        ).grid(row=5, column=0, columnspan=3, sticky="w", pady=4)
+        ).grid(row=6, column=0, columnspan=3, sticky="w", pady=4)
 
         ttk.Checkbutton(
             parent,
             text="全体画像を出力する",
             variable=self.save_frames_var,
-        ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(0, 4))
+        ).grid(row=7, column=0, columnspan=3, sticky="w", pady=(0, 4))
 
         csv_frame = ttk.LabelFrame(parent, text="CSV出力列", padding=12)
-        csv_frame.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        csv_frame.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(8, 0))
         for col_index in range(2):
             csv_frame.columnconfigure(col_index, weight=1)
 
@@ -770,7 +789,7 @@ class RelicGuiApp:
             ).grid(row=row_index, column=col_index, sticky="w", padx=(0, 8), pady=2)
 
         button_frame = ttk.Frame(parent)
-        button_frame.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(12, 0))
+        button_frame.grid(row=9, column=0, columnspan=3, sticky="ew", pady=(12, 0))
         button_frame.columnconfigure(0, weight=1)
         ttk.Button(button_frame, text="閉じる", command=self._close_settings_dialog).grid(row=0, column=0, sticky="e")
 
@@ -1525,6 +1544,10 @@ class RelicGuiApp:
         self.state.column_visibility = {key: var.get() for key, var in self.csv_column_vars.items()}
         self.state.merge_only_reviewed = self.merge_only_reviewed_var.get()
         self.state.server_host = self.server_host_var.get().strip() or "127.0.0.1"
+        engine_value = (self.ocr_engine_var.get() or "").strip().lower() or DEFAULT_OCR_ENGINE
+        if engine_value not in {"tesseract", "vision"}:
+            engine_value = DEFAULT_OCR_ENGINE
+        self.state.ocr_engine = engine_value
         try:
             self.state.ocr_upsample = float(self.ocr_upsample_var.get())
         except ValueError as exc:
@@ -1549,6 +1572,8 @@ class RelicGuiApp:
             results_dir=self.state.results_dir,
             queue_entries=[dict(entry) for entry in self.state.queue_entries],
             ocr_upsample=self.state.ocr_upsample,
+            ocr_engine=self.state.ocr_engine,
+            gcp_credentials=self.state.gcp_credentials,
             save_full_frames=self.state.save_full_frames,
             column_visibility=dict(self.state.column_visibility),
             merge_only_reviewed=self.state.merge_only_reviewed,
