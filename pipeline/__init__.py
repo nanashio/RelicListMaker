@@ -2,6 +2,7 @@
 from .pipeline import (
     DEFAULT_OCR_ENGINE,
     DEFAULT_OCR_UPSAMPLE,
+    DEFAULT_GCP_CREDENTIALS_FILENAME,
     DEFAULT_RESULT_DIR,
     DEFAULT_VIDEO_DIR,
     PipelineResult,
@@ -14,6 +15,7 @@ from .tasks import detect_item_color, detect_relic_type, normalize_relic_type
 __all__ = [
     "DEFAULT_OCR_ENGINE",
     "DEFAULT_OCR_UPSAMPLE",
+    "DEFAULT_GCP_CREDENTIALS_FILENAME",
     "DEFAULT_RESULT_DIR",
     "DEFAULT_VIDEO_DIR",
     "PipelineResult",

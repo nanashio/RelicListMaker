@@ -9,6 +9,7 @@ DEFAULT_OCR_LANG = "jpn"
 DEFAULT_OCR_CONFIG = "--oem 3 --psm 6 -c preserve_interword_spaces=1"
 DEFAULT_OCR_ENGINE = "tesseract"
 DEFAULT_RESIZE_SCALE = 1.5
+DEFAULT_GCP_CREDENTIALS_FILENAME = "service-account-file.json"
 
 DEFAULT_COLUMN_VISIBILITY: dict[str, bool] = {
     "ItemColor": True,

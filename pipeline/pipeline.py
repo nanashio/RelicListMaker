@@ -10,6 +10,9 @@ from datasets.builder import DatasetBuildResult, ProcessedVideoResult, build_dat
 from generate_gallery import generate_html
 from relic_data import load_master_csv, normalize_master_values
 from resource_paths import templates_path
+from relic_pipeline.settings import (
+    DEFAULT_GCP_CREDENTIALS_FILENAME as SETTINGS_DEFAULT_GCP_CREDENTIALS_FILENAME,
+)
 
 from .inputs import build_override_map, build_path_value_map, gather_video_files
 from .processors import process_video
@@ -27,6 +30,7 @@ DEFAULT_VIDEO_DIR = "videos"
 DEFAULT_RESULT_DIR = "results"
 DEFAULT_OCR_UPSAMPLE = 1.5
 DEFAULT_OCR_ENGINE = "tesseract"
+DEFAULT_GCP_CREDENTIALS_FILENAME = SETTINGS_DEFAULT_GCP_CREDENTIALS_FILENAME
 
 
 @dataclass
@@ -36,6 +40,7 @@ class PipelineSettings:
     ocr_upsample: float = DEFAULT_OCR_UPSAMPLE
     ocr_engine: str = DEFAULT_OCR_ENGINE
     gcp_credentials: str | None = None
+    gcp_credentials_filename: str | None = DEFAULT_GCP_CREDENTIALS_FILENAME
     video_files: Optional[Iterable[str | Path]] = None
     item_color_overrides: Optional[dict[str | Path, str]] = None
     relic_type_overrides: Optional[dict[str | Path, str]] = None
@@ -54,6 +59,9 @@ class PipelineSettings:
         self.ocr_engine = engine
         if self.gcp_credentials:
             self.gcp_credentials = str(Path(self.gcp_credentials).expanduser())
+        if self.gcp_credentials_filename is not None:
+            filename = str(self.gcp_credentials_filename).strip()
+            self.gcp_credentials_filename = filename or None
 
 
 @dataclass(frozen=True)
@@ -139,6 +147,7 @@ def run_pipeline(
             ocr_upsample=settings.ocr_upsample,
             ocr_engine=settings.ocr_engine,
             gcp_credentials=settings.gcp_credentials,
+            gcp_credentials_filename=settings.gcp_credentials_filename,
             override_colors=override_map,
             save_full_frames=settings.save_full_frames,
             csv_column_visibility=settings.csv_column_visibility,

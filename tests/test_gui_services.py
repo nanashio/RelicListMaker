@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from gui_services import BackgroundTaskRunner, GuiState, PipelineExecutor
-from pipeline import DEFAULT_OCR_ENGINE, PipelineSettings
+from pipeline import DEFAULT_GCP_CREDENTIALS_FILENAME, DEFAULT_OCR_ENGINE, PipelineSettings
 
 
 class DummyReporter:
@@ -35,6 +35,7 @@ def build_state(tmp_path: Path) -> GuiState:
         merge_only_reviewed=False,
         server_host="0.0.0.0",
         server_port=8080,
+        gcp_credentials_filename="bundled.json",
     )
 
 
@@ -78,6 +79,7 @@ def test_pipeline_executor_builds_settings(tmp_path: Path) -> None:
     assert settings.relic_type_overrides == state.type_overrides()
     assert settings.ocr_engine == state.ocr_engine
     assert settings.gcp_credentials is None
+    assert settings.gcp_credentials_filename == state.gcp_credentials_filename
     assert settings.save_full_frames is True
     assert settings.csv_column_visibility == dict(state.column_visibility)
 
@@ -89,6 +91,7 @@ def test_pipeline_executor_builds_settings(tmp_path: Path) -> None:
 def test_pipeline_executor_merge_and_server(tmp_path: Path) -> None:
     state = build_state(tmp_path)
     state.ocr_engine = DEFAULT_OCR_ENGINE
+    state.gcp_credentials_filename = DEFAULT_GCP_CREDENTIALS_FILENAME
     merge_calls: dict[str, object] = {}
     server_calls: dict[str, object] = {}
 

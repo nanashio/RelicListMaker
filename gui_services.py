@@ -8,6 +8,7 @@ from typing import Callable, Mapping
 
 from merge_results import merge_results
 from pipeline import (
+    DEFAULT_GCP_CREDENTIALS_FILENAME,
     DEFAULT_OCR_ENGINE,
     CallbackProgressReporter,
     PipelineSettings,
@@ -27,6 +28,7 @@ class GuiState:
     ocr_upsample: float = 1.0
     ocr_engine: str = DEFAULT_OCR_ENGINE
     gcp_credentials: str | None = None
+    gcp_credentials_filename: str | None = DEFAULT_GCP_CREDENTIALS_FILENAME
     save_full_frames: bool = False
     column_visibility: Mapping[str, bool] = field(default_factory=dict)
     merge_only_reviewed: bool = True
@@ -86,6 +88,7 @@ class PipelineExecutor:
             ocr_upsample=state.ocr_upsample,
             ocr_engine=state.ocr_engine,
             gcp_credentials=state.gcp_credentials,
+            gcp_credentials_filename=state.gcp_credentials_filename,
             video_files=state.videos_to_process(),
             item_color_overrides=state.color_overrides(),
             relic_type_overrides=state.type_overrides(),

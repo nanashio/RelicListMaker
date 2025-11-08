@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 from pathlib import Path
 from typing import Sequence
 
@@ -23,6 +24,7 @@ from relic_pipeline.settings import (
     DEFAULT_COLUMN_VISIBILITY,
     DEFAULT_OCR_CONFIG,
     DEFAULT_RESIZE_SCALE,
+    DEFAULT_GCP_CREDENTIALS_FILENAME,
     ExportOptions,
     MatchingSettings,
     OCRSettings,
@@ -44,6 +46,48 @@ BASE_CROP_BOXES = [
 OCR_CONFIG = DEFAULT_OCR_CONFIG
 DEFAULT_UPSAMPLE = DEFAULT_RESIZE_SCALE
 CORRECTION_SCORE = 100.0
+
+
+def _resolve_packaged_credentials(filename: str | None) -> Path | None:
+    trimmed = (filename or "").strip()
+    if not trimmed:
+        return None
+    if getattr(sys, "frozen", False):
+        exe_path = Path(sys.executable).resolve()
+        candidate = exe_path.parent / trimmed
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _prepare_gcp_credentials(
+    gcp_credentials: str | None,
+    packaged_filename: str | None,
+) -> None:
+    resolved: Path | None = None
+    if gcp_credentials:
+        cred_path = Path(gcp_credentials).expanduser()
+        if cred_path.exists():
+            resolved = cred_path
+        else:
+            print(f"[WARN] 指定した認証ファイルが見つかりません: {cred_path}")
+
+    if resolved is None:
+        packaged_path = _resolve_packaged_credentials(packaged_filename)
+        if packaged_path is not None:
+            resolved = packaged_path
+            print(
+                "[INFO] 実行ファイルと同じディレクトリの認証ファイルを利用します: "
+                f"{packaged_path.name}"
+            )
+        elif packaged_filename and getattr(sys, "frozen", False):
+            print(
+                "[WARN] Vision認証ファイルが実行ファイルと同じディレクトリにありません: "
+                f"{packaged_filename}"
+            )
+
+    if resolved is not None:
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(resolved)
 
 
 def scale_crop_boxes(boxes, scale=1.0):
@@ -154,16 +198,12 @@ def process_images(
     relic_type=None,
     ocr_engine: str = "tesseract",
     gcp_credentials: str | None = None,
+    gcp_credentials_filename: str | None = DEFAULT_GCP_CREDENTIALS_FILENAME,
 ):
     global _TESSERACT_NOTICE_SHOWN
     normalized_engine = ocr_engine.lower()
     if normalized_engine in {"vision", "google", "google-vision"}:
-        if gcp_credentials:
-            cred_path = Path(gcp_credentials).expanduser()
-            if cred_path.exists():
-                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(cred_path)
-            else:
-                print(f"[WARN] 指定した認証ファイルが見つかりません: {cred_path}")
+        _prepare_gcp_credentials(gcp_credentials, gcp_credentials_filename)
         print("[INFO] Google Cloud Vision API を利用して OCR を実行します")
     elif normalized_engine == "tesseract":
         if not _TESSERACT_NOTICE_SHOWN:
@@ -305,6 +345,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         dest="gcp_credentials",
         default=None,
         help="Google Cloud Vision API 用の認証 JSON パス",
+    )
+    parser.add_argument(
+        "--gcp-credentials-filename",
+        dest="gcp_credentials_filename",
+        default=DEFAULT_GCP_CREDENTIALS_FILENAME,
+        help="実行ファイルと同じディレクトリに配置した Vision 認証ファイル名",
     )
     return parser
 
