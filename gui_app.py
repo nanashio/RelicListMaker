@@ -275,7 +275,7 @@ class RelicGuiApp:
         self.log_queue: "queue.Queue[str]" = queue.Queue()
         self.executor = PipelineExecutor()
         self.background_tasks = BackgroundTaskRunner()
-        self.progress_var = tk.StringVar(value="待機中")
+        self.progress_var = tk.StringVar(value="ドラッグ&ドロップで動画を追加してください")
         self.progress_bar: Optional[ttk.Progressbar] = None
         self._progress_tasks: list[dict[str, object]] = []
         self._progress_counter = 0
@@ -290,6 +290,7 @@ class RelicGuiApp:
         self._relic_type_display_map = {value: label for label, value in self._relic_type_value_map.items()}
         self._dropped_video_set: set[str] = set()
         self._queue_item_paths: dict[str, str] = {}
+        self._last_pipeline_error: Optional[str] = None
         try:
             initial_ocr = float(self.ocr_upsample_var.get())
         except ValueError:
@@ -536,18 +537,14 @@ class RelicGuiApp:
         self._inline_type_item = None
         self._create_inline_relic_type_editor()
 
-        self.queue_selection_var.set("ドラッグ＆ドロップで動画を追加してください")
-        selection_label = ttk.Label(queue_frame, textvariable=self.queue_selection_var, anchor="w")
-        selection_label.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(8, 0))
-
         self.run_button = ttk.Button(queue_frame, text="動画処理を実行", command=self.on_run_pipeline)
-        self.run_button.grid(row=2, column=0, columnspan=2, sticky="ew", padx=(0, 8), pady=(8, 0))
+        self.run_button.grid(row=1, column=0, columnspan=2, sticky="ew", padx=(0, 8), pady=(8, 0))
         ttk.Button(queue_frame, text="選択動画を削除", command=self._remove_selected_videos).grid(
-            row=2, column=2, sticky="ew", pady=(8, 0)
+            row=1, column=2, sticky="ew", pady=(8, 0)
         )
 
         progress_frame = ttk.Frame(queue_frame, padding=8)
-        progress_frame.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(12, 0))
+        progress_frame.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(12, 0))
         progress_frame.columnconfigure(0, weight=1)
         self.progress_bar = ttk.Progressbar(progress_frame, orient="horizontal", mode="indeterminate")
         self.progress_bar.grid(row=0, column=0, sticky="ew")
@@ -1661,7 +1658,9 @@ class RelicGuiApp:
                 break
         self._refresh_progress_display()
 
-    def _stop_progress(self, token: int, final_message: str = "待機中") -> None:
+    def _stop_progress(
+        self, token: int, final_message: str = "ドラッグ&ドロップで動画を追加してください"
+    ) -> None:
         self._progress_tasks = [task for task in self._progress_tasks if task.get("token") != token]
         if not self._progress_tasks:
             if self.progress_bar is not None:
@@ -1682,7 +1681,7 @@ class RelicGuiApp:
                     self._progress_active = False
                 self.progress_bar.configure(mode="determinate", maximum=1, value=0)
             self._progress_mode = "idle"
-            self.progress_var.set("待機中")
+            self.progress_var.set("ドラッグ&ドロップで動画を追加してください")
             return
 
         task = self._progress_tasks[-1]
@@ -1765,6 +1764,7 @@ class RelicGuiApp:
         self.append_log(
             f"[GUI] 動画処理を開始します: {video_dir} -> {results_dir} ({len(state_snapshot.queue_entries)} 件)"
         )
+        self._last_pipeline_error = None
         token = self._start_progress("動画処理を準備中...")
         self._pipeline_progress_token = token
 
@@ -1785,11 +1785,13 @@ class RelicGuiApp:
                     self.executor.execute_pipeline(state_snapshot, progress_callback=progress_callback)
                 self.append_log("[GUI] 動画処理が完了しました")
             except Exception as exc:  # noqa: BLE001 - GUIログに表示するため広く捕捉
+                error_message = f"OCR処理に失敗しました: {exc}"
+                self._last_pipeline_error = error_message
                 self.append_log("[ERROR] 動画処理中にエラーが発生しました")
                 self.append_log(traceback.format_exc())
                 self.root.after(
                     0,
-                    lambda: messagebox.showerror("処理失敗", f"動画処理でエラーが発生しました: {exc}"),
+                    lambda: messagebox.showerror("処理失敗", error_message),
                 )
             finally:
                 self.background_tasks.mark_finished("pipeline")
@@ -1804,8 +1806,10 @@ class RelicGuiApp:
     def _on_pipeline_finished(self) -> None:
         self.run_button.configure(state="normal")
         if self._pipeline_progress_token is not None:
-            self._stop_progress(self._pipeline_progress_token)
+            final_message = self._last_pipeline_error or "ドラッグ&ドロップで動画を追加してください"
+            self._stop_progress(self._pipeline_progress_token, final_message=final_message)
             self._pipeline_progress_token = None
+        self._last_pipeline_error = None
         if self.state.queue_entries:
             self.append_log('[GUI] キューをクリアしました')
         self.state.queue_entries.clear()
