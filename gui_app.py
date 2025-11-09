@@ -227,6 +227,7 @@ class RelicGuiApp:
     """RelicListMaker パイプラインのGUIフロントエンド."""
 
     POLL_INTERVAL_MS = 100
+    ERROR_DISPLAY_MAX_CHARS = 48
 
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
@@ -1726,12 +1727,20 @@ class RelicGuiApp:
         text = message if message.endswith("\n") else message + "\n"
         self.log_queue.put(text)
 
+    def _format_pipeline_error_message(self, detail: str) -> str:
+        normalized = " ".join(detail.split())
+        if not normalized:
+            return "OCR処理に失敗しました"
+        if len(normalized) > self.ERROR_DISPLAY_MAX_CHARS:
+            normalized = normalized[: self.ERROR_DISPLAY_MAX_CHARS - 1] + "…"
+        return f"OCR処理に失敗しました: {normalized}"
+
     def _register_pipeline_error(self, detail: str) -> None:
         message = detail.strip() or "原因不明のエラーが発生しました"
         if message not in self._pipeline_error_messages:
             self._pipeline_error_messages.append(message)
         combined = " / ".join(self._pipeline_error_messages)
-        self._last_pipeline_error = f"OCR処理に失敗しました: {combined}"
+        self._last_pipeline_error = self._format_pipeline_error_message(combined)
 
     def _handle_pipeline_log_message(self, message: str) -> None:
         stripped = message.strip()
@@ -1800,8 +1809,9 @@ class RelicGuiApp:
                     self.executor.execute_pipeline(state_snapshot, progress_callback=progress_callback)
                 self.append_log("[GUI] 動画処理が完了しました")
             except Exception as exc:  # noqa: BLE001 - GUIログに表示するため広く捕捉
-                error_message = f"OCR処理に失敗しました: {exc}"
-                self._last_pipeline_error = error_message
+                error_detail = str(exc)
+                self._last_pipeline_error = self._format_pipeline_error_message(error_detail)
+                error_message = f"OCR処理に失敗しました: {error_detail}"
                 self.append_log("[ERROR] 動画処理中にエラーが発生しました")
                 self.append_log(traceback.format_exc())
                 self.root.after(
