@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import configparser
 import contextlib
 import csv
 import queue
@@ -40,6 +41,11 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".wmv", ".m4v"}
 
 
 GITHUB_URL = "https://github.com/nanashio/RelicListMaker"
+
+
+CONFIG_FILE_NAME = "RelicListMaker.ini"
+_CONFIG_SECTION_APP = "app"
+_CONFIG_SECTION_COLUMNS = "columns"
 
 
 if sys.platform.startswith("win"):
@@ -232,6 +238,7 @@ class RelicGuiApp:
         self._create_menubar()
 
         self.base_dir = _default_base_dir()
+        self.config_path = self.base_dir / CONFIG_FILE_NAME
         self.video_dir_var = tk.StringVar(value="videos")
         self.results_dir_var = tk.StringVar(value="results")
         self.ocr_upsample_var = tk.StringVar(value=str(DEFAULT_OCR_UPSAMPLE))
@@ -260,6 +267,8 @@ class RelicGuiApp:
         self.merge_only_reviewed_var = tk.BooleanVar(value=True)
         self.results_status_var = tk.StringVar(value="結果フォルダを読み込んでください")
         self.log_visible_var = tk.BooleanVar(value=False)
+
+        self._load_settings_from_ini()
 
         self.server_context: Optional[ServerContext] = None
         self.server_thread: Optional[threading.Thread] = None
@@ -1937,7 +1946,105 @@ class RelicGuiApp:
             pass
 
         self._close_settings_dialog()
+        self._save_settings_to_ini()
         self.root.destroy()
+
+    @staticmethod
+    def _parse_config_bool(value: str | None, default: bool) -> bool:
+        if value is None:
+            return default
+        normalized = value.strip().lower()
+        if not normalized:
+            return default
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+        return default
+
+    @staticmethod
+    def _bool_to_text(value: bool) -> str:
+        return "true" if value else "false"
+
+    def _load_settings_from_ini(self) -> None:
+        if not self.config_path.exists():
+            return
+
+        parser = configparser.ConfigParser()
+        try:
+            parser.read(self.config_path, encoding="utf-8")
+        except Exception:
+            return
+
+        if parser.has_section(_CONFIG_SECTION_APP):
+            section = parser[_CONFIG_SECTION_APP]
+            video_dir = section.get("video_dir")
+            if video_dir is not None:
+                self.video_dir_var.set(video_dir)
+            results_dir = section.get("results_dir")
+            if results_dir is not None:
+                self.results_dir_var.set(results_dir)
+            ocr_upsample = section.get("ocr_upsample")
+            if ocr_upsample is not None:
+                self.ocr_upsample_var.set(ocr_upsample)
+            ocr_engine = section.get("ocr_engine")
+            if ocr_engine is not None:
+                self.ocr_engine_var.set(ocr_engine)
+            credentials_filename = section.get("gcp_credentials_filename")
+            if credentials_filename is not None:
+                self.gcp_credentials_filename_var.set(credentials_filename)
+            server_host = section.get("server_host")
+            if server_host is not None:
+                self.server_host_var.set(server_host)
+            server_port = section.get("server_port")
+            if server_port is not None:
+                self.server_port_var.set(server_port)
+            open_browser = section.get("open_browser")
+            self.open_browser_var.set(
+                self._parse_config_bool(open_browser, self.open_browser_var.get())
+            )
+            save_frames = section.get("save_full_frames")
+            self.save_frames_var.set(
+                self._parse_config_bool(save_frames, self.save_frames_var.get())
+            )
+            merge_only = section.get("merge_only_reviewed")
+            self.merge_only_reviewed_var.set(
+                self._parse_config_bool(merge_only, self.merge_only_reviewed_var.get())
+            )
+
+        if parser.has_section(_CONFIG_SECTION_COLUMNS):
+            columns_section = parser[_CONFIG_SECTION_COLUMNS]
+            for key, var in self.csv_column_vars.items():
+                value = columns_section.get(key)
+                var.set(self._parse_config_bool(value, var.get()))
+
+    def _save_settings_to_ini(self) -> None:
+        parser = configparser.ConfigParser()
+        parser[_CONFIG_SECTION_APP] = {
+            "video_dir": self.video_dir_var.get().strip(),
+            "results_dir": self.results_dir_var.get().strip(),
+            "ocr_upsample": self.ocr_upsample_var.get().strip(),
+            "ocr_engine": self.ocr_engine_var.get().strip(),
+            "gcp_credentials_filename": self.gcp_credentials_filename_var.get().strip(),
+            "server_host": self.server_host_var.get().strip(),
+            "server_port": self.server_port_var.get().strip(),
+            "open_browser": self._bool_to_text(self.open_browser_var.get()),
+            "save_full_frames": self._bool_to_text(self.save_frames_var.get()),
+            "merge_only_reviewed": self._bool_to_text(self.merge_only_reviewed_var.get()),
+        }
+
+        parser[_CONFIG_SECTION_COLUMNS] = {
+            key: self._bool_to_text(var.get()) for key, var in self.csv_column_vars.items()
+        }
+
+        try:
+            with self.config_path.open("w", encoding="utf-8") as config_file:
+                parser.write(config_file)
+        except Exception as exc:  # noqa: BLE001 - GUIログにのみ出力
+            try:
+                self.append_log(f"[WARN] 設定ファイルを書き込めませんでした: {exc}")
+            except Exception:
+                pass
 
 
 def _parse_cli_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
