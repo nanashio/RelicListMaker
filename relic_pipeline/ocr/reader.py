@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Sequence
 
 import cv2
 import numpy as np
 import pytesseract
 
-from .google_vision import detect_text as vision_detect_text
+from .google_vision import (
+    VisionClient,
+    close_vision_client,
+    create_vision_client,
+    detect_text as vision_detect_text,
+)
 from .preprocess import prepare_for_ocr
 from ..settings import DEFAULT_OCR_ENGINE, OCRSettings
 
@@ -29,13 +35,20 @@ def recognize_effect_text(
     lang: str,
     config: str,
     engine: str = DEFAULT_OCR_ENGINE,
+    vision_client: VisionClient | None = None,
+    credentials_path: Path | str | None = None,
 ) -> str:
     """Run the configured OCR engine on a prepared image and return the cleaned text."""
 
     if engine == "tesseract":
         raw_text = pytesseract.image_to_string(image, lang=lang, config=config)
     elif engine in {"vision", "google", "google-vision"}:
-        raw_text = vision_detect_text(image, mode="document")
+        raw_text = vision_detect_text(
+            image,
+            mode="document",
+            client=vision_client,
+            credentials_path=credentials_path,
+        )
     else:  # pragma: no cover - defensive branch for unsupported engines
         raise ValueError(f"Unsupported OCR engine: {engine}")
     return clean_ocr_text(raw_text)
@@ -68,15 +81,25 @@ def batch_recognize(crops: Sequence[np.ndarray], *, settings: OCRSettings) -> li
     """Execute OCR over a batch of crops and return cleaned texts."""
 
     texts: list[str] = []
-    for crop in crops:
-        prepared = _prepare_crop(crop, settings)
-        texts.append(
-            recognize_effect_text(
-                prepared,
-                lang=settings.lang,
-                config=settings.config,
-                engine=settings.engine,
+    vision_client = None
+    try:
+        if settings.engine in {"vision", "google", "google-vision"}:
+            vision_client = create_vision_client(settings.vision_credentials_path)
+
+        for crop in crops:
+            prepared = _prepare_crop(crop, settings)
+            texts.append(
+                recognize_effect_text(
+                    prepared,
+                    lang=settings.lang,
+                    config=settings.config,
+                    engine=settings.engine,
+                    vision_client=vision_client,
+                    credentials_path=settings.vision_credentials_path,
+                )
             )
-        )
+    finally:
+        if vision_client is not None:
+            close_vision_client(vision_client)
     return texts
 

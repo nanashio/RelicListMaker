@@ -60,10 +60,10 @@ def _resolve_packaged_credentials(filename: str | None) -> Path | None:
     return None
 
 
-def _prepare_gcp_credentials(
+def _resolve_gcp_credentials(
     gcp_credentials: str | None,
     packaged_filename: str | None,
-) -> None:
+) -> Path | None:
     resolved: Path | None = None
     if gcp_credentials:
         cred_path = Path(gcp_credentials).expanduser()
@@ -86,8 +86,10 @@ def _prepare_gcp_credentials(
                 f"{packaged_filename}"
             )
 
-    if resolved is not None:
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(resolved)
+    if resolved is not None and resolved != Path(gcp_credentials or "").expanduser():
+        print(f"[INFO] Vision 認証ファイル: {resolved}")
+
+    return resolved
 
 
 def scale_crop_boxes(boxes, scale=1.0):
@@ -112,6 +114,7 @@ def ocr_and_match(
     preprocess=True,
     crop_boxes=None,
     ocr_engine: str = "tesseract",
+    vision_credentials_path: Path | None = None,
 ) -> list[MatchResult]:
     boxes = crop_boxes or scale_crop_boxes(BASE_CROP_BOXES, scale)
 
@@ -157,6 +160,7 @@ def ocr_and_match(
             engine=ocr_engine,
             preprocess=preprocess,
             resize_scale=upsample,
+            vision_credentials_path=vision_credentials_path,
         )
         recognized_texts = batch_recognize(valid_crops, settings=ocr_settings)
 
@@ -202,8 +206,12 @@ def process_images(
 ):
     global _TESSERACT_NOTICE_SHOWN
     normalized_engine = ocr_engine.lower()
+    credentials_path: Path | None = None
     if normalized_engine in {"vision", "google", "google-vision"}:
-        _prepare_gcp_credentials(gcp_credentials, gcp_credentials_filename)
+        credentials_path = _resolve_gcp_credentials(
+            gcp_credentials,
+            gcp_credentials_filename,
+        )
         print("[INFO] Google Cloud Vision API を利用して OCR を実行します")
     elif normalized_engine == "tesseract":
         if not _TESSERACT_NOTICE_SHOWN:
@@ -260,6 +268,7 @@ def process_images(
             preprocess=preprocess,
             crop_boxes=crop_boxes,
             ocr_engine=normalized_engine,
+            vision_credentials_path=credentials_path,
         )
         row = build_row(fname, match_results, options=export_options)
         rows.append(row)

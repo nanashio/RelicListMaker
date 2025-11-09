@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable, Mapping, MutableMapping, Sequence
 
 DEFAULT_OCR_LANG = "jpn"
@@ -38,6 +39,7 @@ class OCRSettings:
     resize_scale: float = DEFAULT_RESIZE_SCALE
     apply_threshold: bool = True
     denoise: bool = True
+    vision_credentials_path: Path | None = None
 
 
 @dataclass(slots=True)
