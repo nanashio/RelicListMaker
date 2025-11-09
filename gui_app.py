@@ -291,6 +291,7 @@ class RelicGuiApp:
         self._dropped_video_set: set[str] = set()
         self._queue_item_paths: dict[str, str] = {}
         self._last_pipeline_error: Optional[str] = None
+        self._pipeline_error_messages: list[str] = []
         try:
             initial_ocr = float(self.ocr_upsample_var.get())
         except ValueError:
@@ -1725,10 +1726,23 @@ class RelicGuiApp:
         text = message if message.endswith("\n") else message + "\n"
         self.log_queue.put(text)
 
+    def _register_pipeline_error(self, detail: str) -> None:
+        message = detail.strip() or "原因不明のエラーが発生しました"
+        if message not in self._pipeline_error_messages:
+            self._pipeline_error_messages.append(message)
+        combined = " / ".join(self._pipeline_error_messages)
+        self._last_pipeline_error = f"OCR処理に失敗しました: {combined}"
+
+    def _handle_pipeline_log_message(self, message: str) -> None:
+        stripped = message.strip()
+        if stripped.startswith("OCR error:"):
+            self._register_pipeline_error(stripped[len("OCR error:") :])
+
     def _process_log_queue(self) -> None:
         try:
             while True:
                 message = self.log_queue.get_nowait()
+                self._handle_pipeline_log_message(message)
                 self.log_text.configure(state="normal")
                 self.log_text.insert("end", message)
                 self.log_text.see("end")
@@ -1765,6 +1779,7 @@ class RelicGuiApp:
             f"[GUI] 動画処理を開始します: {video_dir} -> {results_dir} ({len(state_snapshot.queue_entries)} 件)"
         )
         self._last_pipeline_error = None
+        self._pipeline_error_messages.clear()
         token = self._start_progress("動画処理を準備中...")
         self._pipeline_progress_token = token
 
