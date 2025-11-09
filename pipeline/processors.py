@@ -24,6 +24,9 @@ def process_video(
     task: VideoTask,
     *,
     ocr_upsample: float,
+    ocr_engine: str,
+    gcp_credentials: str | None,
+    gcp_credentials_filename: str | None,
     override_colors: Mapping[Path, str],
     save_full_frames: bool,
     csv_column_visibility: Optional[dict[str, object]],
@@ -64,6 +67,9 @@ def process_video(
         column_visibility=csv_column_visibility,
         master_csv_path=master_csv_path,
         relic_type=task_relic_type,
+        ocr_engine=ocr_engine,
+        gcp_credentials=gcp_credentials,
+        gcp_credentials_filename=gcp_credentials_filename,
     )
     reporter.advance(f"{video_name} のOCR/マッチング完了")
     print(f"[✓] {task.crops_dir} の結果を {task.csv_path} に出力しました")

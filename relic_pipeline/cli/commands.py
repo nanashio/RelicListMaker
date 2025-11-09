@@ -71,6 +71,9 @@ def process_images_command(
             corrections_csv=getattr(args, "corrections_csv", None),
             item_color=getattr(args, "item_color", None),
             column_visibility=column_visibility,
+            ocr_engine=str(getattr(args, "ocr_engine", "tesseract")),
+            gcp_credentials=getattr(args, "gcp_credentials", None),
+            gcp_credentials_filename=getattr(args, "gcp_credentials_filename", None),
         )
     except Exception as error:  # pragma: no cover - defensive CLI wrapper
         print(f"[ERROR] OCR 処理に失敗しました: {error}")
