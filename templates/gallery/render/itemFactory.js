@@ -277,10 +277,12 @@
             const symbols = getLabelSymbols();
             const labelSymbols = Array.isArray(symbols) ? symbols : [];
             labelSymbols.forEach((symbol, index) => {
+                const slotIndex = index + 1;
+                const resolvedSymbol = symbol || `Slot ${slotIndex}`;
                 const effect = createEffect(
                     context.record,
-                    index + 1,
-                    symbol || `Slot ${index + 1}`,
+                    slotIndex,
+                    resolvedSymbol,
                     context.imageName,
                     context.recordIndex
                 );
@@ -288,6 +290,20 @@
                     hasEffect = true;
                     appendToFragment(fragment, effect);
                     nodes.push(effect);
+                }
+
+                const demerit = createEffect(
+                    context.record,
+                    slotIndex,
+                    resolvedSymbol,
+                    context.imageName,
+                    context.recordIndex,
+                    { kind: 'demerit' }
+                );
+                if (demerit) {
+                    hasEffect = true;
+                    appendToFragment(fragment, demerit);
+                    nodes.push(demerit);
                 }
             });
 

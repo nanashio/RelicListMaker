@@ -1867,36 +1867,48 @@
 
 
 
-    function updateRecordCorrection(recordIndex, slotIndex, value) {
+    function updateRecordCorrection(recordIndex, slotIndex, value, kind = 'effect') {
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
             return false;
         }
-        const key = `Effect${slotIndex}Correction`;
+        const key = kind === 'demerit' ? `Demerit${slotIndex}Correction` : `Effect${slotIndex}Correction`;
         return updateRecordField(recordIndex, key, value);
     }
-    function updateRecordLevelCorrection(recordIndex, slotIndex, value) {
+    function updateRecordLevelCorrection(recordIndex, slotIndex, value, kind = 'effect') {
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
+            return false;
+        }
+        if (kind === 'demerit') {
             return false;
         }
         const key = `Effect${slotIndex}LevelCorrection`;
         return updateRecordField(recordIndex, key, value);
     }
-    function updateRecordLevelValue(recordIndex, slotIndex, value) {
+    function updateRecordLevelValue(recordIndex, slotIndex, value, kind = 'effect') {
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
+            return false;
+        }
+        if (kind === 'demerit') {
             return false;
         }
         const key = `Effect${slotIndex}Level`;
         return updateRecordField(recordIndex, key, value);
     }
-    function updateRecordLevelOptions(recordIndex, slotIndex, value) {
+    function updateRecordLevelOptions(recordIndex, slotIndex, value, kind = 'effect') {
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
+            return false;
+        }
+        if (kind === 'demerit') {
             return false;
         }
         const key = `Effect${slotIndex}LevelOptions`;
         return updateRecordField(recordIndex, key, value);
     }
-    function updateRecordLevelSuppressed(recordIndex, slotIndex, suppressed) {
+    function updateRecordLevelSuppressed(recordIndex, slotIndex, suppressed, kind = 'effect') {
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
+            return false;
+        }
+        if (kind === 'demerit') {
             return false;
         }
         const key = `Effect${slotIndex}LevelSuppressed`;
@@ -1913,7 +1925,10 @@
         if (!record) {
             return false;
         }
-        const key = `Effect${indexes.slotIndex}Status`;
+        const key =
+            indexes.kind === 'demerit'
+                ? `Demerit${indexes.slotIndex}Status`
+                : `Effect${indexes.slotIndex}Status`;
         if (record[key] !== status) {
             record[key] = status;
             storageManager.scheduleSave();

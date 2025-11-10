@@ -1626,6 +1626,32 @@ describe('gallery effect view model', () => {
     assert.equal(context.correctionValue, 'Fix');
   });
 
+  test('createEffectContext handles demerit entries', () => {
+    const record = {
+      Demerit1: 'Heavy Burden',
+      DemeritRawText1: 'Heavy Burden',
+      DemeritScore1: '55.2',
+      Demerit1Correction: 'Adjusted Burden',
+      Demerit1Status: 'pending'
+    };
+
+    const context = viewModel.createEffectContext(record, 1, 'Ⅰ', 'Penalty.png', 2, {
+      normalizeStatus: (value) => value,
+      kind: 'demerit'
+    });
+
+    assert.ok(context, 'context should be created for demerit records');
+    assert.equal(context.isDemerit, true);
+    assert.equal(context.effectKind, 'demerit');
+    assert.equal(context.predictionText, 'Heavy Burden');
+    assert.equal(context.rawText, 'Heavy Burden');
+    assert.equal(context.scoreDisplay, '55.2%');
+    assert.equal(context.statusValue, 'corrected');
+    assert.equal(context.correctionValue, 'Adjusted Burden');
+    assert.deepEqual(context.levelOptions, []);
+    assert.equal(context.lowConfidence, true);
+  });
+
   test('buildLevelChoices merges original and correction values', () => {
     const context = {
       levelOptions: ['High', 'Low', 'High'],
@@ -1721,6 +1747,21 @@ describe('gallery effect factory', () => {
     assert.ok(applyCalls.length === 1, 'applyMasterLevelOptions should be invoked');
     const [, , effectName] = applyCalls[0];
     assert.equal(effectName, '炎攻撃力上昇');
+  });
+
+  test('createEffect builds demerit entry without level controls', () => {
+    const record = {
+      Demerit1: 'Penalty',
+      DemeritRawText1: 'Penalty OCR',
+      DemeritScore1: 42.5,
+      Demerit1Status: 'pending'
+    };
+    const effect = effectFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
+    assert.ok(effect, 'demerit effect should be created');
+    assert.equal(effect.classList.contains('effect--demerit'), true);
+    assert.equal(effect.dataset.kind, 'demerit');
+    assert.equal(effect.querySelector('.level-input'), null);
+    assert.equal(applyCalls.length, 0, 'applyMasterLevelOptions should not run for demerits');
   });
 
   test('updateEffectStatus updates dataset and button selection', () => {
@@ -1844,10 +1885,11 @@ describe('gallery item factory', () => {
         bindCalls.push(image);
         image.dataset.bound = 'true';
       },
-      createEffect: (record, slot, symbol, imageName, recordIndex) => {
-        effectCalls.push({ record, slot, symbol, imageName, recordIndex });
+      createEffect: (record, slot, symbol, imageName, recordIndex, options) => {
+        effectCalls.push({ record, slot, symbol, imageName, recordIndex, options });
         const element = new MockElement('section', `effect slot-${slot}`);
         element.dataset.slot = String(slot);
+        element.dataset.kind = options && options.kind ? options.kind : 'effect';
         return element;
       },
       colorOptions: [
@@ -1877,12 +1919,19 @@ describe('gallery item factory', () => {
     const item = itemFactory.createItem(record, 0, 1, 5);
     assert.ok(item, 'item should be created');
     assert.equal(item.dataset.imageName, 'alpha.png');
-    assert.equal(effectCalls.length, 2, 'effects should be requested for each symbol');
+    assert.equal(effectCalls.length, 4, 'effect and demerit entries should be requested for each symbol');
     assert.deepEqual(
-      effectCalls.map((entry) => ({ symbol: entry.symbol, slot: entry.slot, imageName: entry.imageName })),
+      effectCalls.map((entry) => ({
+        symbol: entry.symbol,
+        slot: entry.slot,
+        imageName: entry.imageName,
+        kind: entry.options && entry.options.kind ? entry.options.kind : 'effect'
+      })),
       [
-        { symbol: 'Ⅰ', slot: 1, imageName: 'alpha.png' },
-        { symbol: 'Ⅱ', slot: 2, imageName: 'alpha.png' }
+        { symbol: 'Ⅰ', slot: 1, imageName: 'alpha.png', kind: 'effect' },
+        { symbol: 'Ⅰ', slot: 1, imageName: 'alpha.png', kind: 'demerit' },
+        { symbol: 'Ⅱ', slot: 2, imageName: 'alpha.png', kind: 'effect' },
+        { symbol: 'Ⅱ', slot: 2, imageName: 'alpha.png', kind: 'demerit' }
       ]
     );
 
@@ -1902,8 +1951,16 @@ describe('gallery item factory', () => {
     assert.equal(datasetBadge.attributes.title, 'Merged A (runs/a)');
 
     const rightColumn = item.children[1];
-    assert.equal(rightColumn.children.length, 2, 'two effects should be appended');
+    assert.equal(
+      rightColumn.children.length,
+      4,
+      'effect and demerit entries should be appended for each slot'
+    );
     assert.ok(rightColumn.children.every((child) => child.tagName === 'SECTION'));
+    assert.deepEqual(
+      rightColumn.children.map((child) => child.dataset.kind || 'effect'),
+      ['effect', 'demerit', 'effect', 'demerit']
+    );
   });
 
   test('createItem falls back to placeholder when no effect is returned', () => {

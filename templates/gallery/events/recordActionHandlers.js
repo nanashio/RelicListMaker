@@ -140,10 +140,21 @@
         }
 
         function resetLevelSelection(effect, indexes, correctionValue, { updateCandidates } = {}) {
+            if (effect && effect.dataset && effect.dataset.kind === 'demerit') {
+                effect.dataset.levelCorrection = '';
+                effect.dataset.levelCorrectionValue = '';
+                effect.dataset.level = '';
+                if (updateCandidates) {
+                    updateCandidates([]);
+                } else {
+                    setCorrectionLevelCandidates(effect, []);
+                }
+                return false;
+            }
             let levelCleared = false;
             if (indexes) {
                 levelCleared = Boolean(
-                    updateRecordLevelCorrection(indexes.recordIndex, indexes.slotIndex, '')
+                    updateRecordLevelCorrection(indexes.recordIndex, indexes.slotIndex, '', indexes.kind)
                 );
             }
             effect.dataset.levelCorrection = '';
@@ -263,34 +274,64 @@
                 return;
             }
 
+            const isDemerit = indexes.kind === 'demerit';
+
             const nextStatus = selected ? 'corrected' : 'pending';
             const statusChanged = recordStatusChange(effect, nextStatus);
-            const correctionChanged = updateRecordCorrection(indexes.recordIndex, indexes.slotIndex, selected);
-            effect.dataset.correction = toDatasetValue(selected);
-            effect.dataset.preserveOriginalLevel = selected ? 'false' : 'true';
-            updateEffectStatus(effect, nextStatus);
-
-            const suppressLevel = Boolean(selected);
-            const suppressedChanged = updateRecordLevelSuppressed(
+            const correctionChanged = updateRecordCorrection(
                 indexes.recordIndex,
                 indexes.slotIndex,
-                suppressLevel
+                selected,
+                indexes.kind
             );
+            effect.dataset.correction = toDatasetValue(selected);
+            if (!isDemerit) {
+                effect.dataset.preserveOriginalLevel = selected ? 'false' : 'true';
+            }
+            updateEffectStatus(effect, nextStatus);
 
-            let levelStorageCleared = false;
-            if (suppressLevel) {
-                const clearedLevelValue = updateRecordLevelValue(indexes.recordIndex, indexes.slotIndex, '');
-                const clearedLevelOptions = updateRecordLevelOptions(indexes.recordIndex, indexes.slotIndex, '');
-                levelStorageCleared = Boolean(clearedLevelValue || clearedLevelOptions);
-                setLevelOptions(effect, []);
+            let shouldSchedule = correctionChanged;
+
+            if (!isDemerit) {
+                const suppressLevel = Boolean(selected);
+                const suppressedChanged = updateRecordLevelSuppressed(
+                    indexes.recordIndex,
+                    indexes.slotIndex,
+                    suppressLevel,
+                    indexes.kind
+                );
+
+                let levelStorageCleared = false;
+                if (suppressLevel) {
+                    const clearedLevelValue = updateRecordLevelValue(
+                        indexes.recordIndex,
+                        indexes.slotIndex,
+                        '',
+                        indexes.kind
+                    );
+                    const clearedLevelOptions = updateRecordLevelOptions(
+                        indexes.recordIndex,
+                        indexes.slotIndex,
+                        '',
+                        indexes.kind
+                    );
+                    levelStorageCleared = Boolean(clearedLevelValue || clearedLevelOptions);
+                    setLevelOptions(effect, []);
+                } else {
+                    restoreLevelOptions(effect);
+                }
+
+                const levelCleared = resetLevelSelection(effect, indexes, selected);
+                shouldSchedule =
+                    correctionChanged || suppressedChanged || levelStorageCleared || levelCleared;
             } else {
-                restoreLevelOptions(effect);
+                effect.dataset.levelCorrection = '';
+                effect.dataset.levelCorrectionValue = '';
+                effect.dataset.level = '';
             }
 
-            const levelCleared = resetLevelSelection(effect, indexes, selected);
-
             refreshItemFromEffect(effect);
-            if (!statusChanged && (correctionChanged || suppressedChanged || levelStorageCleared || levelCleared)) {
+            if (!statusChanged && shouldSchedule) {
                 safeScheduleSave();
             }
             safeApplyFilters();
@@ -306,11 +347,16 @@
                 return;
             }
             const indexes = getEffectIndexes(effect);
-            if (!indexes) {
+            if (!indexes || indexes.kind === 'demerit') {
                 return;
             }
 
-            const levelChanged = updateRecordLevelCorrection(indexes.recordIndex, indexes.slotIndex, selected);
+            const levelChanged = updateRecordLevelCorrection(
+                indexes.recordIndex,
+                indexes.slotIndex,
+                selected,
+                indexes.kind
+            );
             effect.dataset.levelCorrection = toDatasetValue(selected);
             effect.dataset.levelCorrectionValue = selected;
 
@@ -358,26 +404,54 @@
             if (next === 'pass') {
                 const indexes = getEffectIndexes(effect);
                 if (indexes) {
-                    const correctionChanged = updateRecordCorrection(indexes.recordIndex, indexes.slotIndex, '');
-                    const levelChanged = updateRecordLevelCorrection(indexes.recordIndex, indexes.slotIndex, '');
-                    const suppressChanged = updateRecordLevelSuppressed(indexes.recordIndex, indexes.slotIndex, false);
+                    const isDemerit = indexes.kind === 'demerit';
+                const correctionChanged = updateRecordCorrection(
+                    indexes.recordIndex,
+                    indexes.slotIndex,
+                    '',
+                    indexes.kind
+                );
+                    let levelChanged = false;
+                    let suppressChanged = false;
 
                     effect.dataset.correction = '';
                     effect.dataset.levelCorrection = '';
                     effect.dataset.levelCorrectionValue = '';
-                    effect.dataset.preserveOriginalLevel = 'true';
-                    effect.dataset.level = computeEffectiveLevel(effect);
+                    effect.dataset.level = '';
 
-                    restoreLevelOptions(effect);
-                    resetCorrectionInput(effect);
+                    if (!isDemerit) {
+                        levelChanged = updateRecordLevelCorrection(
+                            indexes.recordIndex,
+                            indexes.slotIndex,
+                            '',
+                            indexes.kind
+                        );
+                        suppressChanged = updateRecordLevelSuppressed(
+                            indexes.recordIndex,
+                            indexes.slotIndex,
+                            false,
+                            indexes.kind
+                        );
 
-                    const levelInput = effect.querySelector ? effect.querySelector('.level-input') : null;
-                    if (levelInput) {
-                        levelInput.value = '';
-                        rebuildLevelSelectOptions(effect, levelInput);
+                        effect.dataset.preserveOriginalLevel = 'true';
+                        effect.dataset.level = computeEffectiveLevel(effect);
+
+                        restoreLevelOptions(effect);
+                        resetCorrectionInput(effect);
+
+                        const levelInput = effect.querySelector
+                            ? effect.querySelector('.level-input')
+                            : null;
+                        if (levelInput) {
+                            levelInput.value = '';
+                            rebuildLevelSelectOptions(effect, levelInput);
+                        }
+                        setCorrectionLevelCandidates(effect, []);
+                        updateLevelBadge(effect);
+                    } else {
+                        resetCorrectionInput(effect);
+                        setCorrectionLevelCandidates(effect, []);
                     }
-                    setCorrectionLevelCandidates(effect, []);
-                    updateLevelBadge(effect);
 
                     changeDetected = correctionChanged || levelChanged || suppressChanged;
                 }

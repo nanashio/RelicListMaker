@@ -122,10 +122,13 @@
             return [];
         }
 
-        function createEffect(record, slot, symbol, imageName, recordIndex) {
+        function createEffect(record, slot, symbol, imageName, recordIndex, options = {}) {
+            const kindOption =
+                options && typeof options.kind === 'string' ? options.kind : undefined;
             const context = createEffectContext(record, slot, symbol, imageName, recordIndex, {
                 normalizeStatus,
-                parseLevelOptions: parseLevelOptionsImpl
+                parseLevelOptions: parseLevelOptionsImpl,
+                kind: kindOption
             });
             if (!context) {
                 return null;
@@ -143,17 +146,23 @@
             const decisionElements = createEffectDecision(effect, context);
             effect.appendChild(decisionElements.container);
 
-            applyMasterLevelOptions(effect, decisionElements.levelInput, context.effectNameForLevels, {
-                setCorrectionLevelCandidates,
-                rebuildLevelSelectOptions,
-                sanitizeLevelList,
-                sortLevelsAscending
-            });
+            if (!context.isDemerit && decisionElements.levelInput) {
+                populateEffectLevelOptions(effect, decisionElements.levelInput, context);
+
+                applyMasterLevelOptions(effect, decisionElements.levelInput, context.effectNameForLevels, {
+                    setCorrectionLevelCandidates,
+                    rebuildLevelSelectOptions,
+                    sanitizeLevelList,
+                    sortLevelsAscending
+                });
+            }
 
             if (datasetState.kind === 'merged') {
                 decisionElements.passButton.disabled = true;
                 decisionElements.correctionInput.disabled = true;
-                decisionElements.levelInput.disabled = true;
+                if (decisionElements.levelInput) {
+                    decisionElements.levelInput.disabled = true;
+                }
             }
 
             updateEffectStatus(effect, context.statusValue);
@@ -224,15 +233,15 @@
 
             const correctionInput = createCorrectionInput(context.correctionValue, context.predictionText);
 
-            const levelInput = document.createElement('select');
-            levelInput.id = `level-input-${context.recordIndex}-${context.slot}`;
-            levelInput.className = 'level-input';
-
-            populateEffectLevelOptions(effect, levelInput, context);
-
             decisionRow.appendChild(passButton);
             decisionRow.appendChild(correctionInput);
-            decisionRow.appendChild(levelInput);
+            let levelInput = null;
+            if (!context.isDemerit) {
+                levelInput = document.createElement('select');
+                levelInput.id = `level-input-${context.recordIndex}-${context.slot}`;
+                levelInput.className = 'level-input';
+                decisionRow.appendChild(levelInput);
+            }
             decision.appendChild(decisionRow);
 
             return {
@@ -476,7 +485,8 @@
             if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
                 return null;
             }
-            return { recordIndex, slotIndex };
+            const kind = effect.dataset.kind === 'demerit' ? 'demerit' : 'effect';
+            return { recordIndex, slotIndex, kind };
         }
 
         return {
