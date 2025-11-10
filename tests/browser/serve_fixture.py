@@ -9,6 +9,8 @@ import sys
 import zlib
 from pathlib import Path
 
+DEFAULT_ITEM_IMAGE_VIEW_BOX = "inset(0px 180px 0px 0px)"  # generate_gallery.DEFAULT_ITEM_IMAGE_VIEW_BOX と同期すること
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
@@ -81,8 +83,14 @@ def _build_fixture_tree(base_dir: Path) -> None:
         .replace("__MASTER_LEVELS__", "{}")
         .replace("__MASTER_LEVELS_BY_TYPE__", "{}")
         .replace("__MASTER_CSV_MAP__", "{}")
+        .replace("__MASTER_DEMERIT_CSV__", "")
+        .replace("__MASTER_DEMERIT_JSON__", "")
+        .replace("__MASTER_DEMERIT_OPTIONS__", "[]")
+        .replace("__MASTER_DEMERIT_OPTIONS_MAP__", "{}")
+        .replace("__MASTER_DEMERIT_CSV_MAP__", "{}")
         .replace("__DATASETS__", "[]")
         .replace("__ACTIVE_DATASET__", "0")
+        .replace("__ITEM_IMAGE_VIEW_BOX__", DEFAULT_ITEM_IMAGE_VIEW_BOX)
     )
     (base_dir / "sample_viewer.html").write_text(viewer_html, encoding="utf-8")
 
