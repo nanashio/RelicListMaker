@@ -182,7 +182,8 @@
                 return;
             }
             const predictionDefault = effect.dataset.predictionValue || '';
-            const replacement = createCorrectionInput('', predictionDefault);
+            const isDemerit = Boolean(effect && effect.dataset && effect.dataset.kind === 'demerit');
+            const replacement = createCorrectionInput({ isDemerit }, '', predictionDefault);
             if (replacement && typeof input.replaceWith === 'function') {
                 input.replaceWith(replacement);
             }

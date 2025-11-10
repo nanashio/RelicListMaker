@@ -18,6 +18,8 @@ LABEL_SYMBOLS = ["①", "②", "③"]
 DEFAULT_ITEM_IMAGE_VIEW_BOX = "inset(0px 180px 0px 0px)"
 DEFAULT_MASTER_CSV = str(templates_path("master_relics.csv"))
 DEFAULT_MASTER_JSON = "master_relics.json"
+DEFAULT_MASTER_DEMERIT_CSV = str(templates_path("master_relics_demerit.csv"))
+DEFAULT_MASTER_DEMERIT_JSON = "master_relics_demerit.json"
 TEMPLATE_HTML_PATH = str(templates_path("gallery.html"))
 TEMPLATE_CSS_PATH = str(templates_path("gallery.css"))
 TEMPLATE_INDEX_JS_PATH = str(templates_path("gallery/index.js"))
@@ -38,6 +40,11 @@ class GalleryPayload:
     master_levels: Dict[str, List[str]]
     master_levels_by_type: Dict[str, Dict[str, List[str]]]
     master_csv_map: Dict[str, str]
+    master_demerit_csv: str
+    master_demerit_json: str
+    master_demerit_options: List[str]
+    master_demerit_options_by_type: Dict[str, List[str]]
+    master_demerit_csv_map: Dict[str, str]
     datasets: List[dict]
     active_dataset_index: int
     item_image_view_box: str
@@ -188,6 +195,12 @@ def _resolve_master_csv_for_type(relic_type: str) -> Optional[str]:
     return None
 
 
+def _resolve_master_demerit_csv_for_type(relic_type: str) -> Optional[str]:
+    if relic_type == "deep":
+        return str(templates_path("master_relics_demerit.csv"))
+    return None
+
+
 def _merge_level_maps(
     base: Optional[Dict[str, List[str]]],
     addition: Optional[Dict[str, List[str]]],
@@ -215,7 +228,13 @@ KNOWN_RELIC_TYPES: Dict[str, str] = {
 def _collect_master_data_by_type(
     dataset_entries: Sequence[dict],
     output_dir: str,
-) -> tuple[Dict[str, List[str]], Dict[str, Dict[str, List[str]]], Dict[str, str]]:
+) -> tuple[
+    Dict[str, List[str]],
+    Dict[str, Dict[str, List[str]]],
+    Dict[str, str],
+    Dict[str, List[str]],
+    Dict[str, str],
+]:
     relic_types: set[str] = set(KNOWN_RELIC_TYPES.keys())
     for entry in dataset_entries or []:
         if not isinstance(entry, dict):
@@ -227,17 +246,21 @@ def _collect_master_data_by_type(
     options_map: Dict[str, List[str]] = {}
     levels_map: Dict[str, Dict[str, List[str]]] = {}
     csv_map: Dict[str, str] = {}
+    demerit_options_map: Dict[str, List[str]] = {}
+    demerit_csv_map: Dict[str, str] = {}
 
     for relic_type in sorted(relic_types):
         candidate_paths: List[str] = []
+        demerit_candidates: List[str] = []
         csv_path = _resolve_master_csv_for_type(relic_type)
         if csv_path:
             candidate_paths.append(csv_path)
         elif relic_type in KNOWN_RELIC_TYPES:
             candidate_paths.append(str(templates_path(KNOWN_RELIC_TYPES[relic_type])))
 
-        if relic_type == "deep":
-            candidate_paths.append(str(templates_path("master_relics_demerit.csv")))
+        demerit_csv_path = _resolve_master_demerit_csv_for_type(relic_type)
+        if demerit_csv_path:
+            demerit_candidates.append(demerit_csv_path)
 
         merged_effects: List[str] = []
         merged_levels: Dict[str, List[str]] = {}
@@ -256,9 +279,6 @@ def _collect_master_data_by_type(
             if levels:
                 merged_levels = _merge_level_maps(merged_levels, levels)
 
-        if not merged_effects and not merged_levels:
-            continue
-
         if merged_effects:
             options_map[relic_type] = merged_effects
         if merged_levels:
@@ -273,11 +293,35 @@ def _collect_master_data_by_type(
                 rel_path = rel_path.replace(os.sep, "/")
             csv_map[relic_type] = rel_path
 
+        demerit_effects: List[str] = []
+        recorded_demerit: str | None = None
+        for candidate in demerit_candidates:
+            if not candidate or not os.path.exists(candidate):
+                continue
+            if recorded_demerit is None:
+                recorded_demerit = candidate
+            effects, _levels = load_master_effects_and_levels(candidate)
+            if effects:
+                for effect in effects:
+                    if effect not in demerit_effects:
+                        demerit_effects.append(effect)
+
+        if demerit_effects:
+            demerit_options_map[relic_type] = demerit_effects
+        if recorded_demerit:
+            try:
+                rel_path = os.path.relpath(recorded_demerit, output_dir)
+            except ValueError:
+                rel_path = os.path.basename(recorded_demerit)
+            if os.sep != "/":
+                rel_path = rel_path.replace(os.sep, "/")
+            demerit_csv_map[relic_type] = rel_path
+
     levels_map_serializable: Dict[str, Dict[str, List[str]]] = {}
     for key, mapping in levels_map.items():
         levels_map_serializable[key] = {effect: list(values) for effect, values in mapping.items()}
 
-    return options_map, levels_map_serializable, csv_map
+    return options_map, levels_map_serializable, csv_map, demerit_options_map, demerit_csv_map
 
 
 def _resolve_asset_path(default_path: str, override: Optional[str]) -> str:
@@ -307,6 +351,9 @@ def build_gallery_payload(
     master_csv_path: Optional[str],
     master_json_path: Optional[str],
     master_options: Optional[Sequence[str]],
+    master_demerit_csv_path: Optional[str],
+    master_demerit_json_path: Optional[str],
+    master_demerit_options: Optional[Sequence[str]],
     datasets,
     active_dataset_index: int,
     item_image_view_box: Optional[str],
@@ -348,6 +395,10 @@ def build_gallery_payload(
     master_json_rel_path = ""
     master_levels_map: Dict[str, List[str]] = {}
     master_effects_from_csv: List[str] = []
+    master_demerit_options_list = normalize_master_values(master_demerit_options)
+    master_demerit_csv_rel_path = ""
+    master_demerit_json_rel_path = ""
+    master_demerit_effects_from_csv: List[str] = []
 
     master_csv_abs: Optional[str] = None
     if master_csv_path:
@@ -400,9 +451,74 @@ def build_gallery_payload(
     if not master_options_list and master_csv_abs:
         master_options_list = load_master_csv(master_csv_abs)
 
+    master_demerit_csv_abs: Optional[str] = None
+    if master_demerit_csv_path:
+        candidate = (
+            master_demerit_csv_path
+            if os.path.isabs(master_demerit_csv_path)
+            else os.path.abspath(os.path.join(output_dir_abs, master_demerit_csv_path))
+        )
+        if os.path.exists(candidate):
+            master_demerit_csv_abs = candidate
+            try:
+                master_demerit_csv_rel_path = os.path.relpath(candidate, output_dir_abs)
+            except ValueError:
+                master_demerit_csv_rel_path = os.path.basename(candidate)
+        else:
+            warnings.append(f"[!] デメリットマスターデータ(CSV)が見つかりません: {candidate}")
+    if master_demerit_csv_abs is None:
+        fallback_csv = (
+            DEFAULT_MASTER_DEMERIT_CSV
+            if os.path.isabs(DEFAULT_MASTER_DEMERIT_CSV)
+            else os.path.abspath(os.path.join(output_dir_abs, DEFAULT_MASTER_DEMERIT_CSV))
+        )
+        if os.path.exists(fallback_csv):
+            master_demerit_csv_abs = fallback_csv
+            try:
+                master_demerit_csv_rel_path = os.path.relpath(fallback_csv, output_dir_abs)
+            except ValueError:
+                master_demerit_csv_rel_path = os.path.basename(fallback_csv)
+        elif DEFAULT_MASTER_DEMERIT_CSV:
+            warnings.append(
+                f"[!] 既定のデメリットマスターデータ(CSV)が見つかりません: {fallback_csv}"
+            )
+
+    if master_demerit_csv_abs:
+        master_demerit_effects_from_csv = load_master_csv(master_demerit_csv_abs)
+
+    if not master_demerit_options_list and master_demerit_json_path:
+        if os.path.isabs(master_demerit_json_path):
+            master_demerit_json_abs = master_demerit_json_path
+        else:
+            master_demerit_json_abs = os.path.abspath(
+                os.path.join(output_dir_abs, master_demerit_json_path)
+            )
+        if os.path.exists(master_demerit_json_abs):
+            try:
+                master_demerit_json_rel_path = os.path.relpath(master_demerit_json_abs, output_dir_abs)
+            except ValueError:
+                master_demerit_json_rel_path = os.path.basename(master_demerit_json_abs)
+            master_demerit_options_list = load_master_json(master_demerit_json_abs)
+        else:
+            warnings.append(
+                f"[!] デメリットマスターデータ(JSON)が見つかりません: {master_demerit_json_abs}"
+            )
+
+    if not master_demerit_options_list and master_demerit_effects_from_csv:
+        master_demerit_options_list = master_demerit_effects_from_csv
+
+    if not master_demerit_options_list and master_demerit_csv_abs:
+        master_demerit_options_list = load_master_csv(master_demerit_csv_abs)
+
     dataset_entries = _normalize_dataset_entries(datasets, output_dir_abs)
 
-    master_options_by_type, master_levels_by_type, master_csv_map = _collect_master_data_by_type(
+    (
+        master_options_by_type,
+        master_levels_by_type,
+        master_csv_map,
+        master_demerit_options_by_type,
+        master_demerit_csv_map,
+    ) = _collect_master_data_by_type(
         dataset_entries,
         output_dir_abs,
     )
@@ -411,6 +527,11 @@ def build_gallery_payload(
     for options in master_options_by_type.values():
         aggregated_options.extend(options)
     master_options_list = normalize_master_values(aggregated_options)
+
+    aggregated_demerit_options: List[str] = list(master_demerit_options_list or [])
+    for options in master_demerit_options_by_type.values():
+        aggregated_demerit_options.extend(options)
+    master_demerit_options_list = normalize_master_values(aggregated_demerit_options)
 
     combined_levels = _merge_level_maps(master_levels_map, None)
     for levels in master_levels_by_type.values():
@@ -485,6 +606,11 @@ def build_gallery_payload(
         master_levels=master_levels_map,
         master_levels_by_type=master_levels_by_type,
         master_csv_map=master_csv_map,
+        master_demerit_csv=master_demerit_csv_rel_path,
+        master_demerit_json=master_demerit_json_rel_path,
+        master_demerit_options=list(master_demerit_options_list or []),
+        master_demerit_options_by_type=master_demerit_options_by_type,
+        master_demerit_csv_map=master_demerit_csv_map,
         datasets=dataset_entries,
         active_dataset_index=active_dataset_index,
         item_image_view_box=resolved_view_box,
@@ -506,12 +632,15 @@ def generate_html(
     label_symbols=None,
     master_csv_path: Optional[str] = None,
     master_json_path: Optional[str] = None,
+    master_demerit_csv_path: Optional[str] = None,
+    master_demerit_json_path: Optional[str] = None,
     template_path: Optional[str] = None,
     css_template_path: Optional[str] = None,
     js_template_path: Optional[str] = None,
     css_output_name: Optional[str] = None,
     js_output_name: Optional[str] = None,
     master_options: Optional[Sequence[str]] = None,
+    master_demerit_options: Optional[Sequence[str]] = None,
     datasets=None,
     active_dataset_index: int = 0,
     item_image_view_box: Optional[str] = None,
@@ -529,6 +658,9 @@ def generate_html(
         master_csv_path=master_csv_path,
         master_json_path=master_json_path,
         master_options=master_options,
+        master_demerit_csv_path=master_demerit_csv_path,
+        master_demerit_json_path=master_demerit_json_path,
+        master_demerit_options=master_demerit_options,
         datasets=datasets,
         active_dataset_index=active_dataset_index,
         item_image_view_box=item_image_view_box,
@@ -559,6 +691,9 @@ def generate_html(
     core_js_reference = gallery_assets.cache_bust_reference(assets.core_js)
 
     embed_options = payload.master_options if not payload.master_json else []
+    embed_demerit_options = (
+        payload.master_demerit_options if not payload.master_demerit_json else []
+    )
 
     replacements = {
         "__RESULTS_CSV__": _escape_attr(payload.results_csv),
@@ -571,6 +706,17 @@ def generate_html(
         "__MASTER_LEVELS__": _escape_attr(json.dumps(payload.master_levels, ensure_ascii=False)),
         "__MASTER_LEVELS_BY_TYPE__": _escape_attr(json.dumps(payload.master_levels_by_type, ensure_ascii=False)),
         "__MASTER_CSV_MAP__": _escape_attr(json.dumps(payload.master_csv_map, ensure_ascii=False)),
+        "__MASTER_DEMERIT_CSV__": _escape_attr(payload.master_demerit_csv),
+        "__MASTER_DEMERIT_JSON__": _escape_attr(payload.master_demerit_json),
+        "__MASTER_DEMERIT_OPTIONS__": _escape_attr(
+            json.dumps(embed_demerit_options, ensure_ascii=False)
+        ),
+        "__MASTER_DEMERIT_OPTIONS_MAP__": _escape_attr(
+            json.dumps(payload.master_demerit_options_by_type, ensure_ascii=False)
+        ),
+        "__MASTER_DEMERIT_CSV_MAP__": _escape_attr(
+            json.dumps(payload.master_demerit_csv_map, ensure_ascii=False)
+        ),
         "__CSS_FILE__": _escape_attr(css_reference),
         "__JS_FILE__": _escape_attr(index_reference),
         "__CORE_JS__": _escape_attr(core_js_reference),

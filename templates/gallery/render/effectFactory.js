@@ -4,6 +4,7 @@
             state,
             datasetState,
             masterDatalistId = 'master-relic-options',
+            demeritDatalistId = 'master-demerit-options',
             createElement,
             sanitizeLevelList,
             sortLevelsAscending,
@@ -125,7 +126,6 @@
         function createEffect(record, slot, symbol, imageName, recordIndex, options = {}) {
             const kindOption =
                 options && typeof options.kind === 'string' ? options.kind : undefined;
-            const skipNested = Boolean(options && options.skipDemerit);
             const context = createEffectContext(record, slot, symbol, imageName, recordIndex, {
                 normalizeStatus,
                 parseLevelOptions: parseLevelOptionsImpl,
@@ -136,21 +136,6 @@
             }
 
             const effect = buildEffectElement(context, { nested: false });
-
-            if (!context.isDemerit && !skipNested) {
-                const nestedDemerit = createNestedDemerit(
-                    record,
-                    slot,
-                    symbol,
-                    imageName,
-                    recordIndex
-                );
-                if (nestedDemerit) {
-                    effect.classList.add('effect--with-demerit');
-                    effect.appendChild(nestedDemerit);
-                }
-            }
-
             return effect;
         }
 
@@ -189,28 +174,6 @@
             updateEffectStatus(effect, context.statusValue);
 
             return effect;
-        }
-
-        function createNestedDemerit(record, slot, symbol, imageName, recordIndex) {
-            const demeritContext = createEffectContext(
-                record,
-                slot,
-                symbol,
-                imageName,
-                recordIndex,
-                {
-                    normalizeStatus,
-                    parseLevelOptions: parseLevelOptionsImpl,
-                    kind: 'demerit'
-                }
-            );
-            if (!demeritContext) {
-                return null;
-            }
-
-            const demeritElement = buildEffectElement(demeritContext, { nested: true });
-            demeritElement.classList.add('effect--nested-demerit');
-            return demeritElement;
         }
 
         function createEffectElement(context, options = {}) {
@@ -278,7 +241,7 @@
             passButton.type = 'button';
             passButton.dataset.value = 'pass';
 
-            const correctionInput = createCorrectionInput(context.correctionValue, context.predictionText);
+            const correctionInput = createCorrectionInput(context, context.correctionValue, context.predictionText);
 
             decisionRow.appendChild(passButton);
             decisionRow.appendChild(correctionInput);
@@ -398,15 +361,19 @@
             });
         }
 
-        function createCorrectionInput(selectedValue, fallbackValue) {
+        function createCorrectionInput(context, selectedValue, fallbackValue) {
             const input = document.createElement('input');
             input.type = 'search';
             input.className = 'correction-input';
-            if (state.masterOptions.length) {
-                input.setAttribute('list', masterDatalistId);
-                input.placeholder = 'master_relicsから選択';
+            const isDemerit = Boolean(context && context.isDemerit);
+            const optionsSource = isDemerit ? state.masterDemeritOptions : state.masterOptions;
+            const hasOptions = Array.isArray(optionsSource) && optionsSource.length > 0;
+            if (hasOptions) {
+                const datalistId = isDemerit ? demeritDatalistId : masterDatalistId;
+                input.setAttribute('list', datalistId);
+                input.placeholder = isDemerit ? 'デメリット候補から選択' : 'master_relicsから選択';
             } else {
-                input.placeholder = 'マスターデータ未設定';
+                input.placeholder = isDemerit ? 'デメリットデータ未設定' : 'マスターデータ未設定';
                 input.disabled = true;
             }
             const initialValue = selectedValue || fallbackValue || '';

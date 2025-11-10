@@ -11,6 +11,12 @@
             masterJsonPath: initialState.masterJsonPath || '',
             masterOptions: Array.isArray(initialState.masterOptions) ? initialState.masterOptions.slice() : [],
             masterDatalistPrepared: false,
+            masterDemeritCsvPath: initialState.masterDemeritCsvPath || '',
+            masterDemeritJsonPath: initialState.masterDemeritJsonPath || '',
+            masterDemeritOptions: Array.isArray(initialState.masterDemeritOptions)
+                ? initialState.masterDemeritOptions.slice()
+                : [],
+            masterDemeritDatalistPrepared: false,
             masterLevels: initialState.masterLevels,
             masterLevelsLoaded: Boolean(initialState.masterLevelsLoaded),
             masterLevelsPromise: null,

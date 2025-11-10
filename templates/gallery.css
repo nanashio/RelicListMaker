@@ -807,15 +807,11 @@ h1 {
     color: var(--color-warning-text-strong);
 }
 
-.effect--with-demerit {
-    gap: var(--space-md);
-}
-
-.effect--nested {
+.effect.effect--demerit {
     margin-left: var(--space-md);
 }
 
-.effect--nested-demerit {
+.effect + .effect.effect--demerit {
     margin-top: var(--space-sm);
 }
 

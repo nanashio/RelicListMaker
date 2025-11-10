@@ -19,9 +19,16 @@ function runScript(relativePath, contextOverrides = {}) {
 class MockElement {
   constructor(tagName = 'div', className = '', text = '') {
     this.tagName = String(tagName).toUpperCase();
-    this._classes = new Set(
-      typeof className === 'string' && className.trim() ? className.trim().split(/\s+/) : []
-    );
+    const initialClasses =
+      typeof className === 'string' && className.trim() ? className.trim().split(/\s+/) : [];
+    this._classes = new Set(initialClasses);
+    Object.defineProperty(this, 'className', {
+      get: () => Array.from(this._classes).join(' '),
+      set: (value) => {
+        const text = typeof value === 'string' ? value.trim() : '';
+        this._classes = new Set(text ? text.split(/\s+/) : []);
+      }
+    });
     this.className = Array.from(this._classes).join(' ');
     this.textContent = text || '';
     this.children = [];
@@ -231,6 +238,7 @@ describe('gallery app state api', () => {
     const store = storeFactory.createStateStore({
       labelSymbols: ['Ⅰ'],
       masterOptions: ['Alpha'],
+      masterDemeritOptions: ['Penalty'],
       datasets: [],
       activeDatasetIndex: 0
     });
@@ -249,8 +257,14 @@ describe('gallery app state api', () => {
     api.setMasterOptions(['Beta', 'Gamma']);
     assert.deepEqual(api.state.masterOptions, ['Beta', 'Gamma']);
 
+    api.setMasterDemeritOptions(['Penalty Fix']);
+    assert.deepEqual(api.state.masterDemeritOptions, ['Penalty Fix']);
+
     api.markMasterDatalistPrepared(true);
     assert.equal(api.state.masterDatalistPrepared, true);
+
+    api.markMasterDemeritDatalistPrepared(true);
+    assert.equal(api.state.masterDemeritDatalistPrepared, true);
 
     const levelMap = new Map([['A', ['1']]]);
     api.setMasterLevels(levelMap);
@@ -1687,9 +1701,10 @@ describe('gallery effect factory', () => {
     runScript('templates/gallery/render/effectFactory.js');
     const factory = global.window.galleryRenderFactory;
     effectFactory = factory.createEffectFactory({
-      state: { showOcr: true, masterOptions: [], labelSymbols: ['Ⅰ'] },
+      state: { showOcr: true, masterOptions: [], masterDemeritOptions: [], labelSymbols: ['Ⅰ'] },
       datasetState: { kind: 'normal' },
       masterDatalistId: 'master-id',
+      demeritDatalistId: 'master-demerit-id',
       createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
       sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
       sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
@@ -1756,15 +1771,36 @@ describe('gallery effect factory', () => {
       DemeritScore1: 42.5,
       Demerit1Status: 'pending'
     };
-    const effect = effectFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
+    const localFactory = global.window.galleryRenderFactory.createEffectFactory({
+      state: {
+        showOcr: true,
+        masterOptions: [],
+        masterDemeritOptions: ['Penalty'],
+        labelSymbols: ['Ⅰ']
+      },
+      datasetState: { kind: 'normal' },
+      masterDatalistId: 'master-id',
+      demeritDatalistId: 'master-demerit-id',
+      createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+      applyMasterLevelOptions: () => {},
+      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+    });
+    const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
     assert.ok(effect, 'demerit effect should be created');
     assert.equal(effect.classList.contains('effect--demerit'), true);
     assert.equal(effect.dataset.kind, 'demerit');
     assert.equal(effect.querySelector('.level-input'), null);
     assert.equal(applyCalls.length, 0, 'applyMasterLevelOptions should not run for demerits');
+    const correctionInput = effect.querySelector('.correction-input');
+    assert.ok(correctionInput, 'correction input should exist');
+    assert.equal(correctionInput.attributes.list, 'master-demerit-id');
+    assert.equal(correctionInput.disabled, false);
   });
 
-  test('createEffect nests demerit beneath effect when available', () => {
+  test('createEffect does not nest demerit and allows separate creation', () => {
     const record = {
       Effect1: 'Power Boost',
       RawText1: 'OCR Text',
@@ -1777,11 +1813,10 @@ describe('gallery effect factory', () => {
     };
     const effect = effectFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0);
     assert.ok(effect, 'effect should be created');
-    assert.equal(effect.classList.contains('effect--with-demerit'), true);
-    const nested = effect.querySelector('.effect--demerit');
-    assert.ok(nested, 'nested demerit should exist');
-    assert.equal(nested.classList.contains('effect--nested-demerit'), true);
-    assert.equal(nested.dataset.kind, 'demerit');
+    assert.equal(effect.querySelector('.effect--demerit'), null, 'effect should not nest demerit');
+    const demerit = effectFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
+    assert.ok(demerit, 'demerit element should be created separately');
+    assert.equal(demerit.classList.contains('effect--demerit'), true);
   });
 
   test('updateEffectStatus updates dataset and button selection', () => {
@@ -1823,14 +1858,20 @@ describe('gallery effect factory', () => {
   });
 
   test('createCorrectionInput toggles availability based on master options', () => {
-    const disabledInput = effectFactory.createCorrectionInput('', 'Fallback');
+    const disabledInput = effectFactory.createCorrectionInput({ isDemerit: false }, '', 'Fallback');
     assert.equal(disabledInput.disabled, true);
     assert.equal(disabledInput.placeholder, 'マスターデータ未設定');
 
     const customFactory = global.window.galleryRenderFactory.createEffectFactory({
-      state: { showOcr: true, masterOptions: ['Alpha'], labelSymbols: ['Ⅰ'] },
+      state: {
+        showOcr: true,
+        masterOptions: ['Alpha'],
+        masterDemeritOptions: [],
+        labelSymbols: ['Ⅰ']
+      },
       datasetState: { kind: 'normal' },
       masterDatalistId: 'master-id',
+      demeritDatalistId: 'demerit-id',
       createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
       sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
       sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
@@ -1838,7 +1879,7 @@ describe('gallery effect factory', () => {
       normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
       statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
     });
-    const enabledInput = customFactory.createCorrectionInput('Chosen', 'Fallback');
+    const enabledInput = customFactory.createCorrectionInput({ isDemerit: false }, 'Chosen', 'Fallback');
     assert.equal(enabledInput.disabled, false);
     assert.equal(enabledInput.placeholder, 'master_relicsから選択');
     assert.equal(enabledInput.attributes.list, 'master-id');
@@ -1939,7 +1980,7 @@ describe('gallery item factory', () => {
     const item = itemFactory.createItem(record, 0, 1, 5);
     assert.ok(item, 'item should be created');
     assert.equal(item.dataset.imageName, 'alpha.png');
-    assert.equal(effectCalls.length, 2, 'effect entries should be requested for each symbol');
+    assert.equal(effectCalls.length, 4, 'effect and demerit entries should be requested for each symbol');
     assert.deepEqual(
       effectCalls.map((entry) => ({
         symbol: entry.symbol,
@@ -1949,7 +1990,9 @@ describe('gallery item factory', () => {
       })),
       [
         { symbol: 'Ⅰ', slot: 1, imageName: 'alpha.png', kind: 'effect' },
-        { symbol: 'Ⅱ', slot: 2, imageName: 'alpha.png', kind: 'effect' }
+        { symbol: 'Ⅰ', slot: 1, imageName: 'alpha.png', kind: 'demerit' },
+        { symbol: 'Ⅱ', slot: 2, imageName: 'alpha.png', kind: 'effect' },
+        { symbol: 'Ⅱ', slot: 2, imageName: 'alpha.png', kind: 'demerit' }
       ]
     );
 
@@ -1969,15 +2012,11 @@ describe('gallery item factory', () => {
     assert.equal(datasetBadge.attributes.title, 'Merged A (runs/a)');
 
     const rightColumn = item.children[1];
-    assert.equal(
-      rightColumn.children.length,
-      2,
-      'effect entries should be appended for each slot'
-    );
+    assert.equal(rightColumn.children.length, 4, 'effect and demerit entries should be appended');
     assert.ok(rightColumn.children.every((child) => child.tagName === 'SECTION'));
     assert.deepEqual(
       rightColumn.children.map((child) => child.dataset.kind || 'effect'),
-      ['effect', 'effect']
+      ['effect', 'demerit', 'effect', 'demerit']
     );
   });
 
@@ -2442,8 +2481,8 @@ describe('record action handlers', () => {
       rebuildLevelSelectOptions: (_effect, selectEl) => rebuildCalls.push(selectEl),
       setCorrectionLevelCandidates: (_effect, candidates) => candidateCalls.push(candidates),
       updateLevelBadge: (target) => badgeCalls.push(target),
-      createCorrectionInput: (value, predictionDefault) => {
-        createCorrectionCalls.push([value, predictionDefault]);
+      createCorrectionInput: (context, value, predictionDefault) => {
+        createCorrectionCalls.push([context && context.isDemerit, value, predictionDefault]);
         return replacementInput;
       },
       getEffectIndexes: () => ({ recordIndex: 4, slotIndex: 2 })
@@ -2469,7 +2508,7 @@ describe('record action handlers', () => {
     assert.equal(refreshCalls.length, 1);
     assert.equal(filterCalls.length, 1);
     assert.equal(scheduleCalls.length, 1);
-    assert.deepEqual(createCorrectionCalls, [['', 'Prediction']]);
+    assert.deepEqual(createCorrectionCalls, [[false, '', 'Prediction']]);
     assert.strictEqual(effect.querySelector('.correction-input'), replacementInput);
     assert.strictEqual(correctionInput.parentNode, null);
     assert.equal(effect.dataset.levelOptionsBaseJson, JSON.stringify(['Base', 'Expert']));
@@ -2536,9 +2575,10 @@ describe('gallery events', () => {
         return candidates;
       },
       rebuildLevelSelectOptions: () => {},
-      createCorrectionInput: (value) => {
+      createCorrectionInput: (context, value) => {
         const input = new MockElement('input', 'correction-input');
         input.value = value || '';
+        input.dataset.kind = context && context.isDemerit ? 'demerit' : 'effect';
         return input;
       },
       updateLevelBadge: () => {},

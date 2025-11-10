@@ -286,24 +286,26 @@
                     context.imageName,
                     context.recordIndex
                 );
+                const demerit = createEffect(
+                    context.record,
+                    slotIndex,
+                    resolvedSymbol,
+                    context.imageName,
+                    context.recordIndex,
+                    { kind: 'demerit' }
+                );
                 if (effect) {
                     hasEffect = true;
                     appendToFragment(fragment, effect);
                     nodes.push(effect);
-                } else {
-                    const demeritOnly = createEffect(
-                        context.record,
-                        slotIndex,
-                        resolvedSymbol,
-                        context.imageName,
-                        context.recordIndex,
-                        { kind: 'demerit' }
-                    );
-                    if (demeritOnly) {
-                        hasEffect = true;
-                        appendToFragment(fragment, demeritOnly);
-                        nodes.push(demeritOnly);
+                    if (demerit) {
+                        appendToFragment(fragment, demerit);
+                        nodes.push(demerit);
                     }
+                } else if (demerit) {
+                    hasEffect = true;
+                    appendToFragment(fragment, demerit);
+                    nodes.push(demerit);
                 }
             });
 
