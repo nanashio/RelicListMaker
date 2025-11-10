@@ -74,6 +74,8 @@ def _serialize_level_options(levels: Sequence[str]) -> str:
 
 def _ensure_effect_slots(row: MutableMapping[str, object], options: ExportOptions) -> None:
     column_flags = options.column_visibility
+    demerit_slots = set(options.demerit_slots or [])
+
     for idx in options.slot_range:
         effect_key = f"Effect{idx}"
         level_key = f"Effect{idx}Level"
@@ -82,6 +84,7 @@ def _ensure_effect_slots(row: MutableMapping[str, object], options: ExportOption
         row.setdefault(effect_key, "-")
         row.setdefault(level_key, "")
         row.setdefault(status_key, "pending")
+        row.setdefault(f"Effect{idx}Kind", "effect")
 
         if column_flags.get("LevelOptions", True):
             row.setdefault(f"Effect{idx}LevelOptions", "")
@@ -93,6 +96,15 @@ def _ensure_effect_slots(row: MutableMapping[str, object], options: ExportOption
             row.setdefault(f"Effect{idx}Score", 0.0)
         if column_flags.get("Source", True):
             row.setdefault(f"Effect{idx}Source", "")
+
+        if idx in demerit_slots:
+            row.setdefault(f"Demerit{idx}", "")
+            if column_flags.get("RawText", True):
+                row.setdefault(f"DemeritRawText{idx}", "")
+            if column_flags.get("Score", True):
+                row.setdefault(f"DemeritScore{idx}", 0.0)
+            if column_flags.get("Source", True):
+                row.setdefault(f"DemeritSource{idx}", "")
 
 
 def build_row(
@@ -112,6 +124,7 @@ def build_row(
         row["RelicType"] = options.relic_type or ""
 
     level_map = options.level_map or {}
+    demerit_slots = set(options.demerit_slots or [])
 
     for idx, match in zip(options.slot_range, matches):
         effect_key = f"Effect{idx}"
@@ -119,12 +132,24 @@ def build_row(
         row[f"Effect{idx}Status"] = "pending"
         row.setdefault(f"Effect{idx}Level", "")
 
+        is_demerit = idx in demerit_slots
+        row[f"Effect{idx}Kind"] = "demerit" if is_demerit else "effect"
+
         if column_flags.get("RawText", True):
             row[f"RawText{idx}"] = match.raw_text
         if column_flags.get("Score", True):
             row[f"Effect{idx}Score"] = match.score
         if column_flags.get("Source", True):
             row[f"Effect{idx}Source"] = match.source
+
+        if is_demerit:
+            row[f"Demerit{idx}"] = match.matched_text
+            if column_flags.get("RawText", True):
+                row[f"DemeritRawText{idx}"] = match.raw_text
+            if column_flags.get("Score", True):
+                row[f"DemeritScore{idx}"] = match.score
+            if column_flags.get("Source", True):
+                row[f"DemeritSource{idx}"] = match.source
 
         if level_map:
             candidates = find_level_candidates(match.matched_text, level_map=level_map)
@@ -165,6 +190,17 @@ def _infer_slot_range(rows: Sequence[Mapping[str, object]]) -> range:
     return range(1, max_slot + 1)
 
 
+def _infer_demerit_slots(rows: Sequence[Mapping[str, object]]) -> Sequence[int]:
+    pattern = re.compile(r"^Demerit(\d+)")
+    slots: set[int] = set()
+    for row in rows:
+        for key in row.keys():
+            match = pattern.match(key)
+            if match:
+                slots.add(int(match.group(1)))
+    return sorted(slots)
+
+
 def write_csv(
     rows: Iterable[Mapping[str, object]],
     *,
@@ -178,6 +214,7 @@ def write_csv(
         return
 
     slot_range = _infer_slot_range(row_list)
+    demerit_slots = _infer_demerit_slots(row_list)
 
     fieldnames: list[str] = ["Image", "Duplicate"]
     if column_flags.get("ItemColor", True):
@@ -191,16 +228,25 @@ def write_csv(
         if column_flags.get("LevelOptions", True):
             fieldnames.append(f"Effect{idx}LevelOptions")
         fieldnames.append(f"Effect{idx}Status")
+        fieldnames.append(f"Effect{idx}Kind")
+        if idx in demerit_slots:
+            fieldnames.append(f"Demerit{idx}")
 
     if column_flags.get("RawText", True):
         for idx in slot_range:
             fieldnames.append(f"RawText{idx}")
+        for idx in demerit_slots:
+            fieldnames.append(f"DemeritRawText{idx}")
     if column_flags.get("Score", True):
         for idx in slot_range:
             fieldnames.append(f"Effect{idx}Score")
+        for idx in demerit_slots:
+            fieldnames.append(f"DemeritScore{idx}")
     if column_flags.get("Source", True):
         for idx in slot_range:
             fieldnames.append(f"Effect{idx}Source")
+        for idx in demerit_slots:
+            fieldnames.append(f"DemeritSource{idx}")
     if column_flags.get("LevelCorrection", True):
         for idx in slot_range:
             fieldnames.append(f"Effect{idx}LevelCorrection")

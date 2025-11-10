@@ -169,6 +169,7 @@
             effect.dataset.predictionValue = context.predictionText;
             effect.dataset.raw = context.rawLower;
             effect.dataset.recordIndex = String(context.recordIndex);
+            effect.dataset.kind = context.effectKind || 'effect';
             effect.dataset.preserveOriginalLevel = context.preserveOriginalLevel ? 'true' : 'false';
             effect.dataset.level = context.displayLevelLower;
             effect.dataset.levelOriginal = context.levelValueLower;
@@ -183,12 +184,16 @@
                 effect.classList.add('low-confidence');
                 effect.dataset.lowConfidence = 'true';
             }
+            if (context.isDemerit) {
+                effect.classList.add('effect--demerit');
+            }
             return effect;
         }
 
         function createEffectPredictionLine(context) {
             const predictionLine = createElement('div', 'prediction');
-            const predictionLabel = createElement('span', 'prediction-label', '推定:');
+            const labelText = context.isDemerit ? 'デメリット:' : '推定:';
+            const predictionLabel = createElement('span', 'prediction-label', labelText);
             const predictionValueNode = createElement(
                 'span',
                 'prediction-value',

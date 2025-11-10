@@ -59,11 +59,35 @@ def test_ensure_effect_slots_adds_placeholder_values():
     assert row["Effect3"] == "-"
     assert row["Effect2Status"] == "pending"
     assert row["Effect2Level"] == ""
+    assert row["Effect2Kind"] == "effect"
     assert row["RawText2"] == ""
     assert row["Effect2Score"] == 0.0
     assert row["Effect2Source"] == ""
     assert row["Effect2LevelOptions"] == ""
     assert row["Effect2LevelCorrection"] == ""
+    assert "Demerit1" not in row
+    assert "Demerit2" not in row
+
+
+def test_ensure_effect_slots_adds_demerit_columns():
+    row = {}
+    slot_range = range(1, 3)
+
+    options = ExportOptions(
+        column_visibility=dict(DEFAULT_COLUMN_VISIBILITY),
+        slot_range=slot_range,
+        level_map=None,
+        item_color=None,
+        demerit_slots=(2,),
+    )
+
+    _ensure_effect_slots(row, options)
+
+    assert "Demerit1" not in row
+    assert row["Demerit2"] == ""
+    assert row["DemeritRawText2"] == ""
+    assert row["DemeritScore2"] == 0.0
+    assert row["DemeritSource2"] == ""
 
 
 def test_write_csv_includes_relic_type_column(tmp_path: Path):
@@ -75,3 +99,31 @@ def test_write_csv_includes_relic_type_column(tmp_path: Path):
 
     header = output.read_text(encoding="utf-8").splitlines()[0].split(",")
     assert "RelicType" in header
+
+
+def test_write_csv_includes_demerit_columns(tmp_path: Path):
+    column_flags = dict(DEFAULT_COLUMN_VISIBILITY)
+    rows = [
+        {
+            "Image": "sample.png",
+            "Duplicate": False,
+            "Effect1": "効果A",
+            "Effect1Level": "",
+            "Effect1Status": "pending",
+            "Effect1Kind": "demerit",
+            "Demerit1": "効果A",
+            "DemeritRawText1": "OCR",
+            "DemeritScore1": 87.5,
+            "DemeritSource1": "dictionary",
+        }
+    ]
+
+    output = tmp_path / "results.csv"
+
+    write_csv(rows, path=output, column_flags=column_flags)
+
+    header = output.read_text(encoding="utf-8").splitlines()[0].split(",")
+    assert "Demerit1" in header
+    assert "DemeritRawText1" in header
+    assert "DemeritScore1" in header
+    assert "DemeritSource1" in header

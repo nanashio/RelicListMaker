@@ -692,6 +692,7 @@ h1 {
     gap: var(--space-sm);
 }
 
+
 .effect-header {
     display: flex;
     justify-content: space-between;
@@ -795,6 +796,15 @@ h1 {
 .effect.pending .status-indicator {
     color: var(--color-badge-orange-text);
     font-weight: 600;
+}
+
+.effect--demerit {
+    border-color: var(--color-warning-border-strong);
+    background: var(--color-warning-background-strong);
+}
+
+.effect--demerit .prediction-label {
+    color: var(--color-warning-text-strong);
 }
 
 .effect.low-confidence {
