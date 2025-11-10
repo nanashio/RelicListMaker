@@ -14,10 +14,13 @@ from .progress import ProgressReporter
 from .tasks import DEFAULT_RELIC_TYPE, RELIC_TYPE_DEEP, VideoTask, decide_item_color
 
 
-def _resolve_master_csv(relic_type: str) -> str:
+def _resolve_master_csv(relic_type: str) -> tuple[str, str | None]:
     if relic_type == RELIC_TYPE_DEEP:
-        return str(templates_path("master_relics_deep.csv"))
-    return str(templates_path("master_relics.csv"))
+        return (
+            str(templates_path("master_relics_deep.csv")),
+            str(templates_path("master_relics_demerit.csv")),
+        )
+    return (str(templates_path("master_relics.csv")), None)
 
 
 def process_video(
@@ -54,7 +57,7 @@ def process_video(
 
     reporter.step(f"{video_name} のOCR/マッチング中...")
     task_relic_type = getattr(task, "relic_type", DEFAULT_RELIC_TYPE)
-    master_csv_path = _resolve_master_csv(task_relic_type)
+    master_csv_path, demerit_master_csv_path = _resolve_master_csv(task_relic_type)
 
     process_images(
         image_dir=str(task.crops_dir),
@@ -66,6 +69,7 @@ def process_video(
         item_color=item_color,
         column_visibility=csv_column_visibility,
         master_csv_path=master_csv_path,
+        demerit_master_csv_path=demerit_master_csv_path,
         relic_type=task_relic_type,
         ocr_engine=ocr_engine,
         gcp_credentials=gcp_credentials,

@@ -26,7 +26,7 @@ def clean_ocr_text(text: str) -> str:
         return ""
     text = text.replace("\x0c", " ")
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    return " ".join(lines)
+    return "\n".join(lines)
 
 
 def recognize_effect_text(

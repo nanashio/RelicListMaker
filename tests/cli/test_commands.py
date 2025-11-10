@@ -26,6 +26,7 @@ def test_process_images_command_invokes_runner_with_overrides():
         corrections_csv="corr.csv",
         item_color="blue",
         column_visibility=["RawText=false", "Score=0", "Source=on"],
+        relic_type="deep",
     )
 
     exit_code = process_images_command(args, runner=fake_runner)
@@ -43,6 +44,7 @@ def test_process_images_command_invokes_runner_with_overrides():
         "Score": False,
         "Source": True,
     }
+    assert captured["relic_type"] == "deep"
 
 
 def test_build_column_flags_merges_defaults(capsys):

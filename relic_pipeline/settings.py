@@ -61,4 +61,5 @@ class ExportOptions:
     level_map: Mapping[str, Sequence[str]] | None = None
     item_color: str | None = None
     relic_type: str | None = None
+    demerit_slots: Sequence[int] = field(default_factory=tuple)
 
