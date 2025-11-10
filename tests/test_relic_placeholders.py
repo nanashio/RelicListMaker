@@ -9,8 +9,9 @@ if str(ROOT_DIR) not in sys.path:
 if "cv2" not in sys.modules:
     sys.modules["cv2"] = types.SimpleNamespace()
 
-from relic_pipeline.io.exporter import _ensure_effect_slots, write_csv
+from relic_pipeline.io.exporter import _ensure_effect_slots, build_row, write_csv
 from relic_pipeline.settings import DEFAULT_COLUMN_VISIBILITY, ExportOptions
+from relic_pipeline.matching import MatchResult
 from relic_data import load_master_effects_and_levels, normalize_master_values
 
 
@@ -110,7 +111,7 @@ def test_write_csv_includes_demerit_columns(tmp_path: Path):
             "Effect1": "効果A",
             "Effect1Level": "",
             "Effect1Status": "pending",
-            "Effect1Kind": "demerit",
+            "Effect1Kind": "effect",
             "Demerit1": "効果A",
             "DemeritRawText1": "OCR",
             "DemeritScore1": 87.5,
@@ -127,3 +128,43 @@ def test_write_csv_includes_demerit_columns(tmp_path: Path):
     assert "DemeritRawText1" in header
     assert "DemeritScore1" in header
     assert "DemeritSource1" in header
+
+
+def test_build_row_merges_demerit_results():
+    options = ExportOptions(
+        column_visibility=dict(DEFAULT_COLUMN_VISIBILITY),
+        slot_range=range(1, 2),
+        level_map=None,
+        item_color=None,
+        demerit_slots=(1,),
+    )
+
+    effect_match = MatchResult(
+        raw_text="Effect Raw",
+        matched_text="Effect Matched",
+        score=91.2,
+        source="dictionary",
+    )
+    demerit_match = MatchResult(
+        raw_text="Demerit Raw",
+        matched_text="Demerit Matched",
+        score=65.4,
+        source="demerit",
+    )
+
+    row = build_row(
+        "image.png",
+        [effect_match],
+        options=options,
+        demerit_matches={1: demerit_match},
+    )
+
+    assert row["Effect1"] == "Effect Matched"
+    assert row["Effect1Kind"] == "effect"
+    assert row["RawText1"] == "Effect Raw"
+    assert row["Effect1Score"] == 91.2
+    assert row["Effect1Source"] == "dictionary"
+    assert row["Demerit1"] == "Demerit Matched"
+    assert row["DemeritRawText1"] == "Demerit Raw"
+    assert row["DemeritScore1"] == 65.4
+    assert row["DemeritSource1"] == "demerit"

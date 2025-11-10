@@ -22,7 +22,7 @@ def test_ocr_and_match_returns_match_results(monkeypatch):
 
     def fake_batch_recognize(crops, settings):  # pragma: no cover - simple stub
         assert len(crops) == 1
-        return ["dummy text"]
+        return ["dummy text\ndemerit text"]
 
     def fake_resolve_effect(text, *, settings):  # pragma: no cover - simple stub
         assert text == "dummy text"
@@ -37,7 +37,7 @@ def test_ocr_and_match_returns_match_results(monkeypatch):
     monkeypatch.setattr(match_and_export, "batch_recognize", fake_batch_recognize)
     monkeypatch.setattr(match_and_export, "resolve_effect", fake_resolve_effect)
 
-    results = match_and_export.ocr_and_match(
+    results, recognized_lines = match_and_export.ocr_and_match(
         "dummy.png",
         dictionary=["Dummy"],
         crop_boxes=[(0, 0, 10, 10)],
@@ -51,4 +51,5 @@ def test_ocr_and_match_returns_match_results(monkeypatch):
     assert isinstance(result, MatchResult)
     assert result.raw_text == "dummy text"
     assert result.matched_text == "Resolved"
+    assert recognized_lines == [["dummy text", "demerit text"]]
 

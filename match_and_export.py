@@ -119,7 +119,7 @@ def ocr_and_match(
     vision_credentials_path: Path | None = None,
     slot_settings: Mapping[int, MatchingSettings] | None = None,
     slot_sources: Mapping[int, str] | None = None,
-) -> list[MatchResult]:
+) -> tuple[list[MatchResult], list[list[str]]]:
     boxes = crop_boxes or scale_crop_boxes(BASE_CROP_BOXES, scale)
 
     try:
@@ -128,6 +128,7 @@ def ocr_and_match(
             raise FileNotFoundError(f"画像を読み込めませんでした: {img_path}")
 
         results: list[MatchResult] = []
+        recognized_lines: list[list[str]] = []
         valid_crops: list[object] = []
         valid_positions: list[int] = []
         valid_slots: list[int] = []
@@ -143,6 +144,7 @@ def ocr_and_match(
                         source="error",
                     )
                 )
+                recognized_lines.append([])
                 continue
 
             valid_positions.append(len(results))
@@ -154,11 +156,12 @@ def ocr_and_match(
                     source="pending",
                 )
             )
+            recognized_lines.append([])
             valid_crops.append(crop)
             valid_slots.append(box_index)
 
         if not valid_crops:
-            return results
+            return results, recognized_lines
 
         ocr_settings = OCRSettings(
             lang="jpn",
@@ -182,17 +185,25 @@ def ocr_and_match(
 
         for position, text, slot_index in zip(valid_positions, recognized_texts, valid_slots):
             settings = slot_overrides.get(slot_index, default_settings)
-            match_result = resolve_effect(text, settings=settings)
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            recognized_lines[position] = lines
+
+            effect_text = lines[0] if lines else ""
+            if not effect_text:
+                effect_text = text.strip()
+
+            match_result = resolve_effect(effect_text, settings=settings)
+            match_result = replace(match_result, raw_text=effect_text)
             override_source = source_overrides.get(slot_index)
             if override_source:
                 match_result = replace(match_result, source=override_source)
             results[position] = match_result
 
-        return results
+        return results, recognized_lines
     except Exception as err:
         print(f"OCR error: {err}")
         fallback_length = len(boxes)
-        return [
+        fallback_results = [
             MatchResult(
                 raw_text="",
                 matched_text="Error",
@@ -201,6 +212,8 @@ def ocr_and_match(
             )
             for _ in range(fallback_length)
         ]
+        fallback_lines: list[list[str]] = [[] for _ in range(fallback_length)]
+        return fallback_results, fallback_lines
 
 def process_images(
     image_dir="crops",
@@ -278,6 +291,7 @@ def process_images(
     slot_settings: dict[int, MatchingSettings] = {}
     slot_sources: dict[int, str] = {}
     demerit_slots: list[int] = []
+    demerit_settings: MatchingSettings | None = None
 
     if normalized_relic_type == "deep":
         demerit_path = demerit_master_csv_path or DEMERIT_DICTIONARY_PATH
@@ -293,9 +307,6 @@ def process_images(
                 corrections=corrections_map or {},
                 correction_score=CORRECTION_SCORE,
             )
-            slot_settings[2] = demerit_settings
-            slot_sources[2] = "demerit"
-            demerit_slots.append(2)
         else:
             print(f"[WARN] デメリット辞書が見つかりません: {demerit_path}")
 
@@ -305,6 +316,8 @@ def process_images(
         defaults=DEFAULT_COLUMN_VISIBILITY,
     )
     slot_range = range(1, len(crop_boxes) + 1)
+    if normalized_relic_type == "deep":
+        demerit_slots = list(slot_range)
     export_options = ExportOptions(
         column_visibility=column_flags,
         slot_range=slot_range,
@@ -319,7 +332,7 @@ def process_images(
         if not fname.endswith(".png"):
             continue
         img_path = os.path.join(image_dir, fname)
-        match_results = ocr_and_match(
+        match_results, recognized_lines = ocr_and_match(
             img_path,
             dictionary,
             corrections_map=corrections_map,
@@ -332,7 +345,35 @@ def process_images(
             slot_settings=slot_settings,
             slot_sources=slot_sources,
         )
-        row = build_row(fname, match_results, options=export_options)
+        demerit_row_matches: dict[int, MatchResult] = {}
+        if normalized_relic_type == "deep":
+            for idx, lines in zip(slot_range, recognized_lines):
+                if not lines or len(lines) < 2:
+                    continue
+                demerit_text = " ".join(lines[1:]).strip()
+                if not demerit_text:
+                    continue
+                if demerit_settings is not None:
+                    demerit_match = resolve_effect(demerit_text, settings=demerit_settings)
+                    demerit_match = replace(
+                        demerit_match,
+                        raw_text=demerit_text,
+                        source="demerit",
+                    )
+                else:
+                    demerit_match = MatchResult(
+                        raw_text=demerit_text,
+                        matched_text=demerit_text,
+                        score=0.0,
+                        source="ocr",
+                    )
+                demerit_row_matches[idx] = demerit_match
+        row = build_row(
+            fname,
+            match_results,
+            options=export_options,
+            demerit_matches=demerit_row_matches,
+        )
         rows.append(row)
 
     if not rows:

@@ -112,6 +112,7 @@ def build_row(
     matches: Sequence[MatchResult],
     *,
     options: ExportOptions,
+    demerit_matches: Mapping[int, MatchResult] | None = None,
 ) -> dict[str, object]:
     """Construct a CSV row for a single image."""
 
@@ -125,6 +126,7 @@ def build_row(
 
     level_map = options.level_map or {}
     demerit_slots = set(options.demerit_slots or [])
+    demerit_map = dict(demerit_matches or {})
 
     for idx, match in zip(options.slot_range, matches):
         effect_key = f"Effect{idx}"
@@ -132,8 +134,7 @@ def build_row(
         row[f"Effect{idx}Status"] = "pending"
         row.setdefault(f"Effect{idx}Level", "")
 
-        is_demerit = idx in demerit_slots
-        row[f"Effect{idx}Kind"] = "demerit" if is_demerit else "effect"
+        row[f"Effect{idx}Kind"] = "effect"
 
         if column_flags.get("RawText", True):
             row[f"RawText{idx}"] = match.raw_text
@@ -142,14 +143,23 @@ def build_row(
         if column_flags.get("Source", True):
             row[f"Effect{idx}Source"] = match.source
 
-        if is_demerit:
-            row[f"Demerit{idx}"] = match.matched_text
+        demerit_match = demerit_map.get(idx)
+        if demerit_match is not None:
+            row[f"Demerit{idx}"] = demerit_match.matched_text
             if column_flags.get("RawText", True):
-                row[f"DemeritRawText{idx}"] = match.raw_text
+                row[f"DemeritRawText{idx}"] = demerit_match.raw_text
             if column_flags.get("Score", True):
-                row[f"DemeritScore{idx}"] = match.score
+                row[f"DemeritScore{idx}"] = demerit_match.score
             if column_flags.get("Source", True):
-                row[f"DemeritSource{idx}"] = match.source
+                row[f"DemeritSource{idx}"] = demerit_match.source
+        elif idx in demerit_slots:
+            row.setdefault(f"Demerit{idx}", "")
+            if column_flags.get("RawText", True):
+                row.setdefault(f"DemeritRawText{idx}", "")
+            if column_flags.get("Score", True):
+                row.setdefault(f"DemeritScore{idx}", 0.0)
+            if column_flags.get("Source", True):
+                row.setdefault(f"DemeritSource{idx}", "")
 
         if level_map:
             candidates = find_level_candidates(match.matched_text, level_map=level_map)
