@@ -125,6 +125,7 @@
         function createEffect(record, slot, symbol, imageName, recordIndex, options = {}) {
             const kindOption =
                 options && typeof options.kind === 'string' ? options.kind : undefined;
+            const skipNested = Boolean(options && options.skipDemerit);
             const context = createEffectContext(record, slot, symbol, imageName, recordIndex, {
                 normalizeStatus,
                 parseLevelOptions: parseLevelOptionsImpl,
@@ -134,7 +135,27 @@
                 return null;
             }
 
-            const effect = createEffectElement(context);
+            const effect = buildEffectElement(context, { nested: false });
+
+            if (!context.isDemerit && !skipNested) {
+                const nestedDemerit = createNestedDemerit(
+                    record,
+                    slot,
+                    symbol,
+                    imageName,
+                    recordIndex
+                );
+                if (nestedDemerit) {
+                    effect.classList.add('effect--with-demerit');
+                    effect.appendChild(nestedDemerit);
+                }
+            }
+
+            return effect;
+        }
+
+        function buildEffectElement(context, options = {}) {
+            const effect = createEffectElement(context, options);
 
             const predictionLine = createEffectPredictionLine(context);
             effect.appendChild(predictionLine);
@@ -170,7 +191,30 @@
             return effect;
         }
 
-        function createEffectElement(context) {
+        function createNestedDemerit(record, slot, symbol, imageName, recordIndex) {
+            const demeritContext = createEffectContext(
+                record,
+                slot,
+                symbol,
+                imageName,
+                recordIndex,
+                {
+                    normalizeStatus,
+                    parseLevelOptions: parseLevelOptionsImpl,
+                    kind: 'demerit'
+                }
+            );
+            if (!demeritContext) {
+                return null;
+            }
+
+            const demeritElement = buildEffectElement(demeritContext, { nested: true });
+            demeritElement.classList.add('effect--nested-demerit');
+            return demeritElement;
+        }
+
+        function createEffectElement(context, options = {}) {
+            const nested = Boolean(options && options.nested);
             const effect = createElement('div', 'effect');
             effect.dataset.slot = String(context.slot);
             effect.dataset.image = context.imageNameLower;
@@ -195,6 +239,9 @@
             }
             if (context.isDemerit) {
                 effect.classList.add('effect--demerit');
+            }
+            if (nested) {
+                effect.classList.add('effect--nested');
             }
             return effect;
         }

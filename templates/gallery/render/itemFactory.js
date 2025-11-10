@@ -290,20 +290,20 @@
                     hasEffect = true;
                     appendToFragment(fragment, effect);
                     nodes.push(effect);
-                }
-
-                const demerit = createEffect(
-                    context.record,
-                    slotIndex,
-                    resolvedSymbol,
-                    context.imageName,
-                    context.recordIndex,
-                    { kind: 'demerit' }
-                );
-                if (demerit) {
-                    hasEffect = true;
-                    appendToFragment(fragment, demerit);
-                    nodes.push(demerit);
+                } else {
+                    const demeritOnly = createEffect(
+                        context.record,
+                        slotIndex,
+                        resolvedSymbol,
+                        context.imageName,
+                        context.recordIndex,
+                        { kind: 'demerit' }
+                    );
+                    if (demeritOnly) {
+                        hasEffect = true;
+                        appendToFragment(fragment, demeritOnly);
+                        nodes.push(demeritOnly);
+                    }
                 }
             });
 

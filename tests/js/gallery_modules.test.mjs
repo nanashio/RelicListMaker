@@ -1764,6 +1764,26 @@ describe('gallery effect factory', () => {
     assert.equal(applyCalls.length, 0, 'applyMasterLevelOptions should not run for demerits');
   });
 
+  test('createEffect nests demerit beneath effect when available', () => {
+    const record = {
+      Effect1: 'Power Boost',
+      RawText1: 'OCR Text',
+      Effect1Score: 88.2,
+      Effect1Status: 'pending',
+      Demerit1: 'Penalty',
+      DemeritRawText1: 'Penalty OCR',
+      DemeritScore1: 35.5,
+      Demerit1Status: 'pending'
+    };
+    const effect = effectFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0);
+    assert.ok(effect, 'effect should be created');
+    assert.equal(effect.classList.contains('effect--with-demerit'), true);
+    const nested = effect.querySelector('.effect--demerit');
+    assert.ok(nested, 'nested demerit should exist');
+    assert.equal(nested.classList.contains('effect--nested-demerit'), true);
+    assert.equal(nested.dataset.kind, 'demerit');
+  });
+
   test('updateEffectStatus updates dataset and button selection', () => {
     const effect = new MockElement('div', 'effect pending');
     const indicator = new MockElement('span', 'status-indicator');
@@ -1919,7 +1939,7 @@ describe('gallery item factory', () => {
     const item = itemFactory.createItem(record, 0, 1, 5);
     assert.ok(item, 'item should be created');
     assert.equal(item.dataset.imageName, 'alpha.png');
-    assert.equal(effectCalls.length, 4, 'effect and demerit entries should be requested for each symbol');
+    assert.equal(effectCalls.length, 2, 'effect entries should be requested for each symbol');
     assert.deepEqual(
       effectCalls.map((entry) => ({
         symbol: entry.symbol,
@@ -1929,9 +1949,7 @@ describe('gallery item factory', () => {
       })),
       [
         { symbol: 'Ⅰ', slot: 1, imageName: 'alpha.png', kind: 'effect' },
-        { symbol: 'Ⅰ', slot: 1, imageName: 'alpha.png', kind: 'demerit' },
-        { symbol: 'Ⅱ', slot: 2, imageName: 'alpha.png', kind: 'effect' },
-        { symbol: 'Ⅱ', slot: 2, imageName: 'alpha.png', kind: 'demerit' }
+        { symbol: 'Ⅱ', slot: 2, imageName: 'alpha.png', kind: 'effect' }
       ]
     );
 
@@ -1953,13 +1971,13 @@ describe('gallery item factory', () => {
     const rightColumn = item.children[1];
     assert.equal(
       rightColumn.children.length,
-      4,
-      'effect and demerit entries should be appended for each slot'
+      2,
+      'effect entries should be appended for each slot'
     );
     assert.ok(rightColumn.children.every((child) => child.tagName === 'SECTION'));
     assert.deepEqual(
       rightColumn.children.map((child) => child.dataset.kind || 'effect'),
-      ['effect', 'demerit', 'effect', 'demerit']
+      ['effect', 'effect']
     );
   });
 
@@ -1981,6 +1999,45 @@ describe('gallery item factory', () => {
     const placeholder = rightColumn.children[0];
     assert.equal(placeholder.className.includes('no-effect'), true);
     assert.equal(placeholder.textContent, '効果情報がありません。');
+  });
+
+  test('createItem uses demerit fallback when main effect is missing', () => {
+    const fallbackCalls = [];
+    const fallbackFactory = itemFactoryNamespace.createItemFactory({
+      datasetState: { kind: 'normal' },
+      createElement,
+      createFragment: () => new MockElement('#fragment'),
+      bindImage: () => {},
+      createEffect: (record, slot, symbol, imageName, recordIndex, options) => {
+        fallbackCalls.push(options && options.kind ? options.kind : 'effect');
+        if (options && options.kind === 'demerit') {
+          const element = new MockElement('section', 'effect slot-demerit');
+          element.dataset.kind = 'demerit';
+          element.dataset.slot = String(slot);
+          return element;
+        }
+        return null;
+      },
+      colorOptions: [],
+      getImagePath: (imageName) => imageName,
+      getDisplayName: (imageName) => imageName,
+      getLabelSymbols: () => ['Ⅰ']
+    });
+
+    const record = {
+      Image: 'gamma.png',
+      Demerit1: 'Penalty',
+      DemeritRawText1: 'Penalty OCR',
+      DemeritScore1: 50
+    };
+
+    const item = fallbackFactory.createItem(record, 0, 1, 1);
+    const rightColumn = item.children[1];
+    assert.deepEqual(fallbackCalls, ['effect', 'demerit']);
+    assert.equal(rightColumn.children.length, 1);
+    const demerit = rightColumn.children[0];
+    assert.equal(demerit.dataset.kind, 'demerit');
+    assert.equal(demerit.dataset.slot, '1');
   });
 
   test('item enhancers run after item creation', () => {

@@ -807,6 +807,18 @@ h1 {
     color: var(--color-warning-text-strong);
 }
 
+.effect--with-demerit {
+    gap: var(--space-md);
+}
+
+.effect--nested {
+    margin-left: var(--space-md);
+}
+
+.effect--nested-demerit {
+    margin-top: var(--space-sm);
+}
+
 .effect.low-confidence {
     border-color: var(--color-error-border);
     background: var(--color-error-background);
