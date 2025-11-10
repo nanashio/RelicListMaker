@@ -229,23 +229,49 @@ def _collect_master_data_by_type(
     csv_map: Dict[str, str] = {}
 
     for relic_type in sorted(relic_types):
+        candidate_paths: List[str] = []
         csv_path = _resolve_master_csv_for_type(relic_type)
-        if not csv_path and relic_type in KNOWN_RELIC_TYPES:
-            csv_path = str(templates_path(KNOWN_RELIC_TYPES[relic_type]))
-        if not csv_path or not os.path.exists(csv_path):
+        if csv_path:
+            candidate_paths.append(csv_path)
+        elif relic_type in KNOWN_RELIC_TYPES:
+            candidate_paths.append(str(templates_path(KNOWN_RELIC_TYPES[relic_type])))
+
+        if relic_type == "deep":
+            candidate_paths.append(str(templates_path("master_relics_demerit.csv")))
+
+        merged_effects: List[str] = []
+        merged_levels: Dict[str, List[str]] = {}
+        recorded_path: str | None = None
+
+        for candidate in candidate_paths:
+            if not candidate or not os.path.exists(candidate):
+                continue
+            if recorded_path is None:
+                recorded_path = candidate
+            effects, levels = load_master_effects_and_levels(candidate)
+            if effects:
+                for effect in effects:
+                    if effect not in merged_effects:
+                        merged_effects.append(effect)
+            if levels:
+                merged_levels = _merge_level_maps(merged_levels, levels)
+
+        if not merged_effects and not merged_levels:
             continue
-        effects, levels = load_master_effects_and_levels(csv_path)
-        if effects:
-            options_map[relic_type] = effects
-        if levels:
-            levels_map[relic_type] = levels
-        try:
-            rel_path = os.path.relpath(csv_path, output_dir)
-        except ValueError:
-            rel_path = os.path.basename(csv_path)
-        if os.sep != "/":
-            rel_path = rel_path.replace(os.sep, "/")
-        csv_map[relic_type] = rel_path
+
+        if merged_effects:
+            options_map[relic_type] = merged_effects
+        if merged_levels:
+            levels_map[relic_type] = merged_levels
+
+        if recorded_path:
+            try:
+                rel_path = os.path.relpath(recorded_path, output_dir)
+            except ValueError:
+                rel_path = os.path.basename(recorded_path)
+            if os.sep != "/":
+                rel_path = rel_path.replace(os.sep, "/")
+            csv_map[relic_type] = rel_path
 
     levels_map_serializable: Dict[str, Dict[str, List[str]]] = {}
     for key, mapping in levels_map.items():

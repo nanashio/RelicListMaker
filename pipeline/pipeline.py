@@ -85,9 +85,12 @@ def run_pipeline(
     result_dir = settings.result_dir
     result_dir.mkdir(parents=True, exist_ok=True)
 
-    master_paths = {
-        DEFAULT_RELIC_TYPE: templates_path("master_relics.csv"),
-        RELIC_TYPE_DEEP: templates_path("master_relics_deep.csv"),
+    master_paths: dict[str, list[Path]] = {
+        DEFAULT_RELIC_TYPE: [templates_path("master_relics.csv")],
+        RELIC_TYPE_DEEP: [
+            templates_path("master_relics_deep.csv"),
+            templates_path("master_relics_demerit.csv"),
+        ],
     }
     master_options: list[str] = []
     processed_results: list[ProcessedVideoResult] = []
@@ -127,8 +130,8 @@ def run_pipeline(
         used_types.add(DEFAULT_RELIC_TYPE)
 
     for relic_type in used_types:
-        master_path = master_paths.get(relic_type)
-        if master_path:
+        path_entries = master_paths.get(relic_type, [])
+        for master_path in path_entries:
             master_options.extend(load_master_csv(master_path))
 
     master_options = normalize_master_values(master_options)

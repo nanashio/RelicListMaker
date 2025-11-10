@@ -243,6 +243,8 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
             return (["Default Effect"], {"Default Effect": ["F1"]})
         if basename == "master_relics_deep.csv":
             return (["Deep Effect"], {"Deep Effect": ["D1"]})
+        if basename == "master_relics_demerit.csv":
+            return (["Deep Demerit"], {})
         return ([], {})
 
     monkeypatch.setattr(generate_gallery, "load_master_effects_and_levels", fake_load_master_effects_and_levels)
@@ -272,7 +274,10 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
     assert parts[4] == html.escape(expected_master_json_rel, quote=True)
     assert json.loads(html.unescape(parts[5])) == []
     master_options_map = json.loads(html.unescape(parts[6]))
-    assert master_options_map == {"deep": ["Deep Effect"], "normal": ["Default Effect"]}
+    assert master_options_map == {
+        "deep": ["Deep Effect", "Deep Demerit"],
+        "normal": ["Default Effect"],
+    }
     master_levels = json.loads(html.unescape(parts[7]))
     assert master_levels.get("Mystic Strike") == ["Alpha", "Beta"]
     assert master_levels.get("Default Effect") == ["F1"]

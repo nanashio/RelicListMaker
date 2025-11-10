@@ -53,6 +53,16 @@
         const levelOptionsRaw = record[`Effect${slot}LevelOptions`];
         const levelOptions = parseOptions(levelOptionsRaw);
         const levelOptionsLower = levelOptions.map((value) => (value == null ? '' : String(value).toLowerCase()));
+        const kindValueRaw = record[`Effect${slot}Kind`];
+        const kindText =
+            kindValueRaw == null
+                ? ''
+                : String(kindValueRaw)
+                      .trim()
+                      .toLowerCase();
+        const effectKind = kindText || 'effect';
+        const isDemerit = effectKind === 'demerit';
+
         const levelCorrectionKey = `Effect${slot}LevelCorrection`;
         const levelCorrectionRaw = record[levelCorrectionKey];
         const levelCorrection = levelCorrectionRaw == null ? '' : String(levelCorrectionRaw).trim();
@@ -94,6 +104,8 @@
             predictionLower,
             rawText,
             rawLower,
+            effectKind,
+            isDemerit,
             numericScore,
             hasFiniteScore,
             scoreDisplay,

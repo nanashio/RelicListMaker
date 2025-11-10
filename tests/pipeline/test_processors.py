@@ -93,6 +93,7 @@ def test_process_video_creates_outputs_and_invokes_dependencies(tmp_path: Path, 
         column_visibility: dict[str, object] | None,
         master_csv_path: str,
         relic_type: str | None,
+        demerit_master_csv_path: str | None,
         ocr_engine: str,
         gcp_credentials: str | None,
         gcp_credentials_filename: str | None,
@@ -107,6 +108,7 @@ def test_process_video_creates_outputs_and_invokes_dependencies(tmp_path: Path, 
                 f"color={item_color}",
                 master_csv_path,
                 f"type={relic_type}",
+                f"demerit={demerit_master_csv_path}",
                 f"engine={ocr_engine}",
                 f"gcp={gcp_credentials}",
                 f"gcp_file={gcp_credentials_filename}",
@@ -151,9 +153,10 @@ def test_process_video_creates_outputs_and_invokes_dependencies(tmp_path: Path, 
     assert "color=green" in calls[1][1][4]
     assert calls[1][1][5].endswith("master_relics.csv")
     assert calls[1][1][6] == "type=normal"
-    assert calls[1][1][7] == "engine=vision"
-    assert calls[1][1][8] == "gcp=/path/to/creds.json"
-    assert calls[1][1][9] == "gcp_file=packaged.json"
+    assert calls[1][1][7] == "demerit=None"
+    assert calls[1][1][8] == "engine=vision"
+    assert calls[1][1][9] == "gcp=/path/to/creds.json"
+    assert calls[1][1][10] == "gcp_file=packaged.json"
 
     assert isinstance(entry, dataset_builder.ProcessedVideoResult)
     assert entry.label == task.base_name
