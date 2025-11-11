@@ -2018,6 +2018,8 @@ describe('gallery item factory', () => {
       rightColumn.children.map((child) => child.dataset.kind || 'effect'),
       ['effect', 'demerit', 'effect', 'demerit']
     );
+    assert.equal(rightColumn.children[0].classList.contains('effect--with-demerit'), true);
+    assert.equal(rightColumn.children[2].classList.contains('effect--with-demerit'), true);
   });
 
   test('createItem falls back to placeholder when no effect is returned', () => {

@@ -798,21 +798,29 @@ h1 {
     font-weight: 600;
 }
 
+.effect.effect--with-demerit {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom-width: 0;
+}
+
 .effect--demerit {
     border-color: var(--color-warning-border-strong);
     background: var(--color-warning-background-strong);
+    margin-left: 0;
 }
 
 .effect--demerit .prediction-label {
     color: var(--color-warning-text-strong);
 }
 
-.effect.effect--demerit {
-    margin-left: var(--space-md);
-}
-
-.effect + .effect.effect--demerit {
-    margin-top: var(--space-sm);
+.effect.effect--with-demerit + .effect.effect--demerit {
+    margin-top: calc(-1 * var(--space-sm));
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-top-width: 1px;
+    border-top-style: solid;
+    border-top-color: inherit;
 }
 
 .effect.low-confidence {

@@ -296,6 +296,9 @@
                 );
                 if (effect) {
                     hasEffect = true;
+                    if (demerit && effect.classList && typeof effect.classList.add === 'function') {
+                        effect.classList.add('effect--with-demerit');
+                    }
                     appendToFragment(fragment, effect);
                     nodes.push(effect);
                     if (demerit) {
