@@ -8,7 +8,13 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
 
 import gallery_assets
-from relic_data import load_master_csv, load_master_json, load_master_effects_and_levels, normalize_master_values
+from relic_data import (
+    load_master_csv,
+    load_master_json,
+    load_master_effect_metadata,
+    load_master_effects_and_levels,
+    normalize_master_values,
+)
 from resource_paths import templates_path
 
 RESULTS_CSV_PATH = "results_input_video.csv"
@@ -45,6 +51,7 @@ class GalleryPayload:
     master_demerit_options: List[str]
     master_demerit_options_by_type: Dict[str, List[str]]
     master_demerit_csv_map: Dict[str, str]
+    master_demerit_rules_by_type: Dict[str, Dict[str, Dict[str, object]]]
     datasets: List[dict]
     active_dataset_index: int
     item_image_view_box: str
@@ -219,6 +226,35 @@ def _merge_level_maps(
     return merged
 
 
+def _merge_demerit_rules(
+    base: Optional[Dict[str, Dict[str, object]]],
+    addition: Optional[Dict[str, Dict[str, object]]],
+) -> Dict[str, Dict[str, object]]:
+    merged: Dict[str, Dict[str, object]] = {}
+    if base:
+        for key, value in base.items():
+            if not isinstance(value, dict):
+                continue
+            has_demerit = bool(value.get("hasDemerit"))
+            levels = value.get("levels")
+            level_list = []
+            if isinstance(levels, list):
+                level_list = [str(entry) for entry in levels if entry is not None]
+            merged[key] = {"hasDemerit": has_demerit, "levels": level_list}
+    if not addition:
+        return merged
+    for key, value in addition.items():
+        if not isinstance(value, dict):
+            continue
+        has_demerit = bool(value.get("hasDemerit"))
+        levels = value.get("levels")
+        level_list = []
+        if isinstance(levels, list):
+            level_list = [str(entry) for entry in levels if entry is not None]
+        merged[key] = {"hasDemerit": has_demerit, "levels": level_list}
+    return merged
+
+
 KNOWN_RELIC_TYPES: Dict[str, str] = {
     "normal": "master_relics.csv",
     "deep": "master_relics_deep.csv",
@@ -234,6 +270,7 @@ def _collect_master_data_by_type(
     Dict[str, str],
     Dict[str, List[str]],
     Dict[str, str],
+    Dict[str, Dict[str, Dict[str, object]]],
 ]:
     relic_types: set[str] = set(KNOWN_RELIC_TYPES.keys())
     for entry in dataset_entries or []:
@@ -248,6 +285,7 @@ def _collect_master_data_by_type(
     csv_map: Dict[str, str] = {}
     demerit_options_map: Dict[str, List[str]] = {}
     demerit_csv_map: Dict[str, str] = {}
+    demerit_rules_map: Dict[str, Dict[str, Dict[str, object]]] = {}
 
     for relic_type in sorted(relic_types):
         candidate_paths: List[str] = []
@@ -264,6 +302,7 @@ def _collect_master_data_by_type(
 
         merged_effects: List[str] = []
         merged_levels: Dict[str, List[str]] = {}
+        merged_rules: Dict[str, Dict[str, object]] = {}
         recorded_path: str | None = None
 
         for candidate in candidate_paths:
@@ -278,11 +317,16 @@ def _collect_master_data_by_type(
                         merged_effects.append(effect)
             if levels:
                 merged_levels = _merge_level_maps(merged_levels, levels)
+            metadata = load_master_effect_metadata(candidate)
+            if metadata:
+                merged_rules = _merge_demerit_rules(merged_rules, metadata)
 
         if merged_effects:
             options_map[relic_type] = merged_effects
         if merged_levels:
             levels_map[relic_type] = merged_levels
+        if merged_rules:
+            demerit_rules_map[relic_type] = merged_rules
 
         if recorded_path:
             try:
@@ -321,7 +365,14 @@ def _collect_master_data_by_type(
     for key, mapping in levels_map.items():
         levels_map_serializable[key] = {effect: list(values) for effect, values in mapping.items()}
 
-    return options_map, levels_map_serializable, csv_map, demerit_options_map, demerit_csv_map
+    return (
+        options_map,
+        levels_map_serializable,
+        csv_map,
+        demerit_options_map,
+        demerit_csv_map,
+        demerit_rules_map,
+    )
 
 
 def _resolve_asset_path(default_path: str, override: Optional[str]) -> str:
@@ -518,6 +569,7 @@ def build_gallery_payload(
         master_csv_map,
         master_demerit_options_by_type,
         master_demerit_csv_map,
+        master_demerit_rules_by_type,
     ) = _collect_master_data_by_type(
         dataset_entries,
         output_dir_abs,
@@ -611,6 +663,7 @@ def build_gallery_payload(
         master_demerit_options=list(master_demerit_options_list or []),
         master_demerit_options_by_type=master_demerit_options_by_type,
         master_demerit_csv_map=master_demerit_csv_map,
+        master_demerit_rules_by_type=master_demerit_rules_by_type,
         datasets=dataset_entries,
         active_dataset_index=active_dataset_index,
         item_image_view_box=resolved_view_box,
@@ -716,6 +769,9 @@ def generate_html(
         ),
         "__MASTER_DEMERIT_CSV_MAP__": _escape_attr(
             json.dumps(payload.master_demerit_csv_map, ensure_ascii=False)
+        ),
+        "__MASTER_DEMERIT_RULES_MAP__": _escape_attr(
+            json.dumps(payload.master_demerit_rules_by_type, ensure_ascii=False)
         ),
         "__CSS_FILE__": _escape_attr(css_reference),
         "__JS_FILE__": _escape_attr(index_reference),

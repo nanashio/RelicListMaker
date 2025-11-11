@@ -48,6 +48,7 @@
         masterDemeritOptions: masterDemeritOptionsJson = '[]',
         masterDemeritOptionsMap: masterDemeritOptionsMapJson = '{}',
         masterDemeritCsvMap: masterDemeritCsvMapJson = '{}',
+        masterDemeritRulesMap: masterDemeritRulesMapJson = '{}',
         datasets: datasetsJson = '[]',
         activeDataset: activeDatasetAttr = ''
     } = body.dataset || {};
@@ -213,6 +214,53 @@
         return result;
     }
 
+    function parseMasterDemeritRulesByTypeJson(jsonText) {
+        const result = {};
+        const source = parseJsonObject(jsonText);
+        Object.keys(source).forEach((key) => {
+            const normalizedType = normalizeRelicTypeValue(key);
+            if (!normalizedType || normalizedType === RELIC_TYPE_MERGED) {
+                return;
+            }
+            const value = source[key];
+            if (!value || typeof value !== 'object') {
+                return;
+            }
+            const normalizedEntries = {};
+            Object.keys(value).forEach((effectKey) => {
+                const normalizedEffectKey =
+                    typeof effectKey === 'string' ? effectKey.trim().toLowerCase() : '';
+                if (!normalizedEffectKey) {
+                    return;
+                }
+                const entry = value[effectKey];
+                if (!entry || typeof entry !== 'object') {
+                    return;
+                }
+                const hasDemerit = Boolean(entry.hasDemerit);
+                const levels = Array.isArray(entry.levels)
+                    ? entry.levels
+                          .map((level) => {
+                              if (level == null) {
+                                  return '';
+                              }
+                              const text = String(level).trim();
+                              return text;
+                          })
+                          .filter((level) => level)
+                    : [];
+                normalizedEntries[normalizedEffectKey] = {
+                    hasDemerit,
+                    levels,
+                };
+            });
+            if (Object.keys(normalizedEntries).length) {
+                result[normalizedType] = normalizedEntries;
+            }
+        });
+        return result;
+    }
+
     function cloneLevelsMap(levels) {
         if (!(levels instanceof Map)) {
             return null;
@@ -224,6 +272,25 @@
             } else {
                 clone.set(key, []);
             }
+        });
+        return clone;
+    }
+
+    function cloneDemeritRulesMap(rules) {
+        if (!rules || typeof rules !== 'object') {
+            return {};
+        }
+        const clone = {};
+        Object.keys(rules).forEach((key) => {
+            const entry = rules[key];
+            if (!entry || typeof entry !== 'object') {
+                return;
+            }
+            const levels = Array.isArray(entry.levels) ? entry.levels.slice() : [];
+            clone[key] = {
+                hasDemerit: Boolean(entry.hasDemerit),
+                levels,
+            };
         });
         return clone;
     }
@@ -729,6 +796,7 @@
     const masterCsvByType = parseMasterCsvByTypeJson(masterCsvMapJson);
     const masterDemeritOptionsByType = parseMasterOptionsByTypeJson(masterDemeritOptionsMapJson);
     const masterDemeritCsvByType = parseMasterCsvByTypeJson(masterDemeritCsvMapJson);
+    const masterDemeritRulesByType = parseMasterDemeritRulesByTypeJson(masterDemeritRulesMapJson);
 
     const dom = {
         gallery: document.getElementById('gallery'),
@@ -793,6 +861,7 @@
         masterDemeritCsvPath: masterDemeritCsvPath || '',
         masterDemeritJsonPath: masterDemeritJsonPath || '',
         masterDemeritOptions: parseMasterOptions(masterDemeritOptionsJson),
+        masterDemeritRules: {},
         masterLevels: preloadedMasterLevels,
         masterLevelsLoaded: hasPreloadedMasterLevels
     });
@@ -981,6 +1050,12 @@
         stateApi.markMasterDemeritDatalistPrepared(false);
         ensureMasterDemeritDatalist();
 
+        const nextDemeritRules =
+            lookupKey && typeof masterDemeritRulesByType[lookupKey] === 'object'
+                ? masterDemeritRulesByType[lookupKey]
+                : {};
+        stateApi.setMasterDemeritRules(cloneDemeritRulesMap(nextDemeritRules));
+
         let nextLevels = null;
         if (lookupKey && masterLevelsByType[lookupKey] instanceof Map) {
             nextLevels = cloneLevelsMap(masterLevelsByType[lookupKey]);
@@ -1046,6 +1121,13 @@
             }
             const levelInput = effect.querySelector('.level-input');
             if (!levelInput) {
+                if (
+                    effect.dataset &&
+                    effect.dataset.kind === 'demerit' &&
+                    typeof syncDemeritAvailability === 'function'
+                ) {
+                    syncDemeritAvailability(effect, { refreshStatus: true });
+                }
                 return;
             }
             const correctionInput = effect.querySelector('.correction-input');
@@ -1075,6 +1157,14 @@
                 }
             }
             updateLevelInputAvailability(levelInput, baseOptions);
+
+            if (
+                effect.dataset &&
+                effect.dataset.kind === 'demerit' &&
+                typeof syncDemeritAvailability === 'function'
+            ) {
+                syncDemeritAvailability(effect, { refreshStatus: true });
+            }
         });
 
         refreshItemCaches(item);
@@ -1648,7 +1738,8 @@
         getEffectIndexes,
         createCorrectionInput,
         updateInputValueAttribute,
-        updateLevelInputAvailability
+        updateLevelInputAvailability,
+        syncDemeritAvailability
     } = effectModule;
 
 
@@ -1739,7 +1830,8 @@
                   getEffectIndexes,
                   updateInputValueAttribute,
                   updateLevelInputAvailability,
-                  applyMasterLevelOptions
+                  applyMasterLevelOptions,
+                  syncDemeritAvailability
               })
             : null;
 

@@ -45,6 +45,25 @@
             core.masterDemeritOptions = cloneArray(options);
         }
 
+        function setMasterDemeritRules(rules) {
+            if (!rules || typeof rules !== 'object') {
+                core.masterDemeritRules = {};
+                return;
+            }
+            const clone = {};
+            Object.keys(rules).forEach((key) => {
+                const entry = rules[key];
+                if (!entry || typeof entry !== 'object') {
+                    return;
+                }
+                clone[key] = {
+                    hasDemerit: Boolean(entry.hasDemerit),
+                    levels: Array.isArray(entry.levels) ? entry.levels.slice() : []
+                };
+            });
+            core.masterDemeritRules = clone;
+        }
+
         function markMasterDatalistPrepared(prepared = true) {
             core.masterDatalistPrepared = Boolean(prepared);
         }
@@ -110,6 +129,7 @@
             clearRecordsAndItems,
             setMasterOptions,
             setMasterDemeritOptions,
+            setMasterDemeritRules,
             markMasterDatalistPrepared,
             markMasterDemeritDatalistPrepared,
             setMasterLevels,
