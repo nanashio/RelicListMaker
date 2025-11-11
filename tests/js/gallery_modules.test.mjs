@@ -71,20 +71,68 @@ class MockElement {
     if (!selector) {
       return false;
     }
-    if (selector.startsWith('.')) {
-      const classNames = selector
+
+    const text = selector.trim();
+    if (!text) {
+      return false;
+    }
+
+    const attrPattern = /\[([^=\]\s]+)(?:=([^\]]+))?\]/g;
+    const attributeChecks = [];
+    let baseSelector = text.replace(attrPattern, (match, name, value) => {
+      attributeChecks.push({ name, value });
+      return '';
+    });
+
+    baseSelector = baseSelector.trim();
+
+    let baseMatched = false;
+    if (!baseSelector || baseSelector === '*') {
+      baseMatched = true;
+    } else if (baseSelector.startsWith('.')) {
+      const classNames = baseSelector
         .slice(1)
         .split('.')
         .filter(Boolean);
-      if (!classNames.length) {
+      baseMatched = classNames.length > 0 && classNames.every((cls) => this._classes.has(cls));
+    } else if (baseSelector.startsWith('#')) {
+      baseMatched = this.id === baseSelector.slice(1);
+    } else {
+      baseMatched = this.tagName === baseSelector.toUpperCase();
+    }
+
+    if (!baseMatched) {
+      return false;
+    }
+
+    const resolveAttributeValue = (name) => {
+      if (Object.prototype.hasOwnProperty.call(this.attributes, name)) {
+        return this.attributes[name];
+      }
+      if (name.startsWith('data-')) {
+        const dataKey = name
+          .slice(5)
+          .split('-')
+          .map((part, index) => (index === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1)))
+          .join('');
+        if (Object.prototype.hasOwnProperty.call(this.dataset, dataKey)) {
+          return this.dataset[dataKey];
+        }
+      }
+      return undefined;
+    };
+
+    return attributeChecks.every(({ name, value }) => {
+      const actual = resolveAttributeValue(name.trim());
+      if (value == null) {
+        return actual !== undefined;
+      }
+      const normalizedExpected = value.trim().replace(/^['"]|['"]$/g, '');
+      if (actual === undefined) {
         return false;
       }
-      return classNames.every((cls) => this._classes.has(cls));
-    }
-    if (selector.startsWith('#')) {
-      return this.id === selector.slice(1);
-    }
-    return this.tagName === selector.toUpperCase();
+      return String(actual) === normalizedExpected;
+    });
   }
 
   appendChild(child) {
