@@ -23,7 +23,7 @@
             updateInputValueAttribute,
             updateLevelInputAvailability,
             applyMasterLevelOptions,
-            syncDemeritAvailability,
+            syncDemeritAvailability = () => {},
             createRecordActionHandlers: createRecordActionHandlersConfig
         } = config;
 

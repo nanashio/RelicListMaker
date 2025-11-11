@@ -1797,7 +1797,9 @@ describe('gallery effect factory', () => {
     const correctionInput = effect.querySelector('.correction-input');
     assert.ok(correctionInput, 'correction input should exist');
     assert.equal(correctionInput.attributes.list, 'master-demerit-id');
-    assert.equal(correctionInput.disabled, false);
+    assert.equal(correctionInput.disabled, true);
+    assert.equal(correctionInput.value, '');
+    assert.equal(correctionInput.placeholder, '通常遺物ではデメリットなし');
   });
 
   test('createEffect does not nest demerit and allows separate creation', () => {

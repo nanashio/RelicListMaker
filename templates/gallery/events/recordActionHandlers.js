@@ -36,7 +36,7 @@
             updateInputValueAttribute,
             updateLevelInputAvailability,
             applyMasterLevelOptions,
-            syncDemeritAvailability,
+            syncDemeritAvailability = () => {},
             applyMasterDataForRelicType
         } = deps;
 
