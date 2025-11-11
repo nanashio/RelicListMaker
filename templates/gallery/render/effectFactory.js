@@ -107,6 +107,7 @@
                 .trim()
                 .replace(/[﹢＋+]/g, '＋')
                 .replace(/[﹣－−-]/g, '－')
+                .replace(/[0-9]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) + 0xFEE0))
                 .replace(/\s+/g, '');
         }
 
