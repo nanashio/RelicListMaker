@@ -71,13 +71,68 @@ class MockElement {
     if (!selector) {
       return false;
     }
-    if (selector.startsWith('.')) {
-      return this._classes.has(selector.slice(1));
+
+    const text = selector.trim();
+    if (!text) {
+      return false;
     }
-    if (selector.startsWith('#')) {
-      return this.id === selector.slice(1);
+
+    const attrPattern = /\[([^=\]\s]+)(?:=([^\]]+))?\]/g;
+    const attributeChecks = [];
+    let baseSelector = text.replace(attrPattern, (match, name, value) => {
+      attributeChecks.push({ name, value });
+      return '';
+    });
+
+    baseSelector = baseSelector.trim();
+
+    let baseMatched = false;
+    if (!baseSelector || baseSelector === '*') {
+      baseMatched = true;
+    } else if (baseSelector.startsWith('.')) {
+      const classNames = baseSelector
+        .slice(1)
+        .split('.')
+        .filter(Boolean);
+      baseMatched = classNames.length > 0 && classNames.every((cls) => this._classes.has(cls));
+    } else if (baseSelector.startsWith('#')) {
+      baseMatched = this.id === baseSelector.slice(1);
+    } else {
+      baseMatched = this.tagName === baseSelector.toUpperCase();
     }
-    return this.tagName === selector.toUpperCase();
+
+    if (!baseMatched) {
+      return false;
+    }
+
+    const resolveAttributeValue = (name) => {
+      if (Object.prototype.hasOwnProperty.call(this.attributes, name)) {
+        return this.attributes[name];
+      }
+      if (name.startsWith('data-')) {
+        const dataKey = name
+          .slice(5)
+          .split('-')
+          .map((part, index) => (index === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1)))
+          .join('');
+        if (Object.prototype.hasOwnProperty.call(this.dataset, dataKey)) {
+          return this.dataset[dataKey];
+        }
+      }
+      return undefined;
+    };
+
+    return attributeChecks.every(({ name, value }) => {
+      const actual = resolveAttributeValue(name.trim());
+      if (value == null) {
+        return actual !== undefined;
+      }
+      const normalizedExpected = value.trim().replace(/^['"]|['"]$/g, '');
+      if (actual === undefined) {
+        return false;
+      }
+      return String(actual) === normalizedExpected;
+    });
   }
 
   appendChild(child) {
@@ -1778,7 +1833,7 @@ describe('gallery effect factory', () => {
         masterDemeritOptions: ['Penalty'],
         labelSymbols: ['Ⅰ']
       },
-      datasetState: { kind: 'normal' },
+      datasetState: { kind: 'normal', relicType: 'normal' },
       masterDatalistId: 'master-id',
       demeritDatalistId: 'master-demerit-id',
       createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
@@ -1797,7 +1852,198 @@ describe('gallery effect factory', () => {
     const correctionInput = effect.querySelector('.correction-input');
     assert.ok(correctionInput, 'correction input should exist');
     assert.equal(correctionInput.attributes.list, 'master-demerit-id');
+    assert.equal(correctionInput.disabled, true);
+    assert.equal(correctionInput.value, '');
+    assert.equal(correctionInput.placeholder, '通常遺物ではデメリットなし');
+    const passButton = effect.querySelector('.review-button.pass');
+    assert.ok(passButton, 'pass button should exist');
+    assert.equal(passButton.disabled, true);
+    assert.equal(effect.style.display, 'none');
+    assert.equal(effect.attributes['aria-hidden'], 'true');
+    assert.equal(effect.dataset.hiddenDemerit, 'true');
+  });
+
+  test('deep relic disables demerit controls when no matching level is available', () => {
+    const record = {
+      RelicType: '深層遺物',
+      Effect1: 'Test Effect',
+      Effect1Level: '＋2',
+      Effect1Status: 'pending',
+      Demerit1: 'Heavy Burden',
+      DemeritRawText1: 'Heavy Burden',
+      DemeritScore1: 35.2
+    };
+    const localFactory = global.window.galleryRenderFactory.createEffectFactory({
+      state: {
+        showOcr: true,
+        masterOptions: [],
+        masterDemeritOptions: ['Heavy Burden'],
+        masterDemeritRules: {
+          'test effect': { hasDemerit: true, levels: ['＋3', '＋4'] }
+        },
+        labelSymbols: ['Ⅰ']
+      },
+      datasetState: { kind: 'normal', relicType: 'deep' },
+      masterDatalistId: 'master-id',
+      demeritDatalistId: 'master-demerit-id',
+      createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+      applyMasterLevelOptions: () => {},
+      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+    });
+    const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
+    assert.ok(effect, 'demerit effect should be created');
+    const correctionInput = effect.querySelector('.correction-input');
+    assert.ok(correctionInput, 'correction input should exist');
+    assert.equal(correctionInput.disabled, true);
+    assert.equal(correctionInput.placeholder, '指定レベルのデメリットなし');
+    const passButton = effect.querySelector('.review-button.pass');
+    assert.ok(passButton, 'pass button should exist');
+    assert.equal(passButton.disabled, true);
+    assert.equal(effect.style.display, '');
+    assert.equal(effect.attributes['aria-hidden'], undefined);
+    assert.equal(effect.dataset.hiddenDemerit, undefined);
+  });
+
+  test('deep relic treats hyphen placeholder effect as demerit exempt', () => {
+    const record = {
+      RelicType: '深層遺物',
+      Effect1: 'Test Effect',
+      Effect1Correction: ' - ',
+      Effect1Level: '＋4',
+      Effect1Status: 'pending',
+      Demerit1: 'Heavy Burden',
+      DemeritRawText1: 'Heavy Burden',
+      DemeritScore1: 40
+    };
+    const state = {
+      showOcr: true,
+      masterOptions: [],
+      masterDemeritOptions: ['Heavy Burden'],
+      masterDemeritRules: {
+        'test effect': { hasDemerit: true, levels: ['＋3', '＋4'] }
+      },
+      labelSymbols: ['Ⅰ'],
+      records: [record]
+    };
+    const localFactory = global.window.galleryRenderFactory.createEffectFactory({
+      state,
+      datasetState: { kind: 'normal', relicType: 'deep' },
+      masterDatalistId: 'master-id',
+      demeritDatalistId: 'master-demerit-id',
+      createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+      applyMasterLevelOptions: () => {},
+      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+    });
+    const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
+    const correctionInput = effect.querySelector('.correction-input');
+    assert.ok(correctionInput, 'correction input should exist');
+    assert.equal(correctionInput.disabled, true);
+    assert.equal(correctionInput.placeholder, 'デメリット対象外');
+    const passButton = effect.querySelector('.review-button.pass');
+    assert.ok(passButton, 'pass button should exist');
+    assert.equal(passButton.disabled, true);
+    assert.equal(effect.style.display, '');
+    assert.equal(effect.dataset.hiddenDemerit, undefined);
+  });
+
+  test('deep relic enables demerit controls when matching level is available', () => {
+    const record = {
+      RelicType: '深層',
+      Effect1: 'Test Effect',
+      Effect1Level: '＋3',
+      Effect1Status: 'pending',
+      Demerit1: 'Heavy Burden',
+      DemeritRawText1: 'Heavy Burden',
+      DemeritScore1: 35.2
+    };
+    const localFactory = global.window.galleryRenderFactory.createEffectFactory({
+      state: {
+        showOcr: true,
+        masterOptions: [],
+        masterDemeritOptions: ['Heavy Burden'],
+        masterDemeritRules: {
+          'test effect': { hasDemerit: true, levels: ['＋3', '＋4'] }
+        },
+        labelSymbols: ['Ⅰ']
+      },
+      datasetState: { kind: 'normal', relicType: 'deep' },
+      masterDatalistId: 'master-id',
+      demeritDatalistId: 'master-demerit-id',
+      createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+      applyMasterLevelOptions: () => {},
+      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+    });
+    const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
+    assert.ok(effect, 'demerit effect should be created');
+    const correctionInput = effect.querySelector('.correction-input');
+    assert.ok(correctionInput, 'correction input should exist');
     assert.equal(correctionInput.disabled, false);
+    assert.equal(correctionInput.placeholder, 'デメリット候補から選択');
+    const passButton = effect.querySelector('.review-button.pass');
+    assert.ok(passButton, 'pass button should exist');
+    assert.equal(passButton.disabled, false);
+    assert.equal(effect.style.display, '');
+    assert.equal(effect.attributes['aria-hidden'], undefined);
+    assert.equal(effect.dataset.hiddenDemerit, undefined);
+  });
+
+  test('syncDemeritAvailability disables controls after level loses demerit match', () => {
+    const record = {
+      RelicType: '深層遺物',
+      Effect1: 'Test Effect',
+      Effect1Level: '＋3',
+      Effect1LevelCorrection: '',
+      Effect1Status: 'pending',
+      Demerit1: 'Heavy Burden',
+      DemeritRawText1: 'Heavy Burden',
+      DemeritScore1: 35.2,
+      Demerit1Status: 'pending'
+    };
+    const state = {
+      showOcr: true,
+      masterOptions: [],
+      masterDemeritOptions: ['Heavy Burden'],
+      masterDemeritRules: {
+        'test effect': { hasDemerit: true, levels: ['＋3', '＋4'] }
+      },
+      labelSymbols: ['Ⅰ'],
+      records: [record]
+    };
+    const localFactory = global.window.galleryRenderFactory.createEffectFactory({
+      state,
+      datasetState: { kind: 'normal', relicType: 'deep' },
+      masterDatalistId: 'master-id',
+      demeritDatalistId: 'master-demerit-id',
+      createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+      applyMasterLevelOptions: () => {},
+      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+    });
+    const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
+    const correctionInput = effect.querySelector('.correction-input');
+    const passButton = effect.querySelector('.review-button.pass');
+    assert.equal(correctionInput.disabled, false);
+    assert.equal(passButton.disabled, false);
+
+    record.Effect1LevelCorrection = '＋1';
+    localFactory.syncDemeritAvailability(effect, { refreshStatus: true });
+
+    assert.equal(correctionInput.disabled, true);
+    assert.equal(correctionInput.placeholder, '指定レベルのデメリットなし');
+    assert.equal(passButton.disabled, true);
+    assert.equal(effect.style.display, '');
+    assert.equal(effect.dataset.hiddenDemerit, undefined);
   });
 
   test('createEffect does not nest demerit and allows separate creation', () => {
@@ -2414,6 +2660,156 @@ describe('record action handlers', () => {
     assert.equal(effect.dataset.levelCorrectionValue, '');
     assert.equal(effect.dataset.level, 'base');
     assert.deepEqual(statusCalls, []);
+  });
+
+  test('changeEffectLevel triggers linked demerit availability sync', () => {
+    const record = {};
+    const item = new MockElement('div', 'item');
+    const effect = new MockElement('div', 'effect');
+    effect.dataset.status = 'pending';
+    effect.dataset.levelOriginalValue = 'Base';
+    item.appendChild(effect);
+
+    const demerit = new MockElement('div', 'effect effect--demerit');
+    demerit.dataset.kind = 'demerit';
+    demerit.dataset.slot = '1';
+    item.appendChild(demerit);
+
+    const originalQuerySelector = item.querySelector.bind(item);
+    item.querySelector = (selector) => {
+      if (selector === '.effect[data-kind="demerit"][data-slot="1"]') {
+        return demerit;
+      }
+      return originalQuerySelector(selector);
+    };
+
+    const levelInput = new MockElement('select', 'level-input');
+    levelInput.value = 'Expert';
+    effect.appendChild(levelInput);
+
+    const syncCalls = [];
+    const deps = buildBaseDeps(record, item, {
+      updateRecordLevelCorrection: () => true,
+      refreshItemCaches: () => {},
+      applyFilters: () => {},
+      updateLevelBadge: () => {},
+      recordStatusChange: () => false,
+      updateEffectStatus: () => {},
+      syncDemeritAvailability: (target, options) => syncCalls.push([target, options]),
+      getEffectIndexes: () => ({ recordIndex: 0, slotIndex: 1, kind: 'effect' })
+    });
+
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.changeEffectLevel(effect, levelInput);
+
+    assert.equal(syncCalls.length, 1);
+    assert.strictEqual(syncCalls[0][0], demerit);
+    assert.deepEqual(syncCalls[0][1], { refreshStatus: true });
+  });
+
+  test('changeEffectLevel should disable linked demerit when level loses rule match', () => {
+    global.document = createMockDocument();
+    try {
+      runScript('templates/gallery/render/effectViewModel.js');
+      runScript('templates/gallery/render/effectFactory.js');
+
+      const renderFactory = global.window.galleryRenderFactory;
+      const record = {
+        RelicType: '深層遺物',
+        Effect1: 'Test Effect',
+        Effect1Level: '＋3',
+        Effect1LevelOptions: '＋1|＋3|＋4',
+        Effect1LevelCorrection: '',
+        Effect1Status: 'pending',
+        Demerit1: 'Heavy Burden',
+        DemeritRawText1: 'Heavy Burden',
+        DemeritScore1: 35,
+        Demerit1Correction: 'Heavy Burden',
+        Demerit1Status: 'corrected'
+      };
+      const state = {
+        showOcr: true,
+        masterOptions: [],
+        masterDemeritOptions: ['Heavy Burden'],
+        masterDemeritRules: {
+          'test effect': { hasDemerit: true, levels: ['＋3', '＋4'] }
+        },
+        labelSymbols: ['Ⅰ'],
+        records: [record]
+      };
+      const effectFactory = renderFactory.createEffectFactory({
+        state,
+        datasetState: { kind: 'normal', relicType: 'deep' },
+        masterDatalistId: 'master-id',
+        demeritDatalistId: 'master-demerit-id',
+        createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+        sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean) : []),
+        sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+        applyMasterLevelOptions: () => {},
+        normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+        statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+      });
+
+      const item = new MockElement('div', 'item');
+      const effect = effectFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0);
+      const demerit = effectFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
+      item.appendChild(effect);
+      item.appendChild(demerit);
+
+      const levelInput = effect.querySelector('.level-input');
+      const demeritInput = demerit.querySelector('.correction-input');
+      const passButton = demerit.querySelector('.review-button.pass');
+
+      assert.ok(levelInput, 'level input should exist');
+      assert.ok(demeritInput, 'demerit input should exist');
+      assert.ok(passButton, 'pass button should exist');
+      assert.equal(demeritInput.disabled, false);
+      assert.equal(passButton.disabled, false);
+
+      levelInput.value = '＋1';
+
+      const deps = buildBaseDeps(record, item, {
+        updateRecordLevelCorrection: (_recordIndex, _slotIndex, value) => {
+          if (value) {
+            record.Effect1LevelCorrection = value;
+          } else {
+            delete record.Effect1LevelCorrection;
+          }
+          return true;
+        },
+        updateLevelBadge: () => {},
+        refreshItemCaches: () => {},
+        applyFilters: () => {},
+        recordStatusChange: () => false,
+        updateEffectStatus: () => {},
+        syncDemeritAvailability: effectFactory.syncDemeritAvailability,
+        getEffectIndexes: (target) => {
+          if (!target) {
+            return null;
+          }
+          const recordIndex = Number(target.dataset.recordIndex || 0);
+          const slotIndex = Number(target.dataset.slot || 0);
+          const kind = target.dataset.kind === 'demerit' ? 'demerit' : 'effect';
+          return { recordIndex, slotIndex, kind };
+        },
+        updateInputValueAttribute: effectFactory.updateInputValueAttribute,
+        updateLevelInputAvailability: effectFactory.updateLevelInputAvailability,
+        sanitizeLevelList: (values) => (Array.isArray(values) ? values : []),
+        sortLevelsAscending: (values) => (Array.isArray(values) ? [...values] : [])
+      });
+
+      const handlers = handlerFactory.createRecordActionHandlers(deps);
+      handlers.changeEffectLevel(effect, levelInput);
+
+      assert.equal(record.Effect1LevelCorrection, '＋1');
+      assert.ok(!('Demerit1Correction' in record));
+      assert.equal(record.Demerit1Status, 'pending');
+      assert.equal(demeritInput.disabled, true);
+      assert.equal(passButton.disabled, true);
+      assert.equal(demeritInput.placeholder, '指定レベルのデメリットなし');
+    } finally {
+      delete global.document;
+    }
   });
 
   test('toggleReviewStatus clears correction and level data when marking as pass', () => {

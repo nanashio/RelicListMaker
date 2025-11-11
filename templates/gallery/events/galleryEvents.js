@@ -23,6 +23,7 @@
             updateInputValueAttribute,
             updateLevelInputAvailability,
             applyMasterLevelOptions,
+            syncDemeritAvailability = () => {},
             createRecordActionHandlers: createRecordActionHandlersConfig
         } = config;
 
@@ -70,6 +71,9 @@
         }
         if (typeof applyMasterLevelOptions !== 'function') {
             throw new Error('createGalleryEvents: applyMasterLevelOptions helper is required');
+        }
+        if (typeof syncDemeritAvailability !== 'function') {
+            throw new Error('createGalleryEvents: syncDemeritAvailability helper is required');
         }
 
         const handlersNamespace = typeof window !== 'undefined' && window ? window.galleryEventHandlersFactory : null;
@@ -229,7 +233,8 @@
                 getEffectIndexes,
                 updateInputValueAttribute,
                 updateLevelInputAvailability,
-                applyMasterLevelOptions
+                applyMasterLevelOptions,
+                syncDemeritAvailability
             });
 
             const {

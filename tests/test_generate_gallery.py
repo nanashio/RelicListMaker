@@ -219,13 +219,14 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
             "__MASTER_CSV_MAP__",
             "__MASTER_DEMERIT_CSV__",
             "__MASTER_DEMERIT_JSON__",
-            "__MASTER_DEMERIT_OPTIONS__",
-            "__MASTER_DEMERIT_OPTIONS_MAP__",
-            "__MASTER_DEMERIT_CSV_MAP__",
-            "__CSS_FILE__",
-            "__JS_FILE__",
-            "__CORE_JS__",
-            "__DATASETS__",
+                "__MASTER_DEMERIT_OPTIONS__",
+                "__MASTER_DEMERIT_OPTIONS_MAP__",
+                "__MASTER_DEMERIT_CSV_MAP__",
+                "__MASTER_DEMERIT_RULES_MAP__",
+                "__CSS_FILE__",
+                "__JS_FILE__",
+                "__CORE_JS__",
+                "__DATASETS__",
             "__ACTIVE_DATASET__",
             "__ITEM_IMAGE_VIEW_BOX__",
         ]
@@ -317,7 +318,10 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
     master_demerit_csv_map = json.loads(html.unescape(parts[14]))
     assert "deep" in master_demerit_csv_map
     assert master_demerit_csv_map["deep"].endswith('master_relics_demerit.csv')
-    assert parts[20] == html.escape(generate_gallery.DEFAULT_ITEM_IMAGE_VIEW_BOX, quote=True)
+    master_demerit_rules_map = json.loads(html.unescape(parts[15]))
+    assert "deep" in master_demerit_rules_map
+    assert isinstance(master_demerit_rules_map["deep"], dict)
+    assert parts[21] == html.escape(generate_gallery.DEFAULT_ITEM_IMAGE_VIEW_BOX, quote=True)
     assert copied_assets.count("gallery.css") == 1
 
 
@@ -336,6 +340,7 @@ def test_generate_html_embeds_known_master_types(monkeypatch, tmp_path):
             "__MASTER_DEMERIT_OPTIONS__",
             "__MASTER_DEMERIT_OPTIONS_MAP__",
             "__MASTER_DEMERIT_CSV_MAP__",
+            "__MASTER_DEMERIT_RULES_MAP__",
         ]
     )
 

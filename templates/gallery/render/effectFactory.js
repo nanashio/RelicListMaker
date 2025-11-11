@@ -99,6 +99,247 @@
             }
         }
 
+        function normalizeLevelToken(value) {
+            if (value == null) {
+                return '';
+            }
+            return String(value)
+                .trim()
+                .replace(/[﹢＋+]/g, '＋')
+                .replace(/[﹣－−-]/g, '－')
+                .replace(/\s+/g, '');
+        }
+
+        function normalizeRelicTypeValue(value) {
+            if (value == null) {
+                return '';
+            }
+            const text = String(value).trim().toLowerCase();
+            if (!text) {
+                return '';
+            }
+            if (text === 'deep' || text === '深層' || text === '深層遺物') {
+                return 'deep';
+            }
+            if (text === 'normal' || text === '通常') {
+                return 'normal';
+            }
+            if (text === 'merged' || text === 'all' || text === '統合') {
+                return 'merged';
+            }
+            return text;
+        }
+
+        function resolveRecordRelicType(record) {
+            const recordType = normalizeRelicTypeValue(record && record.RelicType);
+            if (recordType) {
+                return recordType;
+            }
+            const datasetType = normalizeRelicTypeValue(datasetState.relicType || '');
+            if (datasetType && datasetType !== 'merged') {
+                return datasetType;
+            }
+            return '';
+        }
+
+        function getSlotEffectName(record, slot) {
+            if (!record) {
+                return '';
+            }
+            const slotIndex = Number(slot);
+            if (!Number.isFinite(slotIndex)) {
+                return '';
+            }
+            const correction = record[`Effect${slotIndex}Correction`];
+            if (typeof correction === 'string' && correction.trim()) {
+                return correction.trim();
+            }
+            const prediction = record[`Effect${slotIndex}`];
+            if (typeof prediction === 'string' && prediction.trim()) {
+                return prediction.trim();
+            }
+            const rawValue = record[`RawText${slotIndex}`];
+            if (typeof rawValue === 'string' && rawValue.trim()) {
+                return rawValue.trim();
+            }
+            return '';
+        }
+
+        function getSlotEffectLevel(record, slot) {
+            if (!record) {
+                return '';
+            }
+            const slotIndex = Number(slot);
+            if (!Number.isFinite(slotIndex)) {
+                return '';
+            }
+            const correction = record[`Effect${slotIndex}LevelCorrection`];
+            if (typeof correction === 'string' && correction.trim()) {
+                return correction.trim();
+            }
+            const level = record[`Effect${slotIndex}Level`];
+            if (typeof level === 'string' && level.trim()) {
+                return level.trim();
+            }
+            return '';
+        }
+
+        function normalizeEffectKey(value) {
+            if (value == null) {
+                return '';
+            }
+            const text = String(value).trim().toLowerCase();
+            if (!text) {
+                return '';
+            }
+            const hyphenOnlyPattern = /^[\-‐‑‒–—―−﹣－ー﹘﹣]+$/;
+            if (hyphenOnlyPattern.test(text)) {
+                return '';
+            }
+            return text;
+        }
+
+        function evaluateDemeritAvailability(record, slot) {
+            const relicType = resolveRecordRelicType(record);
+            if (relicType === 'normal') {
+                return { disable: true, placeholder: '通常遺物ではデメリットなし', hide: true };
+            }
+            if (!relicType) {
+                return { disable: true, placeholder: 'デメリット対象外' };
+            }
+            if (relicType !== 'deep') {
+                return { disable: true, placeholder: 'デメリット対象外' };
+            }
+            const rules = state && state.masterDemeritRules;
+            if (!rules || typeof rules !== 'object') {
+                return { disable: false };
+            }
+            const effectName = getSlotEffectName(record, slot);
+            const effectKey = normalizeEffectKey(effectName);
+            if (!effectKey) {
+                return { disable: true, placeholder: 'デメリット対象外' };
+            }
+            const entry = rules[effectKey];
+            if (!entry || typeof entry !== 'object') {
+                return { disable: true, placeholder: 'デメリット対象外' };
+            }
+            if (!entry.hasDemerit) {
+                return { disable: true, placeholder: 'デメリット対象外' };
+            }
+            const levels = Array.isArray(entry.levels) ? entry.levels : [];
+            if (!levels.length) {
+                return { disable: false };
+            }
+            const levelValue = getSlotEffectLevel(record, slot);
+            if (!levelValue) {
+                return { disable: true, placeholder: '指定レベルのデメリットなし' };
+            }
+            const normalizedLevel = normalizeLevelToken(levelValue);
+            if (!normalizedLevel) {
+                return { disable: true, placeholder: '指定レベルのデメリットなし' };
+            }
+            const matched = levels.some((candidate) => {
+                if (candidate == null) {
+                    return false;
+                }
+                return normalizeLevelToken(candidate) === normalizedLevel;
+            });
+            return matched
+                ? { disable: false }
+                : { disable: true, placeholder: '指定レベルのデメリットなし' };
+        }
+
+        function applyDemeritAvailability(effect, context, decisionElements, options = {}) {
+            if (!effect || !context || !context.isDemerit) {
+                return;
+            }
+            const record = context.record;
+            const slotIndex = Number(context.slot);
+            if (!Number.isFinite(slotIndex)) {
+                return;
+            }
+            const input =
+                decisionElements && decisionElements.correctionInput
+                    ? decisionElements.correctionInput
+                    : effect.querySelector
+                        ? effect.querySelector('.correction-input')
+                        : null;
+            const passButton =
+                decisionElements && decisionElements.passButton
+                    ? decisionElements.passButton
+                    : effect.querySelector
+                        ? effect.querySelector('.review-button.pass')
+                        : null;
+            if (!input) {
+                return;
+            }
+            const evaluation = evaluateDemeritAvailability(record, slotIndex);
+            const shouldDisable = Boolean(evaluation && evaluation.disable);
+            const shouldHide = Boolean(evaluation && evaluation.hide);
+            if (shouldDisable) {
+                const placeholder = evaluation && evaluation.placeholder ? evaluation.placeholder : 'デメリット対象外';
+                if (input.value) {
+                    input.value = '';
+                }
+                updateInputValueAttribute(input);
+                input.disabled = true;
+                input.placeholder = placeholder;
+                if (passButton) {
+                    passButton.disabled = true;
+                }
+                effect.dataset.correction = '';
+                const correctionKey = `Demerit${slotIndex}Correction`;
+                if (correctionKey && record && Object.prototype.hasOwnProperty.call(record, correctionKey)) {
+                    delete record[correctionKey];
+                }
+                const statusKey = `Demerit${slotIndex}Status`;
+                if (statusKey && record && record[statusKey] !== 'pending') {
+                    record[statusKey] = 'pending';
+                }
+                if (context) {
+                    context.correctionValue = '';
+                    context.correctionValueLower = '';
+                    context.statusValue = 'pending';
+                }
+                if (shouldHide) {
+                    effect.dataset.hiddenDemerit = 'true';
+                    if (typeof effect.setAttribute === 'function') {
+                        effect.setAttribute('aria-hidden', 'true');
+                    }
+                    effect.style.display = 'none';
+                } else {
+                    delete effect.dataset.hiddenDemerit;
+                    if (typeof effect.removeAttribute === 'function') {
+                        effect.removeAttribute('aria-hidden');
+                    }
+                    effect.style.display = '';
+                }
+                if (options && options.refreshStatus) {
+                    updateEffectStatus(effect, 'pending');
+                }
+                return;
+            }
+
+            const defaultPlaceholder = input.dataset.placeholderDefault || input.placeholder;
+            if (datasetState.kind !== 'merged') {
+                input.disabled = false;
+            }
+            if (passButton && datasetState.kind !== 'merged') {
+                passButton.disabled = false;
+            }
+            if (defaultPlaceholder) {
+                input.placeholder = defaultPlaceholder;
+            }
+            delete effect.dataset.hiddenDemerit;
+            if (typeof effect.removeAttribute === 'function') {
+                effect.removeAttribute('aria-hidden');
+            }
+            effect.style.display = '';
+            if (options && options.refreshStatus && context && context.statusValue) {
+                updateEffectStatus(effect, context.statusValue);
+            }
+        }
+
         function getBaseLevelOptions(effect) {
             if (!effect) {
                 return [];
@@ -161,6 +402,10 @@
                     sanitizeLevelList,
                     sortLevelsAscending
                 });
+            }
+
+            if (context.isDemerit) {
+                applyDemeritAvailability(effect, context, decisionElements);
             }
 
             if (datasetState.kind === 'merged') {
@@ -376,6 +621,7 @@
                 input.placeholder = isDemerit ? 'デメリットデータ未設定' : 'マスターデータ未設定';
                 input.disabled = true;
             }
+            input.dataset.placeholderDefault = input.placeholder;
             const initialValue = selectedValue || fallbackValue || '';
             input.value = initialValue;
             updateInputValueAttribute(input);
@@ -503,6 +749,45 @@
             return { recordIndex, slotIndex, kind };
         }
 
+        function syncDemeritAvailability(effect, options = {}) {
+            if (!effect || effect.dataset.kind !== 'demerit') {
+                return;
+            }
+            const recordIndex = Number(effect.dataset.recordIndex);
+            if (!Array.isArray(state.records) || Number.isNaN(recordIndex)) {
+                return;
+            }
+            const record = state.records[recordIndex];
+            if (!record || typeof record !== 'object') {
+                return;
+            }
+            const slotIndex = Number(effect.dataset.slot);
+            if (!Number.isFinite(slotIndex)) {
+                return;
+            }
+            const input = effect.querySelector ? effect.querySelector('.correction-input') : null;
+            const passButton = effect.querySelector
+                ? effect.querySelector('.review-button.pass')
+                : null;
+            const context = {
+                record,
+                slot: slotIndex,
+                isDemerit: true,
+                correctionValue: record[`Demerit${slotIndex}Correction`] || '',
+                correctionValueLower: '',
+                statusValue: record[`Demerit${slotIndex}Status`] || 'pending'
+            };
+            if (context.correctionValue) {
+                context.correctionValueLower = context.correctionValue.toLowerCase();
+            }
+            applyDemeritAvailability(
+                effect,
+                context,
+                { correctionInput: input, passButton },
+                options
+            );
+        }
+
         return {
             createEffect,
             updateEffectStatus,
@@ -513,6 +798,7 @@
             createCorrectionInput,
             updateInputValueAttribute,
             updateLevelInputAvailability,
+            syncDemeritAvailability,
             parseLevelOptions: parseLevelOptionsImpl
         };
     }

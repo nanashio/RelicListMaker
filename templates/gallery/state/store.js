@@ -1,6 +1,24 @@
 (() => {
     function createStateStore(initialState = {}) {
         const listeners = new Set();
+        const cloneDemeritRules = (rules) => {
+            if (!rules || typeof rules !== 'object') {
+                return {};
+            }
+            const clone = {};
+            Object.keys(rules).forEach((key) => {
+                const entry = rules[key];
+                if (!entry || typeof entry !== 'object') {
+                    return;
+                }
+                clone[key] = {
+                    hasDemerit: Boolean(entry.hasDemerit),
+                    levels: Array.isArray(entry.levels) ? entry.levels.slice() : []
+                };
+            });
+            return clone;
+        };
+
         const core = {
             records: [],
             items: [],
@@ -17,6 +35,7 @@
                 ? initialState.masterDemeritOptions.slice()
                 : [],
             masterDemeritDatalistPrepared: false,
+            masterDemeritRules: cloneDemeritRules(initialState.masterDemeritRules),
             masterLevels: initialState.masterLevels,
             masterLevelsLoaded: Boolean(initialState.masterLevelsLoaded),
             masterLevelsPromise: null,

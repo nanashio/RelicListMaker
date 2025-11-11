@@ -12,9 +12,12 @@ from resource_paths import templates_path
 MASTER_RELICS_FILENAME = "master_relics.csv"
 DEFAULT_MASTER_COLUMN = "EffectBase"
 LEVELS_COLUMN = "Levels"
+DEMERIT_COLUMN = "Demerit"
+EXISTING_COLUMN = "Existing"
 _SKIP_VALUES = {""}
 _PLACEHOLDER_VALUE = "-"
 _FALSE_VALUES = {"false", "no", "none"}
+_NEGATIVE_MARKS = {"✕", "×", "x"}
 
 
 def resolve_master_csv_path(path: Optional[Union[str, Path]] = None) -> Path:
@@ -66,6 +69,42 @@ def _parse_levels_field(raw_value: object) -> list[str]:
         if cleaned not in levels:
             levels.append(cleaned)
     return levels
+
+
+def _normalize_boolean_flag(raw_value: object) -> bool:
+    if raw_value is None:
+        return False
+    if isinstance(raw_value, bool):
+        return raw_value
+    text = str(raw_value).strip()
+    if not text:
+        return False
+    lowered = text.lower()
+    if lowered in _FALSE_VALUES or lowered in _NEGATIVE_MARKS:
+        return False
+    if lowered in {"true", "yes", "1"}:
+        return True
+    if text in {"〇", "○", "◯"}:
+        return True
+    if text in {"✕", "×"}:
+        return False
+    return True
+
+
+def _normalize_level_token(raw_value: object) -> str:
+    if raw_value is None:
+        return ""
+    text = str(raw_value).strip()
+    if not text:
+        return ""
+    normalized = (
+        text.replace("﹢", "＋")
+        .replace("+", "＋")
+        .replace("﹣", "－")
+        .replace("−", "－")
+        .replace("-", "－")
+    )
+    return normalized.replace(" ", "")
 
 
 def load_master_csv(
@@ -144,6 +183,52 @@ def load_master_effects_and_levels(
         if tokens:
             filtered_levels[effect] = tokens
     return normalized_effects, filtered_levels
+
+
+def load_master_effect_metadata(
+    path: Optional[Union[str, Path]] = None,
+    *,
+    column: str = DEFAULT_MASTER_COLUMN,
+) -> dict[str, dict[str, object]]:
+    """master_relics.csv からデメリット有無や対応レベルを取得する."""
+
+    csv_path = resolve_master_csv_path(path)
+    if not csv_path.exists():
+        print(f"[WARN] master_relics.csv が見つかりません: {csv_path}")
+        return {}
+
+    metadata: dict[str, dict[str, object]] = {}
+    try:
+        with csv_path.open("r", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            fieldnames = reader.fieldnames or []
+            if column not in fieldnames:
+                print(f"[WARN] master_relics.csv にカラム '{column}' が見つかりません: {csv_path}")
+                return {}
+            has_demerit_column = DEMERIT_COLUMN in fieldnames
+            has_existing_column = EXISTING_COLUMN in fieldnames
+            for row in reader:
+                base = str(row.get(column, "")).strip()
+                if not base or base in _SKIP_VALUES:
+                    continue
+                effect_key = base.strip().lower()
+                has_demerit = False
+                if has_demerit_column:
+                    has_demerit = _normalize_boolean_flag(row.get(DEMERIT_COLUMN))
+                existing_levels: list[str] = []
+                if has_existing_column:
+                    tokens = _parse_levels_field(row.get(EXISTING_COLUMN))
+                    if tokens:
+                        existing_levels = [_normalize_level_token(token) for token in tokens if token]
+                metadata[effect_key] = {
+                    "hasDemerit": has_demerit,
+                    "levels": existing_levels,
+                }
+    except OSError as err:
+        print(f"[WARN] master_relics.csv の読み込みに失敗しました: {err}")
+        return {}
+
+    return metadata
 
 
 def load_master_json(

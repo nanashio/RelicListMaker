@@ -36,6 +36,7 @@
             updateInputValueAttribute,
             updateLevelInputAvailability,
             applyMasterLevelOptions,
+            syncDemeritAvailability = () => {},
             applyMasterDataForRelicType
         } = deps;
 
@@ -68,6 +69,7 @@
             updateInputValueAttribute,
             updateLevelInputAvailability,
             applyMasterLevelOptions,
+            syncDemeritAvailability,
             applyMasterDataForRelicType
         };
 
@@ -110,6 +112,36 @@
             const item = effect && typeof effect.closest === 'function' ? effect.closest('.item') : null;
             if (item) {
                 safeRefreshItemCaches(item);
+            }
+        }
+
+        function syncLinkedDemeritEffect(effect) {
+            if (typeof syncDemeritAvailability !== 'function') {
+                return;
+            }
+            if (!effect || typeof effect.closest !== 'function') {
+                return;
+            }
+            const indexes = getEffectIndexes(effect);
+            if (!indexes) {
+                return;
+            }
+            if (indexes.kind === 'demerit') {
+                syncDemeritAvailability(effect, { refreshStatus: true });
+                return;
+            }
+            const item = effect.closest('.item');
+            if (!item) {
+                return;
+            }
+            const slot = indexes.slotIndex;
+            if (!Number.isFinite(slot)) {
+                return;
+            }
+            const selector = `.effect[data-kind="demerit"][data-slot="${slot}"]`;
+            const demeritEffect = item.querySelector(selector);
+            if (demeritEffect) {
+                syncDemeritAvailability(demeritEffect, { refreshStatus: true });
             }
         }
 
@@ -332,6 +364,7 @@
             }
 
             refreshItemFromEffect(effect);
+            syncLinkedDemeritEffect(effect);
             if (!statusChanged && shouldSchedule) {
                 safeScheduleSave();
             }
@@ -367,6 +400,7 @@
 
             updateLevelBadge(effect);
             refreshItemFromEffect(effect);
+            syncLinkedDemeritEffect(effect);
 
             const hasEffectCorrection = Boolean(effect.dataset.correction);
             const currentStatus = effect.dataset.status || 'pending';
