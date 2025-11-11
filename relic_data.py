@@ -225,7 +225,6 @@ def load_master_effect_metadata(
                 print(f"[WARN] master_relics.csv にカラム '{column}' が見つかりません: {csv_path}")
                 return {}
             has_demerit_column = DEMERIT_COLUMN in fieldnames
-            has_existing_column = EXISTING_COLUMN in fieldnames
             for row in reader:
                 base = str(row.get(column, "")).strip()
                 if not base or base in _SKIP_VALUES:
@@ -240,12 +239,6 @@ def load_master_effect_metadata(
                 level_tokens: list[str] = []
                 if has_demerit_column and demerit_value:
                     level_tokens = _extract_level_tokens(row.get(DEMERIT_COLUMN))
-                if not level_tokens:
-                    if has_demerit_column:
-                        if has_demerit and has_existing_column:
-                            level_tokens = _extract_level_tokens(row.get(EXISTING_COLUMN))
-                    elif has_existing_column:
-                        level_tokens = _extract_level_tokens(row.get(EXISTING_COLUMN))
                 metadata[effect_key] = {
                     "hasDemerit": has_demerit,
                     "levels": level_tokens,

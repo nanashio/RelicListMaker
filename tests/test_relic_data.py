@@ -28,7 +28,7 @@ def test_load_master_effect_metadata_prefers_demerit_levels(tmp_path):
 
     assert metadata["effect a"]["levels"] == ["＋1", "＋２"]
     assert metadata["effect b"]["levels"] == []
-    assert metadata["effect c"]["levels"] == ["＋２", "＋３"]
+    assert metadata["effect c"]["levels"] == []
     assert metadata["effect a"]["hasDemerit"] is True
     assert metadata["effect b"]["hasDemerit"] is False
     assert metadata["effect c"]["hasDemerit"] is True
@@ -45,5 +45,5 @@ def test_load_master_effect_metadata_without_demerit_column(tmp_path):
 
     metadata = load_master_effect_metadata(csv_path)
 
-    assert metadata["effect a"]["levels"] == ["＋１", "＋２"]
+    assert metadata["effect a"]["levels"] == []
     assert metadata["effect a"]["hasDemerit"] is False
