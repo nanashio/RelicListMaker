@@ -194,8 +194,14 @@
 
         function evaluateDemeritAvailability(record, slot) {
             const relicType = resolveRecordRelicType(record);
+            if (relicType === 'normal') {
+                return { disable: true, placeholder: '通常遺物ではデメリットなし', hide: true };
+            }
+            if (!relicType) {
+                return { disable: true, placeholder: 'デメリット対象外' };
+            }
             if (relicType !== 'deep') {
-                return { disable: true, placeholder: '通常遺物ではデメリットなし' };
+                return { disable: true, placeholder: 'デメリット対象外' };
             }
             const rules = state && state.masterDemeritRules;
             if (!rules || typeof rules !== 'object') {
@@ -251,11 +257,18 @@
                     : effect.querySelector
                         ? effect.querySelector('.correction-input')
                         : null;
+            const passButton =
+                decisionElements && decisionElements.passButton
+                    ? decisionElements.passButton
+                    : effect.querySelector
+                        ? effect.querySelector('.review-button.pass')
+                        : null;
             if (!input) {
                 return;
             }
             const evaluation = evaluateDemeritAvailability(record, slotIndex);
             const shouldDisable = Boolean(evaluation && evaluation.disable);
+            const shouldHide = Boolean(evaluation && evaluation.hide);
             if (shouldDisable) {
                 const placeholder = evaluation && evaluation.placeholder ? evaluation.placeholder : 'デメリット対象外';
                 if (input.value) {
@@ -264,11 +277,27 @@
                 updateInputValueAttribute(input);
                 input.disabled = true;
                 input.placeholder = placeholder;
+                if (passButton) {
+                    passButton.disabled = true;
+                }
                 effect.dataset.correction = '';
                 if (context) {
                     context.correctionValue = '';
                     context.correctionValueLower = '';
                     context.statusValue = 'pending';
+                }
+                if (shouldHide) {
+                    effect.dataset.hiddenDemerit = 'true';
+                    if (typeof effect.setAttribute === 'function') {
+                        effect.setAttribute('aria-hidden', 'true');
+                    }
+                    effect.style.display = 'none';
+                } else {
+                    delete effect.dataset.hiddenDemerit;
+                    if (typeof effect.removeAttribute === 'function') {
+                        effect.removeAttribute('aria-hidden');
+                    }
+                    effect.style.display = '';
                 }
                 if (options && options.refreshStatus) {
                     updateEffectStatus(effect, 'pending');
@@ -280,9 +309,17 @@
             if (datasetState.kind !== 'merged') {
                 input.disabled = false;
             }
+            if (passButton && datasetState.kind !== 'merged') {
+                passButton.disabled = false;
+            }
             if (defaultPlaceholder) {
                 input.placeholder = defaultPlaceholder;
             }
+            delete effect.dataset.hiddenDemerit;
+            if (typeof effect.removeAttribute === 'function') {
+                effect.removeAttribute('aria-hidden');
+            }
+            effect.style.display = '';
             if (options && options.refreshStatus && context && context.statusValue) {
                 updateEffectStatus(effect, context.statusValue);
             }
@@ -714,6 +751,9 @@
                 return;
             }
             const input = effect.querySelector ? effect.querySelector('.correction-input') : null;
+            const passButton = effect.querySelector
+                ? effect.querySelector('.review-button.pass')
+                : null;
             const context = {
                 record,
                 slot: slotIndex,
@@ -725,7 +765,12 @@
             if (context.correctionValue) {
                 context.correctionValueLower = context.correctionValue.toLowerCase();
             }
-            applyDemeritAvailability(effect, context, { correctionInput: input }, options);
+            applyDemeritAvailability(
+                effect,
+                context,
+                { correctionInput: input, passButton },
+                options
+            );
         }
 
         return {
