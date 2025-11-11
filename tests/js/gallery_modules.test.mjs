@@ -1907,6 +1907,48 @@ describe('gallery effect factory', () => {
     assert.equal(effect.dataset.hiddenDemerit, undefined);
   });
 
+  test('deep relic treats half-width level digits as matching demerit metadata', () => {
+    const record = {
+      RelicType: '深層遺物',
+      Effect1: 'Test Effect',
+      Effect1Level: '＋3',
+      Effect1Status: 'pending',
+      Demerit1: 'Heavy Burden',
+      DemeritRawText1: 'Heavy Burden',
+      DemeritScore1: 39.9,
+      Demerit1Status: 'pending'
+    };
+    const state = {
+      showOcr: true,
+      masterOptions: [],
+      masterDemeritOptions: ['Heavy Burden'],
+      masterDemeritRules: {
+        'test effect': { hasDemerit: true, levels: ['＋３', '＋４'] }
+      },
+      labelSymbols: ['Ⅰ']
+    };
+    const localFactory = global.window.galleryRenderFactory.createEffectFactory({
+      state,
+      datasetState: { kind: 'normal', relicType: 'deep' },
+      masterDatalistId: 'master-id',
+      demeritDatalistId: 'master-demerit-id',
+      createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+      applyMasterLevelOptions: () => {},
+      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+    });
+    const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
+    const correctionInput = effect.querySelector('.correction-input');
+    const passButton = effect.querySelector('.review-button.pass');
+    assert.ok(correctionInput, 'correction input should exist');
+    assert.ok(passButton, 'pass button should exist');
+    assert.equal(correctionInput.disabled, false);
+    assert.equal(passButton.disabled, false);
+    assert.equal(effect.dataset.hiddenDemerit, undefined);
+  });
+
   test('deep relic treats hyphen placeholder effect as demerit exempt', () => {
     const record = {
       RelicType: '深層遺物',
