@@ -2724,7 +2724,8 @@ describe('record action handlers', () => {
         Demerit1: 'Heavy Burden',
         DemeritRawText1: 'Heavy Burden',
         DemeritScore1: 35,
-        Demerit1Status: 'pending'
+        Demerit1Correction: 'Heavy Burden',
+        Demerit1Status: 'corrected'
       };
       const state = {
         showOcr: true,
@@ -2801,6 +2802,8 @@ describe('record action handlers', () => {
       handlers.changeEffectLevel(effect, levelInput);
 
       assert.equal(record.Effect1LevelCorrection, '＋1');
+      assert.ok(!('Demerit1Correction' in record));
+      assert.equal(record.Demerit1Status, 'pending');
       assert.equal(demeritInput.disabled, true);
       assert.equal(passButton.disabled, true);
       assert.equal(demeritInput.placeholder, '指定レベルのデメリットなし');

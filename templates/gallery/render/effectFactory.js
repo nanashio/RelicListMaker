@@ -288,6 +288,14 @@
                     passButton.disabled = true;
                 }
                 effect.dataset.correction = '';
+                const correctionKey = `Demerit${slotIndex}Correction`;
+                if (correctionKey && record && Object.prototype.hasOwnProperty.call(record, correctionKey)) {
+                    delete record[correctionKey];
+                }
+                const statusKey = `Demerit${slotIndex}Status`;
+                if (statusKey && record && record[statusKey] !== 'pending') {
+                    record[statusKey] = 'pending';
+                }
                 if (context) {
                     context.correctionValue = '';
                     context.correctionValueLower = '';
