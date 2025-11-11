@@ -232,13 +232,20 @@ def load_master_effect_metadata(
                     continue
                 effect_key = base.strip().lower()
                 has_demerit = False
+                demerit_value = ""
                 if has_demerit_column:
-                    has_demerit = _normalize_boolean_flag(row.get(DEMERIT_COLUMN))
+                    raw_demerit_value = row.get(DEMERIT_COLUMN)
+                    demerit_value = str(raw_demerit_value).strip() if raw_demerit_value is not None else ""
+                    has_demerit = _normalize_boolean_flag(raw_demerit_value)
                 level_tokens: list[str] = []
-                if has_demerit_column:
+                if has_demerit_column and demerit_value:
                     level_tokens = _extract_level_tokens(row.get(DEMERIT_COLUMN))
-                if not level_tokens and has_existing_column:
-                    level_tokens = _extract_level_tokens(row.get(EXISTING_COLUMN))
+                if not level_tokens:
+                    if has_demerit_column:
+                        if has_demerit and has_existing_column:
+                            level_tokens = _extract_level_tokens(row.get(EXISTING_COLUMN))
+                    elif has_existing_column:
+                        level_tokens = _extract_level_tokens(row.get(EXISTING_COLUMN))
                 metadata[effect_key] = {
                     "hasDemerit": has_demerit,
                     "levels": level_tokens,
