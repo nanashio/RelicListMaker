@@ -19,7 +19,7 @@ _RESERVED_FIELDS = [
     "Duplicate",
     "ItemColor",
 ]
-_EXTRA_FIELD_PREFIXES = ("Effect", "RawText")
+_EXTRA_FIELD_PREFIXES = ("Effect", "RawText", "Demerit")
 
 _SAVE_LOCK = threading.Lock()
 

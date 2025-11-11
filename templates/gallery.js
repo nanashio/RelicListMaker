@@ -2,6 +2,7 @@
     'use strict';
 
     const MASTER_DATALIST_ID = 'master-relic-options';
+    const MASTER_DEMERIT_DATALIST_ID = 'master-demerit-options';
     const DUPLICATE_KEY = 'Duplicate';
     const FAVORITE_KEY = 'Favorite';
     const ITEM_COLOR_OPTIONS = [
@@ -42,6 +43,11 @@
         masterLevels: masterLevelsJson = '{}',
         masterLevelsMap: masterLevelsMapJson = '{}',
         masterCsvMap: masterCsvMapJson = '{}',
+        masterDemeritCsv: masterDemeritCsvPath = '',
+        masterDemeritJson: masterDemeritJsonPath = '',
+        masterDemeritOptions: masterDemeritOptionsJson = '[]',
+        masterDemeritOptionsMap: masterDemeritOptionsMapJson = '{}',
+        masterDemeritCsvMap: masterDemeritCsvMapJson = '{}',
         datasets: datasetsJson = '[]',
         activeDataset: activeDatasetAttr = ''
     } = body.dataset || {};
@@ -505,6 +511,15 @@
         stateApi.setMasterOptions(unique);
     }
 
+    function setupMasterDemeritOptions() {
+        const current = Array.isArray(state.masterDemeritOptions) ? state.masterDemeritOptions : [];
+        const normalized = current
+            .map((value) => normalizeEffectName(value))
+            .filter((value) => value);
+        const unique = Array.from(new Set(normalized));
+        stateApi.setMasterDemeritOptions(unique);
+    }
+
     function ensureMasterDatalist() {
         if (typeof document === 'undefined') {
             return;
@@ -522,6 +537,25 @@
             datalist.appendChild(optionNode);
         });
         stateApi.markMasterDatalistPrepared(true);
+    }
+
+    function ensureMasterDemeritDatalist() {
+        if (typeof document === 'undefined') {
+            return;
+        }
+        let datalist = document.getElementById(MASTER_DEMERIT_DATALIST_ID);
+        if (!datalist) {
+            datalist = document.createElement('datalist');
+            datalist.id = MASTER_DEMERIT_DATALIST_ID;
+            document.body.appendChild(datalist);
+        }
+        datalist.textContent = '';
+        state.masterDemeritOptions.forEach((option) => {
+            const optionNode = document.createElement('option');
+            optionNode.value = option;
+            datalist.appendChild(optionNode);
+        });
+        stateApi.markMasterDemeritDatalistPrepared(true);
     }
 
     async function ensureMasterOptions() {
@@ -547,6 +581,34 @@
         }
         setupMasterOptions();
         ensureMasterDatalist();
+    }
+
+    async function ensureMasterDemeritOptions() {
+        if (state.masterDemeritDatalistPrepared) {
+            return;
+        }
+        if (!state.masterDemeritJsonPath) {
+            setupMasterDemeritOptions();
+            ensureMasterDemeritDatalist();
+            return;
+        }
+        try {
+            const response = await fetch(state.masterDemeritJsonPath, { cache: 'no-cache' });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            stateApi.setMasterDemeritOptions(parseMasterOptions(data));
+        } catch (error) {
+            console.error('デメリットマスターデータの読み込みに失敗しました:', error);
+            setStorageStatus(
+                `デメリットマスターデータの読み込みに失敗しました: ${error.message || error}`,
+                true
+            );
+            stateApi.setMasterDemeritOptions([]);
+        }
+        setupMasterDemeritOptions();
+        ensureMasterDemeritDatalist();
     }
 
     async function ensureMasterLevels() {
@@ -665,6 +727,8 @@
     const masterOptionsByType = parseMasterOptionsByTypeJson(masterOptionsMapJson);
     const masterLevelsByType = parseMasterLevelsByTypeJson(masterLevelsMapJson);
     const masterCsvByType = parseMasterCsvByTypeJson(masterCsvMapJson);
+    const masterDemeritOptionsByType = parseMasterOptionsByTypeJson(masterDemeritOptionsMapJson);
+    const masterDemeritCsvByType = parseMasterCsvByTypeJson(masterDemeritCsvMapJson);
 
     const dom = {
         gallery: document.getElementById('gallery'),
@@ -726,6 +790,9 @@
         masterCsvPath: masterCsvPath || '',
         masterJsonPath: masterJsonPath || '',
         masterOptions: parseMasterOptions(masterOptionsJson),
+        masterDemeritCsvPath: masterDemeritCsvPath || '',
+        masterDemeritJsonPath: masterDemeritJsonPath || '',
+        masterDemeritOptions: parseMasterOptions(masterDemeritOptionsJson),
         masterLevels: preloadedMasterLevels,
         masterLevelsLoaded: hasPreloadedMasterLevels
     });
@@ -748,14 +815,23 @@
         throw new Error('gallery record utilities are not available');
     }
     setupMasterOptions();
+    setupMasterDemeritOptions();
     if (!state.masterJsonPath && state.masterOptions.length) {
         ensureMasterDatalist();
+    }
+    if (!state.masterDemeritJsonPath && state.masterDemeritOptions.length) {
+        ensureMasterDemeritDatalist();
     }
 
     const defaultMasterOptions = Array.isArray(state.masterOptions) ? state.masterOptions.slice() : [];
     const defaultMasterLevelsMap = cloneLevelsMap(preloadedMasterLevels);
     const defaultMasterCsvPath = state.masterCsvPath || '';
     const defaultMasterJsonPath = state.masterJsonPath || '';
+    const defaultMasterDemeritOptions = Array.isArray(state.masterDemeritOptions)
+        ? state.masterDemeritOptions.slice()
+        : [];
+    const defaultMasterDemeritCsvPath = state.masterDemeritCsvPath || '';
+    const defaultMasterDemeritJsonPath = state.masterDemeritJsonPath || '';
 
     function handleStateChange() {
         updateDatasetIndicator();
@@ -897,6 +973,14 @@
         stateApi.markMasterDatalistPrepared(false);
         ensureMasterDatalist();
 
+        const nextDemeritOptions = lookupKey && Array.isArray(masterDemeritOptionsByType[lookupKey])
+            ? masterDemeritOptionsByType[lookupKey].slice()
+            : defaultMasterDemeritOptions.slice();
+        stateApi.setMasterDemeritOptions(nextDemeritOptions);
+        setupMasterDemeritOptions();
+        stateApi.markMasterDemeritDatalistPrepared(false);
+        ensureMasterDemeritDatalist();
+
         let nextLevels = null;
         if (lookupKey && masterLevelsByType[lookupKey] instanceof Map) {
             nextLevels = cloneLevelsMap(masterLevelsByType[lookupKey]);
@@ -923,10 +1007,22 @@
         }
         const resolvedCsvPath = normalizedType === RELIC_TYPE_MERGED ? defaultMasterCsvPath : nextCsvPath;
 
+        let nextDemeritCsvPath = defaultMasterDemeritCsvPath;
+        if (lookupKey && typeof masterDemeritCsvByType[lookupKey] === 'string') {
+            const candidate = masterDemeritCsvByType[lookupKey].trim();
+            if (candidate) {
+                nextDemeritCsvPath = candidate;
+            }
+        }
+        const resolvedDemeritCsvPath =
+            normalizedType === RELIC_TYPE_MERGED ? defaultMasterDemeritCsvPath : nextDemeritCsvPath;
+
         stateStore.update({
             core: {
                 masterCsvPath: resolvedCsvPath || '',
-                masterJsonPath: defaultMasterJsonPath
+                masterJsonPath: defaultMasterJsonPath,
+                masterDemeritCsvPath: resolvedDemeritCsvPath || '',
+                masterDemeritJsonPath: defaultMasterDemeritJsonPath
             }
         });
     }
@@ -1020,6 +1116,7 @@
                       setupDatasetSelector: setupSelector = () => {},
                       ensureMasterLevels: loadMasterLevels = async () => {},
                       ensureMasterOptions: loadMasterOptions = async () => {},
+                      ensureMasterDemeritOptions: loadMasterDemeritOptions = async () => {},
                       datasetState: dsState = { list: [], activeIndex: -1 },
                       switchDataset: switchFn = async () => {},
                       loadInitialData: loadData = async () => {}
@@ -1032,6 +1129,7 @@
                           setupSelector();
                           await loadMasterLevels();
                           await loadMasterOptions();
+                          await loadMasterDemeritOptions();
                           if (dsState && Array.isArray(dsState.list) && dsState.list.length) {
                               await switchFn(dsState.activeIndex, { forceReload: true });
                           } else {
@@ -1527,6 +1625,7 @@
                   state,
                   datasetState,
                   masterDatalistId: MASTER_DATALIST_ID,
+                  demeritDatalistId: MASTER_DEMERIT_DATALIST_ID,
                   createElement,
                   sanitizeLevelList,
                   sortLevelsAscending,
@@ -1733,6 +1832,7 @@
         setupDatasetSelector,
         ensureMasterLevels,
         ensureMasterOptions,
+        ensureMasterDemeritOptions,
         datasetState,
         switchDataset,
         loadInitialData
@@ -1867,36 +1967,48 @@
 
 
 
-    function updateRecordCorrection(recordIndex, slotIndex, value) {
+    function updateRecordCorrection(recordIndex, slotIndex, value, kind = 'effect') {
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
             return false;
         }
-        const key = `Effect${slotIndex}Correction`;
+        const key = kind === 'demerit' ? `Demerit${slotIndex}Correction` : `Effect${slotIndex}Correction`;
         return updateRecordField(recordIndex, key, value);
     }
-    function updateRecordLevelCorrection(recordIndex, slotIndex, value) {
+    function updateRecordLevelCorrection(recordIndex, slotIndex, value, kind = 'effect') {
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
+            return false;
+        }
+        if (kind === 'demerit') {
             return false;
         }
         const key = `Effect${slotIndex}LevelCorrection`;
         return updateRecordField(recordIndex, key, value);
     }
-    function updateRecordLevelValue(recordIndex, slotIndex, value) {
+    function updateRecordLevelValue(recordIndex, slotIndex, value, kind = 'effect') {
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
+            return false;
+        }
+        if (kind === 'demerit') {
             return false;
         }
         const key = `Effect${slotIndex}Level`;
         return updateRecordField(recordIndex, key, value);
     }
-    function updateRecordLevelOptions(recordIndex, slotIndex, value) {
+    function updateRecordLevelOptions(recordIndex, slotIndex, value, kind = 'effect') {
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
+            return false;
+        }
+        if (kind === 'demerit') {
             return false;
         }
         const key = `Effect${slotIndex}LevelOptions`;
         return updateRecordField(recordIndex, key, value);
     }
-    function updateRecordLevelSuppressed(recordIndex, slotIndex, suppressed) {
+    function updateRecordLevelSuppressed(recordIndex, slotIndex, suppressed, kind = 'effect') {
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
+            return false;
+        }
+        if (kind === 'demerit') {
             return false;
         }
         const key = `Effect${slotIndex}LevelSuppressed`;
@@ -1913,7 +2025,10 @@
         if (!record) {
             return false;
         }
-        const key = `Effect${indexes.slotIndex}Status`;
+        const key =
+            indexes.kind === 'demerit'
+                ? `Demerit${indexes.slotIndex}Status`
+                : `Effect${indexes.slotIndex}Status`;
         if (record[key] !== status) {
             record[key] = status;
             storageManager.scheduleSave();

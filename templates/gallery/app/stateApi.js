@@ -41,8 +41,16 @@
             core.masterOptions = cloneArray(options);
         }
 
+        function setMasterDemeritOptions(options) {
+            core.masterDemeritOptions = cloneArray(options);
+        }
+
         function markMasterDatalistPrepared(prepared = true) {
             core.masterDatalistPrepared = Boolean(prepared);
+        }
+
+        function markMasterDemeritDatalistPrepared(prepared = true) {
+            core.masterDemeritDatalistPrepared = Boolean(prepared);
         }
 
         function setMasterLevels(levels) {
@@ -101,7 +109,9 @@
             setItems,
             clearRecordsAndItems,
             setMasterOptions,
+            setMasterDemeritOptions,
             markMasterDatalistPrepared,
+            markMasterDemeritDatalistPrepared,
             setMasterLevels,
             setMasterLevelsLoaded,
             setMasterLevelsPromise,

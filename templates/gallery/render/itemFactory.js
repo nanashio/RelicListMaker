@@ -277,17 +277,38 @@
             const symbols = getLabelSymbols();
             const labelSymbols = Array.isArray(symbols) ? symbols : [];
             labelSymbols.forEach((symbol, index) => {
+                const slotIndex = index + 1;
+                const resolvedSymbol = symbol || `Slot ${slotIndex}`;
                 const effect = createEffect(
                     context.record,
-                    index + 1,
-                    symbol || `Slot ${index + 1}`,
+                    slotIndex,
+                    resolvedSymbol,
                     context.imageName,
                     context.recordIndex
                 );
+                const demerit = createEffect(
+                    context.record,
+                    slotIndex,
+                    resolvedSymbol,
+                    context.imageName,
+                    context.recordIndex,
+                    { kind: 'demerit' }
+                );
                 if (effect) {
                     hasEffect = true;
+                    if (demerit && effect.classList && typeof effect.classList.add === 'function') {
+                        effect.classList.add('effect--with-demerit');
+                    }
                     appendToFragment(fragment, effect);
                     nodes.push(effect);
+                    if (demerit) {
+                        appendToFragment(fragment, demerit);
+                        nodes.push(demerit);
+                    }
+                } else if (demerit) {
+                    hasEffect = true;
+                    appendToFragment(fragment, demerit);
+                    nodes.push(demerit);
                 }
             });
 

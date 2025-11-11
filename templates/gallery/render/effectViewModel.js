@@ -28,8 +28,80 @@
 
         const {
             normalizeStatus = (value) => value,
-            parseLevelOptions: parseOptions = parseLevelOptions
+            parseLevelOptions: parseOptions = parseLevelOptions,
+            kind: requestedKind
         } = options;
+
+        const normalizedKind =
+            typeof requestedKind === 'string' && requestedKind.trim().toLowerCase() === 'demerit'
+                ? 'demerit'
+                : 'effect';
+
+        if (normalizedKind === 'demerit') {
+            const predictionRaw = record[`Demerit${slot}`];
+            const raw = record[`DemeritRawText${slot}`];
+            const score = record[`DemeritScore${slot}`];
+
+            const predictionText = predictionRaw == null ? '' : String(predictionRaw);
+            const rawText = raw == null ? '' : String(raw);
+            const hasScoreValue = score != null && !Number.isNaN(Number(score));
+
+            if (!predictionText && !rawText && !hasScoreValue) {
+                return null;
+            }
+
+            const numericScore = Number(score);
+            const hasFiniteScore = Number.isFinite(numericScore);
+            const scoreDisplay = hasFiniteScore ? `${numericScore.toFixed(1)}%` : '--';
+            const ocrDisplay = rawText || '--';
+
+            const correctionKey = `Demerit${slot}Correction`;
+            const correctionValue = record[correctionKey] == null ? '' : String(record[correctionKey]);
+            const initialStatus = normalizeStatus(record[`Demerit${slot}Status`]) || 'pending';
+            const statusValue = correctionValue && initialStatus !== 'pass' ? 'corrected' : initialStatus;
+
+            const predictionLower = predictionText.toLowerCase();
+            const rawLower = rawText.toLowerCase();
+            const correctionValueLower = correctionValue.toLowerCase();
+
+            const normalizedImageName = imageName == null ? '' : String(imageName);
+            const imageNameLower = normalizedImageName.toLowerCase();
+            const effectNameForLevels = correctionValue || predictionText || rawText;
+
+            return {
+                record,
+                slot,
+                symbol,
+                imageName: normalizedImageName,
+                imageNameLower,
+                recordIndex,
+                predictionText,
+                predictionLower,
+                rawText,
+                rawLower,
+                effectKind: 'demerit',
+                isDemerit: true,
+                numericScore,
+                hasFiniteScore,
+                scoreDisplay,
+                ocrDisplay,
+                statusValue,
+                levelValue: '',
+                levelValueLower: '',
+                levelOptions: [],
+                levelOptionsLower: [],
+                levelOptionsDisplay: '',
+                levelCorrection: '',
+                levelCorrectionLower: '',
+                preserveOriginalLevel: true,
+                displayLevel: '',
+                displayLevelLower: '',
+                correctionValue,
+                correctionValueLower,
+                effectNameForLevels,
+                lowConfidence: hasFiniteScore && numericScore < 60
+            };
+        }
 
         const prediction = record[`Effect${slot}`];
         const raw = record[`RawText${slot}`];
@@ -53,15 +125,6 @@
         const levelOptionsRaw = record[`Effect${slot}LevelOptions`];
         const levelOptions = parseOptions(levelOptionsRaw);
         const levelOptionsLower = levelOptions.map((value) => (value == null ? '' : String(value).toLowerCase()));
-        const kindValueRaw = record[`Effect${slot}Kind`];
-        const kindText =
-            kindValueRaw == null
-                ? ''
-                : String(kindValueRaw)
-                      .trim()
-                      .toLowerCase();
-        const effectKind = kindText || 'effect';
-        const isDemerit = effectKind === 'demerit';
 
         const levelCorrectionKey = `Effect${slot}LevelCorrection`;
         const levelCorrectionRaw = record[levelCorrectionKey];
@@ -78,7 +141,7 @@
         const correctionKey = `Effect${slot}Correction`;
         const correctionValue = record[correctionKey] == null ? '' : String(record[correctionKey]);
 
-        const initialStatus = normalizeStatus(record[`Effect${slot}Status`]);
+        const initialStatus = normalizeStatus(record[`Effect${slot}Status`]) || 'pending';
         const statusValue = correctionValue && initialStatus !== 'pass' ? 'corrected' : initialStatus;
 
         const predictionLower = predictionText.toLowerCase();
@@ -104,8 +167,8 @@
             predictionLower,
             rawText,
             rawLower,
-            effectKind,
-            isDemerit,
+            effectKind: 'effect',
+            isDemerit: false,
             numericScore,
             hasFiniteScore,
             scoreDisplay,

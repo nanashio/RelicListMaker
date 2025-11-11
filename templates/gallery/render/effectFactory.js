@@ -4,6 +4,7 @@
             state,
             datasetState,
             masterDatalistId = 'master-relic-options',
+            demeritDatalistId = 'master-demerit-options',
             createElement,
             sanitizeLevelList,
             sortLevelsAscending,
@@ -122,16 +123,24 @@
             return [];
         }
 
-        function createEffect(record, slot, symbol, imageName, recordIndex) {
+        function createEffect(record, slot, symbol, imageName, recordIndex, options = {}) {
+            const kindOption =
+                options && typeof options.kind === 'string' ? options.kind : undefined;
             const context = createEffectContext(record, slot, symbol, imageName, recordIndex, {
                 normalizeStatus,
-                parseLevelOptions: parseLevelOptionsImpl
+                parseLevelOptions: parseLevelOptionsImpl,
+                kind: kindOption
             });
             if (!context) {
                 return null;
             }
 
-            const effect = createEffectElement(context);
+            const effect = buildEffectElement(context, { nested: false });
+            return effect;
+        }
+
+        function buildEffectElement(context, options = {}) {
+            const effect = createEffectElement(context, options);
 
             const predictionLine = createEffectPredictionLine(context);
             effect.appendChild(predictionLine);
@@ -143,17 +152,23 @@
             const decisionElements = createEffectDecision(effect, context);
             effect.appendChild(decisionElements.container);
 
-            applyMasterLevelOptions(effect, decisionElements.levelInput, context.effectNameForLevels, {
-                setCorrectionLevelCandidates,
-                rebuildLevelSelectOptions,
-                sanitizeLevelList,
-                sortLevelsAscending
-            });
+            if (!context.isDemerit && decisionElements.levelInput) {
+                populateEffectLevelOptions(effect, decisionElements.levelInput, context);
+
+                applyMasterLevelOptions(effect, decisionElements.levelInput, context.effectNameForLevels, {
+                    setCorrectionLevelCandidates,
+                    rebuildLevelSelectOptions,
+                    sanitizeLevelList,
+                    sortLevelsAscending
+                });
+            }
 
             if (datasetState.kind === 'merged') {
                 decisionElements.passButton.disabled = true;
                 decisionElements.correctionInput.disabled = true;
-                decisionElements.levelInput.disabled = true;
+                if (decisionElements.levelInput) {
+                    decisionElements.levelInput.disabled = true;
+                }
             }
 
             updateEffectStatus(effect, context.statusValue);
@@ -161,7 +176,8 @@
             return effect;
         }
 
-        function createEffectElement(context) {
+        function createEffectElement(context, options = {}) {
+            const nested = Boolean(options && options.nested);
             const effect = createElement('div', 'effect');
             effect.dataset.slot = String(context.slot);
             effect.dataset.image = context.imageNameLower;
@@ -186,6 +202,9 @@
             }
             if (context.isDemerit) {
                 effect.classList.add('effect--demerit');
+            }
+            if (nested) {
+                effect.classList.add('effect--nested');
             }
             return effect;
         }
@@ -222,17 +241,17 @@
             passButton.type = 'button';
             passButton.dataset.value = 'pass';
 
-            const correctionInput = createCorrectionInput(context.correctionValue, context.predictionText);
-
-            const levelInput = document.createElement('select');
-            levelInput.id = `level-input-${context.recordIndex}-${context.slot}`;
-            levelInput.className = 'level-input';
-
-            populateEffectLevelOptions(effect, levelInput, context);
+            const correctionInput = createCorrectionInput(context, context.correctionValue, context.predictionText);
 
             decisionRow.appendChild(passButton);
             decisionRow.appendChild(correctionInput);
-            decisionRow.appendChild(levelInput);
+            let levelInput = null;
+            if (!context.isDemerit) {
+                levelInput = document.createElement('select');
+                levelInput.id = `level-input-${context.recordIndex}-${context.slot}`;
+                levelInput.className = 'level-input';
+                decisionRow.appendChild(levelInput);
+            }
             decision.appendChild(decisionRow);
 
             return {
@@ -342,15 +361,19 @@
             });
         }
 
-        function createCorrectionInput(selectedValue, fallbackValue) {
+        function createCorrectionInput(context, selectedValue, fallbackValue) {
             const input = document.createElement('input');
             input.type = 'search';
             input.className = 'correction-input';
-            if (state.masterOptions.length) {
-                input.setAttribute('list', masterDatalistId);
-                input.placeholder = 'master_relicsから選択';
+            const isDemerit = Boolean(context && context.isDemerit);
+            const optionsSource = isDemerit ? state.masterDemeritOptions : state.masterOptions;
+            const hasOptions = Array.isArray(optionsSource) && optionsSource.length > 0;
+            if (hasOptions) {
+                const datalistId = isDemerit ? demeritDatalistId : masterDatalistId;
+                input.setAttribute('list', datalistId);
+                input.placeholder = isDemerit ? 'デメリット候補から選択' : 'master_relicsから選択';
             } else {
-                input.placeholder = 'マスターデータ未設定';
+                input.placeholder = isDemerit ? 'デメリットデータ未設定' : 'マスターデータ未設定';
                 input.disabled = true;
             }
             const initialValue = selectedValue || fallbackValue || '';
@@ -476,7 +499,8 @@
             if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
                 return null;
             }
-            return { recordIndex, slotIndex };
+            const kind = effect.dataset.kind === 'demerit' ? 'demerit' : 'effect';
+            return { recordIndex, slotIndex, kind };
         }
 
         return {

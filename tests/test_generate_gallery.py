@@ -11,6 +11,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 import gallery_assets
 from gallery_assets import GalleryAssets, PreparedAsset
 import generate_gallery
+from resource_paths import templates_path
 
 
 def test_copy_gallery_modules_copies_required_viewer_scripts(tmp_path):
@@ -111,6 +112,11 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
         "__MASTER_LEVELS__\n"
         "__MASTER_LEVELS_BY_TYPE__\n"
         "__MASTER_CSV_MAP__\n"
+        "__MASTER_DEMERIT_CSV__\n"
+        "__MASTER_DEMERIT_JSON__\n"
+        "__MASTER_DEMERIT_OPTIONS__\n"
+        "__MASTER_DEMERIT_OPTIONS_MAP__\n"
+        "__MASTER_DEMERIT_CSV_MAP__\n"
         "__CSS_FILE__\n"
         "__JS_FILE__\n"
         "__CORE_JS__\n"
@@ -166,11 +172,18 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
     assert "★" in html.unescape(parts[2])
     assert "A" in html.unescape(parts[5])
     assert json.loads(html.unescape(parts[6])) == {}
-    datasets_json = json.loads(html.unescape(parts[13]))
+    assert parts[10].endswith('master_relics_demerit.csv')
+    assert parts[11] == ''
+    assert isinstance(json.loads(html.unescape(parts[12])), list)
+    assert json.loads(html.unescape(parts[13])) == {}
+    demerit_csv_map = json.loads(html.unescape(parts[14]))
+    assert "deep" in demerit_csv_map
+    assert demerit_csv_map["deep"].endswith('master_relics_demerit.csv')
+    datasets_json = json.loads(html.unescape(parts[18]))
     assert datasets_json[0]["label"] == "全データセット（統合）"
     assert datasets_json[0]["kind"] == "merged"
     assert datasets_json[0]["sources"][0]["label"] == "A"
-    assert json.loads(parts[14]) == 1
+    assert json.loads(parts[19]) == 1
 
 
 def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_path):
@@ -204,6 +217,11 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
             "__MASTER_LEVELS__",
             "__MASTER_LEVELS_BY_TYPE__",
             "__MASTER_CSV_MAP__",
+            "__MASTER_DEMERIT_CSV__",
+            "__MASTER_DEMERIT_JSON__",
+            "__MASTER_DEMERIT_OPTIONS__",
+            "__MASTER_DEMERIT_OPTIONS_MAP__",
+            "__MASTER_DEMERIT_CSV_MAP__",
             "__CSS_FILE__",
             "__JS_FILE__",
             "__CORE_JS__",
@@ -275,7 +293,7 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
     assert json.loads(html.unescape(parts[5])) == []
     master_options_map = json.loads(html.unescape(parts[6]))
     assert master_options_map == {
-        "deep": ["Deep Effect", "Deep Demerit"],
+        "deep": ["Deep Effect"],
         "normal": ["Default Effect"],
     }
     master_levels = json.loads(html.unescape(parts[7]))
@@ -287,7 +305,19 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
         "deep": {"Deep Effect": ["D1"]},
         "normal": {"Default Effect": ["F1"]},
     }
-    assert parts[15] == html.escape(generate_gallery.DEFAULT_ITEM_IMAGE_VIEW_BOX, quote=True)
+    assert parts[10].endswith('master_relics_demerit.csv')
+    assert parts[11] == ''
+    demerit_options = json.loads(html.unescape(parts[12]))
+    assert isinstance(demerit_options, list)
+    assert len(demerit_options) > 0
+    master_demerit_map = json.loads(html.unescape(parts[13]))
+    assert "deep" in master_demerit_map
+    assert isinstance(master_demerit_map["deep"], list)
+    assert len(master_demerit_map["deep"]) > 0
+    master_demerit_csv_map = json.loads(html.unescape(parts[14]))
+    assert "deep" in master_demerit_csv_map
+    assert master_demerit_csv_map["deep"].endswith('master_relics_demerit.csv')
+    assert parts[20] == html.escape(generate_gallery.DEFAULT_ITEM_IMAGE_VIEW_BOX, quote=True)
     assert copied_assets.count("gallery.css") == 1
 
 
@@ -303,6 +333,9 @@ def test_generate_html_embeds_known_master_types(monkeypatch, tmp_path):
             "__MASTER_LEVELS__",
             "__MASTER_LEVELS_BY_TYPE__",
             "__MASTER_CSV_MAP__",
+            "__MASTER_DEMERIT_OPTIONS__",
+            "__MASTER_DEMERIT_OPTIONS_MAP__",
+            "__MASTER_DEMERIT_CSV_MAP__",
         ]
     )
 
@@ -355,16 +388,32 @@ def test_generate_html_embeds_known_master_types(monkeypatch, tmp_path):
     assert options_map["normal"] == ["Normal Effect"]
     assert options_map["deep"] == ["Deep Effect"]
 
-    levels_map = json.loads(parts[3])
+    levels_map = json.loads(parts[2])
     assert levels_map == {
+        "Normal Effect": ["N1"],
+        "Deep Effect": ["D1"],
+    }
+
+    levels_by_type = json.loads(parts[3])
+    assert levels_by_type == {
         "deep": {"Deep Effect": ["D1"]},
         "normal": {"Normal Effect": ["N1"]},
     }
 
     csv_map = json.loads(parts[4])
-    assert csv_map.keys() == {"normal", "deep"}
+    assert set(csv_map.keys()) == {"normal", "deep"}
     assert csv_map["normal"].endswith("master_relics.csv")
     assert csv_map["deep"].endswith("master_relics_deep.csv")
+
+    assert json.loads(parts[5]) == []
+    assert json.loads(parts[6]) == {}
+    demerit_csv_map = json.loads(parts[7])
+    assert demerit_csv_map == {
+        "deep": os.path.relpath(
+            templates_path("master_relics_demerit.csv"),
+            output_html.parent,
+        ).replace(os.sep, "/"),
+    }
 
     assert "master_relics.csv" in loaded_paths
     assert "master_relics_deep.csv" in loaded_paths
