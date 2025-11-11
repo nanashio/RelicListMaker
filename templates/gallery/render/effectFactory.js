@@ -189,6 +189,13 @@
                 return '';
             }
             const text = String(value).trim().toLowerCase();
+            if (!text) {
+                return '';
+            }
+            const hyphenOnlyPattern = /^[\-‐‑‒–—―−﹣－ー﹘﹣]+$/;
+            if (hyphenOnlyPattern.test(text)) {
+                return '';
+            }
             return text;
         }
 
