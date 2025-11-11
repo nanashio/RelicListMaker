@@ -107,6 +107,25 @@ def _normalize_level_token(raw_value: object) -> str:
     return normalized.replace(" ", "")
 
 
+def _looks_like_level_token(token: str) -> bool:
+    if not token:
+        return False
+    if any(char.isdigit() for char in token):
+        return True
+    if "＋" in token or "－" in token:
+        return True
+    return False
+
+
+def _extract_level_tokens(raw_value: object) -> list[str]:
+    tokens: list[str] = []
+    for candidate in _parse_levels_field(raw_value):
+        normalized = _normalize_level_token(candidate)
+        if _looks_like_level_token(normalized):
+            tokens.append(normalized)
+    return tokens
+
+
 def load_master_csv(
     path: Optional[Union[str, Path]] = None,
     *,
@@ -206,23 +225,23 @@ def load_master_effect_metadata(
                 print(f"[WARN] master_relics.csv にカラム '{column}' が見つかりません: {csv_path}")
                 return {}
             has_demerit_column = DEMERIT_COLUMN in fieldnames
-            has_existing_column = EXISTING_COLUMN in fieldnames
             for row in reader:
                 base = str(row.get(column, "")).strip()
                 if not base or base in _SKIP_VALUES:
                     continue
                 effect_key = base.strip().lower()
                 has_demerit = False
+                demerit_value = ""
                 if has_demerit_column:
-                    has_demerit = _normalize_boolean_flag(row.get(DEMERIT_COLUMN))
-                existing_levels: list[str] = []
-                if has_existing_column:
-                    tokens = _parse_levels_field(row.get(EXISTING_COLUMN))
-                    if tokens:
-                        existing_levels = [_normalize_level_token(token) for token in tokens if token]
+                    raw_demerit_value = row.get(DEMERIT_COLUMN)
+                    demerit_value = str(raw_demerit_value).strip() if raw_demerit_value is not None else ""
+                    has_demerit = _normalize_boolean_flag(raw_demerit_value)
+                level_tokens: list[str] = []
+                if has_demerit_column and demerit_value:
+                    level_tokens = _extract_level_tokens(row.get(DEMERIT_COLUMN))
                 metadata[effect_key] = {
                     "hasDemerit": has_demerit,
-                    "levels": existing_levels,
+                    "levels": level_tokens,
                 }
     except OSError as err:
         print(f"[WARN] master_relics.csv の読み込みに失敗しました: {err}")
