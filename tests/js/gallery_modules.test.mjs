@@ -2080,6 +2080,65 @@ describe('gallery effect factory', () => {
     assert.equal(passButton.disabled, false, 'pass button should remain enabled when single option matches');
   });
 
+  test('deep relic treats hyphen level placeholders as valid when level is blank or zero', () => {
+    const baseFactory = global.window.galleryRenderFactory.createEffectFactory({
+      state: {
+        showOcr: true,
+        masterOptions: [],
+        masterDemeritOptions: ['Heavy Burden'],
+        masterDemeritRules: {
+          'test effect': { hasDemerit: true, levels: ['-', '＋3'] }
+        },
+        labelSymbols: ['Ⅰ']
+      },
+      datasetState: { kind: 'normal', relicType: 'deep' },
+      masterDatalistId: 'master-id',
+      demeritDatalistId: 'master-demerit-id',
+      createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+      applyMasterLevelOptions: () => {},
+      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+    });
+
+    const baseRecord = {
+      RelicType: '深層',
+      Effect1: 'Test Effect',
+      Effect1LevelOptions: '-|＋3',
+      Effect1Status: 'pending',
+      Demerit1: 'Heavy Burden',
+      DemeritRawText1: 'Heavy Burden',
+      DemeritScore1: 41.9
+    };
+
+    const blankLevelEffect = baseFactory.createEffect(
+      { ...baseRecord, Effect1Level: '' },
+      1,
+      'Ⅰ',
+      'image.png',
+      0,
+      { kind: 'demerit' }
+    );
+    const blankInput = blankLevelEffect.querySelector('.correction-input');
+    assert.ok(blankInput, 'blank level should still create input');
+    assert.equal(blankInput.disabled, false, 'hyphen placeholder should allow blank level review');
+    assert.equal(blankInput.placeholder, 'デメリット候補から選択');
+
+    const zeroLevelEffect = baseFactory.createEffect(
+      { ...baseRecord, Effect1Level: '0' },
+      1,
+      'Ⅰ',
+      'image.png',
+      1,
+      { kind: 'demerit' }
+    );
+    const zeroInput = zeroLevelEffect.querySelector('.correction-input');
+    assert.ok(zeroInput, 'zero level should still create input');
+    assert.equal(zeroInput.disabled, false, 'hyphen placeholder should allow zero level review');
+    assert.equal(zeroInput.placeholder, 'デメリット候補から選択');
+  });
+
   test('syncDemeritAvailability disables controls after level loses demerit match', () => {
     const record = {
       RelicType: '深層遺物',

@@ -103,12 +103,27 @@
             if (value == null) {
                 return '';
             }
-            return String(value)
+            const normalized = String(value)
                 .trim()
                 .replace(/[﹢＋+]/g, '＋')
                 .replace(/[﹣－−-]/g, '－')
                 .replace(/[0-9]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) + 0xFEE0))
                 .replace(/\s+/g, '');
+            if (!normalized) {
+                return '';
+            }
+            const hyphenOnlyPattern = /^[－ー―ｰ﹣﹘﹣]+$/;
+            if (hyphenOnlyPattern.test(normalized)) {
+                return '';
+            }
+            return normalized;
+        }
+
+        function isLevelNoneNormalized(value) {
+            if (value == null) {
+                return true;
+            }
+            return value === '' || value === '０';
         }
 
         function normalizeRelicTypeValue(value) {
@@ -267,19 +282,15 @@
                 return { disable: false };
             }
             const levelValue = getSlotEffectLevel(record, slot);
-            if (!levelValue) {
-                return { disable: true, placeholder: '指定レベルのデメリットなし' };
-            }
             const normalizedLevel = normalizeLevelToken(levelValue);
-            if (!normalizedLevel) {
-                return { disable: true, placeholder: '指定レベルのデメリットなし' };
+            const normalizedCandidates = levels.map((candidate) => normalizeLevelToken(candidate));
+            const hasNoneLevel = normalizedCandidates.some((candidate) => isLevelNoneNormalized(candidate));
+            if (isLevelNoneNormalized(normalizedLevel)) {
+                return hasNoneLevel
+                    ? { disable: false }
+                    : { disable: true, placeholder: '指定レベルのデメリットなし' };
             }
-            const matched = levels.some((candidate) => {
-                if (candidate == null) {
-                    return false;
-                }
-                return normalizeLevelToken(candidate) === normalizedLevel;
-            });
+            const matched = normalizedCandidates.some((candidate) => candidate === normalizedLevel);
             return matched
                 ? { disable: false }
                 : { disable: true, placeholder: '指定レベルのデメリットなし' };
