@@ -39,8 +39,8 @@
 
         if (normalizedKind === 'demerit') {
             const predictionRaw = record[`Demerit${slot}`];
-            const raw = record[`DemeritRawText${slot}`];
-            const score = record[`DemeritScore${slot}`];
+            const raw = record[`Demerit${slot}RawText`];
+            const score = record[`Demerit${slot}Score`];
 
             const predictionText = predictionRaw == null ? '' : String(predictionRaw);
             const rawText = raw == null ? '' : String(raw);

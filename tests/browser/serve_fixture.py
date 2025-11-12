@@ -61,8 +61,8 @@ def _build_fixture_tree(base_dir: Path) -> None:
 
     (base_dir / "sample.csv").write_text(
         "Image,Duplicate,ItemColor,Effect1,Effect1Score,Effect1Source,Effect1Status,RawText1\n"
-        "sample_red.png,False,red,神秘,95.0,dictionary,pass,神秘\n"
-        "sample_blue.png,False,blue,最大HP上昇,85.0,dictionary,pending,最大HPが上昇\n",
+        "sample_red.png,False,red,神秘,95.0,神秘,pass,神秘\n"
+        "sample_blue.png,False,blue,最大HP上昇,85.0,最大HP上昇,pending,最大HPが上昇\n",
         encoding="utf-8",
         newline="\n",
     )

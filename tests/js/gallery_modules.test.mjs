@@ -1698,8 +1698,8 @@ describe('gallery effect view model', () => {
   test('createEffectContext handles demerit entries', () => {
     const record = {
       Demerit1: 'Heavy Burden',
-      DemeritRawText1: 'Heavy Burden',
-      DemeritScore1: '55.2',
+      Demerit1RawText: 'Heavy Burden',
+      Demerit1Score: '55.2',
       Demerit1Correction: 'Adjusted Burden',
       Demerit1Status: 'pending'
     };
@@ -1822,8 +1822,8 @@ describe('gallery effect factory', () => {
   test('createEffect builds demerit entry without level controls', () => {
     const record = {
       Demerit1: 'Penalty',
-      DemeritRawText1: 'Penalty OCR',
-      DemeritScore1: 42.5,
+      Demerit1RawText: 'Penalty OCR',
+      Demerit1Score: 42.5,
       Demerit1Status: 'pending'
     };
     const localFactory = global.window.galleryRenderFactory.createEffectFactory({
@@ -1870,8 +1870,8 @@ describe('gallery effect factory', () => {
       Effect1Level: '＋2',
       Effect1Status: 'pending',
       Demerit1: 'Heavy Burden',
-      DemeritRawText1: 'Heavy Burden',
-      DemeritScore1: 35.2
+      Demerit1RawText: 'Heavy Burden',
+      Demerit1Score: 35.2
     };
     const localFactory = global.window.galleryRenderFactory.createEffectFactory({
       state: {
@@ -1915,8 +1915,8 @@ describe('gallery effect factory', () => {
       Effect1Level: '＋4',
       Effect1Status: 'pending',
       Demerit1: 'Heavy Burden',
-      DemeritRawText1: 'Heavy Burden',
-      DemeritScore1: 40
+      Demerit1RawText: 'Heavy Burden',
+      Demerit1Score: 40
     };
     const state = {
       showOcr: true,
@@ -1959,8 +1959,8 @@ describe('gallery effect factory', () => {
       Effect1Level: '＋3',
       Effect1Status: 'pending',
       Demerit1: 'Heavy Burden',
-      DemeritRawText1: 'Heavy Burden',
-      DemeritScore1: 35.2
+      Demerit1RawText: 'Heavy Burden',
+      Demerit1Score: 35.2
     };
     const localFactory = global.window.galleryRenderFactory.createEffectFactory({
       state: {
@@ -2004,8 +2004,8 @@ describe('gallery effect factory', () => {
       Effect1LevelCorrection: '',
       Effect1Status: 'pending',
       Demerit1: 'Heavy Burden',
-      DemeritRawText1: 'Heavy Burden',
-      DemeritScore1: 35.2,
+      Demerit1RawText: 'Heavy Burden',
+      Demerit1Score: 35.2,
       Demerit1Status: 'pending'
     };
     const state = {
@@ -2053,8 +2053,8 @@ describe('gallery effect factory', () => {
       Effect1Score: 88.2,
       Effect1Status: 'pending',
       Demerit1: 'Penalty',
-      DemeritRawText1: 'Penalty OCR',
-      DemeritScore1: 35.5,
+      Demerit1RawText: 'Penalty OCR',
+      Demerit1Score: 35.5,
       Demerit1Status: 'pending'
     };
     const effect = effectFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0);
@@ -2329,8 +2329,8 @@ describe('gallery item factory', () => {
     const record = {
       Image: 'gamma.png',
       Demerit1: 'Penalty',
-      DemeritRawText1: 'Penalty OCR',
-      DemeritScore1: 50
+      Demerit1RawText: 'Penalty OCR',
+      Demerit1Score: 50
     };
 
     const item = fallbackFactory.createItem(record, 0, 1, 1);
@@ -2737,8 +2737,8 @@ describe('record action handlers', () => {
         Effect1LevelCorrection: '',
         Effect1Status: 'pending',
         Demerit1: 'Heavy Burden',
-        DemeritRawText1: 'Heavy Burden',
-        DemeritScore1: 35,
+        Demerit1RawText: 'Heavy Burden',
+        Demerit1Score: 35,
         Demerit1Correction: 'Heavy Burden',
         Demerit1Status: 'corrected'
       };
