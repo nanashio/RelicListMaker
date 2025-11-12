@@ -60,15 +60,20 @@ def _parse_levels_field(raw_value: object) -> list[str]:
         return []
 
     levels: list[str] = []
+    hyphen_like_chars = set("-‐‑‒–—―−﹣－ー﹘﹣")
     for token in text_value.split(","):
         cleaned = token.strip()
         if not cleaned or cleaned in _SKIP_VALUES:
             continue
-        normalized = cleaned
+        lowered = cleaned.lower()
+        if lowered in _FALSE_VALUES:
+            continue
         if cleaned == _PLACEHOLDER_VALUE:
-            normalized = "0"
-        if normalized not in levels:
-            levels.append(normalized)
+            continue
+        if all(char in hyphen_like_chars for char in cleaned):
+            continue
+        if cleaned not in levels:
+            levels.append(cleaned)
     return levels
 
 

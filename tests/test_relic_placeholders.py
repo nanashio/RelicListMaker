@@ -31,7 +31,7 @@ def test_load_master_effects_includes_placeholder(tmp_path: Path):
             [
                 "EffectBase,Category,Levels",
                 "-,placeholder,FALSE",
-                '効果A,カテゴリ,"+1, -, +2"',
+                '効果A,カテゴリ,"+1, FALSE, +2"',
             ]
         ),
         encoding="utf-8",
@@ -42,7 +42,7 @@ def test_load_master_effects_includes_placeholder(tmp_path: Path):
     assert "-" in effects
     assert "効果A" in effects
     assert "-" not in level_map
-    assert level_map["効果A"] == ["+1", "0", "+2"]
+    assert level_map["効果A"] == ["+1", "+2"]
 
 
 def test_load_master_effect_metadata_keeps_zero_placeholder(tmp_path: Path):
@@ -51,7 +51,7 @@ def test_load_master_effect_metadata_keeps_zero_placeholder(tmp_path: Path):
         "\n".join(
             [
                 "EffectBase,Category,Levels,Demerit",
-                '効果A,カテゴリ,"-,＋１,＋２","-,＋２"',
+                '効果A,カテゴリ,"0,＋１,＋２","0,＋２"',
             ]
         ),
         encoding="utf-8",
@@ -60,6 +60,23 @@ def test_load_master_effect_metadata_keeps_zero_placeholder(tmp_path: Path):
     metadata = load_master_effect_metadata(csv_path)
     assert metadata["効果a"]["hasDemerit"] is True
     assert metadata["効果a"]["levels"] == ["0", "＋２"]
+
+
+def test_load_master_effect_metadata_ignores_false_tokens(tmp_path: Path):
+    csv_path = tmp_path / "master.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "EffectBase,Category,Levels,Demerit",
+                '効果A,カテゴリ,"＋１,＋２","FALSE,＋２"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    metadata = load_master_effect_metadata(csv_path)
+    assert metadata["効果a"]["hasDemerit"] is True
+    assert metadata["効果a"]["levels"] == ["＋２"]
 
 
 def test_ensure_effect_slots_adds_placeholder_values():
