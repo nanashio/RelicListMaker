@@ -64,7 +64,7 @@ def test_ensure_effect_slots_adds_placeholder_values():
     assert row["RawText2"] == ""
     assert row["Effect2Score"] == 0.0
     assert row["Effect2Source"] == ""
-    assert row["Effect2LevelOptions"] == ""
+    assert row["Effect2LevelOptions"] == "none"
     assert row["Effect2LevelCorrection"] == ""
     assert "Demerit1" not in row
     assert "Demerit2" not in row

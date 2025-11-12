@@ -64,7 +64,7 @@ def normalize_column_visibility(
 def _serialize_level_options(levels: Sequence[str]) -> str:
     filtered = [level for level in levels if level]
     if not filtered:
-        return ""
+        return "none"
     ordered: list[str] = []
     for level in filtered:
         if level not in ordered:
@@ -87,7 +87,7 @@ def _ensure_effect_slots(row: MutableMapping[str, object], options: ExportOption
         row.setdefault(f"Effect{idx}Kind", "effect")
 
         if column_flags.get("LevelOptions", True):
-            row.setdefault(f"Effect{idx}LevelOptions", "")
+            row.setdefault(f"Effect{idx}LevelOptions", "none")
         if column_flags.get("LevelCorrection", True):
             row.setdefault(f"Effect{idx}LevelCorrection", "")
         if column_flags.get("RawText", True):
