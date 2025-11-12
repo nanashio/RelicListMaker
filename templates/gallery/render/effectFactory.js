@@ -182,6 +182,41 @@
             if (typeof level === 'string' && level.trim()) {
                 return level.trim();
             }
+            const optionsKey = `Effect${slotIndex}LevelOptions`;
+            const hasOptionsProperty = Object.prototype.hasOwnProperty.call(record, optionsKey);
+            if (!hasOptionsProperty) {
+                return '';
+            }
+            const rawOptions = record[optionsKey];
+            let parsedOptions = [];
+            if (Array.isArray(rawOptions)) {
+                parsedOptions = rawOptions;
+            } else if (typeof parseLevelOptionsImpl === 'function') {
+                parsedOptions = parseLevelOptionsImpl(rawOptions);
+            } else if (typeof rawOptions === 'string') {
+                parsedOptions = rawOptions.split('|');
+            }
+            const sanitized = sanitizeLevelList(parsedOptions);
+            if (!sanitized.length) {
+                return '';
+            }
+            const unique = [];
+            const seen = new Set();
+            sanitized.forEach((value) => {
+                const text = value == null ? '' : String(value).trim();
+                if (!text) {
+                    return;
+                }
+                const key = text.toLowerCase();
+                if (seen.has(key)) {
+                    return;
+                }
+                seen.add(key);
+                unique.push(text);
+            });
+            if (unique.length === 1) {
+                return unique[0];
+            }
             return '';
         }
 
