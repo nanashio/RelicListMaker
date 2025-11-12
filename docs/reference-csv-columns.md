@@ -52,21 +52,27 @@ OCRパイプライン（`match_and_export.py` → `relic_pipeline.io.exporter`�
 
 | カラム名 | 役割 | 現行コード参照 | 出力条件・備考 |
 | --- | --- | --- | --- |
-| `Effect{n}` | マッチした効果名。 | ○（常時生成） | スロットごとに必ず用意され、未検出時は空文字。【F:relic_pipeline/io/exporter.py†L119-L144】 |
-| `Effect{n}Level` | 推定レベル。 | ○（常時生成） | 一致した `EffectBase` の `Levels` 候補から常に値を選択し、未設定時は `none` が記録される。空欄は使用しない。【F:relic_pipeline/io/exporter.py†L119-L174】 |
-| `Effect{n}LevelOptions` | レベル候補の一覧。 | ○（列フラグで制御） | 列表示フラグ `LevelOptions` が有効な場合のみ出力される。候補が検出できなかった場合でも空欄は使わず、必ず `none` を書き出す。ビューア上では `none` を空欄として表示しつつ、CSVの値自体は `none` のまま保持する。【F:relic_pipeline/io/exporter.py†L89-L109】【F:relic_pipeline/io/exporter.py†L164-L174】【F:relic_pipeline/io/exporter.py†L235-L240】【F:templates/gallery/render/effectFactory.js†L513-L552】 |
-| `Effect{n}Status` | レビュー状況。初期値は `pending`。 | ○（常時生成） | 列表示フラグに関わらず生成され、レビュー時に更新される。【F:relic_pipeline/io/exporter.py†L131-L137】【F:relic_pipeline/io/exporter.py†L235-L241】 |
+| `Effect{n}` | 最新の効果名。 | ○（常時生成） | スロットごとの最終確定値を保持する。OCR直後はマッチ結果で初期化され、ビューアでのレビュー後は補正済みの内容に更新される。未検出時は空文字。【F:relic_pipeline/io/exporter.py†L119-L144】【F:templates/gallery/render/effectFactory.js†L181-L201】【F:templates/gallery/events/recordActionHandlers.js†L299-L369】 |
+| `Effect{n}Level` | 最新のレベル。 | ○（常時生成） | スロットごとの最終確定値を保持する。OCR直後はマッチ結果で初期化され、ビューアでのレビュー後は補正済みの内容に更新される。未設定時は `none` が記録され、空欄は使用しない。レベルを持たない効果についても `Effect{n}Level` 自体は `none` を保持し続ける。【F:relic_pipeline/io/exporter.py†L119-L174】【F:templates/gallery/render/effectFactory.js†L181-L201】 |
+| `Effect{n}LevelSuppressed` | レベル項目の抑制フラグ。 | △（ビューアで必要時に付与） | レベルが存在しない効果として扱うための真偽フラグ。`true` が設定されると、該当スロットの `Effect{n}Level` と `Effect{n}LevelOptions` は保存時に削除され、レベル入力欄も無効化される。`Effect{n}LevelOptions` が `none` のみを含む（= レベル非対応の効果）場合に同等の挙動をさせる予定であり、その運用へ移行した際には当列を削除する計画である。【F:templates/gallery.js†L2142-L2160】【F:templates/gallery/utils/data.js†L258-L305】 |
+| `Effect{n}LevelSource` | レベルのマッチ元情報。 | ○（列フラグで制御） | OCR照合で得た原本テキストから段階を復元した値を保持する。レビュー後も初期マッチ値を参照できる。列表示フラグ `Source` が有効な場合に出力される。【F:relic_pipeline/io/exporter.py†L139-L144】【F:relic_pipeline/io/exporter.py†L245-L259】 |
+| `Effect{n}LevelOptions` | レベル候補の一覧。 | ○（列フラグで制御） | 列表示フラグ `LevelOptions` が有効な場合のみ出力される。候補が検出できなかった場合でも空欄は使わず、必ず `none` を書き出す。ビューア上では `none` を空欄として表示しつつ、CSVの値自体は `none` のまま保持する。列に `none` のみが並ぶ場合はレベル非対応の効果とみなし、レベル欄を無効化する判断材料として利用する。【F:relic_pipeline/io/exporter.py†L89-L109】【F:relic_pipeline/io/exporter.py†L164-L174】【F:relic_pipeline/io/exporter.py†L235-L240】【F:templates/gallery/render/effectFactory.js†L513-L552】 |
+| `Effect{n}Status` | レビュー状況。初期値は `pending`。 | ○（常時生成） | `build_row` が必ず `pending` で初期化し、ビューア読み込み時は訂正欄が埋まっている行を `corrected` として扱う。【F:relic_pipeline/io/exporter.py†L110-L145】【F:templates/gallery/render/effectViewModel.js†L123-L196】 効果名やレベルの訂正を入力すると `corrected` に更新され、訂正が空に戻れば `pending` に戻る。【F:templates/gallery/events/recordActionHandlers.js†L300-L425】 パスボタンで `pass` を付与・解除でき、承認時には補正値やレベル抑制をクリアして保存をスケジュールする。各更新は `recordStatusChange` がCSV行に反映し保存キューへ積む。【F:templates/gallery/events/recordActionHandlers.js†L428-L500】【F:templates/gallery.js†L2140-L2173】 |
 | `Effect{n}Kind` | 列の種別を示す識別子。 | ○（常時生成） | 現状すべて `effect` で初期化される。【F:relic_pipeline/io/exporter.py†L137-L138】【F:relic_pipeline/io/exporter.py†L235-L241】 |
 | `Effect{n}LevelCorrection` | レベル訂正入力欄。 | ○（列フラグで制御） | 列表示フラグ `LevelCorrection` が有効なときに空欄で生成される。【F:relic_pipeline/io/exporter.py†L172-L174】【F:relic_pipeline/io/exporter.py†L245-L262】 |
+| `Effect{n}Correction` | 効果名の訂正入力欄。 | △（ビューア編集時に追加） | ビューア上で効果名を修正すると一時的に当列へ入力され、保存処理で `Effect{n}` に転記される。レビュー完了後は原則空欄に戻り、統合処理では履歴として列が維持される。【F:templates/gallery/render/effectFactory.js†L181-L201】【F:templates/gallery/events/recordActionHandlers.js†L270-L360】【F:merge_results.py†L239-L275】 |
 | `RawText{n}` | OCR生テキスト。 | ○（列フラグで制御） | 列表示フラグ `RawText` が有効な場合に出力される。【F:relic_pipeline/io/exporter.py†L139-L144】【F:relic_pipeline/io/exporter.py†L245-L259】 |
 | `Effect{n}Score` | マッチスコア。 | ○（列フラグで制御） | 列表示フラグ `Score` が有効な場合に出力される。【F:relic_pipeline/io/exporter.py†L139-L144】【F:relic_pipeline/io/exporter.py†L245-L259】 |
-| `Effect{n}Source` | マッチ元情報。 | ○（列フラグで制御） | 列表示フラグ `Source` が有効な場合に出力される。【F:relic_pipeline/io/exporter.py†L139-L144】【F:relic_pipeline/io/exporter.py†L245-L259】 |
+| `Effect{n}Source` | マッチ元情報。 | ○（列フラグで制御） | OCR照合で得た原本テキストを保持する列。レビューで `Effect{n}` が更新された後も初期マッチ値を参照できる。列表示フラグ `Source` が有効な場合に出力される。【F:relic_pipeline/io/exporter.py†L139-L144】【F:relic_pipeline/io/exporter.py†L245-L259】 |
 
 ### デメリット列
 | カラム名 | 役割 | 現行コード参照 | 出力条件・備考 |
 | --- | --- | --- | --- |
-| `Demerit{n}` | デメリットの効果名。 | ○（列定義あり） | デメリットスロットが指定されている場合に生成される。対応する `Effect{n}` / `Effect{n}Level` の組み合わせでデメリットが存在しない場合は空欄のまま保持され、未設定プレースホルダーには `none` を用いる。OCR結果が無い場合でも列は維持され、ビューア側では効果・レベル規則に基づいて入力欄が無効化される。【F:match_and_export.py†L320-L353】【F:relic_pipeline/io/exporter.py†L100-L162】【F:relic_pipeline/io/exporter.py†L245-L259】【F:templates/gallery/render/effectFactory.js†L202-L249】 |
+| `Demerit{n}` | 最新のデメリット名。 | ○（列定義あり） | デメリットスロットが指定されている場合に生成される。OCR直後はマッチ結果で初期化され、ビューアでのレビュー後は補正済みの内容に更新される。デメリットが存在しない場合は空欄のまま保持され、未設定プレースホルダーには `none` を用いる。【F:match_and_export.py†L320-L353】【F:relic_pipeline/io/exporter.py†L100-L162】【F:relic_pipeline/io/exporter.py†L245-L259】【F:templates/gallery/render/effectFactory.js†L202-L249】 |
 | `Demerit{n}Level` など | デメリットに紐づくレベルやスコア等の列。 | ○（列定義あり） | 効果スロット列と同様の命名規則で追加され、`_ensure_effect_slots` が欠損を補完する。【F:match_and_export.py†L320-L353】【F:relic_pipeline/io/exporter.py†L100-L107】【F:relic_pipeline/io/exporter.py†L146-L162】【F:relic_pipeline/io/exporter.py†L245-L259】 |
+| `Demerit{n}Correction` | デメリット名の訂正入力欄。 | △（ビューア編集時に追加） | ビューアがデメリット名の修正を受け付けた際に書き込まれる。デメリットが対象外と判定された場合は列から値が削除され、入力欄も無効化される。【F:templates/gallery/render/effectFactory.js†L300-L356】 |
+| `Demerit{n}Status` | デメリットのレビュー状況。初期値は `pending`。 | ○（ビューアで更新） | デメリット補正欄に入力が入ると `corrected` が適用され、空に戻すと `pending` へ戻る。【F:templates/gallery/render/effectViewModel.js†L40-L103】【F:templates/gallery/events/recordActionHandlers.js†L300-L372】 パスボタンは `pending`⇔`pass` を切り替え、承認すると関連する訂正値を消去した上で保存をスケジュールする。【F:templates/gallery/events/recordActionHandlers.js†L428-L500】 これらの状態変更は `recordStatusChange` がCSV行に書き戻し、保存キューへ積む。【F:templates/gallery.js†L2140-L2173】 |
+| `Demerit{n}Source` | デメリット名のマッチ元情報。 | ○（列定義あり） | OCR照合で得た原本テキストを保持する。レビュー後に `Demerit{n}` が更新された後も初期マッチ値を参照できる。列表示フラグ `Source` が有効な場合に出力される。【F:match_and_export.py†L320-L353】【F:relic_pipeline/io/exporter.py†L139-L162】【F:relic_pipeline/io/exporter.py†L245-L259】 |
 
 ### 追加メタデータ列
 | カラム名 | 役割 | 現行コード参照 | 出力条件・備考 |
