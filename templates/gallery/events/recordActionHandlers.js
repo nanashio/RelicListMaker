@@ -191,7 +191,21 @@
             }
             effect.dataset.levelCorrection = '';
             effect.dataset.levelCorrectionValue = '';
-            effect.dataset.level = computeEffectiveLevel(effect);
+            const originalValue = effect.dataset.levelOriginalValue || '';
+            const preserveOriginal = effect.dataset.preserveOriginalLevel !== 'false';
+            const finalLevelValue = preserveOriginal ? originalValue : '';
+            let levelValueRestored = false;
+            if (indexes) {
+                levelValueRestored = Boolean(
+                    updateRecordLevelValue(
+                        indexes.recordIndex,
+                        indexes.slotIndex,
+                        finalLevelValue,
+                        indexes.kind
+                    )
+                );
+            }
+            effect.dataset.level = toDatasetValue(finalLevelValue);
 
             const levelInput = effect.querySelector ? effect.querySelector('.level-input') : null;
             if (levelInput) {
@@ -205,7 +219,7 @@
                 setCorrectionLevelCandidates(effect, []);
             }
 
-            return levelCleared;
+            return levelCleared || levelValueRestored;
         }
 
         function resetCorrectionInput(effect) {
@@ -385,7 +399,7 @@
                 return;
             }
 
-            const levelChanged = updateRecordLevelCorrection(
+            const levelCorrectionChanged = updateRecordLevelCorrection(
                 indexes.recordIndex,
                 indexes.slotIndex,
                 selected,
@@ -395,7 +409,14 @@
             effect.dataset.levelCorrectionValue = selected;
 
             const originalValue = effect.dataset.levelOriginalValue || '';
-            const finalLevel = selected || originalValue;
+            const preserveOriginal = effect.dataset.preserveOriginalLevel !== 'false';
+            const finalLevel = selected || (preserveOriginal ? originalValue : '');
+            const levelValueChanged = updateRecordLevelValue(
+                indexes.recordIndex,
+                indexes.slotIndex,
+                finalLevel,
+                indexes.kind
+            );
             effect.dataset.level = toDatasetValue(finalLevel);
 
             updateLevelBadge(effect);
@@ -419,7 +440,7 @@
                 }
             }
 
-            if (!statusChanged && levelChanged) {
+            if (!statusChanged && (levelCorrectionChanged || levelValueChanged)) {
                 safeScheduleSave();
             }
             safeApplyFilters();
@@ -440,12 +461,13 @@
                 const indexes = getEffectIndexes(effect);
                 if (indexes) {
                     const isDemerit = indexes.kind === 'demerit';
-                const correctionChanged = updateRecordCorrection(
-                    indexes.recordIndex,
-                    indexes.slotIndex,
-                    '',
-                    indexes.kind
-                );
+                    let levelValueReset = false;
+                    const correctionChanged = updateRecordCorrection(
+                        indexes.recordIndex,
+                        indexes.slotIndex,
+                        '',
+                        indexes.kind
+                    );
                     let levelChanged = false;
                     let suppressChanged = false;
 
@@ -470,6 +492,15 @@
 
                         effect.dataset.preserveOriginalLevel = 'true';
                         effect.dataset.level = computeEffectiveLevel(effect);
+                        const restoredLevel = effect.dataset.levelOriginalValue || '';
+                        levelValueReset = Boolean(
+                            updateRecordLevelValue(
+                                indexes.recordIndex,
+                                indexes.slotIndex,
+                                restoredLevel,
+                                indexes.kind
+                            )
+                        );
 
                         restoreLevelOptions(effect);
                         resetCorrectionInput(effect);
@@ -488,7 +519,7 @@
                         setCorrectionLevelCandidates(effect, []);
                     }
 
-                    changeDetected = correctionChanged || levelChanged || suppressChanged;
+                    changeDetected = correctionChanged || levelChanged || suppressChanged || levelValueReset;
                 }
             }
 

@@ -2625,6 +2625,77 @@ describe('record action handlers', () => {
     assert.equal(effect.dataset.status, 'corrected');
   });
 
+  test('changeEffectLevel stores selected level in record', () => {
+    const record = { Effect1Level: 'Base' };
+    const item = new MockElement('div', 'item');
+    const effect = new MockElement('div', 'effect');
+    effect.dataset.status = 'pending';
+    effect.dataset.levelOriginalValue = 'Base';
+    item.appendChild(effect);
+
+    const levelInput = new MockElement('select', 'level-input');
+    levelInput.value = 'Expert';
+    effect.appendChild(levelInput);
+
+    const storedLevels = [];
+    const scheduleCalls = [];
+    const deps = buildBaseDeps(record, item, {
+      scheduleSave: () => scheduleCalls.push(null),
+      updateRecordLevelCorrection: () => false,
+      updateRecordLevelValue: (recordIndex, slotIndex, value) => {
+        storedLevels.push([recordIndex, slotIndex, value]);
+        record[`Effect${slotIndex}Level`] = value;
+        return true;
+      },
+      getEffectIndexes: () => ({ recordIndex: 5, slotIndex: 1 })
+    });
+
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.changeEffectLevel(effect, levelInput);
+
+    assert.deepEqual(storedLevels, [[5, 1, 'Expert']]);
+    assert.equal(record.Effect1Level, 'Expert');
+    assert.equal(scheduleCalls.length, 1);
+    assert.equal(effect.dataset.level, 'expert');
+  });
+
+  test('changeEffectLevel restores record level when selection cleared', () => {
+    const record = { Effect3Level: 'Expert' };
+    const item = new MockElement('div', 'item');
+    const effect = new MockElement('div', 'effect');
+    effect.dataset.status = 'corrected';
+    effect.dataset.levelOriginalValue = 'Base';
+    effect.dataset.levelCorrectionValue = 'Expert';
+    effect.dataset.level = 'expert';
+    item.appendChild(effect);
+
+    const levelInput = new MockElement('select', 'level-input');
+    levelInput.value = '';
+    effect.appendChild(levelInput);
+
+    const storedLevels = [];
+    const deps = buildBaseDeps(record, item, {
+      updateRecordLevelCorrection: () => false,
+      updateRecordLevelValue: (recordIndex, slotIndex, value) => {
+        storedLevels.push([recordIndex, slotIndex, value]);
+        if (value) {
+          record[`Effect${slotIndex}Level`] = value;
+        } else {
+          delete record[`Effect${slotIndex}Level`];
+        }
+        return true;
+      },
+      getEffectIndexes: () => ({ recordIndex: 0, slotIndex: 3 })
+    });
+
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.changeEffectLevel(effect, levelInput);
+
+    assert.deepEqual(storedLevels, [[0, 3, 'Base']]);
+    assert.equal(record.Effect3Level, 'Base');
+    assert.equal(effect.dataset.level, 'base');
+  });
+
   test('changeEffectLevel clears level while preserving status when correction exists', () => {
     const record = {};
     const item = new MockElement('div', 'item');
@@ -2864,6 +2935,7 @@ describe('record action handlers', () => {
     const statusCalls = [];
     const effectStatusCalls = [];
     const createCorrectionCalls = [];
+    const levelValueCalls = [];
 
     const replacementInput = new MockElement('input', 'correction-input');
 
@@ -2877,6 +2949,15 @@ describe('record action handlers', () => {
       },
       updateRecordLevelCorrection: (recordIndex, slotIndex, value) => {
         levelCorrectionCalls.push([recordIndex, slotIndex, value]);
+        return true;
+      },
+      updateRecordLevelValue: (recordIndex, slotIndex, value) => {
+        levelValueCalls.push([recordIndex, slotIndex, value]);
+        if (value) {
+          record[`Effect${slotIndex}Level`] = value;
+        } else {
+          delete record[`Effect${slotIndex}Level`];
+        }
         return true;
       },
       updateRecordLevelSuppressed: (recordIndex, slotIndex, suppressed) => {
@@ -2909,11 +2990,13 @@ describe('record action handlers', () => {
     assert.deepEqual(correctionCalls, [[4, 2, '']]);
     assert.deepEqual(levelCorrectionCalls, [[4, 2, '']]);
     assert.deepEqual(levelSuppressedCalls, [[4, 2, false]]);
+    assert.deepEqual(levelValueCalls, [[4, 2, 'Base']]);
     assert.equal(effect.dataset.correction, '');
     assert.equal(effect.dataset.levelCorrection, '');
     assert.equal(effect.dataset.levelCorrectionValue, '');
     assert.equal(effect.dataset.preserveOriginalLevel, 'true');
     assert.equal(effect.dataset.level, 'base');
+    assert.equal(record.Effect2Level, 'Base');
     assert.equal(levelInput.value, '');
     assert.deepEqual(candidateCalls, [[]]);
     assert.deepEqual(rebuildCalls, [levelInput]);
