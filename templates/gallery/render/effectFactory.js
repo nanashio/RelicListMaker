@@ -70,13 +70,24 @@
 
         function setCorrectionLevelCandidates(effect, candidates) {
             const sanitized = sanitizeLevelList(candidates);
-            const sorted = sortLevelsAscending(sanitized);
-            if (!effect) {
-                return sorted;
+            const hasZeroCandidate = sanitized.some((value) => hasZeroLevelToken(value));
+            const filtered = filterZeroLevelCandidates(sanitized);
+            const sorted = sortLevelsAscending(filtered);
+            if (effect) {
+                if (hasZeroCandidate) {
+                    effect.dataset.zeroLevelCandidate = 'true';
+                } else {
+                    delete effect.dataset.zeroLevelCandidate;
+                }
             }
-            const input = effect.querySelector ? effect.querySelector('.correction-input') : null;
+            const input = effect && effect.querySelector ? effect.querySelector('.correction-input') : null;
             if (input) {
                 input.dataset.levelCandidates = JSON.stringify(sorted);
+                if (hasZeroCandidate) {
+                    input.dataset.zeroLevelCandidate = 'true';
+                } else {
+                    delete input.dataset.zeroLevelCandidate;
+                }
             }
             return sorted;
         }
@@ -124,6 +135,31 @@
                 return true;
             }
             return value === '' || value === '０';
+        }
+
+        function toLevelText(value) {
+            if (value == null) {
+                return '';
+            }
+            return String(value).trim();
+        }
+
+        function hasZeroLevelToken(value) {
+            const text = toLevelText(value);
+            if (!text) {
+                return false;
+            }
+            const normalized = normalizeLevelToken(text);
+            return isLevelNoneNormalized(normalized);
+        }
+
+        function filterZeroLevelCandidates(values) {
+            if (!Array.isArray(values)) {
+                return [];
+            }
+            return values
+                .map((value) => toLevelText(value))
+                .filter((value) => value && !hasZeroLevelToken(value));
         }
 
         function normalizeRelicTypeValue(value) {
@@ -485,6 +521,9 @@
             effect.dataset.levelOptions = context.levelOptionsLower.join('|');
             effect.dataset.levelOptionsDisplay = context.levelOptionsDisplay;
             effect.dataset.levelOptionsBase = context.levelOptionsDisplay;
+            if (context.hasZeroLevelOption) {
+                effect.dataset.zeroLevelCandidate = 'true';
+            }
             effect.dataset.levelCorrection = context.levelCorrectionLower;
             effect.dataset.levelCorrectionValue = context.levelCorrection;
             effect.dataset.correction = context.correctionValueLower;

@@ -1695,6 +1695,28 @@ describe('gallery effect view model', () => {
     assert.equal(context.correctionValue, 'Fix');
   });
 
+  test('createEffectContext strips zero level tokens from display data', () => {
+    const record = {
+      Effect1: 'Zero Level Effect',
+      RawText1: 'Zero Level',
+      Effect1Score: '50',
+      Effect1Level: '0',
+      Effect1LevelOptions: '0|＋1|＋2',
+      Effect1LevelCorrection: '',
+      Effect1LevelSuppressed: '',
+      Effect1Status: 'pending'
+    };
+
+    const context = viewModel.createEffectContext(record, 1, 'Ⅰ', 'Zero.png', 3, {
+      normalizeStatus: (value) => value
+    });
+
+    assert.equal(context.levelValue, '');
+    assert.deepEqual(context.levelOptions, ['＋1', '＋2']);
+    assert.equal(context.levelOptionsDisplay, '＋1|＋2');
+    assert.equal(context.hasZeroLevelOption, true);
+  });
+
   test('createEffectContext handles demerit entries', () => {
     const record = {
       Demerit1: 'Heavy Burden',
@@ -1797,6 +1819,42 @@ describe('gallery effect factory', () => {
     assert.equal(effectName, 'Power');
     assert.equal(typeof helpers.setCorrectionLevelCandidates, 'function');
     assert.equal(typeof helpers.rebuildLevelSelectOptions, 'function');
+  });
+
+  test('createEffect hides zero level tokens from UI state', () => {
+    const record = {
+      Effect1: 'Zero Option',
+      RawText1: 'Zero Option',
+      Effect1Score: 70,
+      Effect1Level: '0',
+      Effect1LevelOptions: '0|＋3',
+      Effect1LevelCorrection: '',
+      Effect1Status: 'pending',
+      BaseImage: 'base.png'
+    };
+
+    const effect = effectFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0);
+    assert.ok(effect, 'effect should be created for zero level record');
+    assert.equal(effect.dataset.levelOriginalValue, '');
+    assert.equal(effect.dataset.levelOptionsDisplay, '＋3');
+    assert.equal(effect.dataset.zeroLevelCandidate, 'true');
+
+    const select = effect.querySelector('.level-input');
+    assert.ok(select, 'level input should be present for effect records');
+    const optionValues = select.children.map((child) => child.value);
+    assert.deepEqual(optionValues, ['', '＋3']);
+
+    const [, levelInput, , helpers] = applyCalls[0];
+    assert.strictEqual(levelInput, select);
+    helpers.setCorrectionLevelCandidates(effect, ['0', '＋3']);
+
+    const correctionInput = effect.querySelector('.correction-input');
+    assert.ok(correctionInput, 'correction input should exist for effect records');
+    assert.equal(correctionInput.dataset.zeroLevelCandidate, 'true');
+    assert.equal(correctionInput.dataset.levelCandidates, JSON.stringify(['＋3']));
+
+    const baseJson = effect.dataset.levelOptionsBaseJson || '[]';
+    assert.equal(JSON.parse(baseJson).includes('0'), false, 'base options should not include zero tokens');
   });
 
   test('level correction does not override master lookup key', () => {

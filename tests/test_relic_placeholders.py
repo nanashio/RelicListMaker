@@ -189,3 +189,24 @@ def test_build_row_merges_demerit_results():
     assert row["DemeritRawText1"] == "Demerit Raw"
     assert row["DemeritScore1"] == 65.4
     assert row["DemeritSource1"] == "demerit"
+
+
+def test_build_row_converts_zero_level_to_blank():
+    options = ExportOptions(
+        column_visibility=dict(DEFAULT_COLUMN_VISIBILITY),
+        slot_range=range(1, 2),
+        level_map={'Effect Matched': ['0', '＋3']},
+        item_color=None,
+        demerit_slots=(),
+    )
+    match = MatchResult(
+        raw_text='0',
+        matched_text='Effect Matched',
+        score=88.0,
+        source='dictionary',
+    )
+
+    row = build_row('image.png', [match], options=options)
+
+    assert row['Effect1Level'] == ''
+    assert row['Effect1LevelOptions'] == '＋3'

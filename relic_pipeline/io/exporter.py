@@ -38,6 +38,30 @@ def parse_column_flag_value(value: object) -> bool | None:
 LEVEL_OPTIONS_SEPARATOR = " | "
 
 
+def _normalize_zero_level_token(raw_value: object) -> str:
+    if raw_value is None:
+        return ''
+    text = str(raw_value).strip()
+    if not text:
+        return ''
+    normalized = text.replace('﹢', '+').replace('＋', '+')
+    normalized = normalized.replace('﹣', '-').replace('－', '-').replace('−', '-')
+    converted = []
+    for char in normalized:
+        code = ord(char)
+        if 0xFF10 <= code <= 0xFF19:
+            converted.append(chr(code - 0xFEE0))
+        else:
+            converted.append(char)
+    collapsed = ''.join(converted).replace(' ', '').replace('　', '')
+    return collapsed
+
+
+def _is_zero_level_value(raw_value: object) -> bool:
+    normalized = _normalize_zero_level_token(raw_value)
+    return normalized in {'0', '+0', '-0'}
+
+
 def normalize_column_visibility(
     overrides: Mapping[str, object] | None,
     *,
@@ -62,13 +86,19 @@ def normalize_column_visibility(
 
 
 def _serialize_level_options(levels: Sequence[str]) -> str:
-    filtered = [level for level in levels if level]
-    if not filtered:
-        return ""
     ordered: list[str] = []
-    for level in filtered:
-        if level not in ordered:
-            ordered.append(level)
+    for level in levels:
+        if level is None:
+            continue
+        text = str(level).strip()
+        if not text:
+            continue
+        if _is_zero_level_value(text):
+            continue
+        if text not in ordered:
+            ordered.append(text)
+    if not ordered:
+        return ""
     return LEVEL_OPTIONS_SEPARATOR.join(ordered)
 
 
@@ -165,7 +195,10 @@ def build_row(
             candidates = find_level_candidates(match.matched_text, level_map=level_map)
             if candidates:
                 detected_level = detect_level_from_text(match.raw_text, candidates=candidates)
-                row[f"Effect{idx}Level"] = detected_level or ""
+                normalized_level = detected_level or ""
+                if normalized_level and _is_zero_level_value(normalized_level):
+                    normalized_level = ""
+                row[f"Effect{idx}Level"] = normalized_level
                 if column_flags.get("LevelOptions", True):
                     row[f"Effect{idx}LevelOptions"] = _serialize_level_options(candidates)
 

@@ -21,6 +21,31 @@
         return [];
     }
 
+    function normalizeZeroLevelToken(value) {
+        if (value == null) {
+            return '';
+        }
+        return String(value)
+            .trim()
+            .replace(/[﹢＋+]/g, '+')
+            .replace(/[﹣－−-]/g, '-')
+            .replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xFEE0))
+            .replace(/\s+/g, '');
+    }
+
+    function hasZeroLevelToken(value) {
+        const normalized = normalizeZeroLevelToken(value);
+        return normalized === '0' || normalized === '+0' || normalized === '-0';
+    }
+
+    function normalizeLevelDisplayValue(value) {
+        const text = value == null ? '' : String(value).trim();
+        if (!text) {
+            return '';
+        }
+        return hasZeroLevelToken(text) ? '' : text;
+    }
+
     function createEffectContext(record, slot, symbol, imageName, recordIndex, options = {}) {
         if (!record || typeof record !== 'object') {
             return null;
@@ -121,10 +146,30 @@
         const ocrDisplay = rawText || '--';
 
         const levelValueRaw = record[`Effect${slot}Level`];
-        const levelValue = levelValueRaw == null ? '' : String(levelValueRaw).trim();
+        const levelValue = normalizeLevelDisplayValue(levelValueRaw);
         const levelOptionsRaw = record[`Effect${slot}LevelOptions`];
-        const levelOptions = parseOptions(levelOptionsRaw);
-        const levelOptionsLower = levelOptions.map((value) => (value == null ? '' : String(value).toLowerCase()));
+        const parsedLevelOptions = parseOptions(levelOptionsRaw);
+        const levelOptions = [];
+        const levelOptionsLower = [];
+        const levelOptionSeen = new Set();
+        let hasZeroLevelOption = false;
+        parsedLevelOptions.forEach((option) => {
+            const text = option == null ? '' : String(option).trim();
+            if (!text) {
+                return;
+            }
+            if (hasZeroLevelToken(text)) {
+                hasZeroLevelOption = true;
+                return;
+            }
+            const lower = text.toLowerCase();
+            if (levelOptionSeen.has(lower)) {
+                return;
+            }
+            levelOptionSeen.add(lower);
+            levelOptions.push(text);
+            levelOptionsLower.push(lower);
+        });
 
         const levelCorrectionKey = `Effect${slot}LevelCorrection`;
         const levelCorrectionRaw = record[levelCorrectionKey];
@@ -179,6 +224,7 @@
             levelOptions,
             levelOptionsLower,
             levelOptionsDisplay,
+            hasZeroLevelOption,
             levelCorrection,
             levelCorrectionLower,
             preserveOriginalLevel,
