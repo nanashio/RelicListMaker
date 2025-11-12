@@ -2103,6 +2103,21 @@ describe('gallery effect factory', () => {
     assert.equal(effect.dataset.levelOptions, 'alt|base|extra');
   });
 
+  test('rebuildLevelSelectOptions treats none placeholder as blank label', () => {
+    const effect = new MockElement('div', 'effect');
+    effect.dataset.levelOriginalValue = 'none';
+    effect.dataset.preserveOriginalLevel = 'true';
+    effect.dataset.levelOptionsBaseJson = JSON.stringify(['none']);
+    const select = new MockElement('select', 'level-input');
+    effectFactory.rebuildLevelSelectOptions(effect, select);
+    assert.equal(select.children.length, 1);
+    const [onlyOption] = select.children;
+    assert.equal(onlyOption.value, 'none');
+    assert.equal(onlyOption.textContent, '');
+    assert.equal(select.value, 'none');
+    assert.equal(effect.dataset.levelOptionsDisplay, '');
+  });
+
   test('createCorrectionInput toggles availability based on master options', () => {
     const disabledInput = effectFactory.createCorrectionInput({ isDemerit: false }, '', 'Fallback');
     assert.equal(disabledInput.disabled, true);

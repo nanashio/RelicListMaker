@@ -125,6 +125,11 @@
         const levelOptionsRaw = record[`Effect${slot}LevelOptions`];
         const levelOptions = parseOptions(levelOptionsRaw);
         const levelOptionsLower = levelOptions.map((value) => (value == null ? '' : String(value).toLowerCase()));
+        const levelOptionsDisplayValues = levelOptions
+            .map((value) => (value == null ? '' : String(value).trim()))
+            .filter((value) => value && value.toLowerCase() !== 'none');
+        const levelOptionsDisplay = levelOptionsDisplayValues.join('|');
+        const levelOptionsDisplayRaw = levelOptions.join('|');
 
         const levelCorrectionKey = `Effect${slot}LevelCorrection`;
         const levelCorrectionRaw = record[levelCorrectionKey];
@@ -135,7 +140,6 @@
                 ? levelSuppressedRaw
                 : String(levelSuppressedRaw || '').trim().toLowerCase() === 'true';
         const preserveOriginalLevel = !levelSuppressed;
-        const levelOptionsDisplay = levelOptions.join('|');
         const displayLevel = levelCorrection || (preserveOriginalLevel ? levelValue : '');
 
         const correctionKey = `Effect${slot}Correction`;
@@ -179,6 +183,7 @@
             levelOptions,
             levelOptionsLower,
             levelOptionsDisplay,
+            levelOptionsDisplayRaw,
             levelCorrection,
             levelCorrectionLower,
             preserveOriginalLevel,

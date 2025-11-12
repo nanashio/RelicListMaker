@@ -64,7 +64,7 @@ def normalize_column_visibility(
 def _serialize_level_options(levels: Sequence[str]) -> str:
     filtered = [level for level in levels if level]
     if not filtered:
-        return ""
+        return "none"
     ordered: list[str] = []
     for level in filtered:
         if level not in ordered:
@@ -81,13 +81,13 @@ def _ensure_effect_slots(row: MutableMapping[str, object], options: ExportOption
         level_key = f"Effect{idx}Level"
         status_key = f"Effect{idx}Status"
 
-        row.setdefault(effect_key, "-")
-        row.setdefault(level_key, "")
+        row.setdefault(effect_key, "")
+        row.setdefault(level_key, "none")
         row.setdefault(status_key, "pending")
         row.setdefault(f"Effect{idx}Kind", "effect")
 
         if column_flags.get("LevelOptions", True):
-            row.setdefault(f"Effect{idx}LevelOptions", "")
+            row.setdefault(f"Effect{idx}LevelOptions", "none")
         if column_flags.get("LevelCorrection", True):
             row.setdefault(f"Effect{idx}LevelCorrection", "")
         if column_flags.get("RawText", True):
@@ -122,7 +122,7 @@ def build_row(
     if column_flags.get("ItemColor", True):
         row["ItemColor"] = options.item_color or "none"
     if column_flags.get("RelicType", True):
-        row["RelicType"] = options.relic_type or ""
+        row["RelicType"] = options.relic_type or "none"
 
     level_map = options.level_map or {}
     demerit_slots = set(options.demerit_slots or [])
@@ -132,7 +132,7 @@ def build_row(
         effect_key = f"Effect{idx}"
         row[effect_key] = match.matched_text
         row[f"Effect{idx}Status"] = "pending"
-        row.setdefault(f"Effect{idx}Level", "")
+        row.setdefault(f"Effect{idx}Level", "none")
 
         row[f"Effect{idx}Kind"] = "effect"
 
@@ -165,7 +165,7 @@ def build_row(
             candidates = find_level_candidates(match.matched_text, level_map=level_map)
             if candidates:
                 detected_level = detect_level_from_text(match.raw_text, candidates=candidates)
-                row[f"Effect{idx}Level"] = detected_level or ""
+                row[f"Effect{idx}Level"] = detected_level or "none"
                 if column_flags.get("LevelOptions", True):
                     row[f"Effect{idx}LevelOptions"] = _serialize_level_options(candidates)
 
