@@ -54,7 +54,7 @@ OCRパイプライン（`match_and_export.py` → `relic_pipeline.io.exporter`�
 | --- | --- | --- | --- |
 | `Effect{n}` | マッチした効果名。 | ○（常時生成） | スロットごとに必ず用意され、未検出時は空文字。【F:relic_pipeline/io/exporter.py†L119-L144】 |
 | `Effect{n}Level` | 推定レベル。 | ○（常時生成） | 一致した `EffectBase` の `Levels` 候補から常に値を選択し、未設定時は `none` が記録される。空欄は使用しない。【F:relic_pipeline/io/exporter.py†L119-L174】 |
-| `Effect{n}LevelOptions` | レベル候補の一覧。 | ○（列フラグで制御） | 列表示フラグ `LevelOptions` が有効な場合のみ出力される。候補が検出できなかった場合でも空欄は使わず、必ず `none` を書き出す。【F:relic_pipeline/io/exporter.py†L89-L109】【F:relic_pipeline/io/exporter.py†L164-L174】【F:relic_pipeline/io/exporter.py†L235-L240】 |
+| `Effect{n}LevelOptions` | レベル候補の一覧。 | ○（列フラグで制御） | 列表示フラグ `LevelOptions` が有効な場合のみ出力される。候補が検出できなかった場合でも空欄は使わず、必ず `none` を書き出す。ビューア上では `none` を空欄として表示しつつ、CSVの値自体は `none` のまま保持する。【F:relic_pipeline/io/exporter.py†L89-L109】【F:relic_pipeline/io/exporter.py†L164-L174】【F:relic_pipeline/io/exporter.py†L235-L240】【F:templates/gallery/render/effectFactory.js†L513-L552】 |
 | `Effect{n}Status` | レビュー状況。初期値は `pending`。 | ○（常時生成） | 列表示フラグに関わらず生成され、レビュー時に更新される。【F:relic_pipeline/io/exporter.py†L131-L137】【F:relic_pipeline/io/exporter.py†L235-L241】 |
 | `Effect{n}Kind` | 列の種別を示す識別子。 | ○（常時生成） | 現状すべて `effect` で初期化される。【F:relic_pipeline/io/exporter.py†L137-L138】【F:relic_pipeline/io/exporter.py†L235-L241】 |
 | `Effect{n}LevelCorrection` | レベル訂正入力欄。 | ○（列フラグで制御） | 列表示フラグ `LevelCorrection` が有効なときに空欄で生成される。【F:relic_pipeline/io/exporter.py†L172-L174】【F:relic_pipeline/io/exporter.py†L245-L262】 |

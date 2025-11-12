@@ -60,6 +60,39 @@
             throw new Error('createEffectFactory: effectViewModel.parseLevelOptions is required');
         }
 
+        function isNonePlaceholder(value) {
+            if (value == null) {
+                return false;
+            }
+            const text = String(value).trim();
+            if (!text) {
+                return false;
+            }
+            return text.toLowerCase() === 'none';
+        }
+
+        function toLevelOptionValue(value) {
+            if (value == null) {
+                return '';
+            }
+            return String(value).trim();
+        }
+
+        function formatLevelOptionLabel(value) {
+            const text = toLevelOptionValue(value);
+            return text && !isNonePlaceholder(text) ? text : '';
+        }
+
+        function buildLevelOptionsDisplay(values) {
+            if (!Array.isArray(values)) {
+                return '';
+            }
+            const displayValues = values
+                .map((value) => formatLevelOptionLabel(value))
+                .filter((value) => value !== '');
+            return displayValues.join('|');
+        }
+
         function updateInputValueAttribute(input) {
             if (!input) {
                 return;
@@ -438,9 +471,16 @@
             effect.dataset.level = context.displayLevelLower;
             effect.dataset.levelOriginal = context.levelValueLower;
             effect.dataset.levelOriginalValue = context.levelValue;
+            const levelOptionsRaw = Array.isArray(context.levelOptions) ? context.levelOptions : [];
+            const levelOptionsDisplay =
+                context.levelOptionsDisplay || buildLevelOptionsDisplay(levelOptionsRaw);
+            const levelOptionsBase =
+                context.levelOptionsDisplayRaw != null
+                    ? String(context.levelOptionsDisplayRaw)
+                    : levelOptionsRaw.join('|');
             effect.dataset.levelOptions = context.levelOptionsLower.join('|');
-            effect.dataset.levelOptionsDisplay = context.levelOptionsDisplay;
-            effect.dataset.levelOptionsBase = context.levelOptionsDisplay;
+            effect.dataset.levelOptionsDisplay = levelOptionsDisplay;
+            effect.dataset.levelOptionsBase = levelOptionsBase;
             effect.dataset.levelCorrection = context.levelCorrectionLower;
             effect.dataset.levelCorrectionValue = context.levelCorrection;
             effect.dataset.correction = context.correctionValueLower;
@@ -513,15 +553,24 @@
         function populateEffectLevelOptions(effect, levelInput, context) {
             const sortedLevelChoices = buildLevelChoices(context, { sortLevelsAscending });
 
-            const emptyOption = document.createElement('option');
-            emptyOption.value = '';
-            emptyOption.textContent = '';
-            levelInput.appendChild(emptyOption);
+            levelInput.textContent = '';
+            const hasNonePlaceholder = sortedLevelChoices.some((option) => isNonePlaceholder(option));
+
+            if (!hasNonePlaceholder) {
+                const emptyOption = document.createElement('option');
+                emptyOption.value = '';
+                emptyOption.textContent = '';
+                levelInput.appendChild(emptyOption);
+            }
 
             sortedLevelChoices.forEach((option) => {
+                const valueText = toLevelOptionValue(option);
+                if (!valueText) {
+                    return;
+                }
                 const optionNode = document.createElement('option');
-                optionNode.value = option;
-                optionNode.textContent = option;
+                optionNode.value = valueText;
+                optionNode.textContent = formatLevelOptionLabel(valueText);
                 levelInput.appendChild(optionNode);
             });
 
@@ -547,7 +596,7 @@
                 ? optionsDisplay
                       .split('|')
                       .map((value) => value.trim())
-                      .filter((value) => value)
+                      .filter((value) => value && !isNonePlaceholder(value))
                 : [];
 
             if (correctionValue) {
@@ -706,15 +755,23 @@
 
             select.textContent = '';
 
-            const emptyOption = document.createElement('option');
-            emptyOption.value = '';
-            emptyOption.textContent = '';
-            select.appendChild(emptyOption);
+            const hasNonePlaceholder = sortedFinalValues.some((value) => isNonePlaceholder(value));
+
+            if (!hasNonePlaceholder) {
+                const emptyOption = document.createElement('option');
+                emptyOption.value = '';
+                emptyOption.textContent = '';
+                select.appendChild(emptyOption);
+            }
 
             sortedFinalValues.forEach((value) => {
+                const valueText = toLevelOptionValue(value);
+                if (!valueText) {
+                    return;
+                }
                 const optionNode = document.createElement('option');
-                optionNode.value = value;
-                optionNode.textContent = value;
+                optionNode.value = valueText;
+                optionNode.textContent = formatLevelOptionLabel(valueText);
                 select.appendChild(optionNode);
             });
 
@@ -737,7 +794,7 @@
             select.value = applied || '';
             updateLevelInputAvailability(select, sortedFinalValues);
 
-            effect.dataset.levelOptionsDisplay = sortedFinalValues.join('|');
+            effect.dataset.levelOptionsDisplay = buildLevelOptionsDisplay(sortedFinalValues);
             effect.dataset.levelOptions = sortedFinalValues.map((value) => value.toLowerCase()).join('|');
             updateLevelBadge(effect);
         }

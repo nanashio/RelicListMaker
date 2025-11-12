@@ -138,6 +138,39 @@
         throw new Error(`gallery data utilities are incomplete: missing ${missingNames}`);
     }
 
+    function isNonePlaceholder(value) {
+        if (value == null) {
+            return false;
+        }
+        const text = String(value).trim();
+        if (!text) {
+            return false;
+        }
+        return text.toLowerCase() === 'none';
+    }
+
+    function toLevelOptionValue(value) {
+        if (value == null) {
+            return '';
+        }
+        return String(value).trim();
+    }
+
+    function formatLevelOptionLabel(value) {
+        const text = toLevelOptionValue(value);
+        return text && !isNonePlaceholder(text) ? text : '';
+    }
+
+    function buildLevelOptionsDisplay(values) {
+        if (!Array.isArray(values)) {
+            return '';
+        }
+        const displayValues = values
+            .map((value) => formatLevelOptionLabel(value))
+            .filter((value) => value !== '');
+        return displayValues.join('|');
+    }
+
     const normalizeSuppressedRecords = (records) => normalizeSuppressedLevelsFromUtils(records);
 
     function parseJsonObject(jsonText) {
@@ -742,18 +775,25 @@
                 : (targetEffect, targetSelect, baseOptions) => {
                       const values = Array.isArray(baseOptions) ? baseOptions : [];
                       targetSelect.textContent = '';
-                      const emptyOption = document.createElement('option');
-                      emptyOption.value = '';
-                      emptyOption.textContent = '';
-                      targetSelect.appendChild(emptyOption);
+                      const hasNonePlaceholder = values.some((value) => isNonePlaceholder(value));
+                      if (!hasNonePlaceholder) {
+                          const emptyOption = document.createElement('option');
+                          emptyOption.value = '';
+                          emptyOption.textContent = '';
+                          targetSelect.appendChild(emptyOption);
+                      }
                       values.forEach((value) => {
+                          const valueText = toLevelOptionValue(value);
+                          if (!valueText) {
+                              return;
+                          }
                           const optionNode = document.createElement('option');
-                          optionNode.value = value;
-                          optionNode.textContent = value;
+                          optionNode.value = valueText;
+                          optionNode.textContent = formatLevelOptionLabel(valueText);
                           targetSelect.appendChild(optionNode);
                       });
                       if (targetEffect) {
-                          targetEffect.dataset.levelOptionsDisplay = values.join('|');
+                          targetEffect.dataset.levelOptionsDisplay = buildLevelOptionsDisplay(values);
                       }
                   };
 
