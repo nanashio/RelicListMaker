@@ -64,10 +64,11 @@ def _parse_levels_field(raw_value: object) -> list[str]:
         cleaned = token.strip()
         if not cleaned or cleaned in _SKIP_VALUES:
             continue
+        normalized = cleaned
         if cleaned == _PLACEHOLDER_VALUE:
-            continue
-        if cleaned not in levels:
-            levels.append(cleaned)
+            normalized = "0"
+        if normalized not in levels:
+            levels.append(normalized)
     return levels
 
 

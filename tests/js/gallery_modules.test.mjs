@@ -2087,7 +2087,7 @@ describe('gallery effect factory', () => {
         masterOptions: [],
         masterDemeritOptions: ['Heavy Burden'],
         masterDemeritRules: {
-          'test effect': { hasDemerit: true, levels: ['-', '＋3'] }
+          'test effect': { hasDemerit: true, levels: ['0', '＋3'] }
         },
         labelSymbols: ['Ⅰ']
       },
@@ -2105,7 +2105,7 @@ describe('gallery effect factory', () => {
     const baseRecord = {
       RelicType: '深層',
       Effect1: 'Test Effect',
-      Effect1LevelOptions: '-|＋3',
+      Effect1LevelOptions: '0 | ＋3',
       Effect1Status: 'pending',
       Demerit1: 'Heavy Burden',
       DemeritRawText1: 'Heavy Burden',

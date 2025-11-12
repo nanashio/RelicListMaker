@@ -12,7 +12,11 @@ if "cv2" not in sys.modules:
 from relic_pipeline.io.exporter import _ensure_effect_slots, build_row, write_csv
 from relic_pipeline.settings import DEFAULT_COLUMN_VISIBILITY, ExportOptions
 from relic_pipeline.matching import MatchResult
-from relic_data import load_master_effects_and_levels, normalize_master_values
+from relic_data import (
+    load_master_effect_metadata,
+    load_master_effects_and_levels,
+    normalize_master_values,
+)
 
 
 def test_normalize_master_values_keeps_placeholder():
@@ -38,7 +42,24 @@ def test_load_master_effects_includes_placeholder(tmp_path: Path):
     assert "-" in effects
     assert "効果A" in effects
     assert "-" not in level_map
-    assert level_map["効果A"] == ["+1", "+2"]
+    assert level_map["効果A"] == ["+1", "0", "+2"]
+
+
+def test_load_master_effect_metadata_keeps_zero_placeholder(tmp_path: Path):
+    csv_path = tmp_path / "master.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "EffectBase,Category,Levels,Demerit",
+                '効果A,カテゴリ,"-,＋１,＋２","-,＋２"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    metadata = load_master_effect_metadata(csv_path)
+    assert metadata["効果a"]["hasDemerit"] is True
+    assert metadata["効果a"]["levels"] == ["0", "＋２"]
 
 
 def test_ensure_effect_slots_adds_placeholder_values():
