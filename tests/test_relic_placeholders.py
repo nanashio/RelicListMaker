@@ -56,10 +56,10 @@ def test_ensure_effect_slots_adds_placeholder_values():
 
     assert row["Effect1"] == "効果A"
     assert row["Effect1Status"] == "approved"
-    assert row["Effect2"] == "-"
-    assert row["Effect3"] == "-"
+    assert row["Effect2"] == ""
+    assert row["Effect3"] == ""
     assert row["Effect2Status"] == "pending"
-    assert row["Effect2Level"] == ""
+    assert row["Effect2Level"] == "none"
     assert row["Effect2Kind"] == "effect"
     assert row["RawText2"] == ""
     assert row["Effect2Score"] == 0.0
@@ -109,7 +109,7 @@ def test_write_csv_includes_demerit_columns(tmp_path: Path):
             "Image": "sample.png",
             "Duplicate": False,
             "Effect1": "効果A",
-            "Effect1Level": "",
+            "Effect1Level": "none",
             "Effect1Status": "pending",
             "Effect1Kind": "effect",
             "Demerit1": "効果A",

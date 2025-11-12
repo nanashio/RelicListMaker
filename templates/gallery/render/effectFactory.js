@@ -118,6 +118,9 @@
             if (!text) {
                 return '';
             }
+            if (text === 'none') {
+                return '';
+            }
             if (text === 'deep' || text === '深層' || text === '深層遺物') {
                 return 'deep';
             }

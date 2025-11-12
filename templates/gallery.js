@@ -303,6 +303,9 @@
         if (!text) {
             return '';
         }
+        if (text === 'none') {
+            return '';
+        }
         if (text === 'normal' || text === '通常') {
             return 'normal';
         }
