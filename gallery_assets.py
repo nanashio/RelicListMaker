@@ -117,7 +117,10 @@ def copy_gallery_modules(
 
     for relative in modules:
         source_path = templates_path(relative)
-        destination = os.path.join(output_dir, relative.replace("/", os.sep))
+        normalized = relative.replace("/", os.sep)
+        if normalized.startswith(f"gallery{os.sep}"):
+            normalized = normalized[len(f"gallery{os.sep}") :]
+        destination = os.path.join(output_dir, normalized)
         os.makedirs(os.path.dirname(destination), exist_ok=True)
         shutil.copyfile(str(source_path), destination)
 

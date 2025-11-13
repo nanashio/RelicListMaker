@@ -62,12 +62,26 @@ def find_viewer(results_dir: Path, video_name: Optional[str]) -> tuple[Optional[
         return None, False
     if not video_name:
         return candidates[0], True
-    suffix = "_viewer.html"
+    normalized = video_name.strip()
+    legacy_suffix = "_viewer.html"
     for candidate in candidates:
+        try:
+            relative = candidate.relative_to(results_dir)
+            rel_posix = relative.as_posix()
+        except ValueError:
+            rel_posix = candidate.as_posix()
+
+        if rel_posix.endswith("gallery/index.html"):
+            base = rel_posix[: -len("gallery/index.html")].rstrip("/")
+            if base:
+                last_segment = base.split("/")[-1]
+                if last_segment == normalized:
+                    return candidate, True
+
         name = candidate.name
         stem = candidate.stem
         parent_name = candidate.parent.name
-        if name == f"{video_name}{suffix}" or stem == f"{video_name}_viewer" or parent_name == video_name:
+        if name == f"{normalized}{legacy_suffix}" or stem == f"{normalized}_viewer" or parent_name == normalized:
             return candidate, True
     return candidates[0], False
 

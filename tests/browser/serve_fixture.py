@@ -21,12 +21,14 @@ def _build_fixture_tree(base_dir: Path) -> None:
         shutil.rmtree(base_dir)
     base_dir.mkdir(parents=True, exist_ok=True)
 
-    crops_dir = base_dir / "crops"
+    sample_dir = base_dir / "sample"
+    gallery_dir = sample_dir / "gallery"
+    gallery_dir.mkdir(parents=True, exist_ok=True)
+
+    crops_dir = gallery_dir / "crops"
     crops_dir.mkdir(parents=True, exist_ok=True)
 
     templates_dir = _repo_root() / "templates"
-    gallery_dir = base_dir / "gallery"
-    gallery_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(templates_dir / "gallery" / "gallery.css", gallery_dir / "gallery.css")
     shutil.copy2(templates_dir / "gallery" / "gallery.js", gallery_dir / "gallery.js")
     shutil.copy2(templates_dir / "gallery" / "index.js", gallery_dir / "index.js")
@@ -53,14 +55,14 @@ def _build_fixture_tree(base_dir: Path) -> None:
     ]
     for relative in additional_scripts:
         source = templates_dir / relative
-        destination = base_dir / relative
+        destination = gallery_dir / relative.relative_to(Path("gallery"))
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)
 
     _write_png(crops_dir / "sample_red.png", (220, 38, 38))
     _write_png(crops_dir / "sample_blue.png", (37, 99, 235))
 
-    (base_dir / "sample.csv").write_text(
+    (gallery_dir / "sample.csv").write_text(
         "Image,Duplicate,ItemColor,Effect1,Effect1Score,Effect1Source,Effect1Status,RawText1\n"
         "sample_red.png,False,red,神秘,95.0,神秘,pass,神秘\n"
         "sample_blue.png,False,blue,最大HP上昇,85.0,最大HP上昇,pending,最大HPが上昇\n",
@@ -71,9 +73,9 @@ def _build_fixture_tree(base_dir: Path) -> None:
     template = (templates_dir / "gallery.html").read_text(encoding="utf-8")
     viewer_html = (
         template
-        .replace("__CSS_FILE__", "gallery/gallery.css")
-        .replace("__JS_FILE__", "gallery/index.js")
-        .replace("__CORE_JS__", "gallery/gallery.js")
+        .replace("__CSS_FILE__", "gallery.css")
+        .replace("__JS_FILE__", "index.js")
+        .replace("__CORE_JS__", "gallery.js")
         .replace("__RESULTS_CSV__", "sample.csv")
         .replace("__IMAGE_DIR__", "crops")
         .replace("__LABEL_SYMBOLS__", "[\"①\", \"②\", \"③\"]")
@@ -93,7 +95,7 @@ def _build_fixture_tree(base_dir: Path) -> None:
         .replace("__ACTIVE_DATASET__", "0")
         .replace("__ITEM_IMAGE_VIEW_BOX__", DEFAULT_ITEM_IMAGE_VIEW_BOX)
     )
-    (base_dir / "sample_viewer.html").write_text(viewer_html, encoding="utf-8")
+    (gallery_dir / "index.html").write_text(viewer_html, encoding="utf-8")
 
 
 def _write_png(path: Path, rgb: tuple[int, int, int]) -> None:

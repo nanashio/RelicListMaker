@@ -19,7 +19,7 @@ from resource_paths import templates_path
 
 RESULTS_CSV_PATH = "results_input_video.csv"
 IMG_DIR = "crops/input_video"
-OUTPUT_HTML = "viewer.html"
+OUTPUT_HTML = "gallery/index.html"
 LABEL_SYMBOLS = ["①", "②", "③"]
 DEFAULT_ITEM_IMAGE_VIEW_BOX = "inset(0px 180px 0px 0px)"
 DEFAULT_MASTER_CSV = str(templates_path("master_relics.csv"))
@@ -728,13 +728,13 @@ def generate_html(
         output_dir,
         css_template_path=TEMPLATE_CSS_PATH,
         css_override_template=css_template_path,
-        css_output_name=css_output_name or "gallery/gallery.css",
+        css_output_name=css_output_name or "gallery.css",
         css_relative_override=css_relative_override,
         index_template_path=TEMPLATE_INDEX_JS_PATH,
-        index_relative_path="gallery/index.js",
+        index_relative_path="index.js",
         core_template_path=TEMPLATE_CORE_JS_PATH,
         core_override_template=js_template_path,
-        core_output_name=js_output_name or "gallery/gallery.js",
+        core_output_name=js_output_name or "gallery.js",
         core_relative_override=js_relative_override,
         modules=gallery_assets.ADDITIONAL_GALLERY_SCRIPTS,
     )

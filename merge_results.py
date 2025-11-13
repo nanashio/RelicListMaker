@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -105,6 +106,7 @@ def _collect_existing_merged_entries(root: Path, base_name: str) -> list[dict[st
     """ビューワに掲載する既存統合結果のメタデータを収集する."""
 
     collected: list[tuple[int, dict[str, str]]] = []
+    gallery_dir = root / "gallery"
     for folder in _iter_dataset_dirs(root):
         if not _is_merged_dir_name(folder.name, base_name):
             continue
@@ -118,13 +120,15 @@ def _collect_existing_merged_entries(root: Path, base_name: str) -> list[dict[st
             suffix_text = folder.name[len(base_name) + 1 :]
             order = int(suffix_text) + 1 if suffix_text.isdigit() else 1
         label = "統合結果" if folder.name == base_name else f"統合結果 ({folder.name})"
+        csv_rel = os.path.relpath(csv_path, gallery_dir)
+        img_rel = os.path.relpath(images_dir, gallery_dir)
         collected.append(
             (
                 order,
                 {
                     "label": label,
-                    "csv": csv_path.relative_to(root).as_posix(),
-                    "img_dir": images_dir.relative_to(root).as_posix(),
+                    "csv": Path(csv_rel).as_posix(),
+                    "img_dir": Path(img_rel).as_posix(),
                     "folder": folder.name,
                     "kind": "merged_csv",
                 },
@@ -309,6 +313,8 @@ def merge_results(
     if not datasets:
         raise MergeResultsError("統合対象のデータセットが見つかりませんでした")
 
+    gallery_dir = root / "gallery"
+
     merged_dir = _select_output_dir(root, target_name)
     if merged_dir.name != target_name:
         print(f"[INFO] 既存の統合結果を保持するため {merged_dir.name} に書き出します")
@@ -358,8 +364,8 @@ def merge_results(
         source_entries.append(
             {
                 "label": dataset.label,
-                "csv": dataset.csv_path.relative_to(root).as_posix(),
-                "imgDir": dataset.images_dir.relative_to(root).as_posix(),
+                "csv": Path(os.path.relpath(dataset.csv_path, gallery_dir)).as_posix(),
+                "imgDir": Path(os.path.relpath(dataset.images_dir, gallery_dir)).as_posix(),
                 "folder": dataset.folder.name,
             }
         )
@@ -387,10 +393,11 @@ def merge_results(
             active_dataset_index = index
             break
 
-    viewer_path = root / "viewer.html"
+    viewer_path = gallery_dir / "index.html"
+    relative_crops = Path(os.path.relpath(crops_dir, gallery_dir)).as_posix()
     generate_html(
         str(merged_csv_path),
-        str(crops_dir.relative_to(root)),
+        relative_crops,
         str(viewer_path),
         master_csv_path=None,
         master_json_path="",

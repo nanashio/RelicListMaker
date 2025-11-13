@@ -21,8 +21,8 @@ def test_copy_gallery_modules_copies_required_viewer_scripts(tmp_path):
     gallery_assets.copy_gallery_modules(str(output_dir))
 
     expected_files = [
-        Path("gallery/render/effectViewModel.js"),
-        Path("gallery/utils/filter.js"),
+        Path("render/effectViewModel.js"),
+        Path("utils/filter.js"),
     ]
 
     for relative_path in expected_files:
@@ -131,14 +131,14 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
     def fake_prepare_gallery_assets(*args, **kwargs):
         base = tmp_path / "copied"
         css_path = base / "styles" / "app.css"
-        index_path = base / "gallery" / "index.js"
+        index_path = base / "index.js"
         core_path = base / "scripts" / "app.js"
         for file_path in (css_path, index_path, core_path):
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text("/* asset */", encoding="utf-8")
         return GalleryAssets(
             css=PreparedAsset("styles/app.css", str(css_path)),
-            index_js=PreparedAsset("gallery/index.js", str(index_path)),
+            index_js=PreparedAsset("index.js", str(index_path)),
             core_js=PreparedAsset("scripts/app.js", str(core_path)),
         )
 
@@ -238,17 +238,17 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
 
     def fake_prepare_gallery_assets(*args, **kwargs):
         base = tmp_path / "copied"
-        css_path = base / "gallery" / "gallery.css"
-        index_path = base / "gallery" / "index.js"
-        core_path = base / "gallery" / "gallery.js"
+        css_path = base / "gallery.css"
+        index_path = base / "index.js"
+        core_path = base / "gallery.js"
         for file_path in (css_path, index_path, core_path):
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text("/* asset */", encoding="utf-8")
         copied_assets.append(css_path.name)
         return GalleryAssets(
-            css=PreparedAsset("gallery/gallery.css", str(css_path)),
-            index_js=PreparedAsset("gallery/index.js", str(index_path)),
-            core_js=PreparedAsset("gallery/gallery.js", str(core_path)),
+            css=PreparedAsset("gallery.css", str(css_path)),
+            index_js=PreparedAsset("index.js", str(index_path)),
+            core_js=PreparedAsset("gallery.js", str(core_path)),
         )
 
     monkeypatch.setattr(generate_gallery.gallery_assets, "prepare_gallery_assets", fake_prepare_gallery_assets)
@@ -347,16 +347,16 @@ def test_generate_html_embeds_known_master_types(monkeypatch, tmp_path):
     monkeypatch.setattr(generate_gallery, "_load_text_asset", lambda *args, **kwargs: template)
     def fake_prepare_gallery_assets(*args, **kwargs):
         base = tmp_path / "copied"
-        css_path = base / "gallery" / "gallery.css"
-        index_path = base / "gallery" / "index.js"
-        core_path = base / "gallery" / "gallery.js"
+        css_path = base / "gallery.css"
+        index_path = base / "index.js"
+        core_path = base / "gallery.js"
         for file_path in (css_path, index_path, core_path):
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text("/* asset */", encoding="utf-8")
         return GalleryAssets(
-            css=PreparedAsset("gallery/gallery.css", str(css_path)),
-            index_js=PreparedAsset("gallery/index.js", str(index_path)),
-            core_js=PreparedAsset("gallery/gallery.js", str(core_path)),
+            css=PreparedAsset("gallery.css", str(css_path)),
+            index_js=PreparedAsset("index.js", str(index_path)),
+            core_js=PreparedAsset("gallery.js", str(core_path)),
         )
 
     monkeypatch.setattr(generate_gallery.gallery_assets, "prepare_gallery_assets", fake_prepare_gallery_assets)
@@ -454,10 +454,10 @@ def test_generate_html_respects_asset_overrides(monkeypatch, tmp_path):
         if css_override is not None:
             css_asset = PreparedAsset(css_override, None)
         else:
-            css_path = base / "gallery" / "gallery.css"
+            css_path = base / "gallery.css"
             css_path.parent.mkdir(parents=True, exist_ok=True)
             css_path.write_text("/* css */", encoding="utf-8")
-            css_asset = PreparedAsset("gallery/gallery.css", str(css_path))
+            css_asset = PreparedAsset("gallery.css", str(css_path))
 
         core_override = kwargs.get("core_relative_override")
         if core_override is not None:
@@ -465,14 +465,14 @@ def test_generate_html_respects_asset_overrides(monkeypatch, tmp_path):
             core_path = (Path(output_dir) / core_override).resolve()
             core_asset = PreparedAsset(normalized_core, str(core_path))
         else:
-            core_path = base / "gallery" / "gallery.js"
+            core_path = base / "gallery.js"
             core_path.parent.mkdir(parents=True, exist_ok=True)
             core_path.write_text("/* core */", encoding="utf-8")
-            core_asset = PreparedAsset("gallery/gallery.js", str(core_path))
+            core_asset = PreparedAsset("gallery.js", str(core_path))
 
         return GalleryAssets(
             css=css_asset,
-            index_js=PreparedAsset("gallery/index.js", str(index_path)),
+            index_js=PreparedAsset("index.js", str(index_path)),
             core_js=core_asset,
         )
 
@@ -497,7 +497,7 @@ def test_generate_html_respects_asset_overrides(monkeypatch, tmp_path):
     assert copied_assets == ["index.js"]
 
     index_reference = parts[1]
-    assert index_reference.startswith("gallery/index.js?v=")
+    assert index_reference.startswith("index.js?v=")
 
     expected_core_rel = "custom/core.js"
     expected_version = str(int(os.path.getmtime(custom_core)))

@@ -8,7 +8,7 @@ test.describe('Relic viewer', () => {
     const viewerLink = page.getByRole('link', { name: /sample/ });
     await expect(viewerLink).toBeVisible();
     await viewerLink.click();
-    await expect(page).toHaveURL(/sample_viewer\.html$/);
+    await expect(page).toHaveURL(/sample\/gallery\/index\.html$/);
   });
 
 
@@ -25,7 +25,7 @@ test.describe('Relic viewer', () => {
       }
     });
 
-    await page.goto('/sample_viewer.html');
+    await page.goto('/sample/gallery/index.html');
     await page.waitForLoadState('networkidle');
 
     expect(pageErrors, pageErrors.map((error) => error.message).join('\n')).toHaveLength(0);
@@ -40,7 +40,7 @@ test.describe('Relic viewer', () => {
       }
     });
 
-    await page.goto('/sample_viewer.html');
+    await page.goto('/sample/gallery/index.html');
 
     const items = page.locator('.item');
     await expect(items.first()).toBeVisible();
@@ -111,7 +111,7 @@ test.describe('Relic viewer', () => {
       }
     });
 
-    await page.goto('/sample_viewer.html');
+    await page.goto('/sample/gallery/index.html');
     await page.waitForLoadState('networkidle');
 
     const failures = [...assetStatuses.entries()].filter(([, status]) => status >= 400);
