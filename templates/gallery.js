@@ -757,7 +757,10 @@
         }
         const {
             setCorrectionLevelCandidates: setCandidatesHelper,
-            rebuildLevelSelectOptions: rebuildOptionsHelper
+            rebuildLevelSelectOptions: rebuildOptionsHelper,
+            onOptionsApplied: onOptionsAppliedHelper,
+            sanitizeLevelList: sanitizeLevelListHelper,
+            sortLevelsAscending: sortLevelsAscendingHelper
         } = helpers || {};
 
         const setCandidates =
@@ -799,9 +802,35 @@
                       }
                   };
 
+        const sanitizeList =
+            typeof sanitizeLevelListHelper === 'function'
+                ? sanitizeLevelListHelper
+                : sanitizeLevelList;
+        const sortList =
+            typeof sortLevelsAscendingHelper === 'function'
+                ? sortLevelsAscendingHelper
+                : sortLevelsAscending;
+        const notifyApplied =
+            typeof onOptionsAppliedHelper === 'function'
+                ? (targetEffect, applied) => onOptionsAppliedHelper(targetEffect, applied)
+                : null;
+
+        const applyOptions = (targetEffect, optionsList) => {
+            const sanitized = sanitizeList(Array.isArray(optionsList) ? optionsList : []);
+            const sorted = sortList(sanitized);
+            if (targetEffect) {
+                targetEffect.dataset.levelOptionsBaseJson = JSON.stringify(sorted);
+            }
+            rebuildOptions(targetEffect, select, sorted);
+            if (notifyApplied) {
+                notifyApplied(targetEffect, sorted);
+            }
+        };
+
         const normalizedName = normalizeEffectName(effectName);
         if (!state.masterLevelsLoaded) {
             setCandidates(effect, []);
+            applyOptions(effect, []);
             void ensureMasterLevels().then(() => {
                 applyMasterLevelOptions(effect, select, normalizedName, helpers);
             });
@@ -811,25 +840,20 @@
         const levelsMap = state.masterLevels instanceof Map ? state.masterLevels : null;
         if (!levelsMap) {
             setCandidates(effect, []);
-            rebuildOptions(effect, select);
+            applyOptions(effect, []);
             return;
         }
 
         const key = effectKey(normalizedName);
         if (!key) {
             setCandidates(effect, []);
-            rebuildOptions(effect, select);
+            applyOptions(effect, []);
             return;
         }
 
         const candidates = levelsMap.get(key) || [];
         const applied = setCandidates(effect, candidates);
-        if (applied.length) {
-            effect.dataset.levelOptionsBaseJson = JSON.stringify(applied);
-            rebuildOptions(effect, select, applied);
-        } else {
-            rebuildOptions(effect, select);
-        }
+        applyOptions(effect, applied);
     }
 
     const datasets = parseDatasets(datasetsJson);

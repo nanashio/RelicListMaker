@@ -2573,7 +2573,7 @@ describe('record action handlers', () => {
   });
 
   test('changeEffectCorrection updates effect record and schedules save', () => {
-    const record = { Effect1: 'Original' };
+    const record = { Effect1: 'Original', Effect1LevelOptions: 'Base|High' };
     const item = new MockElement('div', 'item');
     const effect = new MockElement('section', 'effect');
     effect.dataset.recordIndex = '0';
@@ -2582,10 +2582,13 @@ describe('record action handlers', () => {
     effect.dataset.predictionOriginalValue = 'Original';
     effect.dataset.predictionValue = 'Original';
     effect.dataset.preserveOriginalLevel = 'true';
+    const levelInput = new MockElement('select', 'level-input');
+    effect.appendChild(levelInput);
     const input = new MockElement('input', 'correction-input');
     input.value = 'New Effect';
     const scheduleCalls = [];
     const effectUpdates = [];
+    const levelOptionsUpdates = [];
     const deps = buildBaseDeps(record, item, {
       scheduleSave: () => scheduleCalls.push(null),
       recordStatusChange: () => false,
@@ -2602,10 +2605,32 @@ describe('record action handlers', () => {
         }
         return true;
       },
-      updateRecordLevelSuppressed: () => false,
+      updateRecordLevelSuppressed: (_recordIndex, _slotIndex, suppressed) => {
+        if (suppressed) {
+          record.Effect1LevelSuppressed = 'true';
+        } else {
+          record.Effect1LevelSuppressed = '';
+        }
+        return true;
+      },
       updateRecordLevelValue: () => false,
-      updateRecordLevelOptions: () => false,
-      getEffectIndexes: () => ({ recordIndex: 0, slotIndex: 1, kind: 'effect' })
+      updateRecordLevelOptions: (_recordIndex, _slotIndex, value) => {
+        record.Effect1LevelOptions = value;
+        levelOptionsUpdates.push(value);
+        return true;
+      },
+      getEffectIndexes: () => ({ recordIndex: 0, slotIndex: 1, kind: 'effect' }),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values] : []),
+      applyMasterLevelOptions: (effectNode, selectNode, _name, helpers) => {
+        const options = ['＋1', '＋3'];
+        if (helpers && typeof helpers.rebuildLevelSelectOptions === 'function') {
+          helpers.rebuildLevelSelectOptions(effectNode, selectNode, options);
+        }
+        if (helpers && typeof helpers.onOptionsApplied === 'function') {
+          helpers.onOptionsApplied(effectNode, options);
+        }
+      }
     });
 
     const handlers = handlerFactory.createRecordActionHandlers(deps);
@@ -2617,6 +2642,8 @@ describe('record action handlers', () => {
     assert.equal(effect.dataset.pred, 'new effect');
     assert.equal(scheduleCalls.length, 1);
     assert.deepEqual(effectUpdates, ['New Effect']);
+    assert.deepEqual(levelOptionsUpdates, ['＋1|＋3']);
+    assert.equal(record.Effect1LevelSuppressed, '');
   });
 
   test('changeEffectCorrection clears effect record back to original when input empty', () => {
@@ -2657,6 +2684,49 @@ describe('record action handlers', () => {
     assert.equal(effect.dataset.predictionValue, 'Original');
     assert.equal(effect.dataset.pred, 'original');
     assert.deepEqual(updatedValues, ['Original']);
+  });
+
+  test('changeEffectCorrection sets none when master has no level candidates', () => {
+    const record = { Effect1: 'Original', Effect1LevelOptions: 'Base|High' };
+    const item = new MockElement('div', 'item');
+    const effect = new MockElement('section', 'effect');
+    effect.dataset.recordIndex = '0';
+    effect.dataset.slot = '1';
+    effect.dataset.kind = 'effect';
+    effect.dataset.predictionOriginalValue = 'Original';
+    effect.dataset.predictionValue = 'Original';
+    effect.dataset.preserveOriginalLevel = 'true';
+    const levelInput = new MockElement('select', 'level-input');
+    effect.appendChild(levelInput);
+    const input = new MockElement('input', 'correction-input');
+    input.value = 'Manual';
+    const deps = buildBaseDeps(record, item, {
+      recordStatusChange: () => false,
+      updateRecordCorrection: () => true,
+      updateRecordEffectValue: () => true,
+      updateRecordLevelSuppressed: () => false,
+      updateRecordLevelValue: () => false,
+      updateRecordLevelOptions: (_recordIndex, _slotIndex, value) => {
+        record.Effect1LevelOptions = value;
+        return true;
+      },
+      getEffectIndexes: () => ({ recordIndex: 0, slotIndex: 1, kind: 'effect' }),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values] : []),
+      applyMasterLevelOptions: (effectNode, selectNode, _name, helpers) => {
+        if (helpers && typeof helpers.rebuildLevelSelectOptions === 'function') {
+          helpers.rebuildLevelSelectOptions(effectNode, selectNode, []);
+        }
+        if (helpers && typeof helpers.onOptionsApplied === 'function') {
+          helpers.onOptionsApplied(effectNode, []);
+        }
+      }
+    });
+
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.changeEffectCorrection(effect, input);
+
+    assert.equal(record.Effect1LevelOptions, 'none');
   });
 
   test('changeEffectCorrection updates demerit record when correction provided', () => {
@@ -3215,7 +3285,14 @@ describe('gallery events', () => {
       }),
       updateInputValueAttribute: () => {},
       updateLevelInputAvailability: () => {},
-      applyMasterLevelOptions: () => {}
+      applyMasterLevelOptions: (effect, select, _name, helpers) => {
+        if (helpers && typeof helpers.onOptionsApplied === 'function') {
+          helpers.onOptionsApplied(effect, []);
+        }
+        if (helpers && typeof helpers.rebuildLevelSelectOptions === 'function') {
+          helpers.rebuildLevelSelectOptions(effect, select, []);
+        }
+      }
     });
   });
 
@@ -3540,7 +3617,7 @@ describe('gallery events', () => {
     changeHandlers[0]({ target: correctionInput });
     assert.deepEqual(recordStatusCalls, ['corrected']);
     assert.deepEqual(updateRecordCorrectionCalls, ['NewValue']);
-    assert.deepEqual(updateLevelSuppressedCalls, [true]);
+    assert.deepEqual(updateLevelSuppressedCalls, [false]);
     assert.equal(scheduleSaveCalls.length, 1);
     assert.equal(refreshCalls.length, 1);
     assert.equal(applyFilterCalls.length, 1);
@@ -3625,9 +3702,10 @@ describe('gallery events', () => {
     changeHandlers[0]({ target: correctionInput });
 
     assert.deepEqual(levelValueCalls, ['']);
-    assert.deepEqual(levelOptionsCalls, ['']);
+    assert.deepEqual(levelOptionsCalls, ['none']);
     assert.equal(Object.prototype.hasOwnProperty.call(record, 'Effect1Level'), false);
-    assert.equal(Object.prototype.hasOwnProperty.call(record, 'Effect1LevelOptions'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(record, 'Effect1LevelOptions'), true);
+    assert.equal(record.Effect1LevelOptions, 'none');
     assert.equal(scheduleSaveCalls.length >= 1, true);
   });
 
