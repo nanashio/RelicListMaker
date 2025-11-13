@@ -69,6 +69,29 @@ def test_normalize_dataset_entries_accepts_various_shapes(tmp_path):
     assert normalized[3]["folder"] == "nested"
 
 
+def test_normalize_dataset_entries_resolves_different_base_dir(tmp_path):
+    root_dir = tmp_path / "results"
+    gallery_dir = root_dir / "gallery"
+    video_dir = root_dir / "video_a"
+    gallery_dir.mkdir(parents=True)
+    (video_dir / "crops").mkdir(parents=True)
+    csv_path = video_dir / "results.csv"
+    csv_path.write_text("id,label\n", encoding="utf-8")
+
+    datasets = [
+        {"csv": "video_a/results.csv", "imgDir": "video_a/crops", "label": "Video A"},
+    ]
+
+    normalized = generate_gallery._normalize_dataset_entries(
+        datasets,
+        str(gallery_dir),
+        base_dir=str(root_dir),
+    )
+
+    assert normalized[0]["csv"] == "../video_a/results.csv"
+    assert normalized[0]["imgDir"] == "../video_a/crops"
+
+
 def test_copy_static_asset_with_subdirectory_and_missing_override(tmp_path):
     source = tmp_path / "templates" / "base.css"
     source.parent.mkdir()
@@ -422,6 +445,61 @@ def test_generate_html_embeds_known_master_types(monkeypatch, tmp_path):
 
     assert "master_relics.csv" in loaded_paths
     assert "master_relics_deep.csv" in loaded_paths
+
+
+def test_generate_html_resolves_dataset_base_dir(monkeypatch, tmp_path):
+    root_dir = tmp_path / "results"
+    gallery_dir = root_dir / "gallery"
+    video_dir = root_dir / "video_a"
+    crops_dir = video_dir / "crops"
+    gallery_dir.mkdir(parents=True)
+    crops_dir.mkdir(parents=True)
+
+    results_csv = video_dir / "results.csv"
+    results_csv.write_text("id,label\n", encoding="utf-8")
+
+    template = "__RESULTS_CSV__\n__IMAGE_DIR__\n__DATASETS__"
+    monkeypatch.setattr(generate_gallery, "_load_text_asset", lambda *args, **kwargs: template)
+
+    def fake_prepare_gallery_assets(*args, **kwargs):
+        base = tmp_path / "assets"
+        css_path = base / "gallery.css"
+        index_path = base / "index.js"
+        core_path = base / "gallery.js"
+        for file_path in (css_path, index_path, core_path):
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text("", encoding="utf-8")
+        return GalleryAssets(
+            css=PreparedAsset("gallery.css", str(css_path)),
+            index_js=PreparedAsset("index.js", str(index_path)),
+            core_js=PreparedAsset("gallery.js", str(core_path)),
+        )
+
+    monkeypatch.setattr(generate_gallery.gallery_assets, "prepare_gallery_assets", fake_prepare_gallery_assets)
+    monkeypatch.setattr(generate_gallery, "load_master_csv", lambda *args, **kwargs: [])
+    monkeypatch.setattr(generate_gallery, "load_master_json", lambda *args, **kwargs: {})
+    monkeypatch.setattr(generate_gallery, "load_master_effects_and_levels", lambda *args, **kwargs: ([], {}))
+    monkeypatch.setattr(generate_gallery, "normalize_master_values", lambda values: list(values or []))
+
+    datasets = [
+        {"csv": "video_a/results.csv", "imgDir": "video_a/crops", "label": "Video A"},
+    ]
+
+    output_html = gallery_dir / "index.html"
+    generate_gallery.generate_html(
+        str(results_csv),
+        "video_a/crops",
+        str(output_html),
+        datasets=datasets,
+        datasets_base_dir=str(root_dir),
+    )
+
+    parts = output_html.read_text(encoding="utf-8").splitlines()
+    assert parts[0] == "../video_a/results.csv"
+    assert parts[1] == "../video_a/crops"
+    datasets_payload = json.loads(html.unescape(parts[2]))
+    assert datasets_payload[0]["csv"] == "../video_a/results.csv"
+    assert datasets_payload[0]["imgDir"] == "../video_a/crops"
 
 
 def test_generate_html_respects_asset_overrides(monkeypatch, tmp_path):
