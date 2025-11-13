@@ -41,11 +41,11 @@ async function loadDependencies() {
 
 function resolveCoreScriptUrl(rawSpecifier) {
     if (!rawSpecifier) {
-        return resolveModuleUrl('../gallery.js', import.meta.url);
+        return resolveModuleUrl('./gallery.js', import.meta.url);
     }
     const trimmed = rawSpecifier.trim();
     if (!trimmed) {
-        return resolveModuleUrl('../gallery.js', import.meta.url);
+        return resolveModuleUrl('./gallery.js', import.meta.url);
     }
     try {
         return new URL(trimmed, document.baseURI).href;

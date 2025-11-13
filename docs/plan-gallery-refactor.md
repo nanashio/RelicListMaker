@@ -1,7 +1,7 @@
 # gallery.js リファクタリング設計方針
 
 ## 目的
-- 巨大な `templates/gallery.js`（約 3,200 行）を責務ごとに分割し、単一責任・高凝集・低結合を実現する。
+- 巨大な `templates/gallery/gallery.js`（約 3,200 行）を責務ごとに分割し、単一責任・高凝集・低結合を実現する。
 - UI 表示ロジックと状態／データ処理ロジックを分離し、テスト可能な純粋関数を増やす。
 - 今後の拡張（効果スロットの追加、フィルタ条件の増加、ストレージ方式の変更）に備えた柔軟なアーキテクチャを用意する。
 
@@ -26,7 +26,7 @@
 | 2025-11-03 | Python 生成スクリプト調査 | `generate_gallery.py::generate_html` の責務集中を分析し、データ整形・アセットコピー・テンプレート変換の分割計画を本ドキュメントへ追加。今後のテスト方針（`pytest` + `npm run test:node`）と進捗記録手順を整理した。 |
 | 2025-11-04 | 生成スクリプト実装・検証 | `gallery_assets.py` を新設してアセット準備を集約し、`build_gallery_payload`・`render_gallery_template` を導入。`pytest` と `npm run test:node` は成功、Playwright はブラウザ未取得のため失敗（代替手順適用済み）と記録。 |
 | 2025-11-05 | データセットビルダー導入 | `datasets/builder.py` を追加し、`ProcessedVideoResult` / `DatasetBuildResult` と `build_dataset_entries` を実装。`pipeline/processors.py`・`pipeline/pipeline.py` を更新してビルダー経由でデータセットを生成し、`tests/test_dataset_builder.py` を新設。`pytest` で回帰確認済み。 |
-| 2025-11-06 | 旧テンプレート確認 | レガシー HTML が `templates/gallery.js` を直接読み込んでいないかリポジトリ全体を検索し、`gallery/index.js` 経由の構成のみが残っていることを確認。追加リファクタリングは不要と判断し、現行モジュール群の維持方針を共有。 |
+| 2025-11-06 | 旧テンプレート確認 | レガシー HTML が `templates/gallery/gallery.js` を直接読み込んでいないかリポジトリ全体を検索し、`gallery/index.js` 経由の構成のみが残っていることを確認。追加リファクタリングは不要と判断し、現行モジュール群の維持方針を共有。 |
 
 ## 実行計画
 
@@ -55,10 +55,10 @@
 - **フィルタ／検索の純化**: `applyFilters` と検索キャッシュを `utils/filter.js` へ切り出し、Node テストを追加して回帰を抑止。
 - **イベントとアクション処理の整理**: `events/galleryEvents.js` をハンドラ単位へ再編し、`events/recordActionHandlers.js` に操作ロジックを集約。お気に入り・色分け・レビュー操作のテストを強化。
 - **レコード・重複管理の共有化**: `templates/gallery/utils/records.js` と `templates/gallery/storage/utils.js` を新設し、ギャラリー本体からヘルパーを排除。フォールバックスタブを明示して依存を整理。
-- **DOM/ストレージユーティリティの統合**: `templates/gallery/utils/dom.js` にファクトリを導入し、`templates/gallery.js` からのフォールバック実装を撤廃。`window.galleryStorageUtils` の API を必須依存として扱い、Node テストで依存注入経路を検証。
+- **DOM/ストレージユーティリティの統合**: `templates/gallery/utils/dom.js` にファクトリを導入し、`templates/gallery/gallery.js` からのフォールバック実装を撤廃。`window.galleryStorageUtils` の API を必須依存として扱い、Node テストで依存注入経路を検証。
 - **データ正規化の拡充**: `utils/data.js` に抑制レベル正規化を追加し、旧 CSV/OPFS データの互換性を担保。データセット解析ユーティリティを `dataset/utils.js` へ集約しテストを整備。
-- **データセット依存の一本化**: `templates/gallery.js` のデータセットユーティリティ内蔵フォールバックを廃止し、`galleryDatasetUtilsFactory` 提供モジュールを必須依存として採用。重複実装を削除して整合性を向上。
-- **データユーティリティの一本化**: `templates/gallery.js` からレベル正規化やマスター候補解析のフォールバック実装を排除し、`galleryDataUtils` が提供する純粋関数を必須依存として扱う。欠落時は明示的に例外を送出し、モジュール実装との乖離を防止。
+- **データセット依存の一本化**: `templates/gallery/gallery.js` のデータセットユーティリティ内蔵フォールバックを廃止し、`galleryDatasetUtilsFactory` 提供モジュールを必須依存として採用。重複実装を削除して整合性を向上。
+- **データユーティリティの一本化**: `templates/gallery/gallery.js` からレベル正規化やマスター候補解析のフォールバック実装を排除し、`galleryDataUtils` が提供する純粋関数を必須依存として扱う。欠落時は明示的に例外を送出し、モジュール実装との乖離を防止。
 - **テスト体制の強化**: `tests/js/gallery_modules.test.mjs` でフィルタ・アイテム生成・効果レベル処理などのシナリオを網羅し、保存トリガーや候補リセットを検証。
 - **状態管理と永続化の抽象化**: `app/stateApi.js` と `storage/manager.js` を導入し、`gallery.js` から直接状態や OPFS 実装へアクセスしない構造に更新。描画・イベント層へ API を注入し、Node テストでモック差し替えが容易な設計に整えた。
 - **ES Modules エントリポイントの整備**: `templates/gallery/index.js` を追加し、HTML テンプレートを `<script type="module">` で読み込む構成に更新。動的 import で `gallery.js` を初期化しつつ依存モジュールの読み込み順序を保証し、`generate_gallery.py` と Playwright フィクスチャを新構成に合わせて更新した。
@@ -76,7 +76,7 @@
 1. **責務ベースでモジュール化**: 状態管理・データセット・描画・永続化・イベントを明確に分割する。
 2. **UI とロジックの分離**: DOM 操作を司るレイヤと、データ加工や判定を行うレイヤを分け、後者を純粋関数化。
 3. **依存方向の固定化**: 下位モジュール（ユーティリティ／データ処理）から上位モジュール（描画／イベント）へ一方向の依存に制限。
-4. **ES Modules 化**: `templates/gallery.js` をエントリポイント (`index.js`) とし、`<script type="module">` で読み込む想定に切り替える。
+4. **ES Modules 化**: `templates/gallery/gallery.js` をエントリポイント (`index.js`) とし、`<script type="module">` で読み込む想定に切り替える。
 5. **テスト容易性の向上**: ロジックモジュールは `tests/` 配下から直接 import できる構造に変更し、ユニットテストを追加しやすくする。
 
 ### DOM / 状態ユーティリティ統合
@@ -120,17 +120,17 @@
 
 ### 依存関係調査（2024-02-14）
 #### レンダリング（`buildGallery`〜`createEffect`）
-- `templates/gallery.js:1911` `buildGallery` は `state.records` / `duplicates` / `dom.gallery` / `createItem` / `updateSummary` / `applyFilters` に依存し、副作用として `state.items` を再生成する。
-- `templates/gallery.js:1957` `createItem` ブロックは `bindImage` / `syncDuplicateState` / `syncFavoriteState` / `syncItemColorState` / `refreshItemCaches` と `datasetState.kind` を参照し、左右カラムを DOM 生成する。
-- `templates/gallery.js:2133` `appendItemEffects` 〜 `createEffect` は `state.labelSymbols` / `datasetState.kind` / `applyMasterLevelOptions` / `updateEffectStatus` / `levelChangeHandler` など多数の補助関数を前提に DOM を構築し、マスターデータ取得後の再描画が必要。
+- `templates/gallery/gallery.js:1911` `buildGallery` は `state.records` / `duplicates` / `dom.gallery` / `createItem` / `updateSummary` / `applyFilters` に依存し、副作用として `state.items` を再生成する。
+- `templates/gallery/gallery.js:1957` `createItem` ブロックは `bindImage` / `syncDuplicateState` / `syncFavoriteState` / `syncItemColorState` / `refreshItemCaches` と `datasetState.kind` を参照し、左右カラムを DOM 生成する。
+- `templates/gallery/gallery.js:2133` `appendItemEffects` 〜 `createEffect` は `state.labelSymbols` / `datasetState.kind` / `applyMasterLevelOptions` / `updateEffectStatus` / `levelChangeHandler` など多数の補助関数を前提に DOM を構築し、マスターデータ取得後の再描画が必要。
 
 #### イベントハンドラ
-- `templates/gallery.js:3248` `attachEventHandlers` は `dom.datasetSelect` / `dom.gallery` / `dom.lightbox` 等の参照と `switchDataset` / `handleDuplicateToggle` / `recordStatusChange` / `updateRecordCorrection` 系の状態更新関数に依存する。
+- `templates/gallery/gallery.js:3248` `attachEventHandlers` は `dom.datasetSelect` / `dom.gallery` / `dom.lightbox` 等の参照と `switchDataset` / `handleDuplicateToggle` / `recordStatusChange` / `updateRecordCorrection` 系の状態更新関数に依存する。
 - 各イベントハンドラは DOM クエリ (`closest`) と `state` 更新 (`setRecordDuplicate` 等) を組み合わせており、副作用を持つコールバックを注入できる構造が必要。
 
 #### 状態・データユーティリティ
-- `templates/gallery/dataset/utils.js` で `parseDatasets` / `resolveDatasetState` / `areSourcesEqual` を提供し、`templates/gallery.js` は `window.galleryDatasetUtils` フォールバックを介して参照する構造に更新した。
-- `templates/gallery.js:342` 以降の DOM / データフォールバックは `window.galleryDomUtils` / `window.galleryDataUtils` が未登録の場合に備えているが、モジュール化後は依存を明示して注入する構造に切り替えられる。
+- `templates/gallery/dataset/utils.js` で `parseDatasets` / `resolveDatasetState` / `areSourcesEqual` を提供し、`templates/gallery/gallery.js` は `window.galleryDatasetUtils` フォールバックを介して参照する構造に更新した。
+- `templates/gallery/gallery.js:342` 以降の DOM / データフォールバックは `window.galleryDomUtils` / `window.galleryDataUtils` が未登録の場合に備えているが、モジュール化後は依存を明示して注入する構造に切り替えられる。
 
 ## テスト戦略
 - ロジック切り出し後に `tests/` 以下でユニットテストを追加。特に以下を対象とする。  
@@ -155,7 +155,7 @@
 
 ### HTML テンプレート処理レイヤ
 - `generate_gallery.py::generate_html` は `templates/gallery.html` を `_load_text_asset` で読み込み、`__RESULTS_CSV__` や `__CSS_FILE__` などのプレースホルダーを `json.dumps` 済みの値で順次置換する。
-- `gallery_assets.copy_static_asset` と `gallery_assets.cache_bust_reference` を介し、`gallery/index.js`・`gallery.js`・`gallery.css` を出力先へコピーしてから、タイムスタンプに基づくクエリパラメータを付与して参照リンクを書き換える。
+- `gallery_assets.copy_static_asset` と `gallery_assets.cache_bust_reference` を介し、`gallery/index.js`・`gallery/gallery.js`・`gallery/gallery.css` を出力先へコピーしてから、タイムスタンプに基づくクエリパラメータを付与して参照リンクを書き換える。
 - HTML への埋め込みは data-* 属性に集約されており、テンプレート入れ替え時はここで提供するキー（結果 CSV、画像ディレクトリ、マスター定義、データセット一覧、表示範囲など）を互換的に維持する必要がある。
 
 ### データ整形レイヤ

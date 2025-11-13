@@ -32,8 +32,16 @@ def _write_csv(path: Path, header: list[str], rows: list[list[str]]) -> None:
 def sample_results(tmp_path: Path) -> Path:
     results_dir = tmp_path / "results"
     (results_dir).mkdir(parents=True, exist_ok=True)
-    (results_dir / "gallery.css").write_text("body { background: #fff; }", encoding="utf-8")
-    (results_dir / "gallery.js").write_text("console.log('stub');", encoding="utf-8")
+    assets_dir = results_dir / "gallery"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    (assets_dir / "gallery.css").write_text(
+        "body { background: #fff; }",
+        encoding="utf-8",
+    )
+    (assets_dir / "gallery.js").write_text(
+        "console.log('stub');",
+        encoding="utf-8",
+    )
 
     # dataset 1: 2 images, one marked duplicate
     dataset1 = results_dir / "video_a"
@@ -134,8 +142,8 @@ def test_merge_results_filters_duplicates_and_copies_images(sample_results: Path
     assert merged_entry["csv"] == "merged/merged.csv"
     assert any(entry.get("folder") == "video_a" for entry in datasets if entry is not merged_entry)
     assert 'data-master-options="[]"' not in html_text
-    assert not (merged_dir / "gallery.css").exists()
-    assert not (merged_dir / "gallery.js").exists()
+    assert not (merged_dir / "gallery" / "gallery.css").exists()
+    assert not (merged_dir / "gallery" / "gallery.js").exists()
     assert not (merged_dir / "merged_viewer.html").exists()
 
 

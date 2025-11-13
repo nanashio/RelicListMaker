@@ -25,10 +25,11 @@ def _build_fixture_tree(base_dir: Path) -> None:
     crops_dir.mkdir(parents=True, exist_ok=True)
 
     templates_dir = _repo_root() / "templates"
-    shutil.copy2(templates_dir / "gallery.css", base_dir / "gallery.css")
-    shutil.copy2(templates_dir / "gallery.js", base_dir / "gallery.js")
-    (base_dir / "gallery").mkdir(parents=True, exist_ok=True)
-    shutil.copy2(templates_dir / "gallery" / "index.js", base_dir / "gallery" / "index.js")
+    gallery_dir = base_dir / "gallery"
+    gallery_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(templates_dir / "gallery" / "gallery.css", gallery_dir / "gallery.css")
+    shutil.copy2(templates_dir / "gallery" / "gallery.js", gallery_dir / "gallery.js")
+    shutil.copy2(templates_dir / "gallery" / "index.js", gallery_dir / "index.js")
 
     additional_scripts = [
         Path('gallery/utils/dom.js'),
@@ -70,9 +71,9 @@ def _build_fixture_tree(base_dir: Path) -> None:
     template = (templates_dir / "gallery.html").read_text(encoding="utf-8")
     viewer_html = (
         template
-        .replace("__CSS_FILE__", "gallery.css")
+        .replace("__CSS_FILE__", "gallery/gallery.css")
         .replace("__JS_FILE__", "gallery/index.js")
-        .replace("__CORE_JS__", "gallery.js")
+        .replace("__CORE_JS__", "gallery/gallery.js")
         .replace("__RESULTS_CSV__", "sample.csv")
         .replace("__IMAGE_DIR__", "crops")
         .replace("__LABEL_SYMBOLS__", "[\"①\", \"②\", \"③\"]")
