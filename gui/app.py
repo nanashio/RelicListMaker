@@ -10,6 +10,7 @@ from pathlib import Path
 from tkinter import messagebox
 from typing import Iterator, Optional, Sequence
 
+from gui_adapters import TkinterDnD
 from gui_services import BackgroundTaskRunner, GuiState, PipelineExecutor
 from viewer_server import ServerContext, _open_browser
 from version_info import get_version
@@ -472,9 +473,20 @@ def _parse_cli_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         return parser.parse_args(args_list)
 
 
+def create_root_window() -> tk.Misc:
+    """TkinterDnDが利用可能な場合は対応するTkを生成する."""
+
+    if TkinterDnD is not None:
+        try:
+            return TkinterDnD.Tk()
+        except Exception:  # noqa: BLE001 - フォールバックで再試行
+            pass
+    return tk.Tk()
+
+
 def main(argv: Optional[Sequence[str]] = None) -> None:
     _parse_cli_args(argv)
-    root = tk.Tk()
+    root = create_root_window()
     app = RelicGuiApp(root)
     root.mainloop()
 
