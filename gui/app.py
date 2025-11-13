@@ -10,8 +10,8 @@ from pathlib import Path
 from tkinter import messagebox
 from typing import Iterator, Optional, Sequence
 
-from gui_adapters import TkinterDnD
-from gui_services import BackgroundTaskRunner, GuiState, PipelineExecutor
+from .adapters import TkinterDnD
+from .services import BackgroundTaskRunner, GuiState, PipelineExecutor
 from viewer_server import ServerContext, _open_browser
 from version_info import get_version
 

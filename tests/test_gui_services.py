@@ -1,4 +1,4 @@
-"""gui_services モジュールのサービス層を検証するテスト."""
+"""gui.services モジュールのサービス層を検証するテスト."""
 from __future__ import annotations
 
 import threading
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from gui_services import BackgroundTaskRunner, GuiState, PipelineExecutor
+from gui.services import BackgroundTaskRunner, GuiState, PipelineExecutor
 from pipeline import DEFAULT_GCP_CREDENTIALS_FILENAME, DEFAULT_OCR_ENGINE, PipelineSettings
 
 

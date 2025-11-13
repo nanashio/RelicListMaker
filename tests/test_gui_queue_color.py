@@ -5,7 +5,7 @@ import tkinter as tk
 
 import pytest
 
-from gui_app import RelicGuiApp
+from gui.app import RelicGuiApp
 
 
 def test_inline_color_selection_updates_queue_entry_color() -> None:

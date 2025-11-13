@@ -1,10 +1,10 @@
-"""gui_adapters の補助機能テスト."""
+"""gui.adapters の補助機能テスト."""
 from __future__ import annotations
 
 import queue
 import sys
 
-from gui_adapters import QueueWriter, redirect_streams
+from gui.adapters import QueueWriter, redirect_streams
 
 
 def test_queue_writer_stores_messages() -> None:

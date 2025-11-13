@@ -1,4 +1,4 @@
-"""旧レイアウトから移行したGUIエントリーポイント."""
+"""GUIパッケージへの互換エントリーポイント."""
 from __future__ import annotations
 
 from gui import RelicGuiApp, main
