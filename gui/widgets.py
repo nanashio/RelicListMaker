@@ -30,6 +30,7 @@ class InlineCombo:
         self._combo.bind("<Escape>", self._handle_escape)
         self._combo.place_forget()
         self._item: str | None = None
+        self._last_item: str | None = None
         self._hide_after: str | None = None
 
     @property
@@ -46,6 +47,7 @@ class InlineCombo:
     def show(self, item: str, bbox: tuple[int, int, int, int], value: str) -> None:
         self.cancel_hide()
         self._item = item
+        self._last_item = item
         self._combo.set(value)
         x, y, width, height = bbox
         self._combo.place(x=x, y=y, width=width, height=height)
@@ -67,10 +69,11 @@ class InlineCombo:
                 self._hide_after = None
 
     def _handle_selected(self, _event: tk.Event[tk.Misc]) -> None:
-        if not self._item:
+        target = self._item or self._last_item
+        if not target:
             return
         value = self._combo.get()
-        self._on_selected(self._item, value)
+        self._on_selected(target, value)
 
     def _handle_focus_out(self, _event: tk.Event[tk.Misc]) -> None:
         if not self._item:
