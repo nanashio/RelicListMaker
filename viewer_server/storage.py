@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import contextlib
 import csv
+import re
 import threading
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -22,6 +23,69 @@ _RESERVED_FIELDS = [
 _EXTRA_FIELD_PREFIXES = ("Effect", "RawText", "Demerit")
 
 _SAVE_LOCK = threading.Lock()
+
+_LEVEL_FIELD_PATTERN = re.compile(r"^Effect(\d+)(Level(?:Source|Options)?)$", re.IGNORECASE)
+
+
+def _normalize_level_placeholder(value: object) -> str:
+    if value is None:
+        return "none"
+    text = str(value).strip()
+    if not text:
+        return "none"
+    return "none" if text.lower() == "none" else text
+
+
+def _ensure_effect_level_placeholders(record: dict[str, object]) -> None:
+    if not isinstance(record, dict):
+        return
+
+    pending_defaults: set[int] = set()
+
+    for key in list(record.keys()):
+        if not isinstance(key, str):
+            continue
+        match = _LEVEL_FIELD_PATTERN.match(key)
+        if not match:
+            continue
+        slot = int(match.group(1))
+        suffix = match.group(2).lower()
+        prefix = f"Effect{slot}"
+
+        if suffix == "level":
+            normalized_key = f"{prefix}Level"
+            record[normalized_key] = _normalize_level_placeholder(record.get(key))
+            source_key = f"{prefix}LevelSource"
+            if source_key in record:
+                record[source_key] = _normalize_level_placeholder(record.get(source_key))
+            continue
+
+        if suffix == "levelsource":
+            normalized_key = f"{prefix}LevelSource"
+            record[normalized_key] = _normalize_level_placeholder(record.get(key))
+            level_key = f"{prefix}Level"
+            if level_key not in record:
+                record[level_key] = record[normalized_key]
+            continue
+
+        if suffix == "leveloptions":
+            level_key = f"{prefix}Level"
+            if level_key in record:
+                continue
+            raw_options = record.get(key)
+            option_text = str(raw_options).strip().lower() if raw_options is not None else ""
+            if not option_text or option_text == "none":
+                pending_defaults.add(slot)
+
+    for slot in pending_defaults:
+        level_key = f"Effect{slot}Level"
+        if level_key not in record:
+            record[level_key] = "none"
+        else:
+            record[level_key] = _normalize_level_placeholder(record.get(level_key))
+        source_key = f"Effect{slot}LevelSource"
+        if source_key in record:
+            record[source_key] = _normalize_level_placeholder(record.get(source_key))
 
 
 @dataclass(slots=True)
@@ -112,6 +176,7 @@ def write_records(csv_path: Path, records: list[dict], field_order: list[str]) -
                 for record in records:
                     if not isinstance(record, dict):
                         continue
+                    _ensure_effect_level_placeholders(record)
                     row = {field: record.get(field, "") for field in field_order}
                     writer.writerow(row)
             tmp_path.replace(csv_path)

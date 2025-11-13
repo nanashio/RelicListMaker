@@ -1,3 +1,4 @@
+import csv
 import sys
 import types
 from pathlib import Path
@@ -13,6 +14,7 @@ from relic_pipeline.io.exporter import _ensure_effect_slots, build_row, write_cs
 from relic_pipeline.settings import DEFAULT_COLUMN_VISIBILITY, ExportOptions
 from relic_pipeline.matching import MatchResult
 from relic_data import load_master_effects_and_levels, normalize_master_values
+from viewer_server import storage as viewer_storage
 
 
 def test_normalize_master_values_keeps_placeholder():
@@ -198,3 +200,32 @@ def test_build_row_merges_demerit_results():
     assert row["Demerit1Source"] == "Demerit Matched"
     assert row["Demerit1Level"] == "none"
     assert row["Demerit1LevelSource"] == "none"
+
+
+def test_viewer_storage_normalizes_blank_effect_levels(tmp_path: Path):
+    field_order = [
+        "Image",
+        "Duplicate",
+        "Effect1Level",
+        "Effect1LevelSource",
+        "Effect1LevelOptions",
+    ]
+    records = [
+        {
+            "Image": "sample.png",
+            "Duplicate": False,
+            "Effect1Level": "",
+            "Effect1LevelSource": "",
+            "Effect1LevelOptions": "none",
+        }
+    ]
+    output = tmp_path / "viewer.csv"
+
+    viewer_storage.write_records(output, records, field_order)
+
+    with output.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        saved = next(reader)
+
+    assert saved["Effect1Level"] == "none"
+    assert saved["Effect1LevelSource"] == "none"

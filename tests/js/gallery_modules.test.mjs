@@ -1540,13 +1540,30 @@ describe('gallery storage utils', () => {
 
     const messages = [];
     let fetchCalls = 0;
-    global.fetch = async () => {
+    const payloads = [];
+    const records = [
+      {
+        Image: 'sample.png',
+        Duplicate: false,
+        Effect1Level: '',
+        Effect1LevelOptions: 'none',
+        Effect1LevelSource: ''
+      }
+    ];
+    global.fetch = async (_url, init = {}) => {
       fetchCalls += 1;
+      if (init && init.body) {
+        try {
+          payloads.push(JSON.parse(init.body));
+        } catch (error) {
+          payloads.push(null);
+        }
+      }
       return { ok: true, async text() { return ''; } };
     };
 
     const manager = utils.createOpfsManager({
-      getRecords: () => [{ Name: 'A' }],
+      getRecords: () => records,
       getDatasetState: () => ({ kind: 'normal', label: 'Alpha' }),
       getCsvPath: () => 'alpha.csv',
       resolveCsvSavePath: (value) => value,
@@ -1556,9 +1573,14 @@ describe('gallery storage utils', () => {
     await manager.flushNow();
     assert.ok(messages.some((message) => message.startsWith('保存しました')));
     assert.equal(fetchCalls, 1);
+    assert.equal(records[0].Effect1Level, 'none');
+    assert.equal(records[0].Effect1LevelSource, 'none');
+    assert.equal(Array.isArray(payloads) && payloads.length, 1);
+    assert.equal(payloads[0].records[0].Effect1Level, 'none');
+    assert.equal(payloads[0].records[0].Effect1LevelSource, 'none');
 
     const blocked = utils.createOpfsManager({
-      getRecords: () => [{ Name: 'A' }],
+      getRecords: () => records,
       getDatasetState: () => ({ kind: 'merged', label: 'Merged' }),
       getCsvPath: () => 'merged.csv',
       resolveCsvSavePath: (value) => value,
