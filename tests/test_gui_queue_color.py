@@ -15,7 +15,7 @@ def test_inline_color_selection_updates_queue_entry_color() -> None:
     except tk.TclError as exc:  # pragma: no cover - 実行環境依存
         pytest.skip(f"Tkが利用できません: {exc}")
 
-    root.withdraw()
+    root.update()
     app = RelicGuiApp(root)
 
     try:
@@ -51,7 +51,7 @@ def test_inline_color_update_survives_focus_out() -> None:
     except tk.TclError as exc:  # pragma: no cover - 実行環境依存
         pytest.skip(f"Tkが利用できません: {exc}")
 
-    root.withdraw()
+    root.update()
     app = RelicGuiApp(root)
 
     try:
@@ -88,7 +88,7 @@ def test_inline_color_selection_after_editor_hidden() -> None:
     except tk.TclError as exc:  # pragma: no cover - 実行環境依存
         pytest.skip(f"Tkが利用できません: {exc}")
 
-    root.withdraw()
+    root.update()
     app = RelicGuiApp(root)
 
     try:
@@ -125,7 +125,7 @@ def test_inline_relic_type_selection_updates_entry() -> None:
     except tk.TclError as exc:  # pragma: no cover - 実行環境依存
         pytest.skip(f"Tkが利用できません: {exc}")
 
-    root.withdraw()
+    root.update()
     app = RelicGuiApp(root)
 
     try:
