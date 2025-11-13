@@ -13,7 +13,7 @@
   - `preprocess.prepare_crop_for_ocr` で前処理し、`pytesseract` と RapidFuzz (`rapidfuzz.process`) を用いて OCR と一致検索を行う。
   - `relic_data` からマスター効果/レベル情報を受け取り、`tesseract_bundle` でバンドル済み Tesseract を初期化する。
 - `generate_gallery.py`
-  - `relic_data` 経由でマスター CSV/JSON を読み込み、テンプレート (`gallery.html`, `gallery.css`, `gallery.js` 等) を `resource_paths.templates_path` からコピーする。
+  - `relic_data` 経由でマスター CSV/JSON を読み込み、テンプレート (`gallery.html`, `gallery/gallery.css`, `gallery/gallery.js` 等) を `resource_paths.templates_path` からコピーする。
   - 処理結果 CSV 群を集約して HTML ビューアを生成する。
 
 ## フェーズ別の責務整理

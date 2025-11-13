@@ -19,7 +19,7 @@ from resource_paths import templates_path
 
 RESULTS_CSV_PATH = "results_input_video.csv"
 IMG_DIR = "crops/input_video"
-OUTPUT_HTML = "viewer.html"
+OUTPUT_HTML = "gallery/index.html"
 LABEL_SYMBOLS = ["①", "②", "③"]
 DEFAULT_ITEM_IMAGE_VIEW_BOX = "inset(0px 180px 0px 0px)"
 DEFAULT_MASTER_CSV = str(templates_path("master_relics.csv"))
@@ -27,9 +27,9 @@ DEFAULT_MASTER_JSON = "master_relics.json"
 DEFAULT_MASTER_DEMERIT_CSV = str(templates_path("master_relics_demerit.csv"))
 DEFAULT_MASTER_DEMERIT_JSON = "master_relics_demerit.json"
 TEMPLATE_HTML_PATH = str(templates_path("gallery.html"))
-TEMPLATE_CSS_PATH = str(templates_path("gallery.css"))
+TEMPLATE_CSS_PATH = str(templates_path("gallery/gallery.css"))
 TEMPLATE_INDEX_JS_PATH = str(templates_path("gallery/index.js"))
-TEMPLATE_CORE_JS_PATH = str(templates_path("gallery.js"))
+TEMPLATE_CORE_JS_PATH = str(templates_path("gallery/gallery.js"))
 
 
 @dataclass
@@ -88,9 +88,39 @@ def _normalize_item_image_view_box(value: Optional[str]) -> str:
     return sanitized
 
 
-def _normalize_dataset_entries(datasets, output_dir: str):
+def _normalize_dataset_entries(
+    datasets,
+    output_dir: str,
+    base_dir: Optional[str] = None,
+):
     if not datasets:
         return []
+
+    output_dir_abs = os.path.abspath(output_dir) if output_dir else os.getcwd()
+    candidate_bases: List[str] = []
+    if base_dir:
+        candidate_bases.append(os.path.abspath(base_dir))
+    candidate_bases.append(output_dir_abs)
+
+    seen = set()
+    ordered_bases: List[str] = []
+    for candidate in candidate_bases:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        ordered_bases.append(candidate)
+
+    if not ordered_bases:
+        ordered_bases.append(output_dir_abs)
+
+    def _resolve_relative_path(path_value: str) -> str:
+        if os.path.isabs(path_value):
+            return path_value
+        for base in ordered_bases:
+            candidate = os.path.abspath(os.path.join(base, path_value))
+            if os.path.exists(candidate):
+                return candidate
+        return os.path.abspath(os.path.join(ordered_bases[0], path_value))
 
     normalized = []
     for entry in datasets:
@@ -127,9 +157,9 @@ def _normalize_dataset_entries(datasets, output_dir: str):
         if os.path.isabs(csv_path):
             csv_abs = csv_path
         else:
-            csv_abs = os.path.abspath(os.path.join(output_dir, csv_path))
+            csv_abs = _resolve_relative_path(csv_path)
         try:
-            csv_rel = os.path.relpath(csv_abs, output_dir)
+            csv_rel = os.path.relpath(csv_abs, output_dir_abs)
         except ValueError:
             csv_rel = os.path.basename(csv_abs)
 
@@ -150,9 +180,9 @@ def _normalize_dataset_entries(datasets, output_dir: str):
             if os.path.isabs(img_dir):
                 img_abs = img_dir
             else:
-                img_abs = os.path.abspath(os.path.join(output_dir, img_dir))
+                img_abs = _resolve_relative_path(img_dir)
             try:
-                img_rel = os.path.relpath(img_abs, output_dir)
+                img_rel = os.path.relpath(img_abs, output_dir_abs)
             except ValueError:
                 img_rel = img_dir
 
@@ -398,6 +428,7 @@ def build_gallery_payload(
     results_path: str,
     img_dir: Optional[str],
     output_dir: str,
+    datasets_base_dir: Optional[str] = None,
     label_symbols: Optional[Sequence[str]],
     master_csv_path: Optional[str],
     master_json_path: Optional[str],
@@ -410,6 +441,11 @@ def build_gallery_payload(
     item_image_view_box: Optional[str],
 ) -> GalleryPayload:
     output_dir_abs = os.path.abspath(output_dir) if output_dir else os.getcwd()
+    datasets_base_dir_abs = (
+        os.path.abspath(datasets_base_dir)
+        if datasets_base_dir
+        else output_dir_abs
+    )
     warnings: List[str] = []
 
     normalized_symbols = _sanitize_symbols(label_symbols) or _sanitize_symbols(LABEL_SYMBOLS)
@@ -429,13 +465,13 @@ def build_gallery_payload(
     if img_dir:
         if os.path.isabs(img_dir):
             img_abs_dir = img_dir
+        else:
+            img_abs_dir = os.path.abspath(os.path.join(datasets_base_dir_abs, img_dir))
+        if img_abs_dir:
             try:
                 img_rel_dir = os.path.relpath(img_abs_dir, output_dir_abs)
             except ValueError:
-                img_rel_dir = os.path.basename(img_abs_dir)
-        else:
-            img_rel_dir = img_dir
-            img_abs_dir = os.path.abspath(os.path.join(output_dir_abs, img_dir))
+                img_rel_dir = os.path.basename(img_abs_dir) if os.path.isabs(img_dir) else img_dir
         if img_abs_dir and not os.path.exists(img_abs_dir):
             warnings.append(f"[!] 画像ディレクトリが見つかりません: {img_abs_dir}")
 
@@ -561,7 +597,11 @@ def build_gallery_payload(
     if not master_demerit_options_list and master_demerit_csv_abs:
         master_demerit_options_list = load_master_csv(master_demerit_csv_abs)
 
-    dataset_entries = _normalize_dataset_entries(datasets, output_dir_abs)
+    dataset_entries = _normalize_dataset_entries(
+        datasets,
+        output_dir_abs,
+        base_dir=datasets_base_dir_abs,
+    )
 
     (
         master_options_by_type,
@@ -699,6 +739,7 @@ def generate_html(
     item_image_view_box: Optional[str] = None,
     css_relative_override: Optional[str] = None,
     js_relative_override: Optional[str] = None,
+    datasets_base_dir: Optional[str] = None,
 ):
     output_dir = os.path.dirname(os.path.abspath(output_html)) or "."
     os.makedirs(output_dir, exist_ok=True)
@@ -707,6 +748,7 @@ def generate_html(
         results_path=results_path,
         img_dir=img_dir,
         output_dir=output_dir,
+        datasets_base_dir=datasets_base_dir,
         label_symbols=label_symbols,
         master_csv_path=master_csv_path,
         master_json_path=master_json_path,
@@ -728,13 +770,13 @@ def generate_html(
         output_dir,
         css_template_path=TEMPLATE_CSS_PATH,
         css_override_template=css_template_path,
-        css_output_name=css_output_name,
+        css_output_name=css_output_name or "gallery.css",
         css_relative_override=css_relative_override,
         index_template_path=TEMPLATE_INDEX_JS_PATH,
-        index_relative_path="gallery/index.js",
+        index_relative_path="index.js",
         core_template_path=TEMPLATE_CORE_JS_PATH,
         core_override_template=js_template_path,
-        core_output_name=js_output_name,
+        core_output_name=js_output_name or "gallery.js",
         core_relative_override=js_relative_override,
         modules=gallery_assets.ADDITIONAL_GALLERY_SCRIPTS,
     )

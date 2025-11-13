@@ -165,7 +165,7 @@ def run_pipeline(
         active_index=0,
     )
 
-    viewer_path = result_dir / "viewer.html"
+    viewer_path = result_dir / "gallery" / "index.html"
     reporter.step("HTML を生成中...")
     generate_html(
         str(dataset_build.default_csv_path),
@@ -177,6 +177,7 @@ def run_pipeline(
         datasets=dataset_build.datasets,
         active_dataset_index=dataset_build.active_index,
         item_image_view_box=settings.item_image_view_box,
+        datasets_base_dir=str(result_dir),
     )
 
     reporter.advance("全処理完了")

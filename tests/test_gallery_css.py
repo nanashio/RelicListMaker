@@ -4,7 +4,7 @@ import re
 
 def load_gallery_css():
     project_root = Path(__file__).resolve().parent.parent
-    css_path = project_root / 'templates' / 'gallery.css'
+    css_path = project_root / 'templates' / 'gallery' / 'gallery.css'
     return css_path.read_text(encoding='utf-8')
 
 

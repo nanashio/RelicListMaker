@@ -40,7 +40,7 @@ RelicListMaker は、動画から遺物の文字を読み取って一覧化す�
   - `frames/`: 必要に応じて保存された元フレーム (オプション)
   - `crops/`: OCR 対象のクロップ画像
   - `<動画名>.csv`: 抽出した効果やレベル情報
-  - `viewer.html`: ブラウザで閲覧できるギャラリー（`RelicListMaker.exe` の「ビューワを開く」から起動）
+  - `gallery/index.html`: ブラウザで閲覧できるギャラリー（`RelicListMaker.exe` の「ビューワを開く」から起動）
 
 ## 動作確認
 - Windows 11 でのみ動作確認済みです。
@@ -83,7 +83,7 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
 ├── main.py              # フレーム抽出→OCR→HTML 出力まで統括するパイプライン入口
 ├── extract_frames.py    # フレーム抽出とシーンスキップで効率的にクロップを生成
 ├── match_and_export.py  # Tesseract OCR と RapidFuzz で効果名・レベルを推定
-├── generate_gallery.py  # CSV とクロップから viewer.html を生成
+├── generate_gallery.py  # CSV とクロップから gallery/index.html を生成
 ├── preprocess.py        # OCR 前処理の検証と調整用スクリプト
 ├── gui/                # GUI アプリ本体とサービス・アダプタ群
 ├── gui_app.py           # 互換用の GUI エントリーポイント（`gui.main` を委譲）
@@ -135,7 +135,7 @@ settings = PipelineSettings(
 
 reporter = CliProgressReporter()
 result = run_pipeline(settings=settings, reporter=reporter)
-print("viewer.html:", result.viewer_path)
+print("viewer index:", result.viewer_path)
 ```
 
 既存の動画列挙処理ではなく、任意の動画を明示的に処理したい場合は `pipeline.tasks.create_tasks` でタスクを構築してから `run_pipeline`

@@ -246,7 +246,7 @@ class ServerController:
         if not force and not self.app.open_browser_var.get():
             return
         target = context.initial_viewer if context.initial_viewer else None
-        fallback = context.results_dir / "viewer.html"
+        fallback = context.results_dir / "gallery" / "index.html"
         if target is None or not target.exists():
             target = fallback if fallback.exists() else None
         try:

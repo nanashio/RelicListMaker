@@ -32,8 +32,16 @@ def _write_csv(path: Path, header: list[str], rows: list[list[str]]) -> None:
 def sample_results(tmp_path: Path) -> Path:
     results_dir = tmp_path / "results"
     (results_dir).mkdir(parents=True, exist_ok=True)
-    (results_dir / "gallery.css").write_text("body { background: #fff; }", encoding="utf-8")
-    (results_dir / "gallery.js").write_text("console.log('stub');", encoding="utf-8")
+    assets_dir = results_dir / "gallery"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    (assets_dir / "gallery.css").write_text(
+        "body { background: #fff; }",
+        encoding="utf-8",
+    )
+    (assets_dir / "gallery.js").write_text(
+        "console.log('stub');",
+        encoding="utf-8",
+    )
 
     # dataset 1: 2 images, one marked duplicate
     dataset1 = results_dir / "video_a"
@@ -116,7 +124,7 @@ def test_merge_results_filters_duplicates_and_copies_images(sample_results: Path
     for image_path in copied_images:
         assert image_path.is_file()
 
-    viewer_html = sample_results / "viewer.html"
+    viewer_html = sample_results / "gallery" / "index.html"
     assert viewer_html.exists()
     html_text = viewer_html.read_text(encoding="utf-8")
     assert f"--item-image-view-box: {DEFAULT_ITEM_IMAGE_VIEW_BOX};" in html_text
@@ -131,12 +139,12 @@ def test_merge_results_filters_duplicates_and_copies_images(sample_results: Path
     datasets = json.loads(datasets_json)
     merged_entry = next((entry for entry in datasets if entry.get("kind") == "merged_csv"), None)
     assert merged_entry is not None
-    assert merged_entry["csv"] == "merged/merged.csv"
+    assert merged_entry["csv"] == "../merged/merged.csv"
     assert any(entry.get("folder") == "video_a" for entry in datasets if entry is not merged_entry)
     assert 'data-master-options="[]"' not in html_text
-    assert not (merged_dir / "gallery.css").exists()
-    assert not (merged_dir / "gallery.js").exists()
-    assert not (merged_dir / "merged_viewer.html").exists()
+    assert not (merged_dir / "gallery" / "gallery.css").exists()
+    assert not (merged_dir / "gallery" / "gallery.js").exists()
+    assert not (merged_dir / "gallery" / "index.html").exists()
 
 
 def test_merge_results_creates_unique_directory_when_existing(sample_results: Path) -> None:
@@ -152,7 +160,7 @@ def test_merge_results_creates_unique_directory_when_existing(sample_results: Pa
     assert (second_dir / MERGED_CSV_NAME).exists()
     assert first_csv.exists()
 
-    viewer_html = sample_results / "viewer.html"
+    viewer_html = sample_results / "gallery" / "index.html"
     html_text = viewer_html.read_text(encoding="utf-8")
     match = re.search(r'data-datasets="([^"]*)"', html_text)
     assert match is not None
@@ -160,10 +168,10 @@ def test_merge_results_creates_unique_directory_when_existing(sample_results: Pa
     datasets = json.loads(datasets_json)
     merged_entries = [entry for entry in datasets if entry.get("kind") == "merged_csv"]
     assert len(merged_entries) >= 2
-    base_csv = f"{MERGED_DIR_NAME}/{MERGED_CSV_NAME}"
+    base_csv = f"../{MERGED_DIR_NAME}/{MERGED_CSV_NAME}"
     assert any(entry.get("csv") == base_csv for entry in merged_entries)
 
-    expected_csv = f"{second_dir.name}/{MERGED_CSV_NAME}"
+    expected_csv = f"../{second_dir.name}/{MERGED_CSV_NAME}"
     new_entry = next((entry for entry in merged_entries if entry.get("folder") == second_dir.name), None)
     assert new_entry is not None
     assert new_entry["csv"] == expected_csv
@@ -186,7 +194,7 @@ def test_merge_results_applies_custom_view_box(sample_results: Path) -> None:
     custom_view_box = "inset(4px 8px 12px 16px)"
     merge_results(sample_results, item_image_view_box=custom_view_box)
 
-    html_text = (sample_results / "viewer.html").read_text(encoding="utf-8")
+    html_text = (sample_results / "gallery" / "index.html").read_text(encoding="utf-8")
     assert f"--item-image-view-box: {custom_view_box};" in html_text
 
 
@@ -237,7 +245,7 @@ def test_collect_existing_merged_entries_returns_sorted_metadata(tmp_path: Path)
     entries = _collect_existing_merged_entries(root, MERGED_DIR_NAME)
 
     assert entries[0]["label"] == "統合結果"
-    assert entries[0]["csv"] == f"{MERGED_DIR_NAME}/{MERGED_CSV_NAME}"
+    assert entries[0]["csv"] == f"../{MERGED_DIR_NAME}/{MERGED_CSV_NAME}"
     assert entries[1]["label"].startswith("統合結果")
     assert entries[1]["folder"] == merged_extra.name
 
@@ -273,6 +281,6 @@ def test_merge_results_with_real_dataset(sample_results_dir: Path) -> None:
     copied_image = merged_dir / "crops" / first_row["Image"]
     assert copied_image.exists()
 
-    viewer_html = (sample_results_dir / "viewer.html").read_text(encoding="utf-8")
-    merged_entry_path = f"{merged_dir.name}/{MERGED_CSV_NAME}"
+    viewer_html = (sample_results_dir / "gallery" / "index.html").read_text(encoding="utf-8")
+    merged_entry_path = f"../{merged_dir.name}/{MERGED_CSV_NAME}"
     assert merged_entry_path in viewer_html
