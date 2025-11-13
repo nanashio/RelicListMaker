@@ -1,6 +1,9 @@
 """Tests for datasets.builder utilities."""
 from __future__ import annotations
 
+import html
+import json
+
 from datasets.builder import ProcessedVideoResult, build_dataset_entries
 
 
@@ -81,3 +84,56 @@ def test_build_dataset_entries_handles_empty_and_missing_labels(tmp_path):
     assert build.default_csv_path == csv_path.resolve()
     assert build.default_img_dir == "images"
     assert build.active_index == 0
+
+
+def test_build_dataset_entries_merges_existing_gallery(tmp_path):
+    base_dir = tmp_path / "results"
+    existing_dir = base_dir / "alpha"
+    existing_crops = existing_dir / "crops"
+    existing_csv = existing_dir / "alpha.csv"
+
+    existing_crops.mkdir(parents=True)
+    existing_csv.write_text("Image\n", encoding="utf-8")
+
+    gallery_dir = base_dir / "gallery"
+    gallery_dir.mkdir()
+
+    existing_datasets = [
+        {
+            "label": "alpha",
+            "csv": "../alpha/alpha.csv",
+            "imgDir": "../alpha/crops",
+            "folder": "alpha",
+            "relicType": "normal",
+        }
+    ]
+    gallery_html = (
+        "<html><body data-datasets=\""
+        + html.escape(json.dumps(existing_datasets, ensure_ascii=False))
+        + "\" data-active-dataset=\"0\"></body></html>"
+    )
+    (gallery_dir / "index.html").write_text(gallery_html, encoding="utf-8")
+
+    new_dir = base_dir / "beta"
+    new_crops = new_dir / "crops"
+    new_csv = new_dir / "beta.csv"
+    new_crops.mkdir(parents=True)
+    new_csv.write_text("Image\n", encoding="utf-8")
+
+    new_result = ProcessedVideoResult(
+        label="beta",
+        csv_path=new_csv,
+        crops_dir=new_crops,
+        output_dir=new_dir,
+        relic_type="normal",
+    )
+
+    build = build_dataset_entries(base_dir, [new_result])
+
+    assert build.active_index == 1
+    assert build.default_csv_path == new_csv.resolve()
+    assert build.default_img_dir == "beta/crops"
+
+    assert [entry["label"] for entry in build.datasets] == ["alpha", "beta"]
+    assert build.datasets[0]["csv"] == "alpha/alpha.csv"
+    assert build.datasets[1]["csv"] == "beta/beta.csv"
