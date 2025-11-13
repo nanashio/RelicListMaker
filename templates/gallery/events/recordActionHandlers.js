@@ -171,7 +171,12 @@
             return effective ? effective.toLowerCase() : '';
         }
 
-        function resetLevelSelection(effect, indexes, correctionValue, { updateCandidates } = {}) {
+        function resetLevelSelection(
+            effect,
+            indexes,
+            correctionValue,
+            { updateCandidates, skipRecordLevelValue } = {}
+        ) {
             if (effect && effect.dataset && effect.dataset.kind === 'demerit') {
                 effect.dataset.levelCorrection = '';
                 effect.dataset.levelCorrectionValue = '';
@@ -195,7 +200,7 @@
             const preserveOriginal = effect.dataset.preserveOriginalLevel !== 'false';
             const finalLevelValue = preserveOriginal ? originalValue : '';
             let levelValueRestored = false;
-            if (indexes) {
+            if (indexes && !skipRecordLevelValue) {
                 levelValueRestored = Boolean(
                     updateRecordLevelValue(
                         indexes.recordIndex,
@@ -368,7 +373,9 @@
                     restoreLevelOptions(effect);
                 }
 
-                const levelCleared = resetLevelSelection(effect, indexes, selected);
+                const levelCleared = resetLevelSelection(effect, indexes, selected, {
+                    skipRecordLevelValue: true
+                });
                 shouldSchedule =
                     correctionChanged || suppressedChanged || levelStorageCleared || levelCleared;
             } else {
