@@ -1885,6 +1885,73 @@ describe('gallery effect factory', () => {
     assert.equal(effect.dataset.hiddenDemerit, 'true');
   });
 
+  test('createEffect creates hidden demerit placeholder when record lacks data', () => {
+    const record = { RelicType: '通常' };
+    const localFactory = global.window.galleryRenderFactory.createEffectFactory({
+      state: {
+        showOcr: true,
+        masterOptions: [],
+        masterDemeritOptions: ['Penalty'],
+        labelSymbols: ['Ⅰ']
+      },
+      datasetState: { kind: 'normal', relicType: 'normal' },
+      masterDatalistId: 'master-id',
+      demeritDatalistId: 'master-demerit-id',
+      createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+      applyMasterLevelOptions: () => {},
+      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+    });
+    const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
+    assert.ok(effect, 'empty demerit placeholder should be created');
+    const input = effect.querySelector('.correction-input');
+    assert.ok(input, 'placeholder should include correction input');
+    assert.equal(input.disabled, true);
+    assert.equal(input.placeholder, '通常遺物ではデメリットなし');
+    assert.equal(effect.dataset.hiddenDemerit, 'true');
+    assert.equal(effect.style.display, 'none');
+  });
+
+  test('syncDemeritAvailability reveals placeholder after relic type change to deep', () => {
+    const record = { RelicType: 'normal' };
+    const state = {
+      showOcr: true,
+      masterOptions: [],
+      masterDemeritOptions: ['Penalty'],
+      labelSymbols: ['Ⅰ'],
+      records: [record]
+    };
+    const localFactory = global.window.galleryRenderFactory.createEffectFactory({
+      state,
+      datasetState: { kind: 'normal', relicType: 'normal' },
+      masterDatalistId: 'master-id',
+      demeritDatalistId: 'master-demerit-id',
+      createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+      applyMasterLevelOptions: () => {},
+      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+    });
+    const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
+    assert.ok(effect, 'placeholder should be created for later toggling');
+    const input = effect.querySelector('.correction-input');
+    const passButton = effect.querySelector('.review-button.pass');
+    assert.equal(input.disabled, true);
+    assert.equal(effect.dataset.hiddenDemerit, 'true');
+
+    record.RelicType = '深層遺物';
+    localFactory.syncDemeritAvailability(effect, { refreshStatus: true });
+
+    assert.equal(effect.dataset.hiddenDemerit, undefined);
+    assert.equal(effect.style.display, '');
+    assert.equal(input.disabled, false);
+    assert.equal(passButton.disabled, false);
+    assert.equal(input.placeholder, 'デメリット候補から選択');
+  });
+
   test('deep relic disables demerit controls when no matching level is available', () => {
     const record = {
       RelicType: '深層遺物',

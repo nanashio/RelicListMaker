@@ -178,6 +178,54 @@
             return '';
         }
 
+        function hasUsableDemeritOptions() {
+            const options = state && state.masterDemeritOptions;
+            if (!Array.isArray(options)) {
+                return false;
+            }
+            return options.some((value) => {
+                if (value == null) {
+                    return false;
+                }
+                return String(value).trim() !== '';
+            });
+        }
+
+        function hasUsableDemeritRules() {
+            const rules = state && state.masterDemeritRules;
+            if (!rules || typeof rules !== 'object') {
+                return false;
+            }
+            return Object.keys(rules).some((key) => {
+                if (typeof key !== 'string' || !key.trim()) {
+                    return false;
+                }
+                const entry = rules[key];
+                return entry && typeof entry === 'object';
+            });
+        }
+
+        function shouldAllowEmptyDemerit(record) {
+            const recordType = normalizeRelicTypeValue(record && record.RelicType);
+            if (recordType === 'deep') {
+                return true;
+            }
+            const datasetType = normalizeRelicTypeValue(datasetState.relicType || '');
+            if (datasetType === 'deep' || datasetType === 'merged') {
+                return true;
+            }
+            const datasetKindText = datasetState && typeof datasetState.kind === 'string'
+                ? datasetState.kind.trim().toLowerCase()
+                : '';
+            if (datasetKindText === 'merged') {
+                return true;
+            }
+            if (hasUsableDemeritOptions() || hasUsableDemeritRules()) {
+                return true;
+            }
+            return false;
+        }
+
         function getSlotEffectName(record, slot) {
             if (!record) {
                 return '';
@@ -403,10 +451,12 @@
         function createEffect(record, slot, symbol, imageName, recordIndex, options = {}) {
             const kindOption =
                 options && typeof options.kind === 'string' ? options.kind : undefined;
+            const allowEmptyDemerit = kindOption === 'demerit' && shouldAllowEmptyDemerit(record);
             const context = createEffectContext(record, slot, symbol, imageName, recordIndex, {
                 normalizeStatus,
                 parseLevelOptions: parseLevelOptionsImpl,
-                kind: kindOption
+                kind: kindOption,
+                allowEmptyDemerit
             });
             if (!context) {
                 return null;
