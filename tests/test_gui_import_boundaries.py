@@ -15,8 +15,6 @@ SKIP_TOP_LEVEL = {
 
 ALLOWLIST = {
     Path("gui_app.py"),
-    Path("gui_adapters.py"),
-    Path("gui_services.py"),
 }
 
 TARGET_MODULES = {
@@ -24,8 +22,6 @@ TARGET_MODULES = {
     "gui.adapters",
     "gui.services",
     "gui.app",
-    "gui_adapters",
-    "gui_services",
     "gui_app",
 }
 
