@@ -496,28 +496,34 @@ class AppEventHandlers:
         editor = self.inline_color_editor
         if tree is None or editor is None:
             return
-        bbox = tree.bbox(item, "#2")
-        if not bbox:
-            return
         current = tree.set(item, "color") or self.color_options[0]
         if current not in self.color_options:
             current = self.color_options[0]
         editor.configure_values(self.color_options)
-        editor.show(item, bbox, current)
         self._inline_last_item = item
+        bbox = tree.bbox(item, "color")
+        if bbox:
+            editor.show(item, bbox, current)
+        else:
+            editor.cancel_hide()
+            editor.hide()
+            editor.widget.set(current)
 
     def show_inline_relic_type_editor(self, item: str) -> None:
         tree = self.app.ui.queue_tree
         editor = self.inline_type_editor
         if tree is None or editor is None:
             return
-        bbox = tree.bbox(item, "#3")
-        if not bbox:
-            return
         current = tree.set(item, "relic_type") or self.relic_type_options[0]
         editor.configure_values(self.relic_type_options)
-        editor.show(item, bbox, current)
         self._inline_type_last_item = item
+        bbox = tree.bbox(item, "relic_type")
+        if bbox:
+            editor.show(item, bbox, current)
+        else:
+            editor.cancel_hide()
+            editor.hide()
+            editor.widget.set(current)
 
     def hide_inline_color_editor(self) -> None:
         editor = self.inline_color_editor
