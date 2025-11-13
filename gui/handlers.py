@@ -12,7 +12,7 @@ from typing import Optional, Sequence
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
-from gui_adapters import (
+from .adapters import (
     DND_FILES,
     HAS_TKDND,
     get_windows_drop_support,

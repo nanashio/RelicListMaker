@@ -85,7 +85,8 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
 ├── match_and_export.py  # Tesseract OCR と RapidFuzz で効果名・レベルを推定
 ├── generate_gallery.py  # CSV とクロップから viewer.html を生成
 ├── preprocess.py        # OCR 前処理の検証と調整用スクリプト
-├── gui_app.py           # exe 相当機能を提供するデスクトップ GUI ラッパー
+├── gui/                # GUI アプリ本体とサービス・アダプタ群
+├── gui_app.py           # 互換用の GUI エントリーポイント（`gui.main` を委譲）
 └── viewer_server.py     # 結果フォルダをブラウザ閲覧する簡易サーバー
 ```
 

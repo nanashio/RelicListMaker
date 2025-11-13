@@ -3,8 +3,8 @@ from __future__ import annotations
 import traceback
 from tkinter import messagebox
 
-from gui_adapters import redirect_streams
-from gui_services import GuiState
+from .adapters import redirect_streams
+from .services import GuiState
 from merge_results import MergeResultsError
 
 
