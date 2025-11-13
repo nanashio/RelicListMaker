@@ -109,6 +109,7 @@
 
     const {
         sanitizeLevelList,
+        normalizeLevelPlaceholder: normalizeLevelPlaceholderValue,
         normalizeEffectName,
         effectKey,
         normalizeLevelNumericValue,
@@ -117,11 +118,14 @@
         parseMasterOptions,
         parseMasterLevels,
         normalizeSuppressedLevels: normalizeSuppressedLevelsFromUtils,
+        normalizeEffectLevelPlaceholders: normalizeEffectLevelPlaceholdersFromUtils,
+        applyEffectCorrections,
         normalizeRelicTypeColumns
     } = dataUtils;
 
     const dataUtilsMissing = [
         ['sanitizeLevelList', sanitizeLevelList],
+        ['normalizeLevelPlaceholder', normalizeLevelPlaceholderValue],
         ['normalizeEffectName', normalizeEffectName],
         ['effectKey', effectKey],
         ['normalizeLevelNumericValue', normalizeLevelNumericValue],
@@ -130,6 +134,8 @@
         ['parseMasterOptions', parseMasterOptions],
         ['parseMasterLevels', parseMasterLevels],
         ['normalizeSuppressedLevels', normalizeSuppressedLevelsFromUtils],
+        ['normalizeEffectLevelPlaceholders', normalizeEffectLevelPlaceholdersFromUtils],
+        ['applyEffectCorrections', applyEffectCorrections],
         ['normalizeRelicTypeColumns', normalizeRelicTypeColumns]
     ].filter(([, value]) => typeof value !== 'function');
 
@@ -172,6 +178,8 @@
     }
 
     const normalizeSuppressedRecords = (records) => normalizeSuppressedLevelsFromUtils(records);
+    const normalizeEffectLevelPlaceholdersRecords = (records) =>
+        normalizeEffectLevelPlaceholdersFromUtils(records);
 
     function parseJsonObject(jsonText) {
         if (typeof jsonText !== 'string') {
@@ -755,7 +763,10 @@
         }
         const {
             setCorrectionLevelCandidates: setCandidatesHelper,
-            rebuildLevelSelectOptions: rebuildOptionsHelper
+            rebuildLevelSelectOptions: rebuildOptionsHelper,
+            onOptionsApplied: onOptionsAppliedHelper,
+            sanitizeLevelList: sanitizeLevelListHelper,
+            sortLevelsAscending: sortLevelsAscendingHelper
         } = helpers || {};
 
         const setCandidates =
@@ -797,9 +808,35 @@
                       }
                   };
 
+        const sanitizeList =
+            typeof sanitizeLevelListHelper === 'function'
+                ? sanitizeLevelListHelper
+                : sanitizeLevelList;
+        const sortList =
+            typeof sortLevelsAscendingHelper === 'function'
+                ? sortLevelsAscendingHelper
+                : sortLevelsAscending;
+        const notifyApplied =
+            typeof onOptionsAppliedHelper === 'function'
+                ? (targetEffect, applied) => onOptionsAppliedHelper(targetEffect, applied)
+                : null;
+
+        const applyOptions = (targetEffect, optionsList) => {
+            const sanitized = sanitizeList(Array.isArray(optionsList) ? optionsList : []);
+            const sorted = sortList(sanitized);
+            if (targetEffect) {
+                targetEffect.dataset.levelOptionsBaseJson = JSON.stringify(sorted);
+            }
+            rebuildOptions(targetEffect, select, sorted);
+            if (notifyApplied) {
+                notifyApplied(targetEffect, sorted);
+            }
+        };
+
         const normalizedName = normalizeEffectName(effectName);
         if (!state.masterLevelsLoaded) {
             setCandidates(effect, []);
+            applyOptions(effect, []);
             void ensureMasterLevels().then(() => {
                 applyMasterLevelOptions(effect, select, normalizedName, helpers);
             });
@@ -809,25 +846,20 @@
         const levelsMap = state.masterLevels instanceof Map ? state.masterLevels : null;
         if (!levelsMap) {
             setCandidates(effect, []);
-            rebuildOptions(effect, select);
+            applyOptions(effect, []);
             return;
         }
 
         const key = effectKey(normalizedName);
         if (!key) {
             setCandidates(effect, []);
-            rebuildOptions(effect, select);
+            applyOptions(effect, []);
             return;
         }
 
         const candidates = levelsMap.get(key) || [];
         const applied = setCandidates(effect, candidates);
-        if (applied.length) {
-            effect.dataset.levelOptionsBaseJson = JSON.stringify(applied);
-            rebuildOptions(effect, select, applied);
-        } else {
-            rebuildOptions(effect, select);
-        }
+        applyOptions(effect, applied);
     }
 
     const datasets = parseDatasets(datasetsJson);
@@ -1953,6 +1985,7 @@
         setRecordItemRelicType,
         applyMasterDataForRelicType,
         recordStatusChange,
+        updateRecordEffectValue,
         updateRecordCorrection,
         updateRecordLevelCorrection,
         updateRecordLevelValue,
@@ -2102,6 +2135,14 @@
 
 
 
+    function updateRecordEffectValue(recordIndex, slotIndex, value, kind = 'effect') {
+        if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
+            return false;
+        }
+        const key = kind === 'demerit' ? `Demerit${slotIndex}` : `Effect${slotIndex}`;
+        return updateRecordField(recordIndex, key, value);
+    }
+
     function updateRecordCorrection(recordIndex, slotIndex, value, kind = 'effect') {
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
             return false;
@@ -2197,6 +2238,14 @@
         const normalized = normalizeSuppressedRecords(records);
         if (Array.isArray(normalized)) {
             records = normalized;
+        }
+        const correctionsApplied = applyEffectCorrections(records);
+        if (Array.isArray(correctionsApplied)) {
+            records = correctionsApplied;
+        }
+        const levelPlaceholdersApplied = normalizeEffectLevelPlaceholdersRecords(records);
+        if (Array.isArray(levelPlaceholdersApplied)) {
+            records = levelPlaceholdersApplied;
         }
         const relicNormalized = normalizeRelicTypeColumns(records);
         if (Array.isArray(relicNormalized)) {

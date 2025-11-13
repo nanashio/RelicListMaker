@@ -1,3 +1,4 @@
+import csv
 import sys
 import types
 from pathlib import Path
@@ -13,6 +14,7 @@ from relic_pipeline.io.exporter import _ensure_effect_slots, build_row, write_cs
 from relic_pipeline.settings import DEFAULT_COLUMN_VISIBILITY, ExportOptions
 from relic_pipeline.matching import MatchResult
 from relic_data import load_master_effects_and_levels, normalize_master_values
+from viewer_server import storage as viewer_storage
 
 
 def test_normalize_master_values_keeps_placeholder():
@@ -64,6 +66,7 @@ def test_ensure_effect_slots_adds_placeholder_values():
     assert row["RawText2"] == ""
     assert row["Effect2Score"] == 0.0
     assert row["Effect2Source"] == ""
+    assert row["Effect2LevelSource"] == "none"
     assert row["Effect2LevelOptions"] == "none"
     assert row["Effect2LevelCorrection"] == ""
     assert "Demerit1" not in row
@@ -86,9 +89,15 @@ def test_ensure_effect_slots_adds_demerit_columns():
 
     assert "Demerit1" not in row
     assert row["Demerit2"] == ""
-    assert row["DemeritRawText2"] == ""
-    assert row["DemeritScore2"] == 0.0
-    assert row["DemeritSource2"] == ""
+    assert row["Demerit2Level"] == "none"
+    assert row["Demerit2Status"] == "pending"
+    assert row["Demerit2Kind"] == "demerit"
+    assert row["Demerit2LevelOptions"] == "none"
+    assert row["Demerit2LevelCorrection"] == ""
+    assert row["Demerit2RawText"] == ""
+    assert row["Demerit2Score"] == 0.0
+    assert row["Demerit2Source"] == ""
+    assert row["Demerit2LevelSource"] == "none"
 
 
 def test_write_csv_includes_relic_type_column(tmp_path: Path):
@@ -112,10 +121,18 @@ def test_write_csv_includes_demerit_columns(tmp_path: Path):
             "Effect1Level": "none",
             "Effect1Status": "pending",
             "Effect1Kind": "effect",
+            "Effect1Source": "効果A",
+            "Effect1LevelSource": "none",
             "Demerit1": "効果A",
-            "DemeritRawText1": "OCR",
-            "DemeritScore1": 87.5,
-            "DemeritSource1": "dictionary",
+            "Demerit1Level": "none",
+            "Demerit1Status": "pending",
+            "Demerit1Kind": "demerit",
+            "Demerit1LevelOptions": "none",
+            "Demerit1LevelCorrection": "",
+            "Demerit1RawText": "OCR",
+            "Demerit1Score": 87.5,
+            "Demerit1Source": "効果A",
+            "Demerit1LevelSource": "none",
         }
     ]
 
@@ -125,9 +142,20 @@ def test_write_csv_includes_demerit_columns(tmp_path: Path):
 
     header = output.read_text(encoding="utf-8").splitlines()[0].split(",")
     assert "Demerit1" in header
-    assert "DemeritRawText1" in header
-    assert "DemeritScore1" in header
-    assert "DemeritSource1" in header
+    assert "Demerit1Level" in header
+    if DEFAULT_COLUMN_VISIBILITY.get("LevelOptions", True):
+        assert "Demerit1LevelOptions" in header
+    assert "Demerit1Status" in header
+    assert "Demerit1Kind" in header
+    if DEFAULT_COLUMN_VISIBILITY.get("RawText", True):
+        assert "Demerit1RawText" in header
+    if DEFAULT_COLUMN_VISIBILITY.get("Score", True):
+        assert "Demerit1Score" in header
+    if DEFAULT_COLUMN_VISIBILITY.get("Source", True):
+        assert "Demerit1Source" in header
+        assert "Demerit1LevelSource" in header
+    if DEFAULT_COLUMN_VISIBILITY.get("LevelCorrection", True):
+        assert "Demerit1LevelCorrection" in header
 
 
 def test_build_row_merges_demerit_results():
@@ -163,8 +191,41 @@ def test_build_row_merges_demerit_results():
     assert row["Effect1Kind"] == "effect"
     assert row["RawText1"] == "Effect Raw"
     assert row["Effect1Score"] == 91.2
-    assert row["Effect1Source"] == "dictionary"
+    assert row["Effect1Source"] == "Effect Matched"
+    assert row["Effect1Level"] == "none"
+    assert row["Effect1LevelSource"] == "none"
     assert row["Demerit1"] == "Demerit Matched"
-    assert row["DemeritRawText1"] == "Demerit Raw"
-    assert row["DemeritScore1"] == 65.4
-    assert row["DemeritSource1"] == "demerit"
+    assert row["Demerit1RawText"] == "Demerit Raw"
+    assert row["Demerit1Score"] == 65.4
+    assert row["Demerit1Source"] == "Demerit Matched"
+    assert row["Demerit1Level"] == "none"
+    assert row["Demerit1LevelSource"] == "none"
+
+
+def test_viewer_storage_normalizes_blank_effect_levels(tmp_path: Path):
+    field_order = [
+        "Image",
+        "Duplicate",
+        "Effect1Level",
+        "Effect1LevelSource",
+        "Effect1LevelOptions",
+    ]
+    records = [
+        {
+            "Image": "sample.png",
+            "Duplicate": False,
+            "Effect1Level": "",
+            "Effect1LevelSource": "",
+            "Effect1LevelOptions": "none",
+        }
+    ]
+    output = tmp_path / "viewer.csv"
+
+    viewer_storage.write_records(output, records, field_order)
+
+    with output.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        saved = next(reader)
+
+    assert saved["Effect1Level"] == "none"
+    assert saved["Effect1LevelSource"] == "none"

@@ -96,15 +96,24 @@ def _ensure_effect_slots(row: MutableMapping[str, object], options: ExportOption
             row.setdefault(f"Effect{idx}Score", 0.0)
         if column_flags.get("Source", True):
             row.setdefault(f"Effect{idx}Source", "")
+            row.setdefault(f"Effect{idx}LevelSource", "none")
 
         if idx in demerit_slots:
             row.setdefault(f"Demerit{idx}", "")
+            row.setdefault(f"Demerit{idx}Level", "none")
+            row.setdefault(f"Demerit{idx}Status", "pending")
+            row.setdefault(f"Demerit{idx}Kind", "demerit")
+            if column_flags.get("LevelOptions", True):
+                row.setdefault(f"Demerit{idx}LevelOptions", "none")
+            if column_flags.get("LevelCorrection", True):
+                row.setdefault(f"Demerit{idx}LevelCorrection", "")
             if column_flags.get("RawText", True):
-                row.setdefault(f"DemeritRawText{idx}", "")
+                row.setdefault(f"Demerit{idx}RawText", "")
             if column_flags.get("Score", True):
-                row.setdefault(f"DemeritScore{idx}", 0.0)
+                row.setdefault(f"Demerit{idx}Score", 0.0)
             if column_flags.get("Source", True):
-                row.setdefault(f"DemeritSource{idx}", "")
+                row.setdefault(f"Demerit{idx}Source", "")
+                row.setdefault(f"Demerit{idx}LevelSource", "none")
 
 
 def build_row(
@@ -132,8 +141,6 @@ def build_row(
         effect_key = f"Effect{idx}"
         row[effect_key] = match.matched_text
         row[f"Effect{idx}Status"] = "pending"
-        row.setdefault(f"Effect{idx}Level", "none")
-
         row[f"Effect{idx}Kind"] = "effect"
 
         if column_flags.get("RawText", True):
@@ -141,33 +148,44 @@ def build_row(
         if column_flags.get("Score", True):
             row[f"Effect{idx}Score"] = match.score
         if column_flags.get("Source", True):
-            row[f"Effect{idx}Source"] = match.source
+            row[f"Effect{idx}Source"] = match.matched_text
 
-        demerit_match = demerit_map.get(idx)
-        if demerit_match is not None:
-            row[f"Demerit{idx}"] = demerit_match.matched_text
-            if column_flags.get("RawText", True):
-                row[f"DemeritRawText{idx}"] = demerit_match.raw_text
-            if column_flags.get("Score", True):
-                row[f"DemeritScore{idx}"] = demerit_match.score
-            if column_flags.get("Source", True):
-                row[f"DemeritSource{idx}"] = demerit_match.source
-        elif idx in demerit_slots:
-            row.setdefault(f"Demerit{idx}", "")
-            if column_flags.get("RawText", True):
-                row.setdefault(f"DemeritRawText{idx}", "")
-            if column_flags.get("Score", True):
-                row.setdefault(f"DemeritScore{idx}", 0.0)
-            if column_flags.get("Source", True):
-                row.setdefault(f"DemeritSource{idx}", "")
-
+        detected_level = ""
         if level_map:
             candidates = find_level_candidates(match.matched_text, level_map=level_map)
             if candidates:
                 detected_level = detect_level_from_text(match.raw_text, candidates=candidates)
-                row[f"Effect{idx}Level"] = detected_level or "none"
                 if column_flags.get("LevelOptions", True):
                     row[f"Effect{idx}LevelOptions"] = _serialize_level_options(candidates)
+
+        level_value = detected_level or "none"
+        row[f"Effect{idx}Level"] = level_value
+        if column_flags.get("Source", True):
+            row[f"Effect{idx}LevelSource"] = level_value
+
+        demerit_match = demerit_map.get(idx)
+        if demerit_match is not None:
+            row[f"Demerit{idx}"] = demerit_match.matched_text
+            row[f"Demerit{idx}Status"] = "pending"
+            row[f"Demerit{idx}Kind"] = "demerit"
+            if column_flags.get("RawText", True):
+                row[f"Demerit{idx}RawText"] = demerit_match.raw_text
+            if column_flags.get("Score", True):
+                row[f"Demerit{idx}Score"] = demerit_match.score
+            if column_flags.get("Source", True):
+                row[f"Demerit{idx}Source"] = demerit_match.matched_text
+                row.setdefault(f"Demerit{idx}LevelSource", "none")
+        elif idx in demerit_slots:
+            row.setdefault(f"Demerit{idx}", "")
+            row.setdefault(f"Demerit{idx}Status", "pending")
+            row.setdefault(f"Demerit{idx}Kind", "demerit")
+            if column_flags.get("RawText", True):
+                row.setdefault(f"Demerit{idx}RawText", "")
+            if column_flags.get("Score", True):
+                row.setdefault(f"Demerit{idx}Score", 0.0)
+            if column_flags.get("Source", True):
+                row.setdefault(f"Demerit{idx}Source", "")
+                row.setdefault(f"Demerit{idx}LevelSource", "none")
 
         if column_flags.get("LevelCorrection", True):
             row.setdefault(f"Effect{idx}LevelCorrection", "")
@@ -239,27 +257,37 @@ def write_csv(
             fieldnames.append(f"Effect{idx}LevelOptions")
         fieldnames.append(f"Effect{idx}Status")
         fieldnames.append(f"Effect{idx}Kind")
-        if idx in demerit_slots:
-            fieldnames.append(f"Demerit{idx}")
+
+    for idx in demerit_slots:
+        fieldnames.append(f"Demerit{idx}")
+        fieldnames.append(f"Demerit{idx}Level")
+        if column_flags.get("LevelOptions", True):
+            fieldnames.append(f"Demerit{idx}LevelOptions")
+        fieldnames.append(f"Demerit{idx}Status")
+        fieldnames.append(f"Demerit{idx}Kind")
 
     if column_flags.get("RawText", True):
         for idx in slot_range:
             fieldnames.append(f"RawText{idx}")
         for idx in demerit_slots:
-            fieldnames.append(f"DemeritRawText{idx}")
+            fieldnames.append(f"Demerit{idx}RawText")
     if column_flags.get("Score", True):
         for idx in slot_range:
             fieldnames.append(f"Effect{idx}Score")
         for idx in demerit_slots:
-            fieldnames.append(f"DemeritScore{idx}")
+            fieldnames.append(f"Demerit{idx}Score")
     if column_flags.get("Source", True):
         for idx in slot_range:
             fieldnames.append(f"Effect{idx}Source")
+            fieldnames.append(f"Effect{idx}LevelSource")
         for idx in demerit_slots:
-            fieldnames.append(f"DemeritSource{idx}")
+            fieldnames.append(f"Demerit{idx}Source")
+            fieldnames.append(f"Demerit{idx}LevelSource")
     if column_flags.get("LevelCorrection", True):
         for idx in slot_range:
             fieldnames.append(f"Effect{idx}LevelCorrection")
+        for idx in demerit_slots:
+            fieldnames.append(f"Demerit{idx}LevelCorrection")
 
     for row in row_list:
         for key in row.keys():

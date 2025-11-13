@@ -330,6 +330,97 @@
         };
     }
 
+    function normalizeLevelPlaceholder(value) {
+        if (value == null) {
+            return 'none';
+        }
+        const text = String(value).trim();
+        if (!text) {
+            return 'none';
+        }
+        return text.toLowerCase() === 'none' ? 'none' : text;
+    }
+
+    function ensureEffectLevelPlaceholders(records) {
+        if (!Array.isArray(records)) {
+            return [];
+        }
+
+        return records.map((record) => {
+            if (!record || typeof record !== 'object') {
+                return record;
+            }
+
+            const pendingDefaults = new Set();
+
+            Object.keys(record).forEach((key) => {
+                if (typeof key !== 'string') {
+                    return;
+                }
+                const levelMatch = /^Effect(\d+)Level$/i.exec(key);
+                if (levelMatch) {
+                    const slot = Number.parseInt(levelMatch[1], 10);
+                    if (!Number.isFinite(slot)) {
+                        return;
+                    }
+                    const normalizedKey = `Effect${slot}Level`;
+                    record[normalizedKey] = normalizeLevelPlaceholder(record[key]);
+                    const sourceKey = `Effect${slot}LevelSource`;
+                    if (Object.prototype.hasOwnProperty.call(record, sourceKey)) {
+                        record[sourceKey] = normalizeLevelPlaceholder(record[sourceKey]);
+                    }
+                    return;
+                }
+
+                const sourceMatch = /^Effect(\d+)LevelSource$/i.exec(key);
+                if (sourceMatch) {
+                    const slot = Number.parseInt(sourceMatch[1], 10);
+                    if (!Number.isFinite(slot)) {
+                        return;
+                    }
+                    const normalizedKey = `Effect${slot}LevelSource`;
+                    record[normalizedKey] = normalizeLevelPlaceholder(record[key]);
+                    if (!Object.prototype.hasOwnProperty.call(record, `Effect${slot}Level`)) {
+                        record[`Effect${slot}Level`] = record[normalizedKey];
+                    }
+                    return;
+                }
+
+                const optionsMatch = /^Effect(\d+)LevelOptions$/i.exec(key);
+                if (optionsMatch) {
+                    const slot = Number.parseInt(optionsMatch[1], 10);
+                    if (!Number.isFinite(slot)) {
+                        return;
+                    }
+                    const levelKey = `Effect${slot}Level`;
+                    if (Object.prototype.hasOwnProperty.call(record, levelKey)) {
+                        return;
+                    }
+                    const raw = record[key];
+                    const text = raw == null ? '' : String(raw).trim().toLowerCase();
+                    if (!text || text === 'none') {
+                        pendingDefaults.add(slot);
+                    }
+                }
+            });
+
+            pendingDefaults.forEach((slot) => {
+                const levelKey = `Effect${slot}Level`;
+                if (!Object.prototype.hasOwnProperty.call(record, levelKey)) {
+                    record[levelKey] = 'none';
+                } else {
+                    record[levelKey] = normalizeLevelPlaceholder(record[levelKey]);
+                }
+                const sourceKey = `Effect${slot}LevelSource`;
+                if (Object.prototype.hasOwnProperty.call(record, sourceKey)) {
+                    record[sourceKey] = normalizeLevelPlaceholder(record[sourceKey]);
+                }
+            });
+
+            return record;
+        });
+    }
+
     function createOpfsManager(config = {}) {
         const {
             getRecords = () => [],
@@ -352,7 +443,9 @@
 
         function collectRecords() {
             const data = getRecords();
-            return Array.isArray(data) ? data : [];
+            const records = Array.isArray(data) ? data : [];
+            ensureEffectLevelPlaceholders(records);
+            return records;
         }
 
         async function writeOnce() {
