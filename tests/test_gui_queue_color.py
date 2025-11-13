@@ -15,7 +15,7 @@ def test_inline_color_selection_updates_queue_entry_color() -> None:
     except tk.TclError as exc:  # pragma: no cover - 実行環境依存
         pytest.skip(f"Tkが利用できません: {exc}")
 
-    root.withdraw()
+    root.update()
     app = RelicGuiApp(root)
 
     try:
@@ -23,7 +23,7 @@ def test_inline_color_selection_updates_queue_entry_color() -> None:
         app._dropped_videos = [{"path": sample_path, "color": "none"}]
         app._dropped_video_set = {sample_path}
         app._refresh_queue_view()
-        root.update_idletasks()
+        root.update()
 
         queue_tree = app.queue_tree
         inline_combo = app.inline_color_combo
@@ -33,10 +33,11 @@ def test_inline_color_selection_updates_queue_entry_color() -> None:
         item_id = queue_tree.get_children()[0]
         assert app._queue_item_paths[item_id] == sample_path
         app._show_inline_color_editor(item_id)
-        root.update_idletasks()
+        root.update()
 
         inline_combo.set("red")
-        app._on_inline_color_selected()
+        inline_combo.event_generate("<<ComboboxSelected>>")
+        root.update()
 
         assert app._dropped_videos[0]["color"] == "red"
     finally:
@@ -50,7 +51,7 @@ def test_inline_color_update_survives_focus_out() -> None:
     except tk.TclError as exc:  # pragma: no cover - 実行環境依存
         pytest.skip(f"Tkが利用できません: {exc}")
 
-    root.withdraw()
+    root.update()
     app = RelicGuiApp(root)
 
     try:
@@ -58,7 +59,7 @@ def test_inline_color_update_survives_focus_out() -> None:
         app._dropped_videos = [{"path": sample_path, "color": "none"}]
         app._dropped_video_set = {sample_path}
         app._refresh_queue_view()
-        root.update_idletasks()
+        root.update()
 
         queue_tree = app.queue_tree
         inline_combo = app.inline_color_combo
@@ -70,9 +71,10 @@ def test_inline_color_update_survives_focus_out() -> None:
         root.update_idletasks()
 
         # フォーカス喪失が先に発生しても選択イベントで更新される想定
-        app._on_inline_color_focus_out()
+        inline_combo.event_generate("<FocusOut>")
         inline_combo.set("green")
-        app._on_inline_color_selected()
+        inline_combo.event_generate("<<ComboboxSelected>>")
+        root.update()
 
         assert app._dropped_videos[0]["color"] == "green"
     finally:
@@ -86,7 +88,7 @@ def test_inline_color_selection_after_editor_hidden() -> None:
     except tk.TclError as exc:  # pragma: no cover - 実行環境依存
         pytest.skip(f"Tkが利用できません: {exc}")
 
-    root.withdraw()
+    root.update()
     app = RelicGuiApp(root)
 
     try:
@@ -108,7 +110,8 @@ def test_inline_color_selection_after_editor_hidden() -> None:
         # エディタが自動的に閉じたケースを模倣
         app._hide_inline_color_editor()
         inline_combo.set("blue")
-        app._on_inline_color_selected()
+        inline_combo.event_generate("<<ComboboxSelected>>")
+        root.update()
 
         assert app._dropped_videos[0]["color"] == "blue"
     finally:
@@ -122,7 +125,7 @@ def test_inline_relic_type_selection_updates_entry() -> None:
     except tk.TclError as exc:  # pragma: no cover - 実行環境依存
         pytest.skip(f"Tkが利用できません: {exc}")
 
-    root.withdraw()
+    root.update()
     app = RelicGuiApp(root)
 
     try:
@@ -144,7 +147,8 @@ def test_inline_relic_type_selection_updates_entry() -> None:
         root.update_idletasks()
 
         inline_type.set("深層遺物")
-        app._on_inline_type_selected()
+        inline_type.event_generate("<<ComboboxSelected>>")
+        root.update()
 
         assert app._dropped_videos[0]["relic_type"] == "deep"
     finally:
