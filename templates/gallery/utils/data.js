@@ -8,6 +8,17 @@
             .filter((value) => value !== '');
     }
 
+    function normalizeLevelPlaceholder(value) {
+        if (value == null) {
+            return 'none';
+        }
+        const text = String(value).trim();
+        if (!text) {
+            return 'none';
+        }
+        return text.toLowerCase() === 'none' ? 'none' : text;
+    }
+
     function normalizeEffectName(value) {
         if (value == null) {
             return '';
@@ -303,6 +314,35 @@
         return records.map((record) => normalizeRecordLevelSuppression(record));
     }
 
+    function normalizeRecordLevelPlaceholders(record) {
+        if (!record || typeof record !== 'object') {
+            return record;
+        }
+
+        Object.keys(record).forEach((key) => {
+            const match = /^Effect(\d+)Level$/i.exec(key);
+            if (!match) {
+                return;
+            }
+            const slot = Number.parseInt(match[1], 10);
+            if (!Number.isFinite(slot)) {
+                return;
+            }
+
+            const normalizedKey = `Effect${slot}Level`;
+            record[normalizedKey] = normalizeLevelPlaceholder(record[key]);
+        });
+
+        return record;
+    }
+
+    function normalizeEffectLevelPlaceholders(records) {
+        if (!Array.isArray(records)) {
+            return [];
+        }
+        return records.map((record) => normalizeRecordLevelPlaceholders(record));
+    }
+
     function applyRecordCorrections(record) {
         if (!record || typeof record !== 'object') {
             return record;
@@ -396,6 +436,7 @@
 
     window.galleryDataUtils = {
         sanitizeLevelList,
+        normalizeLevelPlaceholder,
         normalizeEffectName,
         effectKey,
         normalizeLevelNumericValue,
@@ -405,6 +446,8 @@
         parseMasterLevels,
         normalizeSuppressedLevels,
         normalizeRecordLevelSuppression,
+        normalizeRecordLevelPlaceholders,
+        normalizeEffectLevelPlaceholders,
         applyRecordCorrections,
         applyEffectCorrections,
         normalizeRecordRelicTypeField,

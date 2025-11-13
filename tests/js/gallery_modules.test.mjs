@@ -2700,12 +2700,17 @@ describe('record action handlers', () => {
     effect.appendChild(levelInput);
     const input = new MockElement('input', 'correction-input');
     input.value = 'Manual';
+    const storedLevels = [];
     const deps = buildBaseDeps(record, item, {
       recordStatusChange: () => false,
       updateRecordCorrection: () => true,
       updateRecordEffectValue: () => true,
       updateRecordLevelSuppressed: () => false,
-      updateRecordLevelValue: () => false,
+      updateRecordLevelValue: (_recordIndex, slotIndex, value) => {
+        storedLevels.push([slotIndex, value]);
+        record[`Effect${slotIndex}Level`] = value;
+        return true;
+      },
       updateRecordLevelOptions: (_recordIndex, _slotIndex, value) => {
         record.Effect1LevelOptions = value;
         return true;
@@ -2727,6 +2732,12 @@ describe('record action handlers', () => {
     handlers.changeEffectCorrection(effect, input);
 
     assert.equal(record.Effect1LevelOptions, 'none');
+    assert.deepEqual(storedLevels, [
+      [1, 'none'],
+      [1, 'none']
+    ]);
+    assert.equal(record.Effect1Level, 'none');
+    assert.equal(effect.dataset.level, '');
   });
 
   test('changeEffectCorrection updates demerit record when correction provided', () => {
@@ -3701,9 +3712,10 @@ describe('gallery events', () => {
     assert.ok(changeHandlers.length > 0, 'change handler should exist for correction input');
     changeHandlers[0]({ target: correctionInput });
 
-    assert.deepEqual(levelValueCalls, ['']);
+    assert.deepEqual(levelValueCalls, ['none', 'none']);
     assert.deepEqual(levelOptionsCalls, ['none']);
-    assert.equal(Object.prototype.hasOwnProperty.call(record, 'Effect1Level'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(record, 'Effect1Level'), true);
+    assert.equal(record.Effect1Level, 'none');
     assert.equal(Object.prototype.hasOwnProperty.call(record, 'Effect1LevelOptions'), true);
     assert.equal(record.Effect1LevelOptions, 'none');
     assert.equal(scheduleSaveCalls.length >= 1, true);

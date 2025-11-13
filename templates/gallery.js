@@ -109,6 +109,7 @@
 
     const {
         sanitizeLevelList,
+        normalizeLevelPlaceholder: normalizeLevelPlaceholderValue,
         normalizeEffectName,
         effectKey,
         normalizeLevelNumericValue,
@@ -117,12 +118,14 @@
         parseMasterOptions,
         parseMasterLevels,
         normalizeSuppressedLevels: normalizeSuppressedLevelsFromUtils,
+        normalizeEffectLevelPlaceholders: normalizeEffectLevelPlaceholdersFromUtils,
         applyEffectCorrections,
         normalizeRelicTypeColumns
     } = dataUtils;
 
     const dataUtilsMissing = [
         ['sanitizeLevelList', sanitizeLevelList],
+        ['normalizeLevelPlaceholder', normalizeLevelPlaceholderValue],
         ['normalizeEffectName', normalizeEffectName],
         ['effectKey', effectKey],
         ['normalizeLevelNumericValue', normalizeLevelNumericValue],
@@ -131,6 +134,7 @@
         ['parseMasterOptions', parseMasterOptions],
         ['parseMasterLevels', parseMasterLevels],
         ['normalizeSuppressedLevels', normalizeSuppressedLevelsFromUtils],
+        ['normalizeEffectLevelPlaceholders', normalizeEffectLevelPlaceholdersFromUtils],
         ['applyEffectCorrections', applyEffectCorrections],
         ['normalizeRelicTypeColumns', normalizeRelicTypeColumns]
     ].filter(([, value]) => typeof value !== 'function');
@@ -174,6 +178,8 @@
     }
 
     const normalizeSuppressedRecords = (records) => normalizeSuppressedLevelsFromUtils(records);
+    const normalizeEffectLevelPlaceholdersRecords = (records) =>
+        normalizeEffectLevelPlaceholdersFromUtils(records);
 
     function parseJsonObject(jsonText) {
         if (typeof jsonText !== 'string') {
@@ -2236,6 +2242,10 @@
         const correctionsApplied = applyEffectCorrections(records);
         if (Array.isArray(correctionsApplied)) {
             records = correctionsApplied;
+        }
+        const levelPlaceholdersApplied = normalizeEffectLevelPlaceholdersRecords(records);
+        if (Array.isArray(levelPlaceholdersApplied)) {
+            records = levelPlaceholdersApplied;
         }
         const relicNormalized = normalizeRelicTypeColumns(records);
         if (Array.isArray(relicNormalized)) {
