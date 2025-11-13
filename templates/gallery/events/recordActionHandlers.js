@@ -21,6 +21,7 @@
             setRecordItemRelicType,
             recordStatusChange,
             updateRecordCorrection,
+            updateRecordEffectValue,
             updateRecordLevelCorrection,
             updateRecordLevelValue,
             updateRecordLevelOptions,
@@ -54,6 +55,7 @@
             setRecordItemRelicType,
             recordStatusChange,
             updateRecordCorrection,
+            updateRecordEffectValue,
             updateRecordLevelCorrection,
             updateRecordLevelValue,
             updateRecordLevelOptions,
@@ -328,6 +330,21 @@
 
             const isDemerit = indexes.kind === 'demerit';
 
+            const originalPrediction =
+                (effect.dataset && effect.dataset.predictionOriginalValue) || '';
+            const currentPrediction = (effect.dataset && effect.dataset.predictionValue) || '';
+            const fallbackPrediction = originalPrediction || currentPrediction;
+            const baseValue = selected || fallbackPrediction;
+            const normalizedBaseValue = baseValue ? String(baseValue).trim() : '';
+            const effectValueChanged = updateRecordEffectValue(
+                indexes.recordIndex,
+                indexes.slotIndex,
+                normalizedBaseValue,
+                indexes.kind
+            );
+            effect.dataset.predictionValue = normalizedBaseValue;
+            effect.dataset.pred = toDatasetValue(normalizedBaseValue);
+
             const nextStatus = selected ? 'corrected' : 'pending';
             const statusChanged = recordStatusChange(effect, nextStatus);
             const correctionChanged = updateRecordCorrection(
@@ -342,7 +359,7 @@
             }
             updateEffectStatus(effect, nextStatus);
 
-            let shouldSchedule = correctionChanged;
+            let shouldSchedule = correctionChanged || effectValueChanged;
 
             if (!isDemerit) {
                 const suppressLevel = Boolean(selected);
@@ -377,7 +394,11 @@
                     skipRecordLevelValue: true
                 });
                 shouldSchedule =
-                    correctionChanged || suppressedChanged || levelStorageCleared || levelCleared;
+                    correctionChanged ||
+                    effectValueChanged ||
+                    suppressedChanged ||
+                    levelStorageCleared ||
+                    levelCleared;
             } else {
                 effect.dataset.levelCorrection = '';
                 effect.dataset.levelCorrectionValue = '';

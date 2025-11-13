@@ -303,6 +303,43 @@
         return records.map((record) => normalizeRecordLevelSuppression(record));
     }
 
+    function applyRecordCorrections(record) {
+        if (!record || typeof record !== 'object') {
+            return record;
+        }
+
+        Object.keys(record).forEach((key) => {
+            if (typeof key !== 'string') {
+                return;
+            }
+            const match = /^(Effect|Demerit)(\d+)Correction$/i.exec(key);
+            if (!match) {
+                return;
+            }
+            const slot = Number.parseInt(match[2], 10);
+            if (!Number.isFinite(slot)) {
+                return;
+            }
+            const basePrefix = match[1];
+            const rawValue = record[key];
+            const text = rawValue == null ? '' : String(rawValue).trim();
+            if (!text) {
+                return;
+            }
+            const baseKey = `${basePrefix}${slot}`;
+            record[baseKey] = text;
+        });
+
+        return record;
+    }
+
+    function applyEffectCorrections(records) {
+        if (!Array.isArray(records)) {
+            return [];
+        }
+        return records.map((record) => applyRecordCorrections(record));
+    }
+
     function normalizeRecordRelicTypeField(record) {
         if (!record || typeof record !== 'object') {
             return record;
@@ -368,6 +405,8 @@
         parseMasterLevels,
         normalizeSuppressedLevels,
         normalizeRecordLevelSuppression,
+        applyRecordCorrections,
+        applyEffectCorrections,
         normalizeRecordRelicTypeField,
         normalizeRelicTypeColumns
     };

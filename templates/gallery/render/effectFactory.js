@@ -464,6 +464,7 @@
             effect.dataset.image = context.imageNameLower;
             effect.dataset.pred = context.predictionLower;
             effect.dataset.predictionValue = context.predictionText;
+            effect.dataset.predictionOriginalValue = context.predictionText;
             effect.dataset.raw = context.rawLower;
             effect.dataset.recordIndex = String(context.recordIndex);
             effect.dataset.kind = context.effectKind || 'effect';

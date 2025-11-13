@@ -2451,6 +2451,7 @@ describe('record action handlers', () => {
       },
       recordStatusChange: () => false,
       updateRecordCorrection: () => false,
+      updateRecordEffectValue: () => false,
       updateRecordLevelCorrection: () => false,
       updateRecordLevelValue: () => false,
       updateRecordLevelOptions: () => false,
@@ -2569,6 +2570,136 @@ describe('record action handlers', () => {
     assert.deepEqual(favoriteVisuals, [[item, true]]);
     assert.equal(scheduleCalls.length, 1);
     assert.equal(filterCalls.length, 1);
+  });
+
+  test('changeEffectCorrection updates effect record and schedules save', () => {
+    const record = { Effect1: 'Original' };
+    const item = new MockElement('div', 'item');
+    const effect = new MockElement('section', 'effect');
+    effect.dataset.recordIndex = '0';
+    effect.dataset.slot = '1';
+    effect.dataset.kind = 'effect';
+    effect.dataset.predictionOriginalValue = 'Original';
+    effect.dataset.predictionValue = 'Original';
+    effect.dataset.preserveOriginalLevel = 'true';
+    const input = new MockElement('input', 'correction-input');
+    input.value = 'New Effect';
+    const scheduleCalls = [];
+    const effectUpdates = [];
+    const deps = buildBaseDeps(record, item, {
+      scheduleSave: () => scheduleCalls.push(null),
+      recordStatusChange: () => false,
+      updateRecordCorrection: (_recordIndex, _slotIndex, value) => {
+        record.Effect1Correction = value;
+        return true;
+      },
+      updateRecordEffectValue: (_recordIndex, _slotIndex, value) => {
+        effectUpdates.push(value);
+        if (value) {
+          record.Effect1 = value;
+        } else {
+          delete record.Effect1;
+        }
+        return true;
+      },
+      updateRecordLevelSuppressed: () => false,
+      updateRecordLevelValue: () => false,
+      updateRecordLevelOptions: () => false,
+      getEffectIndexes: () => ({ recordIndex: 0, slotIndex: 1, kind: 'effect' })
+    });
+
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.changeEffectCorrection(effect, input);
+
+    assert.equal(record.Effect1, 'New Effect');
+    assert.equal(record.Effect1Correction, 'New Effect');
+    assert.equal(effect.dataset.predictionValue, 'New Effect');
+    assert.equal(effect.dataset.pred, 'new effect');
+    assert.equal(scheduleCalls.length, 1);
+    assert.deepEqual(effectUpdates, ['New Effect']);
+  });
+
+  test('changeEffectCorrection clears effect record back to original when input empty', () => {
+    const record = { Effect1: 'New Effect' };
+    const item = new MockElement('div', 'item');
+    const effect = new MockElement('section', 'effect');
+    effect.dataset.recordIndex = '0';
+    effect.dataset.slot = '1';
+    effect.dataset.kind = 'effect';
+    effect.dataset.predictionOriginalValue = 'Original';
+    effect.dataset.predictionValue = 'New Effect';
+    effect.dataset.preserveOriginalLevel = 'false';
+    const input = new MockElement('input', 'correction-input');
+    input.value = '';
+    const updatedValues = [];
+    const deps = buildBaseDeps(record, item, {
+      recordStatusChange: () => false,
+      updateRecordCorrection: () => false,
+      updateRecordEffectValue: (_recordIndex, _slotIndex, value) => {
+        updatedValues.push(value);
+        if (value) {
+          record.Effect1 = value;
+        } else {
+          delete record.Effect1;
+        }
+        return true;
+      },
+      updateRecordLevelSuppressed: () => false,
+      updateRecordLevelValue: () => false,
+      updateRecordLevelOptions: () => false,
+      getEffectIndexes: () => ({ recordIndex: 0, slotIndex: 1, kind: 'effect' })
+    });
+
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.changeEffectCorrection(effect, input);
+
+    assert.equal(record.Effect1, 'Original');
+    assert.equal(effect.dataset.predictionValue, 'Original');
+    assert.equal(effect.dataset.pred, 'original');
+    assert.deepEqual(updatedValues, ['Original']);
+  });
+
+  test('changeEffectCorrection updates demerit record when correction provided', () => {
+    const record = { Demerit1: 'Penalty' };
+    const item = new MockElement('div', 'item');
+    const effect = new MockElement('section', 'effect effect--demerit');
+    effect.dataset.recordIndex = '0';
+    effect.dataset.slot = '1';
+    effect.dataset.kind = 'demerit';
+    effect.dataset.predictionOriginalValue = 'Penalty';
+    effect.dataset.predictionValue = 'Penalty';
+    const input = new MockElement('input', 'correction-input');
+    input.value = 'Adjusted';
+    const scheduleCalls = [];
+    const updates = [];
+    const deps = buildBaseDeps(record, item, {
+      scheduleSave: () => scheduleCalls.push(null),
+      recordStatusChange: () => false,
+      updateRecordCorrection: (_recordIndex, _slotIndex, value) => {
+        record.Demerit1Correction = value;
+        return true;
+      },
+      updateRecordEffectValue: (_recordIndex, _slotIndex, value) => {
+        updates.push(value);
+        if (value) {
+          record.Demerit1 = value;
+        } else {
+          delete record.Demerit1;
+        }
+        return true;
+      },
+      getEffectIndexes: () => ({ recordIndex: 0, slotIndex: 1, kind: 'demerit' })
+    });
+
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.changeEffectCorrection(effect, input);
+
+    assert.equal(record.Demerit1, 'Adjusted');
+    assert.equal(record.Demerit1Correction, 'Adjusted');
+    assert.equal(effect.dataset.predictionValue, 'Adjusted');
+    assert.equal(effect.dataset.pred, 'adjusted');
+    assert.equal(scheduleCalls.length, 1);
+    assert.deepEqual(updates, ['Adjusted']);
   });
 
   test('changeEffectLevel applies level correction and updates status', () => {

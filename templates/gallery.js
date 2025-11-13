@@ -117,6 +117,7 @@
         parseMasterOptions,
         parseMasterLevels,
         normalizeSuppressedLevels: normalizeSuppressedLevelsFromUtils,
+        applyEffectCorrections,
         normalizeRelicTypeColumns
     } = dataUtils;
 
@@ -130,6 +131,7 @@
         ['parseMasterOptions', parseMasterOptions],
         ['parseMasterLevels', parseMasterLevels],
         ['normalizeSuppressedLevels', normalizeSuppressedLevelsFromUtils],
+        ['applyEffectCorrections', applyEffectCorrections],
         ['normalizeRelicTypeColumns', normalizeRelicTypeColumns]
     ].filter(([, value]) => typeof value !== 'function');
 
@@ -1953,6 +1955,7 @@
         setRecordItemRelicType,
         applyMasterDataForRelicType,
         recordStatusChange,
+        updateRecordEffectValue,
         updateRecordCorrection,
         updateRecordLevelCorrection,
         updateRecordLevelValue,
@@ -2102,6 +2105,14 @@
 
 
 
+    function updateRecordEffectValue(recordIndex, slotIndex, value, kind = 'effect') {
+        if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
+            return false;
+        }
+        const key = kind === 'demerit' ? `Demerit${slotIndex}` : `Effect${slotIndex}`;
+        return updateRecordField(recordIndex, key, value);
+    }
+
     function updateRecordCorrection(recordIndex, slotIndex, value, kind = 'effect') {
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
             return false;
@@ -2197,6 +2208,10 @@
         const normalized = normalizeSuppressedRecords(records);
         if (Array.isArray(normalized)) {
             records = normalized;
+        }
+        const correctionsApplied = applyEffectCorrections(records);
+        if (Array.isArray(correctionsApplied)) {
+            records = correctionsApplied;
         }
         const relicNormalized = normalizeRelicTypeColumns(records);
         if (Array.isArray(relicNormalized)) {
