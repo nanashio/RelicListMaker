@@ -14,6 +14,7 @@ from merge_results import (
     MERGED_CSV_NAME,
     MERGED_DIR_NAME,
     merge_results,
+    _apply_corrections,
     _collect_existing_merged_entries,
     _is_duplicate,
     _prefer_review_csv,
@@ -26,6 +27,34 @@ def _write_csv(path: Path, header: list[str], rows: list[list[str]]) -> None:
         writer = csv.writer(handle)
         writer.writerow(header)
         writer.writerows(rows)
+
+
+def _migrate_correction_columns(csv_path: Path) -> None:
+    with csv_path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        original_fieldnames = reader.fieldnames or []
+        fieldnames = [
+            name for name in original_fieldnames if not name.endswith("Correction")
+        ]
+
+        migrated_rows: list[dict[str, str]] = []
+        for row in reader:
+            updated = _apply_corrections(row)
+            sanitized: dict[str, str] = {}
+            for key in fieldnames:
+                value = updated.get(key, "")
+                if value is None:
+                    sanitized[key] = ""
+                elif isinstance(value, str):
+                    sanitized[key] = value
+                else:
+                    sanitized[key] = str(value)
+            migrated_rows.append(sanitized)
+
+    with csv_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(migrated_rows)
 
 
 @pytest.fixture
@@ -306,6 +335,35 @@ def test_merge_results_filters_duplicates_and_copies_images(sample_results: Path
     assert not (merged_dir / "gallery" / "gallery.css").exists()
     assert not (merged_dir / "gallery" / "gallery.js").exists()
     assert not (merged_dir / "gallery" / "index.html").exists()
+
+
+def test_merge_results_handles_migrated_correction_columns(sample_results: Path) -> None:
+    for csv_path in sample_results.glob("**/*.csv"):
+        _migrate_correction_columns(csv_path)
+
+    merged_dir = merge_results(sample_results)
+    merged_csv = merged_dir / MERGED_CSV_NAME
+    with merged_csv.open("r", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        rows = list(reader)
+
+    header = reader.fieldnames or []
+    assert all(not name.endswith("Correction") for name in header)
+
+    corrected_entry = next(
+        row for row in rows if row["Dataset"] == "video_d" and row["BaseImage"] == "patch001.png"
+    )
+    assert corrected_entry["Effect1"] == "Corrected Effect"
+    assert corrected_entry["Effect1Status"] == "corrected"
+    assert corrected_entry["Effect1Level"] == "Lv2"
+    assert corrected_entry["Demerit1"] == "Corrected Downside"
+    assert corrected_entry["Demerit1Status"] == "corrected"
+
+    level_entry = next(
+        row for row in rows if row["Dataset"] == "video_e" and row["BaseImage"] == "fixlevel.png"
+    )
+    assert level_entry["Effect1Level"] == "Lv3"
+    assert level_entry["Effect1Status"] == "corrected"
 
 
 def test_merge_results_creates_unique_directory_when_existing(sample_results: Path) -> None:
