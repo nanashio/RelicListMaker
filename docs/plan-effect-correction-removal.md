@@ -10,7 +10,7 @@
 - ✅ フェーズ 2-1: 既存 CSV が存在しないことを確認済みで、追加マイグレーションは不要と判断しました。検証用に `scripts/migrate_effect_corrections.py` を試作しましたが、計画上は実行不要ステップとして扱っています。【F:scripts/migrate_effect_corrections.py†L1-L113】
 - ✅ フェーズ 2-2: レベル抑制判定を `Effect{n}LevelOptions` の候補有無に集約し、`none` しかない場合はセレクトを無効化することで旧 `Effect{n}LevelSuppressed` の挙動を再現しました。UI の処理と単体テストで `none` の除外や `LevelOptionsDisplay` の更新を確認済みです。【F:templates/gallery/render/effectViewModel.js†L1-L24】【F:templates/gallery/render/effectFactory.js†L117-L135】【F:tests/js/gallery_modules.test.mjs†L1742-L1748】【F:tests/js/gallery_modules.test.mjs†L2237-L2251】
 - ✅ フェーズ 2-3: マイグレーション後の CSV を模した pytest シナリオを追加し、補助列を完全に削除したデータでも `merge_results` が補正済み値とステータスを維持することを確認しました。【F:tests/test_merge_results.py†L340-L366】
-- ✅ フェーズ 2-4: 補助列未依存の Playwright シナリオを追加し、効果名を直接編集した際に保存 API が補助列を含まないペイロードを送信することと、基列 `Effect{n}` / `Effect{n}Status` が更新されることを検証しました。【F:tests/browser/viewer.spec.ts†L100-L160】
+- ✅ フェーズ 2-4: 補助列未依存の Playwright シナリオを追加し、効果名を直接編集した際に保存 API が補助列を含まないペイロードを送信することと、基列 `Effect{n}` / `Effect{n}Status` が更新されることを検証しました。Playwright をインストール済みのローカル環境でシナリオが成功することも確認済みです。【F:tests/browser/viewer.spec.ts†L100-L160】
 - ✅ フェーズ 3-1, 3-2: 補助列 `Effect{n}Correction` / `Effect{n}LevelCorrection` / `Demerit{n}Correction` を正式に廃止し、ドキュメント・バックエンド・フロントエンドから参照を除去しました。ビューアは `Effect{n}` / `Effect{n}Level` を直接更新する実装へ移行済みです。【F:docs/reference-csv-columns.md†L55-L88】【F:merge_results.py†L1-L510】【F:templates/gallery/events/recordActionHandlers.js†L1-L660】
 - ✅ フェーズ 3-3: `Effect{n}LevelSuppressed` 列を完全廃止し、出力・マージ・ビューアのいずれでも候補リストの `none` 判定に一本化しました。生成 CSV に列が現れないことと `Effect{n}LevelOptions` の保持をテストで確認済みです。【F:relic_pipeline/io/exporter.py†L150-L159】【F:tests/test_merge_results.py†L244-L269】【F:docs/reference-csv-columns.md†L55-L96】
 
