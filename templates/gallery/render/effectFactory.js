@@ -805,6 +805,11 @@
             const initialValue = selectedValue || fallbackValue || '';
             input.value = initialValue;
             updateInputValueAttribute(input);
+            input.disabled = true;
+            input.readOnly = true;
+            input.tabIndex = -1;
+            input.classList.add('correction-input--disabled');
+            input.setAttribute('aria-hidden', 'true');
             return input;
         }
 

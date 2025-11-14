@@ -2127,7 +2127,7 @@ describe('gallery effect factory', () => {
     assert.ok(effect, 'demerit effect should be created');
     const correctionInput = effect.querySelector('.correction-input');
     assert.ok(correctionInput, 'correction input should exist');
-    assert.equal(correctionInput.disabled, false);
+    assert.equal(correctionInput.disabled, true);
     assert.equal(correctionInput.placeholder, 'デメリット候補から選択');
     const passButton = effect.querySelector('.review-button.pass');
     assert.ok(passButton, 'pass button should exist');
@@ -2174,7 +2174,7 @@ describe('gallery effect factory', () => {
     const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
     const correctionInput = effect.querySelector('.correction-input');
     const passButton = effect.querySelector('.review-button.pass');
-    assert.equal(correctionInput.disabled, false);
+    assert.equal(correctionInput.disabled, true);
     assert.equal(passButton.disabled, false);
 
     record.Effect1LevelCorrection = '＋1';

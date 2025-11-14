@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import os
+import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,6 +17,14 @@ MERGED_CSV_NAME = "merged.csv"
 DEFAULT_IMAGE_DIR_NAME = "crops"
 EXTRA_FIELD_PREFIXES: Sequence[str] = ("Effect", "RawText")
 _REVIEWED_STATUSES = {"pass", "corrected"}
+
+_CORRECTION_FIELD_PATTERN = re.compile(r"^(effect|demerit)\d+(level)?correction$")
+
+
+def _is_correction_field(name: str) -> bool:
+    if not name:
+        return False
+    return bool(_CORRECTION_FIELD_PATTERN.match(name.strip().lower()))
 
 
 @dataclass(frozen=True)
@@ -179,7 +188,9 @@ def _collect_field_order(rows: list[dict[str, object]]) -> list[str]:
     ]
 
     def register(name: str) -> None:
-        if name and name not in order:
+        if not name or _is_correction_field(name):
+            return
+        if name not in order:
             order.append(name)
 
     for field in reserved:
@@ -190,9 +201,12 @@ def _collect_field_order(rows: list[dict[str, object]]) -> list[str]:
         for key in row.keys():
             if key in reserved:
                 continue
+            if _is_correction_field(key):
+                continue
             for prefix in EXTRA_FIELD_PREFIXES:
                 if key.startswith(prefix):
-                    extra_fields.add(key)
+                    if not _is_correction_field(key):
+                        extra_fields.add(key)
                     break
             else:
                 register(key)
@@ -244,8 +258,7 @@ def _slot_has_content(row: dict[str, object], slot: int) -> bool:
     effect_key = f"Effect{slot}"
     raw_key = f"RawText{slot}"
     score_key = f"Effect{slot}Score"
-    correction_key = f"Effect{slot}Correction"
-    for key in (effect_key, raw_key, correction_key, score_key):
+    for key in (effect_key, raw_key, score_key):
         if key not in row:
             continue
         value = row.get(key)
