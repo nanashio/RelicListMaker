@@ -320,20 +320,6 @@ def _apply_corrections(row: dict[str, object]) -> dict[str, object]:
             updated.pop(key, None)
             continue
 
-        if key.startswith("Effect") and key.endswith("LevelSuppressed"):
-            slot_text = key[len("Effect") : -len("LevelSuppressed")]
-            if not slot_text.isdigit():
-                updated.pop(key, None)
-                continue
-            normalized_key = f"Effect{slot_text}LevelSuppressed"
-            if _parse_truthy(row.get(key)):
-                updated[normalized_key] = "true"
-                updated.pop(f"Effect{slot_text}Level", None)
-                updated.pop(f"Effect{slot_text}LevelOptions", None)
-            else:
-                updated.pop(normalized_key, None)
-            continue
-
     return updated
 
 

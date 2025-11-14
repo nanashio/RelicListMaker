@@ -160,7 +160,6 @@ def sample_results(tmp_path: Path) -> Path:
             "Effect1LevelOptions",
             "Effect1Correction",
             "Effect1LevelCorrection",
-            "Effect1LevelSuppressed",
             "Demerit1",
             "Demerit1Status",
             "Demerit1Correction",
@@ -177,7 +176,6 @@ def sample_results(tmp_path: Path) -> Path:
                 "Lv1|Lv2",
                 "Corrected Effect",
                 "Lv2",
-                "",
                 "Original Downside",
                 "pending",
                 "Corrected Downside",
@@ -189,11 +187,10 @@ def sample_results(tmp_path: Path) -> Path:
                 "raw effect 2",
                 "Suppressed Effect",
                 "pass",
-                "",
+                "none",
                 "none",
                 "",
                 " ",
-                "TRUE",
                 "",
                 "",
                 "",
@@ -267,9 +264,8 @@ def test_merge_results_filters_duplicates_and_copies_images(sample_results: Path
         row for row in rows if row["Dataset"] == "video_d" and row["BaseImage"] == "patch002.png"
     )
     assert suppressed_entry["Effect1"] == "Suppressed Effect"
-    assert suppressed_entry.get("Effect1Level") == ""
-    assert suppressed_entry.get("Effect1LevelOptions") == ""
-    assert suppressed_entry.get("Effect1LevelSuppressed") == "true"
+    assert suppressed_entry.get("Effect1Level") == "none"
+    assert suppressed_entry.get("Effect1LevelOptions") == "none"
 
     level_only_entry = next(
         row for row in rows if row["Dataset"] == "video_e" and row["BaseImage"] == "fixlevel.png"

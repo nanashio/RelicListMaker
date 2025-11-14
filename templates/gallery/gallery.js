@@ -117,7 +117,6 @@
         parseLevelTokens,
         parseMasterOptions,
         parseMasterLevels,
-        normalizeSuppressedLevels: normalizeSuppressedLevelsFromUtils,
         normalizeEffectLevelPlaceholders: normalizeEffectLevelPlaceholdersFromUtils,
         normalizeRelicTypeColumns
     } = dataUtils;
@@ -132,7 +131,6 @@
         ['parseLevelTokens', parseLevelTokens],
         ['parseMasterOptions', parseMasterOptions],
         ['parseMasterLevels', parseMasterLevels],
-        ['normalizeSuppressedLevels', normalizeSuppressedLevelsFromUtils],
         ['normalizeEffectLevelPlaceholders', normalizeEffectLevelPlaceholdersFromUtils],
         ['normalizeRelicTypeColumns', normalizeRelicTypeColumns]
     ].filter(([, value]) => typeof value !== 'function');
@@ -175,7 +173,6 @@
         return displayValues.join('|');
     }
 
-    const normalizeSuppressedRecords = (records) => normalizeSuppressedLevelsFromUtils(records);
     const normalizeEffectLevelPlaceholdersRecords = (records) =>
         normalizeEffectLevelPlaceholdersFromUtils(records);
 
@@ -1986,7 +1983,6 @@
         updateRecordEffectValue,
         updateRecordLevelValue,
         updateRecordLevelOptions,
-        updateRecordLevelSuppressed,
         scheduleSave: () => storageManager.scheduleSave()
     });
 
@@ -2159,18 +2155,6 @@
         const key = `Effect${slotIndex}LevelOptions`;
         return updateRecordField(recordIndex, key, value);
     }
-    function updateRecordLevelSuppressed(recordIndex, slotIndex, suppressed, kind = 'effect') {
-        if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
-            return false;
-        }
-        if (kind === 'demerit') {
-            return false;
-        }
-        const key = `Effect${slotIndex}LevelSuppressed`;
-        const normalized = suppressed ? 'true' : '';
-        return updateRecordField(recordIndex, key, normalized);
-    }
-
     function recordStatusChange(effect, status) {
         const indexes = getEffectIndexes(effect);
         if (!indexes) {
@@ -2214,10 +2198,6 @@
 
     function loadRecordsArray(data) {
         let records = Array.isArray(data) ? data.slice() : data && typeof data === 'object' ? [data] : [];
-        const normalized = normalizeSuppressedRecords(records);
-        if (Array.isArray(normalized)) {
-            records = normalized;
-        }
         const levelPlaceholdersApplied = normalizeEffectLevelPlaceholdersRecords(records);
         if (Array.isArray(levelPlaceholdersApplied)) {
             records = levelPlaceholdersApplied;

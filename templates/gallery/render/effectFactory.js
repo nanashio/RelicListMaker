@@ -124,7 +124,11 @@
                     if (value == null) {
                         return false;
                     }
-                    return String(value).trim() !== '';
+                    const text = String(value).trim();
+                    if (!text) {
+                        return false;
+                    }
+                    return text.toLowerCase() !== 'none';
                 });
             select.disabled = !hasUsableOption;
             if (!hasUsableOption) {

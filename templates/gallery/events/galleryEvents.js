@@ -190,7 +190,6 @@
                 setRecordItemRelicType = () => false,
                 recordStatusChange = () => false,
                 updateRecordEffectValue = () => false,
-                updateRecordLevelSuppressed = () => false,
                 updateRecordLevelValue = () => false,
                 updateRecordLevelOptions = () => false,
                 scheduleSave = () => {}
@@ -220,7 +219,6 @@
                 updateRecordEffectValue,
                 updateRecordLevelValue,
                 updateRecordLevelOptions,
-                updateRecordLevelSuppressed,
                 updateEffectStatus,
                 sanitizeLevelList,
                 sortLevelsAscending,
