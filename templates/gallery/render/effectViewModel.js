@@ -29,7 +29,8 @@
         const {
             normalizeStatus = (value) => value,
             parseLevelOptions: parseOptions = parseLevelOptions,
-            kind: requestedKind
+            kind: requestedKind,
+            allowEmptyDemerit = false
         } = options;
 
         const normalizedKind =
@@ -46,7 +47,7 @@
             const rawText = raw == null ? '' : String(raw);
             const hasScoreValue = score != null && !Number.isNaN(Number(score));
 
-            if (!predictionText && !rawText && !hasScoreValue) {
+            if (!predictionText && !rawText && !hasScoreValue && !allowEmptyDemerit) {
                 return null;
             }
 
