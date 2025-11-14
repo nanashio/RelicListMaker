@@ -405,6 +405,30 @@
             }
         }
 
+        function setCorrectionInputAccessibility(input, { disabled, readOnly, ariaReadonly, tabIndex }) {
+            if (!input) {
+                return;
+            }
+            if (typeof disabled === 'boolean') {
+                input.disabled = disabled;
+            }
+            if (typeof readOnly === 'boolean') {
+                input.readOnly = readOnly;
+            }
+            if (ariaReadonly === false) {
+                if (typeof input.removeAttribute === 'function') {
+                    input.removeAttribute('aria-readonly');
+                }
+            } else if (ariaReadonly === true) {
+                if (typeof input.setAttribute === 'function') {
+                    input.setAttribute('aria-readonly', 'true');
+                }
+            }
+            if (tabIndex != null) {
+                input.tabIndex = tabIndex;
+            }
+        }
+
         function applyDemeritAvailability(effect, context, decisionElements, options = {}) {
             if (!effect || !context || !context.isDemerit) {
                 return;
@@ -440,7 +464,12 @@
                     input.value = '';
                 }
                 updateInputValueAttribute(input);
-                input.disabled = true;
+                setCorrectionInputAccessibility(input, {
+                    disabled: true,
+                    readOnly: true,
+                    ariaReadonly: true,
+                    tabIndex: -1
+                });
                 input.placeholder = placeholder;
                 if (passButton) {
                     passButton.disabled = true;
@@ -484,8 +513,12 @@
             if (passButton && datasetState.kind !== 'merged') {
                 passButton.disabled = false;
             }
-            input.disabled = true;
-            input.setAttribute('aria-readonly', 'true');
+            setCorrectionInputAccessibility(input, {
+                disabled: false,
+                readOnly: false,
+                ariaReadonly: false,
+                tabIndex: 0
+            });
             if (defaultPlaceholder) {
                 input.placeholder = defaultPlaceholder;
             }
@@ -572,7 +605,12 @@
 
             if (datasetState.kind === 'merged') {
                 decisionElements.passButton.disabled = true;
-                decisionElements.correctionInput.disabled = true;
+                setCorrectionInputAccessibility(decisionElements.correctionInput, {
+                    disabled: true,
+                    readOnly: true,
+                    ariaReadonly: true,
+                    tabIndex: -1
+                });
                 if (decisionElements.levelInput) {
                     decisionElements.levelInput.disabled = true;
                 }
@@ -804,10 +842,18 @@
             const initialValue = selectedValue || fallbackValue || '';
             input.value = initialValue;
             updateInputValueAttribute(input);
-            input.disabled = true;
-            input.readOnly = true;
-            input.tabIndex = -1;
-            input.setAttribute('aria-readonly', 'true');
+            if (!hasOptions) {
+                input.disabled = true;
+                input.readOnly = true;
+                input.tabIndex = -1;
+                if (typeof input.setAttribute === 'function') {
+                    input.setAttribute('aria-readonly', 'true');
+                }
+            } else {
+                input.disabled = false;
+                input.readOnly = false;
+                input.tabIndex = 0;
+            }
             return input;
         }
 
