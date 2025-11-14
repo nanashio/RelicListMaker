@@ -54,7 +54,6 @@ class AppConfig:
             "Score": True,
             "Source": True,
             "LevelOptions": True,
-            "LevelCorrection": True,
             "Dataset": True,
             "DatasetFolder": True,
             "SourceCsv": True,

@@ -76,10 +76,8 @@ def sample_results(tmp_path: Path) -> Path:
             "ItemColor",
             "RawText1",
             "Effect1",
-            "Effect1Correction",
             "Effect1Status",
             "Demerit1",
-            "Demerit1Correction",
             "Demerit1Status",
         ],
         [
@@ -88,10 +86,8 @@ def sample_results(tmp_path: Path) -> Path:
                 "",
                 "blue",
                 "text3",
-                "",
                 "Fixed Effect",
                 "corrected",
-                "",
                 "Major downside",
                 "corrected",
             ]

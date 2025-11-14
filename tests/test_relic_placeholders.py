@@ -68,7 +68,6 @@ def test_ensure_effect_slots_adds_placeholder_values():
     assert row["Effect2Source"] == ""
     assert row["Effect2LevelSource"] == "none"
     assert row["Effect2LevelOptions"] == "none"
-    assert row["Effect2LevelCorrection"] == ""
     assert "Demerit1" not in row
     assert "Demerit2" not in row
 
@@ -93,7 +92,6 @@ def test_ensure_effect_slots_adds_demerit_columns():
     assert row["Demerit2Status"] == "pending"
     assert row["Demerit2Kind"] == "demerit"
     assert row["Demerit2LevelOptions"] == "none"
-    assert row["Demerit2LevelCorrection"] == ""
     assert row["Demerit2RawText"] == ""
     assert row["Demerit2Score"] == 0.0
     assert row["Demerit2Source"] == ""
@@ -128,7 +126,6 @@ def test_write_csv_includes_demerit_columns(tmp_path: Path):
             "Demerit1Status": "pending",
             "Demerit1Kind": "demerit",
             "Demerit1LevelOptions": "none",
-            "Demerit1LevelCorrection": "",
             "Demerit1RawText": "OCR",
             "Demerit1Score": 87.5,
             "Demerit1Source": "効果A",
@@ -154,8 +151,6 @@ def test_write_csv_includes_demerit_columns(tmp_path: Path):
     if DEFAULT_COLUMN_VISIBILITY.get("Source", True):
         assert "Demerit1Source" in header
         assert "Demerit1LevelSource" in header
-    if DEFAULT_COLUMN_VISIBILITY.get("LevelCorrection", True):
-        assert "Demerit1LevelCorrection" in header
 
 
 def test_build_row_merges_demerit_results():

@@ -88,8 +88,6 @@ def _ensure_effect_slots(row: MutableMapping[str, object], options: ExportOption
 
         if column_flags.get("LevelOptions", True):
             row.setdefault(f"Effect{idx}LevelOptions", "none")
-        if column_flags.get("LevelCorrection", True):
-            row.setdefault(f"Effect{idx}LevelCorrection", "")
         if column_flags.get("RawText", True):
             row.setdefault(f"RawText{idx}", "")
         if column_flags.get("Score", True):
@@ -105,8 +103,6 @@ def _ensure_effect_slots(row: MutableMapping[str, object], options: ExportOption
             row.setdefault(f"Demerit{idx}Kind", "demerit")
             if column_flags.get("LevelOptions", True):
                 row.setdefault(f"Demerit{idx}LevelOptions", "none")
-            if column_flags.get("LevelCorrection", True):
-                row.setdefault(f"Demerit{idx}LevelCorrection", "")
             if column_flags.get("RawText", True):
                 row.setdefault(f"Demerit{idx}RawText", "")
             if column_flags.get("Score", True):
@@ -187,8 +183,6 @@ def build_row(
                 row.setdefault(f"Demerit{idx}Source", "")
                 row.setdefault(f"Demerit{idx}LevelSource", "none")
 
-        if column_flags.get("LevelCorrection", True):
-            row.setdefault(f"Effect{idx}LevelCorrection", "")
 
     _ensure_effect_slots(row, options)
 
@@ -283,12 +277,6 @@ def write_csv(
         for idx in demerit_slots:
             fieldnames.append(f"Demerit{idx}Source")
             fieldnames.append(f"Demerit{idx}LevelSource")
-    if column_flags.get("LevelCorrection", True):
-        for idx in slot_range:
-            fieldnames.append(f"Effect{idx}LevelCorrection")
-        for idx in demerit_slots:
-            fieldnames.append(f"Demerit{idx}LevelCorrection")
-
     for row in row_list:
         for key in row.keys():
             if key not in fieldnames:
