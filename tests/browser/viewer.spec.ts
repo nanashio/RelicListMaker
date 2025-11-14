@@ -125,6 +125,7 @@ test.describe('Relic viewer', () => {
     await expect(firstEffect).toBeVisible();
 
     const correctionInput = firstEffect.locator('.correction-input');
+    await expect(correctionInput).toBeEditable();
     await correctionInput.fill('手動編集テスト');
 
     const saveResponsePromise = page.waitForResponse(
