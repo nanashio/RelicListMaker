@@ -468,12 +468,16 @@
                 };
 
                 setLevelOptions(effect, []);
-                const levelValueCleared = updateRecordLevelValue(
-                    indexes.recordIndex,
-                    indexes.slotIndex,
-                    toStoredLevelValue(''),
-                    indexes.kind
-                );
+                const restoreOriginalLevel = !selected;
+                let levelValueCleared = false;
+                if (!restoreOriginalLevel) {
+                    levelValueCleared = updateRecordLevelValue(
+                        indexes.recordIndex,
+                        indexes.slotIndex,
+                        toStoredLevelValue(''),
+                        indexes.kind
+                    );
+                }
                 const suppressedChanged = updateRecordLevelSuppressed(
                     indexes.recordIndex,
                     indexes.slotIndex,
@@ -482,7 +486,7 @@
                 );
 
                 const levelCleared = resetLevelSelection(effect, indexes, selected, {
-                    skipRecordLevelValue: true,
+                    skipRecordLevelValue: !restoreOriginalLevel,
                     onOptionsApplied: handleOptionsApplied
                 });
                 shouldSchedule =
