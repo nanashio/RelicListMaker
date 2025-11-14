@@ -57,10 +57,42 @@ def sample_results(tmp_path: Path) -> Path:
             "RawText1",
             "Effect1",
             "Effect1Status",
+            "Effect1Level",
+            "Effect1Correction",
+            "Effect1LevelCorrection",
+            "Demerit1",
+            "Demerit1Status",
+            "Demerit1Correction",
         ],
         [
-            ["frame001.png", "False", "red", "text1", "effect1", "pass"],
-            ["frame002.png", "True", "red", "text2", "effect2", "pass"],
+            [
+                "frame001.png",
+                "False",
+                "red",
+                "text1",
+                "effect1",
+                "pass",
+                "Lv1",
+                "",
+                "",
+                "",
+                "",
+                "",
+            ],
+            [
+                "frame002.png",
+                "True",
+                "red",
+                "text2",
+                "effect2",
+                "pass",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+            ],
         ],
     )
 
@@ -111,6 +143,93 @@ def sample_results(tmp_path: Path) -> Path:
         [["clip001.png", "False", "green", "text4", "effect4", "pending"]],
     )
 
+    dataset4 = results_dir / "video_d"
+    (dataset4 / "crops").mkdir(parents=True)
+    (dataset4 / "crops" / "patch001.png").write_bytes(b"patch001")
+    (dataset4 / "crops" / "patch002.png").write_bytes(b"patch002")
+    _write_csv(
+        dataset4 / "video_d.csv",
+        [
+            "Image",
+            "Duplicate",
+            "ItemColor",
+            "RawText1",
+            "Effect1",
+            "Effect1Status",
+            "Effect1Level",
+            "Effect1LevelOptions",
+            "Effect1Correction",
+            "Effect1LevelCorrection",
+            "Effect1LevelSuppressed",
+            "Demerit1",
+            "Demerit1Status",
+            "Demerit1Correction",
+        ],
+        [
+            [
+                "patch001.png",
+                "False",
+                "gold",
+                "raw effect",
+                "Original Effect",
+                "pending",
+                "Lv1",
+                "Lv1|Lv2",
+                "Corrected Effect",
+                "Lv2",
+                "",
+                "Original Downside",
+                "pending",
+                "Corrected Downside",
+            ],
+            [
+                "patch002.png",
+                "False",
+                "gold",
+                "raw effect 2",
+                "Suppressed Effect",
+                "pass",
+                "",
+                "none",
+                "",
+                " ",
+                "TRUE",
+                "",
+                "",
+                "",
+            ],
+        ],
+    )
+
+    dataset5 = results_dir / "video_e"
+    (dataset5 / "crops").mkdir(parents=True)
+    (dataset5 / "crops" / "fixlevel.png").write_bytes(b"fixlevel")
+    _write_csv(
+        dataset5 / "video_e.csv",
+        [
+            "Image",
+            "Duplicate",
+            "ItemColor",
+            "RawText1",
+            "Effect1",
+            "Effect1Status",
+            "Effect1Level",
+            "Effect1LevelCorrection",
+        ],
+        [
+            [
+                "fixlevel.png",
+                "",
+                "silver",
+                "raw effect e",
+                "Effect With Level",
+                "pending",
+                "Lv1",
+                "Lv3",
+            ],
+        ],
+    )
+
     return results_dir
 
 
@@ -126,20 +245,47 @@ def test_merge_results_filters_duplicates_and_copies_images(sample_results: Path
         rows = list(reader)
 
     assert "Effect1Correction" not in (reader.fieldnames or [])
+    assert "Effect1LevelCorrection" not in (reader.fieldnames or [])
 
-    assert len(rows) == 2
+    assert len(rows) == 5
     datasets = {row["Dataset"] for row in rows}
-    assert datasets == {"video_a", "video_b"}
+    assert datasets == {"video_a", "video_b", "video_d", "video_e"}
 
     duplicate_flags = {row.get("Duplicate") for row in rows}
     assert duplicate_flags == {"False"}
 
-    corrected_entry = next(row for row in rows if row["Dataset"] == "video_b")
-    assert corrected_entry["Effect1"] == "Fixed Effect"
-    assert corrected_entry["Demerit1"] == "Major downside"
+    corrected_entry = next(
+        row for row in rows if row["Dataset"] == "video_d" and row["BaseImage"] == "patch001.png"
+    )
+    assert corrected_entry["Effect1"] == "Corrected Effect"
+    assert corrected_entry["Effect1Status"] == "corrected"
+    assert corrected_entry["Effect1Level"] == "Lv2"
+    assert corrected_entry["Demerit1"] == "Corrected Downside"
+    assert corrected_entry["Demerit1Status"] == "corrected"
+
+    suppressed_entry = next(
+        row for row in rows if row["Dataset"] == "video_d" and row["BaseImage"] == "patch002.png"
+    )
+    assert suppressed_entry["Effect1"] == "Suppressed Effect"
+    assert suppressed_entry.get("Effect1Level") == ""
+    assert suppressed_entry.get("Effect1LevelOptions") == ""
+    assert suppressed_entry.get("Effect1LevelSuppressed") == "true"
+
+    level_only_entry = next(
+        row for row in rows if row["Dataset"] == "video_e" and row["BaseImage"] == "fixlevel.png"
+    )
+    assert level_only_entry["Effect1"] == "Effect With Level"
+    assert level_only_entry["Effect1Status"] == "corrected"
+    assert level_only_entry["Effect1Level"] == "Lv3"
+
+    video_b_entry = next(row for row in rows if row["Dataset"] == "video_b")
+    assert video_b_entry["Effect1"] == "Fixed Effect"
+    assert video_b_entry["Effect1Status"] == "corrected"
+    assert video_b_entry["Demerit1"] == "Major downside"
+    assert video_b_entry["Demerit1Status"] == "corrected"
 
     copied_images = sorted((merged_dir / "crops").iterdir())
-    assert len(copied_images) == 2
+    assert len(copied_images) == 5
     for image_path in copied_images:
         assert image_path.is_file()
 
@@ -204,9 +350,9 @@ def test_merge_results_can_include_pending_when_option_disabled(sample_results: 
         reader = csv.DictReader(handle)
         rows = list(reader)
 
-    assert len(rows) == 3
+    assert len(rows) == 6
     datasets = {row["Dataset"] for row in rows}
-    assert datasets == {"video_a", "video_b", "video_c"}
+    assert datasets == {"video_a", "video_b", "video_c", "video_d", "video_e"}
 
 
 def test_merge_results_applies_custom_view_box(sample_results: Path) -> None:

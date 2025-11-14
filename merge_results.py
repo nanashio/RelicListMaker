@@ -18,6 +18,27 @@ EXTRA_FIELD_PREFIXES: Sequence[str] = ("Effect", "RawText")
 _REVIEWED_STATUSES = {"pass", "corrected"}
 
 
+def _normalize_cell(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    return str(value).strip()
+
+
+def _parse_truthy(value: object) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    text = str(value).strip().lower()
+    if not text:
+        return False
+    return text in {"true", "1", "yes", "y", "t"}
+
+
 @dataclass(frozen=True)
 class DatasetRecord:
     """統合対象となる既存データセットのメタ情報."""
@@ -242,6 +263,80 @@ def _normalize_effect_status(value: object) -> str:
     return text
 
 
+def _apply_corrections(row: dict[str, object]) -> dict[str, object]:
+    if not row:
+        return {}
+
+    updated = dict(row)
+    for key in list(row.keys()):
+        if not isinstance(key, str):
+            continue
+
+        if key.startswith("Effect") and key.endswith("LevelCorrection"):
+            slot_text = key[len("Effect") : -len("LevelCorrection")]
+            if not slot_text.isdigit():
+                updated.pop(key, None)
+                continue
+            value = _normalize_cell(row.get(key))
+            target_key = f"Effect{slot_text}Level"
+            if value:
+                updated[target_key] = value
+                status_key = f"Effect{slot_text}Status"
+                status = _normalize_effect_status(updated.get(status_key))
+                if status != "pass":
+                    updated[status_key] = "corrected"
+            updated.pop(key, None)
+            continue
+
+        if key.startswith("Effect") and key.endswith("Correction"):
+            slot_text = key[len("Effect") : -len("Correction")]
+            if not slot_text.isdigit():
+                updated.pop(key, None)
+                continue
+            value = _normalize_cell(row.get(key))
+            target_key = f"Effect{slot_text}"
+            if value:
+                updated[target_key] = value
+                status_key = f"Effect{slot_text}Status"
+                status = _normalize_effect_status(updated.get(status_key))
+                if status != "pass":
+                    updated[status_key] = "corrected"
+            updated.pop(key, None)
+            continue
+
+        if key.startswith("Demerit") and key.endswith("Correction"):
+            slot_text = key[len("Demerit") : -len("Correction")]
+            if not slot_text.isdigit():
+                updated.pop(key, None)
+                continue
+            value = _normalize_cell(row.get(key))
+            target_key = f"Demerit{slot_text}"
+            if value:
+                updated[target_key] = value
+                status_key = f"Demerit{slot_text}Status"
+                status = _normalize_effect_status(updated.get(status_key))
+                if status != "pass":
+                    updated[status_key] = "corrected"
+            updated.pop(key, None)
+            continue
+
+        if key.startswith("Effect") and key.endswith("LevelSuppressed"):
+            slot_text = key[len("Effect") : -len("LevelSuppressed")]
+            if not slot_text.isdigit():
+                updated.pop(key, None)
+                continue
+            normalized_key = f"Effect{slot_text}LevelSuppressed"
+            if _parse_truthy(row.get(key)):
+                updated[normalized_key] = "true"
+                updated.pop(f"Effect{slot_text}Level", None)
+                updated.pop(f"Effect{slot_text}LevelOptions", None)
+            else:
+                updated.pop(normalized_key, None)
+            continue
+
+    return updated
+
+
 def _slot_has_content(row: dict[str, object], slot: int) -> bool:
     effect_key = f"Effect{slot}"
     raw_key = f"RawText{slot}"
@@ -336,7 +431,7 @@ def merge_results(
                     continue
 
                 for row_index, row in enumerate(reader, start=1):
-                    normalized_row = dict(row)
+                    normalized_row = _apply_corrections(dict(row))
 
                     if _is_duplicate(normalized_row.get("Duplicate")):
                         continue
