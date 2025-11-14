@@ -117,7 +117,6 @@ class RelicGuiApp:
             "Score": tk.BooleanVar(value=True),
             "Source": tk.BooleanVar(value=True),
             "LevelOptions": tk.BooleanVar(value=True),
-            "LevelCorrection": tk.BooleanVar(value=True),
             "Dataset": tk.BooleanVar(value=True),
             "DatasetFolder": tk.BooleanVar(value=True),
             "SourceCsv": tk.BooleanVar(value=True),

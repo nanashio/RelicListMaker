@@ -119,7 +119,6 @@
         parseMasterLevels,
         normalizeSuppressedLevels: normalizeSuppressedLevelsFromUtils,
         normalizeEffectLevelPlaceholders: normalizeEffectLevelPlaceholdersFromUtils,
-        applyEffectCorrections,
         normalizeRelicTypeColumns
     } = dataUtils;
 
@@ -135,7 +134,6 @@
         ['parseMasterLevels', parseMasterLevels],
         ['normalizeSuppressedLevels', normalizeSuppressedLevelsFromUtils],
         ['normalizeEffectLevelPlaceholders', normalizeEffectLevelPlaceholdersFromUtils],
-        ['applyEffectCorrections', applyEffectCorrections],
         ['normalizeRelicTypeColumns', normalizeRelicTypeColumns]
     ].filter(([, value]) => typeof value !== 'function');
 
@@ -1986,8 +1984,6 @@
         applyMasterDataForRelicType,
         recordStatusChange,
         updateRecordEffectValue,
-        updateRecordCorrection,
-        updateRecordLevelCorrection,
         updateRecordLevelValue,
         updateRecordLevelOptions,
         updateRecordLevelSuppressed,
@@ -2143,55 +2139,6 @@
         return updateRecordField(recordIndex, key, value);
     }
 
-    function updateRecordCorrection(recordIndex, slotIndex, value, kind = 'effect') {
-        if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
-            return false;
-        }
-        const record = getRecordByIndex(recordIndex);
-        if (!record || typeof record !== 'object') {
-            return false;
-        }
-        const normalize = (input) => {
-            if (input == null) {
-                return '';
-            }
-            const text = String(input).trim();
-            return text;
-        };
-        const key = kind === 'demerit' ? `Demerit${slotIndex}Correction` : `Effect${slotIndex}Correction`;
-        const previous = normalize(record[key]);
-        const next = normalize(value);
-        if (Object.prototype.hasOwnProperty.call(record, key)) {
-            delete record[key];
-        }
-        return previous !== next;
-    }
-    function updateRecordLevelCorrection(recordIndex, slotIndex, value, kind = 'effect') {
-        if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
-            return false;
-        }
-        if (kind === 'demerit') {
-            return false;
-        }
-        const record = getRecordByIndex(recordIndex);
-        if (!record || typeof record !== 'object') {
-            return false;
-        }
-        const normalize = (input) => {
-            if (input == null) {
-                return '';
-            }
-            const text = String(input).trim();
-            return text;
-        };
-        const key = `Effect${slotIndex}LevelCorrection`;
-        const previous = normalize(record[key]);
-        const next = normalize(value);
-        if (Object.prototype.hasOwnProperty.call(record, key)) {
-            delete record[key];
-        }
-        return previous !== next;
-    }
     function updateRecordLevelValue(recordIndex, slotIndex, value, kind = 'effect') {
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
             return false;
@@ -2270,10 +2217,6 @@
         const normalized = normalizeSuppressedRecords(records);
         if (Array.isArray(normalized)) {
             records = normalized;
-        }
-        const correctionsApplied = applyEffectCorrections(records);
-        if (Array.isArray(correctionsApplied)) {
-            records = correctionsApplied;
         }
         const levelPlaceholdersApplied = normalizeEffectLevelPlaceholdersRecords(records);
         if (Array.isArray(levelPlaceholdersApplied)) {

@@ -2673,9 +2673,7 @@ describe('record action handlers', () => {
         return changed;
       },
       recordStatusChange: () => false,
-      updateRecordCorrection: () => false,
       updateRecordEffectValue: () => false,
-      updateRecordLevelCorrection: () => false,
       updateRecordLevelValue: () => false,
       updateRecordLevelOptions: () => false,
       updateRecordLevelSuppressed: () => false,
@@ -2815,10 +2813,6 @@ describe('record action handlers', () => {
     const deps = buildBaseDeps(record, item, {
       scheduleSave: () => scheduleCalls.push(null),
       recordStatusChange: () => false,
-      updateRecordCorrection: (_recordIndex, _slotIndex, value) => {
-        record.Effect1Correction = value;
-        return true;
-      },
       updateRecordEffectValue: (_recordIndex, _slotIndex, value) => {
         effectUpdates.push(value);
         if (value) {
@@ -2860,9 +2854,10 @@ describe('record action handlers', () => {
     handlers.changeEffectCorrection(effect, input);
 
     assert.equal(record.Effect1, 'New Effect');
-    assert.equal(record.Effect1Correction, 'New Effect');
+    assert.equal(Object.prototype.hasOwnProperty.call(record, 'Effect1Correction'), false);
     assert.equal(effect.dataset.predictionValue, 'New Effect');
     assert.equal(effect.dataset.pred, 'new effect');
+    assert.equal(effect.dataset.correction, 'new effect');
     assert.equal(scheduleCalls.length, 1);
     assert.deepEqual(effectUpdates, ['New Effect']);
     assert.deepEqual(levelOptionsUpdates, ['＋1|＋3']);
@@ -2884,7 +2879,6 @@ describe('record action handlers', () => {
     const updatedValues = [];
     const deps = buildBaseDeps(record, item, {
       recordStatusChange: () => false,
-      updateRecordCorrection: () => false,
       updateRecordEffectValue: (_recordIndex, _slotIndex, value) => {
         updatedValues.push(value);
         if (value) {
@@ -2906,6 +2900,7 @@ describe('record action handlers', () => {
     assert.equal(record.Effect1, 'Original');
     assert.equal(effect.dataset.predictionValue, 'Original');
     assert.equal(effect.dataset.pred, 'original');
+    assert.equal(Object.prototype.hasOwnProperty.call(record, 'Effect1Correction'), false);
     assert.deepEqual(updatedValues, ['Original']);
   });
 
@@ -2926,7 +2921,6 @@ describe('record action handlers', () => {
     const storedLevels = [];
     const deps = buildBaseDeps(record, item, {
       recordStatusChange: () => false,
-      updateRecordCorrection: () => true,
       updateRecordEffectValue: () => true,
       updateRecordLevelSuppressed: () => false,
       updateRecordLevelValue: (_recordIndex, slotIndex, value) => {
@@ -2961,6 +2955,7 @@ describe('record action handlers', () => {
     ]);
     assert.equal(record.Effect1Level, 'none');
     assert.equal(effect.dataset.level, '');
+    assert.equal(Object.prototype.hasOwnProperty.call(record, 'Effect1Correction'), false);
   });
 
   test('changeEffectCorrection updates demerit record when correction provided', () => {
@@ -2979,10 +2974,6 @@ describe('record action handlers', () => {
     const deps = buildBaseDeps(record, item, {
       scheduleSave: () => scheduleCalls.push(null),
       recordStatusChange: () => false,
-      updateRecordCorrection: (_recordIndex, _slotIndex, value) => {
-        record.Demerit1Correction = value;
-        return true;
-      },
       updateRecordEffectValue: (_recordIndex, _slotIndex, value) => {
         updates.push(value);
         if (value) {
@@ -2999,9 +2990,10 @@ describe('record action handlers', () => {
     handlers.changeEffectCorrection(effect, input);
 
     assert.equal(record.Demerit1, 'Adjusted');
-    assert.equal(record.Demerit1Correction, 'Adjusted');
+    assert.equal(Object.prototype.hasOwnProperty.call(record, 'Demerit1Correction'), false);
     assert.equal(effect.dataset.predictionValue, 'Adjusted');
     assert.equal(effect.dataset.pred, 'adjusted');
+    assert.equal(effect.dataset.correction, 'adjusted');
     assert.equal(scheduleCalls.length, 1);
     assert.deepEqual(updates, ['Adjusted']);
   });
@@ -3018,27 +3010,28 @@ describe('record action handlers', () => {
     levelInput.value = 'Expert';
     effect.appendChild(levelInput);
 
-    const levelCorrectionCalls = [];
     const statusCalls = [];
     const effectStatusCalls = [];
     const badgeCalls = [];
     const refreshCalls = [];
     const filterCalls = [];
     const scheduleCalls = [];
+    const levelValueCalls = [];
     const deps = buildBaseDeps(record, item, {
       scheduleSave: () => scheduleCalls.push(null),
       applyFilters: () => filterCalls.push(null),
       refreshItemCaches: () => refreshCalls.push(null),
-      updateRecordLevelCorrection: (recordIndex, slotIndex, value) => {
-        levelCorrectionCalls.push([recordIndex, slotIndex, value]);
-        return true;
-      },
       recordStatusChange: (_effect, status) => {
         statusCalls.push(status);
         effect.dataset.status = status;
         return true;
       },
       updateEffectStatus: (_effect, status) => effectStatusCalls.push(status),
+      updateRecordLevelValue: (recordIndex, slotIndex, value) => {
+        levelValueCalls.push([recordIndex, slotIndex, value]);
+        record[`Effect${slotIndex}Level`] = value;
+        return true;
+      },
       updateLevelBadge: (target) => badgeCalls.push(target),
       getEffectIndexes: () => ({ recordIndex: 2, slotIndex: 1 })
     });
@@ -3046,13 +3039,14 @@ describe('record action handlers', () => {
     const handlers = handlerFactory.createRecordActionHandlers(deps);
     handlers.changeEffectLevel(effect, levelInput);
 
-    assert.deepEqual(levelCorrectionCalls, [[2, 1, 'Expert']]);
     assert.deepEqual(statusCalls, ['corrected']);
     assert.deepEqual(effectStatusCalls, ['corrected']);
     assert.equal(badgeCalls.length, 1);
     assert.equal(refreshCalls.length, 1);
     assert.equal(filterCalls.length, 1);
     assert.equal(scheduleCalls.length, 0);
+    assert.deepEqual(levelValueCalls, [[2, 1, 'Expert']]);
+    assert.equal(record.Effect1Level, 'Expert');
     assert.equal(effect.dataset.levelCorrection, 'expert');
     assert.equal(effect.dataset.levelCorrectionValue, 'Expert');
     assert.equal(effect.dataset.level, 'expert');
@@ -3076,7 +3070,6 @@ describe('record action handlers', () => {
     const scheduleCalls = [];
     const deps = buildBaseDeps(record, item, {
       scheduleSave: () => scheduleCalls.push(null),
-      updateRecordLevelCorrection: () => false,
       updateRecordLevelValue: (recordIndex, slotIndex, value) => {
         storedLevels.push([recordIndex, slotIndex, value]);
         record[`Effect${slotIndex}Level`] = value;
@@ -3110,7 +3103,6 @@ describe('record action handlers', () => {
 
     const storedLevels = [];
     const deps = buildBaseDeps(record, item, {
-      updateRecordLevelCorrection: () => false,
       updateRecordLevelValue: (recordIndex, slotIndex, value) => {
         storedLevels.push([recordIndex, slotIndex, value]);
         if (value) {
@@ -3146,23 +3138,28 @@ describe('record action handlers', () => {
     levelInput.value = '';
     effect.appendChild(levelInput);
 
-    const levelCorrectionCalls = [];
     const badgeCalls = [];
     const refreshCalls = [];
     const filterCalls = [];
     const scheduleCalls = [];
     const statusCalls = [];
+    const levelValueCalls = [];
 
     const deps = buildBaseDeps(record, item, {
       scheduleSave: () => scheduleCalls.push(null),
       applyFilters: () => filterCalls.push(null),
       refreshItemCaches: () => refreshCalls.push(null),
-      updateRecordLevelCorrection: (recordIndex, slotIndex, value) => {
-        levelCorrectionCalls.push([recordIndex, slotIndex, value]);
-        return true;
-      },
       recordStatusChange: (_effect, status) => {
         statusCalls.push(status);
+        return true;
+      },
+      updateRecordLevelValue: (recordIndex, slotIndex, value) => {
+        levelValueCalls.push([recordIndex, slotIndex, value]);
+        if (value) {
+          record[`Effect${slotIndex}Level`] = value;
+        } else {
+          delete record[`Effect${slotIndex}Level`];
+        }
         return true;
       },
       updateLevelBadge: (target) => badgeCalls.push(target),
@@ -3172,11 +3169,12 @@ describe('record action handlers', () => {
     const handlers = handlerFactory.createRecordActionHandlers(deps);
     handlers.changeEffectLevel(effect, levelInput);
 
-    assert.deepEqual(levelCorrectionCalls, [[1, 3, '']]);
     assert.equal(badgeCalls.length, 1);
     assert.equal(refreshCalls.length, 1);
     assert.equal(filterCalls.length, 1);
     assert.equal(scheduleCalls.length, 1);
+    assert.deepEqual(levelValueCalls, [[1, 3, 'Base']]);
+    assert.equal(record.Effect3Level, 'Base');
     assert.equal(effect.dataset.levelCorrection, '');
     assert.equal(effect.dataset.levelCorrectionValue, '');
     assert.equal(effect.dataset.level, 'base');
@@ -3210,7 +3208,6 @@ describe('record action handlers', () => {
 
     const syncCalls = [];
     const deps = buildBaseDeps(record, item, {
-      updateRecordLevelCorrection: () => true,
       refreshItemCaches: () => {},
       applyFilters: () => {},
       updateLevelBadge: () => {},
@@ -3291,12 +3288,14 @@ describe('record action handlers', () => {
 
       levelInput.value = '＋1';
 
+      const levelValueCalls = [];
       const deps = buildBaseDeps(record, item, {
-        updateRecordLevelCorrection: (_recordIndex, _slotIndex, value) => {
+        updateRecordLevelValue: (_recordIndex, slotIndex, value) => {
+          levelValueCalls.push([slotIndex, value]);
           if (value) {
-            record.Effect1LevelCorrection = value;
+            record[`Effect${slotIndex}Level`] = value;
           } else {
-            delete record.Effect1LevelCorrection;
+            delete record[`Effect${slotIndex}Level`];
           }
           return true;
         },
@@ -3324,7 +3323,9 @@ describe('record action handlers', () => {
       const handlers = handlerFactory.createRecordActionHandlers(deps);
       handlers.changeEffectLevel(effect, levelInput);
 
-      assert.equal(record.Effect1LevelCorrection, '＋1');
+      assert.deepEqual(levelValueCalls, [[1, '＋1']]);
+      assert.equal(record.Effect1Level, '＋1');
+      assert.ok(!('Effect1LevelCorrection' in record));
       assert.ok(!('Demerit1Correction' in record));
       assert.equal(record.Demerit1Status, 'pending');
       assert.equal(demeritInput.disabled, true);
@@ -3362,8 +3363,6 @@ describe('record action handlers', () => {
     const button = new MockElement('button');
     button.dataset.value = 'pass';
 
-    const correctionCalls = [];
-    const levelCorrectionCalls = [];
     const levelSuppressedCalls = [];
     const rebuildCalls = [];
     const candidateCalls = [];
@@ -3382,14 +3381,6 @@ describe('record action handlers', () => {
       scheduleSave: () => scheduleCalls.push(null),
       applyFilters: () => filterCalls.push(null),
       refreshItemCaches: () => refreshCalls.push(null),
-      updateRecordCorrection: (recordIndex, slotIndex, value) => {
-        correctionCalls.push([recordIndex, slotIndex, value]);
-        return true;
-      },
-      updateRecordLevelCorrection: (recordIndex, slotIndex, value) => {
-        levelCorrectionCalls.push([recordIndex, slotIndex, value]);
-        return true;
-      },
       updateRecordLevelValue: (recordIndex, slotIndex, value) => {
         levelValueCalls.push([recordIndex, slotIndex, value]);
         if (value) {
@@ -3426,8 +3417,6 @@ describe('record action handlers', () => {
 
     assert.deepEqual(effectStatusCalls, ['pass']);
     assert.deepEqual(statusCalls, ['pass']);
-    assert.deepEqual(correctionCalls, [[4, 2, '']]);
-    assert.deepEqual(levelCorrectionCalls, [[4, 2, '']]);
     assert.deepEqual(levelSuppressedCalls, [[4, 2, false]]);
     assert.deepEqual(levelValueCalls, [[4, 2, 'Base']]);
     assert.equal(effect.dataset.correction, '');
@@ -3589,8 +3578,6 @@ describe('gallery events', () => {
       setRecordItemRelicType: () => false,
       applyMasterDataForRelicType: () => {},
       recordStatusChange: () => false,
-      updateRecordCorrection: () => false,
-      updateRecordLevelCorrection: () => false,
       updateRecordLevelSuppressed: () => false,
       scheduleSave: () => scheduleSaveCalls.push(null)
     });
@@ -3656,8 +3643,6 @@ describe('gallery events', () => {
       setRecordItemRelicType: () => false,
       applyMasterDataForRelicType: () => {},
       recordStatusChange: () => false,
-      updateRecordCorrection: () => false,
-      updateRecordLevelCorrection: () => false,
       updateRecordLevelValue: () => false,
       updateRecordLevelOptions: () => false,
       updateRecordLevelSuppressed: () => false,
@@ -3746,8 +3731,6 @@ describe('gallery events', () => {
       },
       applyMasterDataForRelicType: () => {},
       recordStatusChange: () => false,
-      updateRecordCorrection: () => false,
-      updateRecordLevelCorrection: () => false,
       updateRecordLevelValue: () => false,
       updateRecordLevelOptions: () => false,
       updateRecordLevelSuppressed: () => false,
@@ -3810,7 +3793,6 @@ describe('gallery events', () => {
     effect.appendChild(levelInput);
 
     const recordStatusCalls = [];
-    const updateRecordCorrectionCalls = [];
     const updateLevelSuppressedCalls = [];
     const scheduleSaveCalls = [];
     const refreshCalls = [];
@@ -3838,11 +3820,10 @@ describe('gallery events', () => {
         recordStatusCalls.push(status);
         return false;
       },
-      updateRecordCorrection: (idx, slot, value) => {
-        updateRecordCorrectionCalls.push(value);
+      updateRecordEffectValue: (idx, slot, value) => {
+        record[`Effect${slot}`] = value;
         return true;
       },
-      updateRecordLevelCorrection: () => false,
       updateRecordLevelSuppressed: (idx, slot, suppress) => {
         updateLevelSuppressedCalls.push(suppress);
         return true;
@@ -3854,11 +3835,12 @@ describe('gallery events', () => {
     assert.equal(changeHandlers.length > 0, true);
     changeHandlers[0]({ target: correctionInput });
     assert.deepEqual(recordStatusCalls, ['corrected']);
-    assert.deepEqual(updateRecordCorrectionCalls, ['NewValue']);
     assert.deepEqual(updateLevelSuppressedCalls, [false]);
     assert.equal(scheduleSaveCalls.length, 1);
     assert.equal(refreshCalls.length, 1);
     assert.equal(applyFilterCalls.length, 1);
+    assert.equal(record.Effect1, 'NewValue');
+    assert.equal(Object.prototype.hasOwnProperty.call(record, 'Effect1Correction'), false);
     assert.equal(effect.dataset.correction, 'newvalue');
 
   });
@@ -3909,8 +3891,10 @@ describe('gallery events', () => {
       setRecordFavorite: () => false,
       setRecordItemColor: () => false,
       recordStatusChange: () => false,
-      updateRecordCorrection: () => true,
-      updateRecordLevelCorrection: () => false,
+      updateRecordEffectValue: (idx, slot, value) => {
+        record[`Effect${slot}`] = value;
+        return true;
+      },
       updateRecordLevelSuppressed: () => true,
       updateRecordLevelValue: (idx, slot, value) => {
         levelValueCalls.push(value);
@@ -3981,8 +3965,6 @@ describe('gallery events', () => {
       },
       setRecordItemColor: () => false,
       recordStatusChange: () => false,
-      updateRecordCorrection: () => false,
-      updateRecordLevelCorrection: () => false,
       updateRecordLevelSuppressed: () => false,
       scheduleSave: () => scheduleSaveCalls.push(null)
     });
@@ -4021,7 +4003,7 @@ describe('gallery events', () => {
     effect.appendChild(levelInput);
 
     const statusChanges = [];
-    const levelCorrectionCalls = [];
+    const levelValueCalls = [];
     const scheduleSaveCalls = [];
     const refreshCalls = [];
     const applyFilterCalls = [];
@@ -4049,9 +4031,9 @@ describe('gallery events', () => {
         effectElement.dataset.status = status;
         return true;
       },
-      updateRecordCorrection: () => false,
-      updateRecordLevelCorrection: (index, slot, value) => {
-        levelCorrectionCalls.push(value);
+      updateRecordLevelValue: (index, slot, value) => {
+        levelValueCalls.push([index, slot, value]);
+        record[`Effect${slot}Level`] = value;
         return true;
       },
       updateRecordLevelSuppressed: () => false,
@@ -4062,7 +4044,8 @@ describe('gallery events', () => {
     assert.ok(changeHandlers.length > 0, 'change handler should be registered');
     changeHandlers[0]({ target: levelInput });
 
-    assert.deepEqual(levelCorrectionCalls, ['High']);
+    assert.deepEqual(levelValueCalls, [[0, 1, 'High']]);
+    assert.equal(record.Effect1Level, 'High');
     assert.deepEqual(statusChanges, ['corrected']);
     assert.equal(effect.dataset.status, 'corrected');
     assert.equal(effect.dataset.levelCorrectionValue, 'High');
@@ -4113,8 +4096,6 @@ describe('gallery events', () => {
         record[`Effect1Status`] = status;
         return true;
       },
-      updateRecordCorrection: () => false,
-      updateRecordLevelCorrection: () => false,
       updateRecordLevelSuppressed: () => false,
       scheduleSave: () => statusCalls.push('save')
     };

@@ -510,7 +510,6 @@ class LayoutManager:
             ("RawText[n]", "RawText"),
             ("Effect[n]Score", "Score"),
             ("Effect[n]LevelOptions", "LevelOptions"),
-            ("Effect[n]LevelCorrection", "LevelCorrection"),
         ]
         optional_specs = [
             ("ItemColor", "ItemColor"),

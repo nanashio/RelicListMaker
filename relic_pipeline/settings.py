@@ -19,7 +19,6 @@ DEFAULT_COLUMN_VISIBILITY: dict[str, bool] = {
     "Score": True,
     "Source": True,
     "LevelOptions": True,
-    "LevelCorrection": True,
     "Dataset": True,
     "DatasetFolder": True,
     "SourceCsv": True,
