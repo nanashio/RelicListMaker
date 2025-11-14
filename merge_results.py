@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import os
+import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,6 +17,54 @@ MERGED_CSV_NAME = "merged.csv"
 DEFAULT_IMAGE_DIR_NAME = "crops"
 EXTRA_FIELD_PREFIXES: Sequence[str] = ("Effect", "RawText")
 _REVIEWED_STATUSES = {"pass", "corrected"}
+
+_CORRECTION_FIELD_PATTERN = re.compile(
+    r"^(effect|demerit)(\d+)(level)?correction$",
+    re.IGNORECASE,
+)
+
+
+def _is_correction_field(name: str) -> bool:
+    if not name:
+        return False
+    return bool(_CORRECTION_FIELD_PATTERN.match(name.strip().lower()))
+
+
+def _apply_corrections(row: dict[str, object]) -> dict[str, object]:
+    """補助列の値を基列へ反映する."""
+
+    if not row:
+        return row
+
+    for raw_key, raw_value in list(row.items()):
+        if not isinstance(raw_key, str):
+            continue
+        key = raw_key.strip()
+        if not key:
+            continue
+        match = _CORRECTION_FIELD_PATTERN.match(key)
+        if not match:
+            continue
+
+        base_prefix = match.group(1).lower()
+        slot = match.group(2)
+        has_level = bool(match.group(3))
+
+        normalized_prefix = base_prefix.capitalize()
+        base_key = f"{normalized_prefix}{slot}"
+        if has_level:
+            base_key += "Level"
+
+        if raw_value is None:
+            continue
+
+        text = str(raw_value).strip()
+        if not text:
+            continue
+
+        row[base_key] = text
+
+    return row
 
 
 @dataclass(frozen=True)
@@ -179,7 +228,9 @@ def _collect_field_order(rows: list[dict[str, object]]) -> list[str]:
     ]
 
     def register(name: str) -> None:
-        if name and name not in order:
+        if not name or _is_correction_field(name):
+            return
+        if name not in order:
             order.append(name)
 
     for field in reserved:
@@ -190,9 +241,12 @@ def _collect_field_order(rows: list[dict[str, object]]) -> list[str]:
         for key in row.keys():
             if key in reserved:
                 continue
+            if _is_correction_field(key):
+                continue
             for prefix in EXTRA_FIELD_PREFIXES:
                 if key.startswith(prefix):
-                    extra_fields.add(key)
+                    if not _is_correction_field(key):
+                        extra_fields.add(key)
                     break
             else:
                 register(key)
@@ -244,8 +298,7 @@ def _slot_has_content(row: dict[str, object], slot: int) -> bool:
     effect_key = f"Effect{slot}"
     raw_key = f"RawText{slot}"
     score_key = f"Effect{slot}Score"
-    correction_key = f"Effect{slot}Correction"
-    for key in (effect_key, raw_key, correction_key, score_key):
+    for key in (effect_key, raw_key, score_key):
         if key not in row:
             continue
         value = row.get(key)
@@ -335,20 +388,22 @@ def merge_results(
                     continue
 
                 for row_index, row in enumerate(reader, start=1):
-                    if _is_duplicate(row.get("Duplicate")):
+                    normalized_row = _apply_corrections(dict(row))
+
+                    if _is_duplicate(normalized_row.get("Duplicate")):
                         continue
-                    if only_reviewed and not _has_all_effects_reviewed(row):
+                    if only_reviewed and not _has_all_effects_reviewed(normalized_row):
                         print(
                             "[INFO] レビュー未完了のためスキップします:",
                             f"{dataset.csv_path} #{row_index}",
                         )
                         continue
-                    image_path = _resolve_image_path(row, dataset)
+                    image_path = _resolve_image_path(normalized_row, dataset)
                     if not image_path:
                         continue
 
                     dest_name = _copy_image(image_path, crops_dir, dataset.label, row_index)
-                    merged_row: dict[str, object] = dict(row)
+                    merged_row: dict[str, object] = dict(normalized_row)
                     merged_row["Image"] = dest_name
                     merged_row["BaseImage"] = image_path.name
                     merged_row["Dataset"] = dataset.label

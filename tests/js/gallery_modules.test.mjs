@@ -176,6 +176,13 @@ class MockElement {
     }
   }
 
+  removeAttribute(name) {
+    delete this.attributes[name];
+    if (name === 'id') {
+      this.id = '';
+    }
+  }
+
   addEventListener(type, handler) {
     if (!this.eventListeners[type]) {
       this.eventListeners[type] = [];
@@ -1948,8 +1955,11 @@ describe('gallery effect factory', () => {
     assert.equal(effect.dataset.hiddenDemerit, undefined);
     assert.equal(effect.style.display, '');
     assert.equal(input.disabled, false);
+    assert.equal(input.readOnly, false);
+    assert.equal(input.tabIndex, 0);
     assert.equal(passButton.disabled, false);
     assert.equal(input.placeholder, 'デメリット候補から選択');
+    assert.equal(input.attributes['aria-readonly'], undefined);
   });
 
   test('syncDemeritAvailability toggles paired effect class when demerit visibility changes', () => {
@@ -2128,6 +2138,8 @@ describe('gallery effect factory', () => {
     const correctionInput = effect.querySelector('.correction-input');
     assert.ok(correctionInput, 'correction input should exist');
     assert.equal(correctionInput.disabled, false);
+    assert.equal(correctionInput.readOnly, false);
+    assert.equal(correctionInput.tabIndex, 0);
     assert.equal(correctionInput.placeholder, 'デメリット候補から選択');
     const passButton = effect.querySelector('.review-button.pass');
     assert.ok(passButton, 'pass button should exist');
@@ -2175,12 +2187,16 @@ describe('gallery effect factory', () => {
     const correctionInput = effect.querySelector('.correction-input');
     const passButton = effect.querySelector('.review-button.pass');
     assert.equal(correctionInput.disabled, false);
+    assert.equal(correctionInput.readOnly, false);
+    assert.equal(correctionInput.tabIndex, 0);
     assert.equal(passButton.disabled, false);
 
     record.Effect1LevelCorrection = '＋1';
     localFactory.syncDemeritAvailability(effect, { refreshStatus: true });
 
     assert.equal(correctionInput.disabled, true);
+    assert.equal(correctionInput.readOnly, true);
+    assert.equal(correctionInput.tabIndex, -1);
     assert.equal(correctionInput.placeholder, '指定レベルのデメリットなし');
     assert.equal(passButton.disabled, true);
     assert.equal(effect.style.display, '');
@@ -2259,10 +2275,13 @@ describe('gallery effect factory', () => {
     assert.equal(effect.dataset.levelOptionsDisplay, '');
   });
 
-  test('createCorrectionInput toggles availability based on master options', () => {
+  test('createCorrectionInput toggles manual input based on master availability', () => {
     const disabledInput = effectFactory.createCorrectionInput({ isDemerit: false }, '', 'Fallback');
     assert.equal(disabledInput.disabled, true);
     assert.equal(disabledInput.placeholder, 'マスターデータ未設定');
+    assert.equal(disabledInput.readOnly, true);
+    assert.equal(disabledInput.tabIndex, -1);
+    assert.equal(disabledInput.attributes['aria-readonly'], 'true');
 
     const customFactory = global.window.galleryRenderFactory.createEffectFactory({
       state: {
@@ -2286,6 +2305,9 @@ describe('gallery effect factory', () => {
     assert.equal(enabledInput.placeholder, 'master_relicsから選択');
     assert.equal(enabledInput.attributes.list, 'master-id');
     assert.equal(enabledInput.value, 'Chosen');
+    assert.equal(enabledInput.readOnly, false);
+    assert.equal(enabledInput.tabIndex, 0);
+    assert.equal(enabledInput.attributes['aria-readonly'], undefined);
   });
 
   test('updateLevelBadge prioritizes correction and available options', () => {
@@ -3263,6 +3285,8 @@ describe('record action handlers', () => {
       assert.ok(demeritInput, 'demerit input should exist');
       assert.ok(passButton, 'pass button should exist');
       assert.equal(demeritInput.disabled, false);
+      assert.equal(demeritInput.readOnly, false);
+      assert.equal(demeritInput.tabIndex, 0);
       assert.equal(passButton.disabled, false);
 
       levelInput.value = '＋1';
@@ -3304,6 +3328,8 @@ describe('record action handlers', () => {
       assert.ok(!('Demerit1Correction' in record));
       assert.equal(record.Demerit1Status, 'pending');
       assert.equal(demeritInput.disabled, true);
+      assert.equal(demeritInput.readOnly, true);
+      assert.equal(demeritInput.tabIndex, -1);
       assert.equal(passButton.disabled, true);
       assert.equal(demeritInput.placeholder, '指定レベルのデメリットなし');
     } finally {

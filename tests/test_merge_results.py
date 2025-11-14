@@ -76,9 +76,26 @@ def sample_results(tmp_path: Path) -> Path:
             "ItemColor",
             "RawText1",
             "Effect1",
+            "Effect1Correction",
             "Effect1Status",
+            "Demerit1",
+            "Demerit1Correction",
+            "Demerit1Status",
         ],
-        [["shot001.png", "", "blue", "text3", "effect3", "pass"]],
+        [
+            [
+                "shot001.png",
+                "",
+                "blue",
+                "text3",
+                "",
+                "Fixed Effect",
+                "corrected",
+                "",
+                "Major downside",
+                "corrected",
+            ]
+        ],
     )
 
     # dataset 3: pending review, should be filtered out by default
@@ -112,12 +129,18 @@ def test_merge_results_filters_duplicates_and_copies_images(sample_results: Path
         reader = csv.DictReader(handle)
         rows = list(reader)
 
+    assert "Effect1Correction" not in (reader.fieldnames or [])
+
     assert len(rows) == 2
     datasets = {row["Dataset"] for row in rows}
     assert datasets == {"video_a", "video_b"}
 
     duplicate_flags = {row.get("Duplicate") for row in rows}
     assert duplicate_flags == {"False"}
+
+    corrected_entry = next(row for row in rows if row["Dataset"] == "video_b")
+    assert corrected_entry["Effect1"] == "Fixed Effect"
+    assert corrected_entry["Demerit1"] == "Major downside"
 
     copied_images = sorted((merged_dir / "crops").iterdir())
     assert len(copied_images) == 2

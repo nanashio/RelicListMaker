@@ -802,6 +802,14 @@ h1 {
     cursor: not-allowed;
 }
 
+.correction-input--disabled {
+    display: inline-block;
+    visibility: visible;
+    padding: var(--space-sm) var(--space-lg);
+    border: 1px solid transparent;
+    min-width: 0;
+}
+
 .effect.pending {
     border-color: var(--color-warning-border);
     background: var(--color-warning-background);

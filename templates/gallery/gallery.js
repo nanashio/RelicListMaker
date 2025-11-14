@@ -2147,8 +2147,24 @@
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
             return false;
         }
+        const record = getRecordByIndex(recordIndex);
+        if (!record || typeof record !== 'object') {
+            return false;
+        }
+        const normalize = (input) => {
+            if (input == null) {
+                return '';
+            }
+            const text = String(input).trim();
+            return text;
+        };
         const key = kind === 'demerit' ? `Demerit${slotIndex}Correction` : `Effect${slotIndex}Correction`;
-        return updateRecordField(recordIndex, key, value);
+        const previous = normalize(record[key]);
+        const next = normalize(value);
+        if (Object.prototype.hasOwnProperty.call(record, key)) {
+            delete record[key];
+        }
+        return previous !== next;
     }
     function updateRecordLevelCorrection(recordIndex, slotIndex, value, kind = 'effect') {
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
@@ -2157,8 +2173,24 @@
         if (kind === 'demerit') {
             return false;
         }
+        const record = getRecordByIndex(recordIndex);
+        if (!record || typeof record !== 'object') {
+            return false;
+        }
+        const normalize = (input) => {
+            if (input == null) {
+                return '';
+            }
+            const text = String(input).trim();
+            return text;
+        };
         const key = `Effect${slotIndex}LevelCorrection`;
-        return updateRecordField(recordIndex, key, value);
+        const previous = normalize(record[key]);
+        const next = normalize(value);
+        if (Object.prototype.hasOwnProperty.call(record, key)) {
+            delete record[key];
+        }
+        return previous !== next;
     }
     function updateRecordLevelValue(recordIndex, slotIndex, value, kind = 'effect') {
         if (Number.isNaN(recordIndex) || Number.isNaN(slotIndex)) {
