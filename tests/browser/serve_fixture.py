@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import struct
@@ -71,6 +72,12 @@ def _build_fixture_tree(base_dir: Path) -> None:
     )
 
     template = (templates_dir / "gallery.html").read_text(encoding="utf-8")
+    master_options = [
+        "神秘",
+        "最大HP上昇",
+        "炎のダメージ",
+    ]
+
     viewer_html = (
         template
         .replace("__CSS_FILE__", "gallery.css")
@@ -81,7 +88,7 @@ def _build_fixture_tree(base_dir: Path) -> None:
         .replace("__LABEL_SYMBOLS__", "[\"①\", \"②\", \"③\"]")
         .replace("__MASTER_CSV__", "")
         .replace("__MASTER_JSON__", "")
-        .replace("__MASTER_OPTIONS__", "[]")
+        .replace("__MASTER_OPTIONS__", json.dumps(master_options, ensure_ascii=False))
         .replace("__MASTER_OPTIONS_MAP__", "{}")
         .replace("__MASTER_LEVELS__", "{}")
         .replace("__MASTER_LEVELS_BY_TYPE__", "{}")

@@ -96,6 +96,69 @@ test.describe('Relic viewer', () => {
     await expect(page.locator('#lightbox')).toHaveAttribute('aria-hidden', 'true');
   });
 
+  test('補助列なしでも効果編集が保存される', async ({ page }) => {
+    const savePayloads: Array<{ records?: Array<Record<string, unknown>> }> = [];
+
+    await page.route('**/__viewer_api__/save', async (route) => {
+      const request = route.request();
+      const bodyText = request.postData() ?? '';
+      if (bodyText) {
+        try {
+          const parsed = JSON.parse(bodyText) as { records?: Array<Record<string, unknown>> };
+          savePayloads.push(parsed);
+        } catch (error) {
+          savePayloads.push({ records: [] });
+          console.warn('保存リクエストの解析に失敗しました', error);
+        }
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok' })
+      });
+    });
+
+    await page.goto('/sample/gallery/index.html');
+
+    const firstEffect = page.locator('.effect[data-kind="effect"][data-slot="1"]').first();
+    await expect(firstEffect).toBeVisible();
+
+    const correctionInput = firstEffect.locator('.correction-input');
+    await expect(correctionInput).toBeEditable();
+    await correctionInput.fill('手動編集テスト');
+
+    const saveResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes('__viewer_api__/save') && response.request().method() === 'POST'
+    );
+
+    await correctionInput.evaluate((element) => {
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    await saveResponsePromise;
+
+    expect(savePayloads.length).toBeGreaterThan(0);
+    const payload = savePayloads[savePayloads.length - 1];
+    expect(Array.isArray(payload.records)).toBe(true);
+
+    const updatedRecord = payload.records?.find(
+      (record) => typeof record.Image === 'string' && record.Image.includes('sample_red.png')
+    );
+    expect(updatedRecord).toBeTruthy();
+    expect(updatedRecord?.Effect1).toBe('手動編集テスト');
+    expect(updatedRecord?.Effect1Status).toBe('corrected');
+
+    for (const record of payload.records ?? []) {
+      const keys = Object.keys(record);
+      for (const key of keys) {
+        expect(key.includes('Correction')).toBeFalsy();
+        expect(key.includes('LevelSuppressed')).toBeFalsy();
+      }
+    }
+  });
+
   test('静的アセットが 404 を返さない', async ({ page }) => {
     const assetStatuses = new Map<string, number>();
 
