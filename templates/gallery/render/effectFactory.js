@@ -485,10 +485,7 @@
                 passButton.disabled = false;
             }
             input.disabled = true;
-            if (input.classList && typeof input.classList.add === 'function') {
-                input.classList.add('correction-input--disabled');
-            }
-            input.setAttribute('aria-hidden', 'true');
+            input.setAttribute('aria-readonly', 'true');
             if (defaultPlaceholder) {
                 input.placeholder = defaultPlaceholder;
             }
@@ -810,8 +807,7 @@
             input.disabled = true;
             input.readOnly = true;
             input.tabIndex = -1;
-            input.classList.add('correction-input--disabled');
-            input.setAttribute('aria-hidden', 'true');
+            input.setAttribute('aria-readonly', 'true');
             return input;
         }
 

@@ -803,11 +803,10 @@ h1 {
 }
 
 .correction-input--disabled {
-    display: none !important;
-    visibility: hidden;
-    padding: 0;
-    border: 0;
-    width: 0;
+    display: inline-block;
+    visibility: visible;
+    padding: var(--space-sm) var(--space-lg);
+    border: 1px solid transparent;
     min-width: 0;
 }
 

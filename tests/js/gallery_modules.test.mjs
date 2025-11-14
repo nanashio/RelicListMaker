@@ -1950,7 +1950,7 @@ describe('gallery effect factory', () => {
     assert.equal(input.disabled, true);
     assert.equal(passButton.disabled, false);
     assert.equal(input.placeholder, 'デメリット候補から選択');
-    assert.equal(input.attributes['aria-hidden'], 'true');
+    assert.equal(input.attributes['aria-readonly'], 'true');
   });
 
   test('syncDemeritAvailability toggles paired effect class when demerit visibility changes', () => {
@@ -2287,7 +2287,7 @@ describe('gallery effect factory', () => {
     assert.equal(enabledInput.placeholder, 'master_relicsから選択');
     assert.equal(enabledInput.attributes.list, 'master-id');
     assert.equal(enabledInput.value, 'Chosen');
-    assert.equal(enabledInput.attributes['aria-hidden'], 'true');
+    assert.equal(enabledInput.attributes['aria-readonly'], 'true');
   });
 
   test('updateLevelBadge prioritizes correction and available options', () => {
