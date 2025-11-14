@@ -422,7 +422,19 @@
             effect.dataset.predictionValue = nextValue;
             effect.dataset.pred = toDatasetValue(nextValue);
 
-            const nextStatus = hasManualEntry ? 'corrected' : 'pending';
+            const currentStatus = effect.dataset.status || 'pending';
+            const previousCorrection = effect.dataset.correction || '';
+            const hasLevelCorrection = Boolean(effect.dataset.levelCorrectionValue);
+
+            let nextStatus = currentStatus;
+            if (hasManualEntry) {
+                nextStatus = 'corrected';
+            } else if (selectedValue === fallbackNormalized) {
+                nextStatus = currentStatus;
+            } else if (!hasLevelCorrection && (previousCorrection || currentStatus === 'corrected')) {
+                nextStatus = 'pending';
+            }
+
             const statusChanged = recordStatusChange(effect, nextStatus);
             effect.dataset.correction = hasManualEntry ? toDatasetValue(selectedValue) : '';
             if (!isDemerit) {
