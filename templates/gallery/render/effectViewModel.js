@@ -6,17 +6,20 @@
         if (Array.isArray(raw)) {
             return raw
                 .map((value) => (value == null ? '' : String(value).trim()))
-                .filter((value) => value !== '');
+                .filter((value) => value !== '' && value.toLowerCase() !== 'none');
         }
         if (typeof raw === 'string') {
             if (!raw.includes('|')) {
                 const text = raw.trim();
-                return text ? [text] : [];
+                if (!text || text.toLowerCase() === 'none') {
+                    return [];
+                }
+                return [text];
             }
             return raw
                 .split('|')
                 .map((value) => value.trim())
-                .filter((value) => value !== '');
+                .filter((value) => value !== '' && value.toLowerCase() !== 'none');
         }
         return [];
     }
@@ -135,12 +138,10 @@
         const levelCorrectionKey = `Effect${slot}LevelCorrection`;
         const levelCorrectionRaw = record[levelCorrectionKey];
         const levelCorrection = levelCorrectionRaw == null ? '' : String(levelCorrectionRaw).trim();
-        const levelSuppressedRaw = record[`Effect${slot}LevelSuppressed`];
-        const levelSuppressed =
-            typeof levelSuppressedRaw === 'boolean'
-                ? levelSuppressedRaw
-                : String(levelSuppressedRaw || '').trim().toLowerCase() === 'true';
-        const preserveOriginalLevel = !levelSuppressed;
+        const levelValueLower = levelValue ? levelValue.toLowerCase() : '';
+        const hasLevelOptions = levelOptions.length > 0;
+        const hasOriginalLevel = Boolean(levelValue && levelValueLower !== 'none');
+        const preserveOriginalLevel = hasLevelOptions || hasOriginalLevel;
         const displayLevel = levelCorrection || (preserveOriginalLevel ? levelValue : '');
 
         const correctionKey = `Effect${slot}Correction`;
@@ -151,7 +152,6 @@
 
         const predictionLower = predictionText.toLowerCase();
         const rawLower = rawText.toLowerCase();
-        const levelValueLower = levelValue ? levelValue.toLowerCase() : '';
         const displayLevelLower = displayLevel ? displayLevel.toLowerCase() : '';
         const levelCorrectionLower = levelCorrection ? levelCorrection.toLowerCase() : '';
         const correctionValueLower = correctionValue.toLowerCase();

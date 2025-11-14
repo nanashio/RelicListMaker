@@ -547,32 +547,6 @@ describe('gallery data utils', () => {
     assert.deepEqual(result.get('effectb'), ['high', 'low']);
   });
 
-  test('normalizeSuppressedLevels clears legacy level values', () => {
-    const records = [
-      {
-        Image: 'sample.png',
-        Effect1Level: 'Base',
-        Effect1LevelOptions: 'Base|High',
-        Effect1LevelCorrection: '',
-        Effect1LevelSuppressed: 'TRUE'
-      },
-      {
-        Image: 'keep.png',
-        Effect2Level: 'Remain',
-        Effect2LevelSuppressed: 'false'
-      }
-    ];
-
-    const normalized = dataUtils.normalizeSuppressedLevels(records);
-    assert.equal(Array.isArray(normalized), true);
-    assert.equal(normalized[0].Effect1LevelSuppressed, 'true');
-    assert.equal(Object.prototype.hasOwnProperty.call(normalized[0], 'Effect1Level'), false);
-    assert.equal(Object.prototype.hasOwnProperty.call(normalized[0], 'Effect1LevelOptions'), false);
-    assert.equal(Object.prototype.hasOwnProperty.call(normalized[0], 'Effect1LevelCorrection'), false);
-    assert.equal(Object.prototype.hasOwnProperty.call(normalized[1], 'Effect2LevelSuppressed'), false);
-    assert.equal(normalized[1].Effect2Level, 'Remain');
-  });
-
   test('normalizeRecordRelicTypeField maps snake_case field to RelicType', () => {
     const record = { Image: 'deep.png', relic_type: 'deep' };
     const normalized = dataUtils.normalizeRecordRelicTypeField(record);
@@ -1705,7 +1679,6 @@ describe('gallery effect view model', () => {
       Effect1Level: 'L1',
       Effect1LevelOptions: 'L1| L2 |',
       Effect1LevelCorrection: '',
-      Effect1LevelSuppressed: 'true',
       Effect1Correction: 'Fix',
       Effect1Status: 'pending'
     };
@@ -1720,7 +1693,7 @@ describe('gallery effect view model', () => {
     assert.equal(context.scoreDisplay, '72.4%');
     assert.deepEqual(context.levelOptions, ['L1', 'L2']);
     assert.equal(context.statusValue, 'corrected');
-    assert.equal(context.displayLevel, '');
+    assert.equal(context.displayLevel, 'L1');
     assert.equal(context.correctionValue, 'Fix');
   });
 
@@ -1769,6 +1742,9 @@ describe('gallery effect view model', () => {
   test('parseLevelOptions normalizes string and array sources', () => {
     assert.deepEqual(viewModel.parseLevelOptions('A| B |'), ['A', 'B']);
     assert.deepEqual(viewModel.parseLevelOptions(['', 'C', null, 'D']), ['C', 'D']);
+    assert.deepEqual(viewModel.parseLevelOptions('none|L1'), ['L1']);
+    assert.deepEqual(viewModel.parseLevelOptions(['none', 'Lv2']), ['Lv2']);
+    assert.deepEqual(viewModel.parseLevelOptions(['none']), []);
     assert.deepEqual(viewModel.parseLevelOptions(null), []);
   });
 });
@@ -1811,7 +1787,6 @@ describe('gallery effect factory', () => {
       Effect1Level: 'L1',
       Effect1LevelOptions: 'L1|L2',
       Effect1LevelCorrection: '',
-      Effect1LevelSuppressed: '',
       Effect1Correction: '',
       Effect1Status: 'pending',
       BaseImage: 'base.png'
@@ -1836,7 +1811,6 @@ describe('gallery effect factory', () => {
       Effect1Level: 'L1',
       Effect1LevelOptions: 'L1|L2|L3',
       Effect1LevelCorrection: 'L3',
-      Effect1LevelSuppressed: '',
       Effect1Correction: '',
       Effect1Status: 'pending',
       BaseImage: 'base.png'
@@ -2271,7 +2245,8 @@ describe('gallery effect factory', () => {
     const [onlyOption] = select.children;
     assert.equal(onlyOption.value, 'none');
     assert.equal(onlyOption.textContent, '');
-    assert.equal(select.value, 'none');
+    assert.equal(select.value, '');
+    assert.equal(select.disabled, true);
     assert.equal(effect.dataset.levelOptionsDisplay, '');
   });
 
@@ -2676,7 +2651,6 @@ describe('record action handlers', () => {
       updateRecordEffectValue: () => false,
       updateRecordLevelValue: () => false,
       updateRecordLevelOptions: () => false,
-      updateRecordLevelSuppressed: () => false,
       updateEffectStatus: () => {},
       sanitizeLevelList: (values) => (Array.isArray(values) ? values : []),
       sortLevelsAscending: (values) => (Array.isArray(values) ? [...values] : []),
@@ -2822,14 +2796,6 @@ describe('record action handlers', () => {
         }
         return true;
       },
-      updateRecordLevelSuppressed: (_recordIndex, _slotIndex, suppressed) => {
-        if (suppressed) {
-          record.Effect1LevelSuppressed = 'true';
-        } else {
-          record.Effect1LevelSuppressed = '';
-        }
-        return true;
-      },
       updateRecordLevelValue: () => false,
       updateRecordLevelOptions: (_recordIndex, _slotIndex, value) => {
         record.Effect1LevelOptions = value;
@@ -2861,7 +2827,6 @@ describe('record action handlers', () => {
     assert.equal(scheduleCalls.length, 1);
     assert.deepEqual(effectUpdates, ['New Effect']);
     assert.deepEqual(levelOptionsUpdates, ['＋1|＋3']);
-    assert.equal(record.Effect1LevelSuppressed, '');
   });
 
   test('changeEffectCorrection clears effect record back to original when input empty', () => {
@@ -2888,7 +2853,6 @@ describe('record action handlers', () => {
         }
         return true;
       },
-      updateRecordLevelSuppressed: () => false,
       updateRecordLevelValue: () => false,
       updateRecordLevelOptions: () => false,
       getEffectIndexes: () => ({ recordIndex: 0, slotIndex: 1, kind: 'effect' })
@@ -2922,7 +2886,6 @@ describe('record action handlers', () => {
     const deps = buildBaseDeps(record, item, {
       recordStatusChange: () => false,
       updateRecordEffectValue: () => true,
-      updateRecordLevelSuppressed: () => false,
       updateRecordLevelValue: (_recordIndex, slotIndex, value) => {
         storedLevels.push([slotIndex, value]);
         record[`Effect${slotIndex}Level`] = value;
@@ -3363,7 +3326,6 @@ describe('record action handlers', () => {
     const button = new MockElement('button');
     button.dataset.value = 'pass';
 
-    const levelSuppressedCalls = [];
     const rebuildCalls = [];
     const candidateCalls = [];
     const badgeCalls = [];
@@ -3390,10 +3352,6 @@ describe('record action handlers', () => {
         }
         return true;
       },
-      updateRecordLevelSuppressed: (recordIndex, slotIndex, suppressed) => {
-        levelSuppressedCalls.push([recordIndex, slotIndex, suppressed]);
-        return true;
-      },
       recordStatusChange: (_effect, status) => {
         statusCalls.push(status);
         return false;
@@ -3417,7 +3375,6 @@ describe('record action handlers', () => {
 
     assert.deepEqual(effectStatusCalls, ['pass']);
     assert.deepEqual(statusCalls, ['pass']);
-    assert.deepEqual(levelSuppressedCalls, [[4, 2, false]]);
     assert.deepEqual(levelValueCalls, [[4, 2, 'Base']]);
     assert.equal(effect.dataset.correction, '');
     assert.equal(effect.dataset.levelCorrection, '');
@@ -3578,7 +3535,6 @@ describe('gallery events', () => {
       setRecordItemRelicType: () => false,
       applyMasterDataForRelicType: () => {},
       recordStatusChange: () => false,
-      updateRecordLevelSuppressed: () => false,
       scheduleSave: () => scheduleSaveCalls.push(null)
     });
 
@@ -3645,7 +3601,6 @@ describe('gallery events', () => {
       recordStatusChange: () => false,
       updateRecordLevelValue: () => false,
       updateRecordLevelOptions: () => false,
-      updateRecordLevelSuppressed: () => false,
       scheduleSave: () => scheduleSaveCalls.push(null)
     });
 
@@ -3733,7 +3688,6 @@ describe('gallery events', () => {
       recordStatusChange: () => false,
       updateRecordLevelValue: () => false,
       updateRecordLevelOptions: () => false,
-      updateRecordLevelSuppressed: () => false,
       scheduleSave: () => scheduleSaveCalls.push(null)
     });
 
@@ -3793,7 +3747,6 @@ describe('gallery events', () => {
     effect.appendChild(levelInput);
 
     const recordStatusCalls = [];
-    const updateLevelSuppressedCalls = [];
     const scheduleSaveCalls = [];
     const refreshCalls = [];
     const applyFilterCalls = [];
@@ -3824,10 +3777,6 @@ describe('gallery events', () => {
         record[`Effect${slot}`] = value;
         return true;
       },
-      updateRecordLevelSuppressed: (idx, slot, suppress) => {
-        updateLevelSuppressedCalls.push(suppress);
-        return true;
-      },
       scheduleSave: () => scheduleSaveCalls.push(null)
     });
 
@@ -3835,7 +3784,6 @@ describe('gallery events', () => {
     assert.equal(changeHandlers.length > 0, true);
     changeHandlers[0]({ target: correctionInput });
     assert.deepEqual(recordStatusCalls, ['corrected']);
-    assert.deepEqual(updateLevelSuppressedCalls, [false]);
     assert.equal(scheduleSaveCalls.length, 1);
     assert.equal(refreshCalls.length, 1);
     assert.equal(applyFilterCalls.length, 1);
@@ -3895,7 +3843,6 @@ describe('gallery events', () => {
         record[`Effect${slot}`] = value;
         return true;
       },
-      updateRecordLevelSuppressed: () => true,
       updateRecordLevelValue: (idx, slot, value) => {
         levelValueCalls.push(value);
         const key = `Effect${slot}Level`;
@@ -3965,7 +3912,6 @@ describe('gallery events', () => {
       },
       setRecordItemColor: () => false,
       recordStatusChange: () => false,
-      updateRecordLevelSuppressed: () => false,
       scheduleSave: () => scheduleSaveCalls.push(null)
     });
 
@@ -4036,7 +3982,6 @@ describe('gallery events', () => {
         record[`Effect${slot}Level`] = value;
         return true;
       },
-      updateRecordLevelSuppressed: () => false,
       scheduleSave: () => scheduleSaveCalls.push(null)
     });
 
@@ -4096,7 +4041,6 @@ describe('gallery events', () => {
         record[`Effect1Status`] = status;
         return true;
       },
-      updateRecordLevelSuppressed: () => false,
       scheduleSave: () => statusCalls.push('save')
     };
 

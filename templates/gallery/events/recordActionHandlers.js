@@ -23,7 +23,6 @@
             updateRecordEffectValue,
             updateRecordLevelValue,
             updateRecordLevelOptions,
-            updateRecordLevelSuppressed,
             updateEffectStatus,
             sanitizeLevelList,
             sortLevelsAscending,
@@ -55,7 +54,6 @@
             updateRecordEffectValue,
             updateRecordLevelValue,
             updateRecordLevelOptions,
-            updateRecordLevelSuppressed,
             updateEffectStatus,
             sanitizeLevelList,
             sortLevelsAscending,
@@ -478,23 +476,13 @@
                         indexes.kind
                     );
                 }
-                const suppressedChanged = updateRecordLevelSuppressed(
-                    indexes.recordIndex,
-                    indexes.slotIndex,
-                    false,
-                    indexes.kind
-                );
 
                 const levelCleared = resetLevelSelection(effect, indexes, selected, {
                     skipRecordLevelValue: !restoreOriginalLevel,
                     onOptionsApplied: handleOptionsApplied
                 });
                 shouldSchedule =
-                    effectValueChanged ||
-                    suppressedChanged ||
-                    levelValueCleared ||
-                    levelCleared ||
-                    levelOptionsChanged;
+                    effectValueChanged || levelValueCleared || levelCleared || levelOptionsChanged;
             } else {
                 effect.dataset.levelCorrection = '';
                 effect.dataset.levelCorrectionValue = '';
@@ -590,7 +578,6 @@
                 if (indexes) {
                     const isDemerit = indexes.kind === 'demerit';
                     let levelValueReset = false;
-                    let suppressChanged = false;
 
                     effect.dataset.correction = '';
                     effect.dataset.levelCorrection = '';
@@ -615,13 +602,6 @@
                     }
 
                     if (!isDemerit) {
-                        suppressChanged = updateRecordLevelSuppressed(
-                            indexes.recordIndex,
-                            indexes.slotIndex,
-                            false,
-                            indexes.kind
-                        );
-
                         effect.dataset.preserveOriginalLevel = 'true';
                         effect.dataset.level = computeEffectiveLevel(effect);
                         const restoredLevel = toStoredLevelValue(
@@ -655,7 +635,7 @@
                         setCorrectionLevelCandidates(effect, []);
                     }
 
-                    changeDetected = suppressChanged || levelValueReset;
+                    changeDetected = levelValueReset;
                 }
             }
 
