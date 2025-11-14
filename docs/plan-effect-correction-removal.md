@@ -7,7 +7,7 @@
 - ✅ フェーズ 1-2: `docs/reference-csv-columns.md` で補助列を非推奨化し、レビュー CSV へ値を書き戻さない運用方針を明文化しました。【F:docs/reference-csv-columns.md†L55-L96】
 - ✅ フェーズ 1-2: ギャラリー UI の補正入力を常時読み取り専用に変更し、非表示となっていた効果・デメリットを再表示しつつ保存処理では補助列を利用しない挙動に統一しました。【F:templates/gallery/gallery.js†L1-L200】【F:templates/gallery/render/effectFactory.js†L1-L140】
 - ✅ フェーズ 1-4: `_apply_corrections` を追加して補助列の値を統合処理で `Effect{n}` / `Demerit{n}` 等へ反映するようにし、補助列が残っていても最終出力では基列へ転記されることを確認しました。レベル補正のみが入力されたケースでも `Effect{n}Status` が `corrected` に更新されるよう調整し、pytest フィクスチャへ確認用データセットを追加しています。【F:merge_results.py†L253-L333】【F:tests/test_merge_results.py†L204-L289】
-- ✅ フェーズ 2-1: 既存 CSV が存在しないことを確認済みのため、追加マイグレーションは不要と判断しました。
+- ✅ フェーズ 2-1: 既存 CSV が存在しないことを確認済みで、追加マイグレーションは不要と判断しました。検証用に `scripts/migrate_effect_corrections.py` を試作しましたが、計画上は実行不要ステップとして扱っています。【F:scripts/migrate_effect_corrections.py†L1-L113】
 - ⚠️ フェーズ 2-3, 2-4: 補助列未依存の統合・E2E テスト整備は未完了。pytest のサンプルは整備済みですが、Playwright シナリオと実 CSV での検証が残っています。
 - ✅ フェーズ 3-1, 3-2: 補助列 `Effect{n}Correction` / `Effect{n}LevelCorrection` / `Demerit{n}Correction` を正式に廃止し、ドキュメント・バックエンド・フロントエンドから参照を除去しました。ビューアは `Effect{n}` / `Effect{n}Level` を直接更新する実装へ移行済みです。【F:docs/reference-csv-columns.md†L55-L88】【F:merge_results.py†L1-L510】【F:templates/gallery/events/recordActionHandlers.js†L1-L660】
 
