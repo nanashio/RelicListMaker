@@ -3,6 +3,13 @@
 ## 背景
 現在のギャラリー UI では `Effect{n}Correction` / `Effect{n}LevelCorrection` / `Demerit{n}Correction` 列に一時的な修正値を保持し、保存時に `Effect{n}` / `Effect{n}Level` / `Demerit{n}` へ転記する設計となっています。ギャラリー側では補助列を通じて訂正候補の提示や入力値の復元を実現していますが、ユーザー要求により補助列を廃止し、直接 `Effect{n}` などの基列のみで運用できる形へ移行する必要があります。プロジェクトはまだ未リリースで既存のレビュー CSV は存在しないため、段階的削除は主に今後作成されるデータと開発中のフローを安全に移行することが目的です。また、`Effect{n}LevelSuppressed` 列についても `Effect{n}LevelOptions` 側で同等の挙動を実現できる運用へ移行後に削除する計画が明記されています。【F:docs/reference-csv-columns.md†L55-L96】【F:templates/gallery/events/recordActionHandlers.js†L205-L301】【F:merge_results.py†L239-L278】
 
+## 進捗状況 (2025-11-14 時点)
+- ✅ フェーズ 1-2: `docs/reference-csv-columns.md` で補助列を非推奨化し、レビュー CSV へ値を書き戻さない運用方針を明文化しました。【F:docs/reference-csv-columns.md†L55-L96】
+- ✅ フェーズ 1-2: ギャラリー UI の補正入力を常時読み取り専用に変更し、非表示となっていた効果・デメリットを再表示しつつ保存処理では補助列を利用しない挙動に統一しました。【F:templates/gallery/gallery.js†L1-L200】【F:templates/gallery/render/effectFactory.js†L1-L140】
+- ✅ フェーズ 1-4: `_apply_corrections` を追加して補助列の値を統合処理で `Effect{n}` / `Demerit{n}` 等へ反映するようにし、補助列が残っていても最終出力では基列へ転記されることを確認しました。【F:merge_results.py†L22-L122】【F:tests/test_merge_results.py†L1-L120】
+- ⚠️ フェーズ 2-1: 既存 CSV を補正適用後の形式へ一括変換するマイグレーションスクリプトは未着手。要件定義と実装計画が必要です。
+- ⚠️ フェーズ 2-3, 2-4: 補助列未依存の統合・E2E テスト整備は未完了。pytest のサンプルは整備済みですが、Playwright シナリオと実 CSV での検証が残っています。
+
 ## 段階的削除方針
 補助列を即時削除すると既存のレビュー CSV からの復元や未保存データの損失リスクがあるため、段階的な移行を推奨します。以下の 3 フェーズで順次機能を削除します。
 
