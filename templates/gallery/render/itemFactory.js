@@ -133,6 +133,36 @@
             return { item, leftColumn, rightColumn };
         }
 
+        function shouldLinkEffectWithDemerit(effect, demerit) {
+            if (!effect || !demerit) {
+                return false;
+            }
+            const dataset = demerit.dataset || {};
+            if (dataset.hiddenDemerit === 'true') {
+                return false;
+            }
+            const display = demerit.style ? demerit.style.display : undefined;
+            if (display && display.toLowerCase() === 'none') {
+                return false;
+            }
+            return true;
+        }
+
+        function updateEffectDemeritLink(effect, demerit) {
+            const classList = effect && effect.classList;
+            if (!classList) {
+                return;
+            }
+            const link = shouldLinkEffectWithDemerit(effect, demerit);
+            if (typeof classList.toggle === 'function') {
+                classList.toggle('effect--with-demerit', link);
+            } else if (link && typeof classList.add === 'function') {
+                classList.add('effect--with-demerit');
+            } else if (!link && typeof classList.remove === 'function') {
+                classList.remove('effect--with-demerit');
+            }
+        }
+
         function buildLeftColumn(context) {
             const fragment = createFragment();
             const nodes = [];
@@ -296,8 +326,8 @@
                 );
                 if (effect) {
                     hasEffect = true;
-                    if (demerit && effect.classList && typeof effect.classList.add === 'function') {
-                        effect.classList.add('effect--with-demerit');
+                    if (demerit) {
+                        updateEffectDemeritLink(effect, demerit);
                     }
                     appendToFragment(fragment, effect);
                     nodes.push(effect);

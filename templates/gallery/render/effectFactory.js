@@ -333,6 +333,78 @@
                 : { disable: true, placeholder: '指定レベルのデメリットなし' };
         }
 
+        function toElementList(collection) {
+            if (!collection) {
+                return [];
+            }
+            if (Array.isArray(collection)) {
+                return collection;
+            }
+            if (typeof collection.length === 'number') {
+                try {
+                    return Array.from(collection);
+                } catch (_error) {
+                    if (collection.length === 0) {
+                        return [];
+                    }
+                }
+            }
+            return [];
+        }
+
+        function findPrimaryEffectForDemerit(demeritEffect) {
+            if (!demeritEffect || !demeritEffect.dataset || demeritEffect.dataset.kind !== 'demerit') {
+                return null;
+            }
+            const parent = demeritEffect.parentNode;
+            if (!parent) {
+                return null;
+            }
+            const siblings = toElementList(parent.children);
+            if (!siblings.length) {
+                return null;
+            }
+            const currentIndex = siblings.indexOf(demeritEffect);
+            if (currentIndex <= 0) {
+                return null;
+            }
+            const recordIndex = demeritEffect.dataset.recordIndex;
+            const slot = demeritEffect.dataset.slot;
+            for (let index = currentIndex - 1; index >= 0; index -= 1) {
+                const candidate = siblings[index];
+                if (!candidate || !candidate.dataset) {
+                    continue;
+                }
+                if (candidate.dataset.kind === 'demerit') {
+                    continue;
+                }
+                if (candidate.dataset.recordIndex === recordIndex && candidate.dataset.slot === slot) {
+                    return candidate;
+                }
+            }
+            return null;
+        }
+
+        function togglePrimaryEffectDemeritLink(effect, visible) {
+            if (!effect || !effect.classList) {
+                return;
+            }
+            const classList = effect.classList;
+            if (typeof classList.toggle === 'function') {
+                classList.toggle('effect--with-demerit', Boolean(visible));
+                return;
+            }
+            if (visible) {
+                if (typeof classList.add === 'function') {
+                    classList.add('effect--with-demerit');
+                }
+                return;
+            }
+            if (typeof classList.remove === 'function') {
+                classList.remove('effect--with-demerit');
+            }
+        }
+
         function applyDemeritAvailability(effect, context, decisionElements, options = {}) {
             if (!effect || !context || !context.isDemerit) {
                 return;
@@ -357,6 +429,8 @@
             if (!input) {
                 return;
             }
+            const primaryEffect = findPrimaryEffectForDemerit(effect);
+            const updatePrimaryLink = (visible) => togglePrimaryEffectDemeritLink(primaryEffect, visible);
             const evaluation = evaluateDemeritAvailability(record, slotIndex);
             const shouldDisable = Boolean(evaluation && evaluation.disable);
             const shouldHide = Boolean(evaluation && evaluation.hide);
@@ -391,12 +465,14 @@
                         effect.setAttribute('aria-hidden', 'true');
                     }
                     effect.style.display = 'none';
+                    updatePrimaryLink(false);
                 } else {
                     delete effect.dataset.hiddenDemerit;
                     if (typeof effect.removeAttribute === 'function') {
                         effect.removeAttribute('aria-hidden');
                     }
                     effect.style.display = '';
+                    updatePrimaryLink(true);
                 }
                 if (options && options.refreshStatus) {
                     updateEffectStatus(effect, 'pending');
@@ -419,6 +495,7 @@
                 effect.removeAttribute('aria-hidden');
             }
             effect.style.display = '';
+            updatePrimaryLink(true);
             if (options && options.refreshStatus && context && context.statusValue) {
                 updateEffectStatus(effect, context.statusValue);
             }
