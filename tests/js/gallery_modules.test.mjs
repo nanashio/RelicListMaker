@@ -1952,6 +1952,58 @@ describe('gallery effect factory', () => {
     assert.equal(input.placeholder, 'デメリット候補から選択');
   });
 
+  test('syncDemeritAvailability toggles paired effect class when demerit visibility changes', () => {
+    const record = {
+      RelicType: '深層遺物',
+      Effect1: 'Test Effect',
+      Effect1Level: '＋3',
+      Effect1Status: 'pending',
+      Demerit1: 'Heavy Burden',
+      Demerit1RawText: 'Heavy Burden',
+      Demerit1Score: 42.1
+    };
+    const state = {
+      showOcr: true,
+      masterOptions: [],
+      masterDemeritOptions: ['Heavy Burden'],
+      masterDemeritRules: {},
+      labelSymbols: ['Ⅰ'],
+      records: [record]
+    };
+    const localFactory = global.window.galleryRenderFactory.createEffectFactory({
+      state,
+      datasetState: { kind: 'normal', relicType: 'deep' },
+      masterDatalistId: 'master-id',
+      demeritDatalistId: 'master-demerit-id',
+      createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+      applyMasterLevelOptions: () => {},
+      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+    });
+
+    const primaryEffect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0);
+    const demeritEffect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
+    const container = new MockElement('div', 'effect-container');
+    container.appendChild(primaryEffect);
+    container.appendChild(demeritEffect);
+
+    primaryEffect.classList.add('effect--with-demerit');
+    assert.equal(primaryEffect.classList.contains('effect--with-demerit'), true);
+    assert.equal(demeritEffect.style.display === '' || demeritEffect.style.display === undefined, true);
+
+    record.RelicType = '通常';
+    localFactory.syncDemeritAvailability(demeritEffect, { refreshStatus: true });
+    assert.equal(demeritEffect.style.display, 'none');
+    assert.equal(primaryEffect.classList.contains('effect--with-demerit'), false);
+
+    record.RelicType = '深層遺物';
+    localFactory.syncDemeritAvailability(demeritEffect, { refreshStatus: true });
+    assert.equal(demeritEffect.style.display, '');
+    assert.equal(primaryEffect.classList.contains('effect--with-demerit'), true);
+  });
+
   test('deep relic disables demerit controls when no matching level is available', () => {
     const record = {
       RelicType: '深層遺物',
@@ -2390,6 +2442,66 @@ describe('gallery item factory', () => {
     const placeholder = rightColumn.children[0];
     assert.equal(placeholder.className.includes('no-effect'), true);
     assert.equal(placeholder.textContent, '効果情報がありません。');
+  });
+
+  test('createItem omits demerit link when placeholder is hidden', () => {
+    runScript('templates/gallery/render/effectViewModel.js');
+    runScript('templates/gallery/render/effectFactory.js');
+
+    const record = {
+      Image: 'gamma.png',
+      Effect1: 'Power Up',
+      RawText1: 'Power Up',
+      Effect1Score: 88,
+      Effect1Level: '＋1',
+      Effect1Status: 'pending',
+      RelicType: '通常'
+    };
+
+    const state = {
+      showOcr: true,
+      masterOptions: [],
+      masterDemeritOptions: ['Heavy Burden'],
+      masterDemeritRules: {},
+      labelSymbols: ['Ⅰ'],
+      records: [record]
+    };
+
+    const effectFactory = global.window.galleryRenderFactory.createEffectFactory({
+      state,
+      datasetState: { kind: 'normal', relicType: 'normal' },
+      masterDatalistId: 'master-id',
+      demeritDatalistId: 'master-demerit-id',
+      createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+      applyMasterLevelOptions: () => {},
+      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+    });
+
+    const localFactory = itemFactoryNamespace.createItemFactory({
+      datasetState: { kind: 'normal', relicType: 'normal' },
+      createElement,
+      createFragment: () => new MockElement('#fragment'),
+      bindImage: () => {},
+      createEffect: (...args) => effectFactory.createEffect(...args),
+      colorOptions: [],
+      getImagePath: (imageName) => imageName,
+      getDisplayName: (imageName) => imageName,
+      getLabelSymbols: () => ['Ⅰ']
+    });
+
+    const item = localFactory.createItem(record, 0, 1, 1);
+    const rightColumn = item.children[1];
+    const effect = rightColumn.children[0];
+    const demerit = rightColumn.children[1];
+
+    assert.ok(effect, 'main effect should exist');
+    assert.ok(demerit, 'demerit placeholder should exist');
+    assert.equal(demerit.dataset.hiddenDemerit, 'true');
+    assert.equal(demerit.style.display, 'none');
+    assert.equal(effect.classList.contains('effect--with-demerit'), false);
   });
 
   test('createItem uses demerit fallback when main effect is missing', () => {
