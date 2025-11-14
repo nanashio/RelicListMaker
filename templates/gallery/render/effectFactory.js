@@ -238,10 +238,6 @@
             if (!Number.isFinite(slotIndex)) {
                 return '';
             }
-            const correction = record[`Effect${slotIndex}Correction`];
-            if (typeof correction === 'string' && correction.trim()) {
-                return correction.trim();
-            }
             const prediction = record[`Effect${slotIndex}`];
             if (typeof prediction === 'string' && prediction.trim()) {
                 return prediction.trim();
@@ -260,10 +256,6 @@
             const slotIndex = Number(slot);
             if (!Number.isFinite(slotIndex)) {
                 return '';
-            }
-            const correction = record[`Effect${slotIndex}LevelCorrection`];
-            if (typeof correction === 'string' && correction.trim()) {
-                return correction.trim();
             }
             const level = record[`Effect${slotIndex}Level`];
             if (typeof level === 'string' && level.trim()) {
@@ -479,10 +471,6 @@
                     passButton.disabled = true;
                 }
                 effect.dataset.correction = '';
-                const correctionKey = `Demerit${slotIndex}Correction`;
-                if (correctionKey && record && Object.prototype.hasOwnProperty.call(record, correctionKey)) {
-                    delete record[correctionKey];
-                }
                 const statusKey = `Demerit${slotIndex}Status`;
                 if (statusKey && record && record[statusKey] !== 'pending') {
                     record[statusKey] = 'pending';
@@ -1010,17 +998,18 @@
             const passButton = effect.querySelector
                 ? effect.querySelector('.review-button.pass')
                 : null;
+            const manualLower =
+                effect && effect.dataset && typeof effect.dataset.correction === 'string'
+                    ? effect.dataset.correction
+                    : '';
             const context = {
                 record,
                 slot: slotIndex,
                 isDemerit: true,
-                correctionValue: record[`Demerit${slotIndex}Correction`] || '',
-                correctionValueLower: '',
+                correctionValue: '',
+                correctionValueLower: manualLower || '',
                 statusValue: record[`Demerit${slotIndex}Status`] || 'pending'
             };
-            if (context.correctionValue) {
-                context.correctionValueLower = context.correctionValue.toLowerCase();
-            }
             applyDemeritAvailability(
                 effect,
                 context,

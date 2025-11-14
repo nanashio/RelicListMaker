@@ -277,12 +277,6 @@
                     )
                 );
             }
-            if (record && indexes) {
-                const levelCorrectionKey = `Effect${indexes.slotIndex}LevelCorrection`;
-                if (Object.prototype.hasOwnProperty.call(record, levelCorrectionKey)) {
-                    delete record[levelCorrectionKey];
-                }
-            }
             applyDatasetLevel(effect, storedLevelValue);
 
             const levelInput = effect.querySelector ? effect.querySelector('.level-input') : null;
@@ -410,38 +404,29 @@
             }
 
             const isDemerit = indexes.kind === 'demerit';
-            const actionContext = getItemActionContext(effect);
-            const record = actionContext && actionContext.record ? actionContext.record : null;
 
             const originalPrediction =
                 (effect.dataset && effect.dataset.predictionOriginalValue) || '';
             const currentPrediction = (effect.dataset && effect.dataset.predictionValue) || '';
             const fallbackPrediction = originalPrediction || currentPrediction;
-            const baseValue = selected || fallbackPrediction;
-            const normalizedBaseValue = baseValue ? String(baseValue).trim() : '';
+            const fallbackNormalized = fallbackPrediction ? String(fallbackPrediction).trim() : '';
+            const selectedValue = selected ? String(selected).trim() : '';
+            const hasManualEntry = Boolean(selectedValue) && selectedValue !== fallbackNormalized;
+            const nextValue = hasManualEntry ? selectedValue : fallbackNormalized;
             const effectValueChanged = updateRecordEffectValue(
                 indexes.recordIndex,
                 indexes.slotIndex,
-                normalizedBaseValue,
+                nextValue,
                 indexes.kind
             );
-            effect.dataset.predictionValue = normalizedBaseValue;
-            effect.dataset.pred = toDatasetValue(normalizedBaseValue);
+            effect.dataset.predictionValue = nextValue;
+            effect.dataset.pred = toDatasetValue(nextValue);
 
-            const nextStatus = selected ? 'corrected' : 'pending';
+            const nextStatus = hasManualEntry ? 'corrected' : 'pending';
             const statusChanged = recordStatusChange(effect, nextStatus);
-            effect.dataset.correction = toDatasetValue(selected);
-            if (record) {
-                const correctionKey =
-                    indexes.kind === 'demerit'
-                        ? `Demerit${indexes.slotIndex}Correction`
-                        : `Effect${indexes.slotIndex}Correction`;
-                if (Object.prototype.hasOwnProperty.call(record, correctionKey)) {
-                    delete record[correctionKey];
-                }
-            }
+            effect.dataset.correction = hasManualEntry ? toDatasetValue(selectedValue) : '';
             if (!isDemerit) {
-                effect.dataset.preserveOriginalLevel = selected ? 'false' : 'true';
+                effect.dataset.preserveOriginalLevel = hasManualEntry ? 'false' : 'true';
             }
             updateEffectStatus(effect, nextStatus);
 
@@ -512,16 +497,8 @@
                 return;
             }
 
-            const actionContext = getItemActionContext(effect);
-            const record = actionContext && actionContext.record ? actionContext.record : null;
             effect.dataset.levelCorrection = toDatasetValue(selected);
             effect.dataset.levelCorrectionValue = selected;
-            if (record) {
-                const levelCorrectionKey = `Effect${indexes.slotIndex}LevelCorrection`;
-                if (Object.prototype.hasOwnProperty.call(record, levelCorrectionKey)) {
-                    delete record[levelCorrectionKey];
-                }
-            }
 
             const originalValue = effect.dataset.levelOriginalValue || '';
             const preserveOriginal = effect.dataset.preserveOriginalLevel !== 'false';
@@ -578,28 +555,24 @@
                 if (indexes) {
                     const isDemerit = indexes.kind === 'demerit';
                     let levelValueReset = false;
+                    let effectValueReset = false;
 
                     effect.dataset.correction = '';
                     effect.dataset.levelCorrection = '';
                     effect.dataset.levelCorrectionValue = '';
                     effect.dataset.level = '';
-                    const actionContext = getItemActionContext(effect);
-                    const record = actionContext && actionContext.record ? actionContext.record : null;
-                    if (record) {
-                        const correctionKey =
-                            indexes.kind === 'demerit'
-                                ? `Demerit${indexes.slotIndex}Correction`
-                                : `Effect${indexes.slotIndex}Correction`;
-                        if (Object.prototype.hasOwnProperty.call(record, correctionKey)) {
-                            delete record[correctionKey];
-                        }
-                        if (!isDemerit) {
-                            const levelCorrectionKey = `Effect${indexes.slotIndex}LevelCorrection`;
-                            if (Object.prototype.hasOwnProperty.call(record, levelCorrectionKey)) {
-                                delete record[levelCorrectionKey];
-                            }
-                        }
-                    }
+                    const originalText =
+                        (effect.dataset && effect.dataset.predictionOriginalValue) || '';
+                    const restoredEffectValue = originalText ? String(originalText).trim() : '';
+                    effectValueReset = updateRecordEffectValue(
+                        indexes.recordIndex,
+                        indexes.slotIndex,
+                        restoredEffectValue,
+                        indexes.kind
+                    );
+                    changeDetected = effectValueReset;
+                    effect.dataset.predictionValue = restoredEffectValue;
+                    effect.dataset.pred = toDatasetValue(restoredEffectValue);
 
                     if (!isDemerit) {
                         effect.dataset.preserveOriginalLevel = 'true';
@@ -635,7 +608,7 @@
                         setCorrectionLevelCandidates(effect, []);
                     }
 
-                    changeDetected = levelValueReset;
+                    changeDetected = changeDetected || levelValueReset;
                 }
             }
 

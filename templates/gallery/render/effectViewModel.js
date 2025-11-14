@@ -59,18 +59,14 @@
             const scoreDisplay = hasFiniteScore ? `${numericScore.toFixed(1)}%` : '--';
             const ocrDisplay = rawText || '--';
 
-            const correctionKey = `Demerit${slot}Correction`;
-            const correctionValue = record[correctionKey] == null ? '' : String(record[correctionKey]);
-            const initialStatus = normalizeStatus(record[`Demerit${slot}Status`]) || 'pending';
-            const statusValue = correctionValue && initialStatus !== 'pass' ? 'corrected' : initialStatus;
-
             const predictionLower = predictionText.toLowerCase();
             const rawLower = rawText.toLowerCase();
-            const correctionValueLower = correctionValue.toLowerCase();
 
             const normalizedImageName = imageName == null ? '' : String(imageName);
             const imageNameLower = normalizedImageName.toLowerCase();
-            const effectNameForLevels = correctionValue || predictionText || rawText;
+            const effectNameForLevels = predictionText || rawText;
+
+            const statusValue = normalizeStatus(record[`Demerit${slot}Status`]) || 'pending';
 
             return {
                 record,
@@ -100,8 +96,8 @@
                 preserveOriginalLevel: true,
                 displayLevel: '',
                 displayLevelLower: '',
-                correctionValue,
-                correctionValueLower,
+                correctionValue: '',
+                correctionValueLower: '',
                 effectNameForLevels,
                 lowConfidence: hasFiniteScore && numericScore < 60
             };
@@ -135,31 +131,26 @@
         const levelOptionsDisplay = levelOptionsDisplayValues.join('|');
         const levelOptionsDisplayRaw = levelOptions.join('|');
 
-        const levelCorrectionKey = `Effect${slot}LevelCorrection`;
-        const levelCorrectionRaw = record[levelCorrectionKey];
-        const levelCorrection = levelCorrectionRaw == null ? '' : String(levelCorrectionRaw).trim();
         const levelValueLower = levelValue ? levelValue.toLowerCase() : '';
         const hasLevelOptions = levelOptions.length > 0;
         const hasOriginalLevel = Boolean(levelValue && levelValueLower !== 'none');
         const preserveOriginalLevel = hasLevelOptions || hasOriginalLevel;
-        const displayLevel = levelCorrection || (preserveOriginalLevel ? levelValue : '');
+        const displayLevel = preserveOriginalLevel ? levelValue : '';
 
-        const correctionKey = `Effect${slot}Correction`;
-        const correctionValue = record[correctionKey] == null ? '' : String(record[correctionKey]);
-
-        const initialStatus = normalizeStatus(record[`Effect${slot}Status`]) || 'pending';
-        const statusValue = correctionValue && initialStatus !== 'pass' ? 'corrected' : initialStatus;
+        const statusValue = normalizeStatus(record[`Effect${slot}Status`]) || 'pending';
 
         const predictionLower = predictionText.toLowerCase();
         const rawLower = rawText.toLowerCase();
         const displayLevelLower = displayLevel ? displayLevel.toLowerCase() : '';
-        const levelCorrectionLower = levelCorrection ? levelCorrection.toLowerCase() : '';
-        const correctionValueLower = correctionValue.toLowerCase();
+        const levelCorrection = '';
+        const levelCorrectionLower = '';
+        const correctionValue = '';
+        const correctionValueLower = '';
 
         const normalizedImageName = imageName == null ? '' : String(imageName);
         const imageNameLower = normalizedImageName.toLowerCase();
 
-        const effectNameForLevels = correctionValue || predictionText || rawText;
+        const effectNameForLevels = predictionText || rawText;
 
         return {
             record,

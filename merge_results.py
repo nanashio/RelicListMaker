@@ -267,58 +267,14 @@ def _apply_corrections(row: dict[str, object]) -> dict[str, object]:
     if not row:
         return {}
 
-    updated = dict(row)
-    for key in list(row.keys()):
+    updated: dict[str, object] = {}
+    for key, value in row.items():
         if not isinstance(key, str):
+            updated[key] = value
             continue
-
-        if key.startswith("Effect") and key.endswith("LevelCorrection"):
-            slot_text = key[len("Effect") : -len("LevelCorrection")]
-            if not slot_text.isdigit():
-                updated.pop(key, None)
-                continue
-            value = _normalize_cell(row.get(key))
-            target_key = f"Effect{slot_text}Level"
-            if value:
-                updated[target_key] = value
-                status_key = f"Effect{slot_text}Status"
-                status = _normalize_effect_status(updated.get(status_key))
-                if status != "pass":
-                    updated[status_key] = "corrected"
-            updated.pop(key, None)
+        if key.endswith("Correction"):
             continue
-
-        if key.startswith("Effect") and key.endswith("Correction"):
-            slot_text = key[len("Effect") : -len("Correction")]
-            if not slot_text.isdigit():
-                updated.pop(key, None)
-                continue
-            value = _normalize_cell(row.get(key))
-            target_key = f"Effect{slot_text}"
-            if value:
-                updated[target_key] = value
-                status_key = f"Effect{slot_text}Status"
-                status = _normalize_effect_status(updated.get(status_key))
-                if status != "pass":
-                    updated[status_key] = "corrected"
-            updated.pop(key, None)
-            continue
-
-        if key.startswith("Demerit") and key.endswith("Correction"):
-            slot_text = key[len("Demerit") : -len("Correction")]
-            if not slot_text.isdigit():
-                updated.pop(key, None)
-                continue
-            value = _normalize_cell(row.get(key))
-            target_key = f"Demerit{slot_text}"
-            if value:
-                updated[target_key] = value
-                status_key = f"Demerit{slot_text}Status"
-                status = _normalize_effect_status(updated.get(status_key))
-                if status != "pass":
-                    updated[status_key] = "corrected"
-            updated.pop(key, None)
-            continue
+        updated[key] = value
 
     return updated
 

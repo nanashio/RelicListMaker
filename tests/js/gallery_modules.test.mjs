@@ -1671,15 +1671,13 @@ describe('gallery effect view model', () => {
     assert.equal(context, null);
   });
 
-  test('createEffectContext normalizes fields and derives status', () => {
+  test('createEffectContext normalizes fields without correction columns', () => {
     const record = {
       Effect1: 'Power Boost',
       RawText1: 'Raw Effect',
       Effect1Score: '72.4',
       Effect1Level: 'L1',
       Effect1LevelOptions: 'L1| L2 |',
-      Effect1LevelCorrection: '',
-      Effect1Correction: 'Fix',
       Effect1Status: 'pending'
     };
 
@@ -1692,9 +1690,9 @@ describe('gallery effect view model', () => {
     assert.equal(context.predictionText, 'Power Boost');
     assert.equal(context.scoreDisplay, '72.4%');
     assert.deepEqual(context.levelOptions, ['L1', 'L2']);
-    assert.equal(context.statusValue, 'corrected');
+    assert.equal(context.statusValue, 'pending');
     assert.equal(context.displayLevel, 'L1');
-    assert.equal(context.correctionValue, 'Fix');
+    assert.equal(context.correctionValue, '');
   });
 
   test('createEffectContext handles demerit entries', () => {
@@ -1702,7 +1700,6 @@ describe('gallery effect view model', () => {
       Demerit1: 'Heavy Burden',
       Demerit1RawText: 'Heavy Burden',
       Demerit1Score: '55.2',
-      Demerit1Correction: 'Adjusted Burden',
       Demerit1Status: 'pending'
     };
 
@@ -1717,8 +1714,8 @@ describe('gallery effect view model', () => {
     assert.equal(context.predictionText, 'Heavy Burden');
     assert.equal(context.rawText, 'Heavy Burden');
     assert.equal(context.scoreDisplay, '55.2%');
-    assert.equal(context.statusValue, 'corrected');
-    assert.equal(context.correctionValue, 'Adjusted Burden');
+    assert.equal(context.statusValue, 'pending');
+    assert.equal(context.correctionValue, '');
     assert.deepEqual(context.levelOptions, []);
     assert.equal(context.lowConfidence, true);
   });
@@ -1786,8 +1783,6 @@ describe('gallery effect factory', () => {
       Effect1Score: 95,
       Effect1Level: 'L1',
       Effect1LevelOptions: 'L1|L2',
-      Effect1LevelCorrection: '',
-      Effect1Correction: '',
       Effect1Status: 'pending',
       BaseImage: 'base.png'
     };
@@ -1808,10 +1803,8 @@ describe('gallery effect factory', () => {
       Effect1: '炎攻撃力上昇',
       RawText1: 'Raw',
       Effect1Score: 80,
-      Effect1Level: 'L1',
+      Effect1Level: 'L3',
       Effect1LevelOptions: 'L1|L2|L3',
-      Effect1LevelCorrection: 'L3',
-      Effect1Correction: '',
       Effect1Status: 'pending',
       BaseImage: 'base.png'
     };
@@ -2035,8 +2028,7 @@ describe('gallery effect factory', () => {
   test('deep relic treats hyphen placeholder effect as demerit exempt', () => {
     const record = {
       RelicType: '深層遺物',
-      Effect1: 'Test Effect',
-      Effect1Correction: ' - ',
+      Effect1: ' - ',
       Effect1Level: '＋4',
       Effect1Status: 'pending',
       Demerit1: 'Heavy Burden',
@@ -2128,7 +2120,6 @@ describe('gallery effect factory', () => {
       RelicType: '深層遺物',
       Effect1: 'Test Effect',
       Effect1Level: '＋3',
-      Effect1LevelCorrection: '',
       Effect1Status: 'pending',
       Demerit1: 'Heavy Burden',
       Demerit1RawText: 'Heavy Burden',
@@ -2165,7 +2156,9 @@ describe('gallery effect factory', () => {
     assert.equal(correctionInput.tabIndex, 0);
     assert.equal(passButton.disabled, false);
 
-    record.Effect1LevelCorrection = '＋1';
+    record.Effect1Level = '＋1';
+    effect.dataset.levelCorrection = '＋1';
+    effect.dataset.levelCorrectionValue = '＋1';
     localFactory.syncDemeritAvailability(effect, { refreshStatus: true });
 
     assert.equal(correctionInput.disabled, true);
@@ -3200,12 +3193,10 @@ describe('record action handlers', () => {
         Effect1: 'Test Effect',
         Effect1Level: '＋3',
         Effect1LevelOptions: '＋1|＋3|＋4',
-        Effect1LevelCorrection: '',
         Effect1Status: 'pending',
         Demerit1: 'Heavy Burden',
         Demerit1RawText: 'Heavy Burden',
         Demerit1Score: 35,
-        Demerit1Correction: 'Heavy Burden',
         Demerit1Status: 'corrected'
       };
       const state = {
@@ -3312,7 +3303,8 @@ describe('record action handlers', () => {
     effect.dataset.levelCorrection = 'expert';
     effect.dataset.level = 'expert';
     effect.dataset.levelOptionsBase = 'Base|Expert';
-    effect.dataset.predictionValue = 'Prediction';
+    effect.dataset.predictionOriginalValue = 'Prediction';
+    effect.dataset.predictionValue = 'Manual';
     item.appendChild(effect);
 
     const correctionInput = new MockElement('input', 'correction-input');
