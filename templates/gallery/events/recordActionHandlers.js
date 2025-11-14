@@ -427,9 +427,15 @@
             const hasLevelCorrection = Boolean(effect.dataset.levelCorrectionValue);
 
             let nextStatus = currentStatus;
+            const normalizedCurrentPrediction = currentPrediction
+                ? String(currentPrediction).trim()
+                : '';
+            const normalizedNextValue = nextValue ? String(nextValue).trim() : '';
+            const valueUnchanged = !effectValueChanged && normalizedCurrentPrediction === normalizedNextValue;
+
             if (hasManualEntry) {
                 nextStatus = 'corrected';
-            } else if (selectedValue === fallbackNormalized) {
+            } else if (valueUnchanged) {
                 nextStatus = currentStatus;
             } else if (!hasLevelCorrection && (previousCorrection || currentStatus === 'corrected')) {
                 nextStatus = 'pending';
