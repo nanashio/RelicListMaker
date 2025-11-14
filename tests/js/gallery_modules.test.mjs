@@ -1947,9 +1947,10 @@ describe('gallery effect factory', () => {
 
     assert.equal(effect.dataset.hiddenDemerit, undefined);
     assert.equal(effect.style.display, '');
-    assert.equal(input.disabled, false);
+    assert.equal(input.disabled, true);
     assert.equal(passButton.disabled, false);
     assert.equal(input.placeholder, 'デメリット候補から選択');
+    assert.equal(input.attributes['aria-hidden'], 'true');
   });
 
   test('syncDemeritAvailability toggles paired effect class when demerit visibility changes', () => {
@@ -2259,7 +2260,7 @@ describe('gallery effect factory', () => {
     assert.equal(effect.dataset.levelOptionsDisplay, '');
   });
 
-  test('createCorrectionInput toggles availability based on master options', () => {
+  test('createCorrectionInput keeps master metadata while disabling manual input', () => {
     const disabledInput = effectFactory.createCorrectionInput({ isDemerit: false }, '', 'Fallback');
     assert.equal(disabledInput.disabled, true);
     assert.equal(disabledInput.placeholder, 'マスターデータ未設定');
@@ -2282,10 +2283,11 @@ describe('gallery effect factory', () => {
       statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
     });
     const enabledInput = customFactory.createCorrectionInput({ isDemerit: false }, 'Chosen', 'Fallback');
-    assert.equal(enabledInput.disabled, false);
+    assert.equal(enabledInput.disabled, true);
     assert.equal(enabledInput.placeholder, 'master_relicsから選択');
     assert.equal(enabledInput.attributes.list, 'master-id');
     assert.equal(enabledInput.value, 'Chosen');
+    assert.equal(enabledInput.attributes['aria-hidden'], 'true');
   });
 
   test('updateLevelBadge prioritizes correction and available options', () => {
@@ -3262,7 +3264,7 @@ describe('record action handlers', () => {
       assert.ok(levelInput, 'level input should exist');
       assert.ok(demeritInput, 'demerit input should exist');
       assert.ok(passButton, 'pass button should exist');
-      assert.equal(demeritInput.disabled, false);
+      assert.equal(demeritInput.disabled, true);
       assert.equal(passButton.disabled, false);
 
       levelInput.value = '＋1';

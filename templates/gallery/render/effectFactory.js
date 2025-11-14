@@ -481,12 +481,14 @@
             }
 
             const defaultPlaceholder = input.dataset.placeholderDefault || input.placeholder;
-            if (datasetState.kind !== 'merged') {
-                input.disabled = false;
-            }
             if (passButton && datasetState.kind !== 'merged') {
                 passButton.disabled = false;
             }
+            input.disabled = true;
+            if (input.classList && typeof input.classList.add === 'function') {
+                input.classList.add('correction-input--disabled');
+            }
+            input.setAttribute('aria-hidden', 'true');
             if (defaultPlaceholder) {
                 input.placeholder = defaultPlaceholder;
             }
