@@ -50,7 +50,7 @@
 7. ✅ **データセット生成フローの共通化（2025-11-05）**: `datasets/builder.py` と `build_dataset_entries` を導入し、パイプライン・GUI で共有できるデータセット整形 API を確立。`ProcessVideoResult` は相対パス変換をビルダーへ移譲し、HTML 生成との接続点が単純化された。
 
 ### 完了済みハイライト
-- **初期化と基盤整備**: `viewer_server.py` を含む読み込み経路を確認し、新規モジュールを `generate_gallery.py` やブラウザフィクスチャへ反映。
+- **初期化と基盤整備**: `viewer_server` パッケージを含む読み込み経路を確認し、新規モジュールを `generate_gallery.py` やブラウザフィクスチャへ反映。
 - **描画レイヤの再構成**: `render/galleryView.js` から `itemFactory`・`itemEnhancers`・`effectFactory` へ責務を分割し、左右カラムやエフェクト表示を純粋関数へ移行。
 - **フィルタ／検索の純化**: `applyFilters` と検索キャッシュを `utils/filter.js` へ切り出し、Node テストを追加して回帰を抑止。
 - **イベントとアクション処理の整理**: `events/galleryEvents.js` をハンドラ単位へ再編し、`events/recordActionHandlers.js` に操作ロジックを集約。お気に入り・色分け・レビュー操作のテストを強化。

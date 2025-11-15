@@ -172,7 +172,8 @@ def main() -> None:
         sys.executable,
         [
             sys.executable,
-            str(repo_root / "viewer_server.py"),
+            "-m",
+            "viewer_server.main",
             "--results-dir",
             str(fixture_root),
             "--host",

@@ -115,7 +115,7 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
    ```
 4. 実行完了後、`results/<動画名>/` に上記の出力が生成されます。静的サーバー経由で閲覧する場合は以下を実行してください。
    ```bash
-   python viewer_server.py --root results
+   python -m viewer_server.main --results-dir results
    ```
 
 ### OCR 前処理の調整

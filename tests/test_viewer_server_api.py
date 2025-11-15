@@ -7,7 +7,7 @@ import pytest
 
 from viewer_server import API_SAVE_PATH
 from viewer_server import ServerContext  # noqa: F401 - API 公開確認用
-from viewer_server.app import open_browser  # noqa: F401 - 互換API確認
+from viewer_server import open_browser  # noqa: F401 - API 公開確認用
 from viewer_server.storage import resolve_field_order, write_records
 from viewer_server.validation import RequestValidationError, build_save_request, parse_content_length, validate_save_payload
 
