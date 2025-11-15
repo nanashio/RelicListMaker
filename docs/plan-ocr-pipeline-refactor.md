@@ -141,7 +141,7 @@ def process_images_command(args: Namespace) -> int:
 - `preprocess.prepare_crop_for_ocr` は新しい `prepare_for_ocr` を呼ぶラッパーとして維持し、`ocr_and_match` は `batch_recognize` の結果を `MatchResult` として返却するよう整理した。`process_images` はこのシーケンスを直接 `build_row` へ渡す構造となった。
 - CSV 組み立てと書き出しは `relic_pipeline.io.exporter` へ移行し、`process_images` は `ExportOptions` を介して行単位に委譲する。
 - CLI 層を切り出すため `relic_pipeline/cli/commands.py` を新設。`match_and_export.py` に `build_arg_parser` / `main` を追加し、既存処理を `process_images_command` から呼び出す構成へ整理。列表示デフォルトは `relic_pipeline.settings.DEFAULT_COLUMN_VISIBILITY` に集約し、`tests/cli/test_commands.py` で CLI の引数処理を検証。
-- 次のステップ候補: CLI コマンドを `gui_app.py` など他エントリから再利用できるようアダプタ層を整備、`matching/levels` のユニットテスト追加、`MatchResult` ベースの API を GUI 側へ展開し、辞書補正レイヤーの単体テストを強化。
+- 次のステップ候補: CLI コマンドを GUI エントリ（`python -m gui`）など他エントリから再利用できるようアダプタ層を整備、`matching/levels` のユニットテスト追加、`MatchResult` ベースの API を GUI 側へ展開し、辞書補正レイヤーの単体テストを強化。
 - 2025-11-01: `relic_pipeline.io.exporter` に `parse_column_flag_value` を追加し、`normalize_column_visibility` と CLI の列表示フラグ処理を共通化。文字列や数値で渡されたフラグも期待通りに反映されることを `tests/cli/test_commands.py` で確認。
 - 2025-11-02: `relic_pipeline.matching.effects.resolve_effect` を追加し、補正辞書と辞書マッチングの統合を一箇所に集約。`match_and_export.ocr_and_match` から新しい関数を呼び出し、責務分担をより明確にした。テストは `resolve_effect` ベースに更新し、補正優先ロジックの回帰を防止。
 - 2025-11-03: 計画全体を再確認し、コードベースが Step 1〜4 の完了状態を維持していることを確認。追加のリファクタリング作業は現時点で不要と判断した。

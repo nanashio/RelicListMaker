@@ -73,7 +73,7 @@ if tkinterdnd2 is not None:
 
 
 a = Analysis(
-    ["gui_app.py"],
+    ["gui/__main__.py"],
     pathex=[str(project_dir)],
     binaries=[],
     datas=datas,
