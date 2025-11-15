@@ -11,6 +11,9 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 import gallery_assets
 from gallery_assets import GalleryAssets, PreparedAsset
 import generate_gallery
+import gallery.normalization as gallery_normalization
+import gallery.render as gallery_render
+from gallery.models import GalleryDependencies
 from resource_paths import templates_path
 
 
@@ -52,7 +55,7 @@ def test_normalize_dataset_entries_accepts_various_shapes(tmp_path):
         None,
     ]
 
-    normalized = generate_gallery._normalize_dataset_entries(datasets, str(output_dir))
+    normalized = gallery_normalization.normalize_dataset_entries(datasets, str(output_dir))
 
     assert [entry["label"] for entry in normalized] == [
         "絶対パス",
@@ -82,7 +85,7 @@ def test_normalize_dataset_entries_resolves_different_base_dir(tmp_path):
         {"csv": "video_a/results.csv", "imgDir": "video_a/crops", "label": "Video A"},
     ]
 
-    normalized = generate_gallery._normalize_dataset_entries(
+    normalized = gallery_normalization.normalize_dataset_entries(
         datasets,
         str(gallery_dir),
         base_dir=str(root_dir),
@@ -149,7 +152,7 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
         "__ITEM_IMAGE_VIEW_BOX__"
     )
 
-    monkeypatch.setattr(generate_gallery, "_load_text_asset", lambda *args, **kwargs: template)
+    monkeypatch.setattr(gallery_render, "load_text_asset", lambda *args, **kwargs: template)
 
     def fake_prepare_gallery_assets(*args, **kwargs):
         base = tmp_path / "copied"
@@ -165,11 +168,15 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
             core_js=PreparedAsset("scripts/app.js", str(core_path)),
         )
 
-    monkeypatch.setattr(generate_gallery.gallery_assets, "prepare_gallery_assets", fake_prepare_gallery_assets)
-    monkeypatch.setattr(generate_gallery, "load_master_csv", lambda path: [])
-    monkeypatch.setattr(generate_gallery, "load_master_json", lambda path: {})
-    monkeypatch.setattr(generate_gallery, "load_master_effects_and_levels", lambda path: ([], {}))
-    monkeypatch.setattr(generate_gallery, "normalize_master_values", lambda values: ["A", "B"])
+    monkeypatch.setattr(gallery_render.gallery_assets, "prepare_gallery_assets", fake_prepare_gallery_assets)
+
+    dependencies = GalleryDependencies(
+        load_master_csv=lambda path: [],
+        load_master_json=lambda path: {},
+        load_master_effects_and_levels=lambda path: ([], {}),
+        load_master_effect_metadata=lambda path: {},
+        normalize_master_values=lambda values: ["A", "B"],
+    )
 
     datasets = [
         {"csv": "a/results.csv", "imgDir": "a/images", "label": "A"},
@@ -186,6 +193,7 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
         active_dataset_index=0,
         css_output_name="styles/app.css",
         js_output_name="scripts/app.js",
+        dependencies=dependencies,
     )
 
     html_output = output_html.read_text(encoding="utf-8")
@@ -255,7 +263,7 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
         ]
     )
 
-    monkeypatch.setattr(generate_gallery, "_load_text_asset", lambda *args, **kwargs: template)
+    monkeypatch.setattr(gallery_render, "load_text_asset", lambda *args, **kwargs: template)
 
     copied_assets = []
 
@@ -274,7 +282,7 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
             core_js=PreparedAsset("gallery.js", str(core_path)),
         )
 
-    monkeypatch.setattr(generate_gallery.gallery_assets, "prepare_gallery_assets", fake_prepare_gallery_assets)
+    monkeypatch.setattr(gallery_render.gallery_assets, "prepare_gallery_assets", fake_prepare_gallery_assets)
 
     def fake_load_master_effects_and_levels(path):
         candidate = Path(path)
@@ -289,7 +297,9 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
             return (["Deep Demerit"], {})
         return ([], {})
 
-    monkeypatch.setattr(generate_gallery, "load_master_effects_and_levels", fake_load_master_effects_and_levels)
+    dependencies = GalleryDependencies(
+        load_master_effects_and_levels=fake_load_master_effects_and_levels,
+    )
 
     datasets = [
         {"csv": "a/results.csv", "imgDir": "a/images", "label": "A"},
@@ -304,6 +314,7 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
         master_json_path=str(master_json),
         datasets=datasets,
         item_image_view_box="<script>alert(1)</script>",
+        dependencies=dependencies,
     )
 
     html_output = output_html.read_text(encoding="utf-8")
@@ -367,7 +378,7 @@ def test_generate_html_embeds_known_master_types(monkeypatch, tmp_path):
         ]
     )
 
-    monkeypatch.setattr(generate_gallery, "_load_text_asset", lambda *args, **kwargs: template)
+    monkeypatch.setattr(gallery_render, "load_text_asset", lambda *args, **kwargs: template)
     def fake_prepare_gallery_assets(*args, **kwargs):
         base = tmp_path / "copied"
         css_path = base / "gallery.css"
@@ -382,9 +393,7 @@ def test_generate_html_embeds_known_master_types(monkeypatch, tmp_path):
             core_js=PreparedAsset("gallery.js", str(core_path)),
         )
 
-    monkeypatch.setattr(generate_gallery.gallery_assets, "prepare_gallery_assets", fake_prepare_gallery_assets)
-    monkeypatch.setattr(generate_gallery, "load_master_csv", lambda path: [])
-    monkeypatch.setattr(generate_gallery, "load_master_json", lambda path: [])
+    monkeypatch.setattr(gallery_render.gallery_assets, "prepare_gallery_assets", fake_prepare_gallery_assets)
 
     loaded_paths = []
 
@@ -397,13 +406,18 @@ def test_generate_html_embeds_known_master_types(monkeypatch, tmp_path):
             return (["Deep Effect"], {"Deep Effect": ["D1"]})
         return ([], {})
 
-    monkeypatch.setattr(generate_gallery, "load_master_effects_and_levels", fake_load_master_effects_and_levels)
+    dependencies = GalleryDependencies(
+        load_master_csv=lambda path: [],
+        load_master_json=lambda path: [],
+        load_master_effects_and_levels=fake_load_master_effects_and_levels,
+    )
 
     generate_gallery.generate_html(
         str(results_csv),
         "images",
         str(output_html),
         datasets=[{"csv": "results.csv", "imgDir": "images", "label": "A"}],
+        dependencies=dependencies,
     )
 
     html_output = output_html.read_text(encoding="utf-8")
@@ -459,7 +473,7 @@ def test_generate_html_resolves_dataset_base_dir(monkeypatch, tmp_path):
     results_csv.write_text("id,label\n", encoding="utf-8")
 
     template = "__RESULTS_CSV__\n__IMAGE_DIR__\n__DATASETS__"
-    monkeypatch.setattr(generate_gallery, "_load_text_asset", lambda *args, **kwargs: template)
+    monkeypatch.setattr(gallery_render, "load_text_asset", lambda *args, **kwargs: template)
 
     def fake_prepare_gallery_assets(*args, **kwargs):
         base = tmp_path / "assets"
@@ -475,11 +489,14 @@ def test_generate_html_resolves_dataset_base_dir(monkeypatch, tmp_path):
             core_js=PreparedAsset("gallery.js", str(core_path)),
         )
 
-    monkeypatch.setattr(generate_gallery.gallery_assets, "prepare_gallery_assets", fake_prepare_gallery_assets)
-    monkeypatch.setattr(generate_gallery, "load_master_csv", lambda *args, **kwargs: [])
-    monkeypatch.setattr(generate_gallery, "load_master_json", lambda *args, **kwargs: {})
-    monkeypatch.setattr(generate_gallery, "load_master_effects_and_levels", lambda *args, **kwargs: ([], {}))
-    monkeypatch.setattr(generate_gallery, "normalize_master_values", lambda values: list(values or []))
+    monkeypatch.setattr(gallery_render.gallery_assets, "prepare_gallery_assets", fake_prepare_gallery_assets)
+
+    dependencies = GalleryDependencies(
+        load_master_csv=lambda *args, **kwargs: [],
+        load_master_json=lambda *args, **kwargs: [],
+        load_master_effects_and_levels=lambda *args, **kwargs: ([], {}),
+        normalize_master_values=lambda values: list(values or []),
+    )
 
     datasets = [
         {"csv": "video_a/results.csv", "imgDir": "video_a/crops", "label": "Video A"},
@@ -492,6 +509,7 @@ def test_generate_html_resolves_dataset_base_dir(monkeypatch, tmp_path):
         str(output_html),
         datasets=datasets,
         datasets_base_dir=str(root_dir),
+        dependencies=dependencies,
     )
 
     parts = output_html.read_text(encoding="utf-8").splitlines()
@@ -517,7 +535,7 @@ def test_generate_html_respects_asset_overrides(monkeypatch, tmp_path):
         ]
     )
 
-    monkeypatch.setattr(generate_gallery, "_load_text_asset", lambda *args, **kwargs: template)
+    monkeypatch.setattr(gallery_render, "load_text_asset", lambda *args, **kwargs: template)
 
     copied_assets = []
 
@@ -554,7 +572,7 @@ def test_generate_html_respects_asset_overrides(monkeypatch, tmp_path):
             core_js=core_asset,
         )
 
-    monkeypatch.setattr(generate_gallery.gallery_assets, "prepare_gallery_assets", fake_prepare_gallery_assets)
+    monkeypatch.setattr(gallery_render.gallery_assets, "prepare_gallery_assets", fake_prepare_gallery_assets)
 
     custom_core = output_html.parent / "custom" / "core.js"
     custom_core.parent.mkdir(parents=True, exist_ok=True)
