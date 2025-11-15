@@ -2822,6 +2822,100 @@ describe('record action handlers', () => {
     assert.deepEqual(levelOptionsUpdates, ['＋1|＋3']);
   });
 
+  test('changeEffectCorrection keeps corrected status when value unchanged', () => {
+    const record = { Effect1: 'Adjusted' };
+    const item = new MockElement('div', 'item');
+    const effect = new MockElement('section', 'effect');
+    item.appendChild(effect);
+    effect.dataset.recordIndex = '0';
+    effect.dataset.slot = '1';
+    effect.dataset.kind = 'effect';
+    effect.dataset.predictionOriginalValue = 'Adjusted';
+    effect.dataset.predictionValue = 'Adjusted';
+    effect.dataset.status = 'corrected';
+    effect.dataset.correction = '';
+    const input = new MockElement('input', 'correction-input');
+    input.value = 'Adjusted';
+    const scheduleCalls = [];
+    const statusCalls = [];
+    const deps = buildBaseDeps(record, item, {
+      scheduleSave: () => scheduleCalls.push(null),
+      recordStatusChange: (_effect, status) => {
+        statusCalls.push(status);
+        const changed = effect.dataset.status !== status;
+        effect.dataset.status = status;
+        return changed;
+      },
+      updateRecordEffectValue: () => false,
+      getEffectIndexes: () => ({ recordIndex: 0, slotIndex: 1, kind: 'effect' })
+    });
+
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.changeEffectCorrection(effect, input);
+
+    assert.equal(record.Effect1, 'Adjusted');
+    assert.equal(effect.dataset.status, 'corrected');
+    assert.deepEqual(statusCalls, ['corrected']);
+    assert.equal(effect.dataset.correction, '');
+    assert.equal(scheduleCalls.length, 0);
+  });
+
+  test('changeEffectCorrection returns to pending when manual entry cleared', () => {
+    const record = { Effect1: 'Manual' };
+    const item = new MockElement('div', 'item');
+    const effect = new MockElement('section', 'effect');
+    item.appendChild(effect);
+    effect.dataset.recordIndex = '0';
+    effect.dataset.slot = '1';
+    effect.dataset.kind = 'effect';
+    effect.dataset.predictionOriginalValue = 'Adjusted';
+    effect.dataset.predictionValue = 'Manual';
+    effect.dataset.status = 'corrected';
+    effect.dataset.correction = 'manual';
+    effect.dataset.preserveOriginalLevel = 'true';
+    effect.dataset.levelOriginalValue = 'Base';
+    const input = new MockElement('input', 'correction-input');
+    input.value = '';
+    const statusCalls = [];
+    const effectUpdates = [];
+    const levelValueCalls = [];
+    const deps = buildBaseDeps(record, item, {
+      recordStatusChange: (_effect, status) => {
+        statusCalls.push(status);
+        const changed = effect.dataset.status !== status;
+        effect.dataset.status = status;
+        return changed;
+      },
+      updateRecordEffectValue: (_recordIndex, _slotIndex, value) => {
+        effectUpdates.push(value);
+        record.Effect1 = value;
+        return true;
+      },
+      updateRecordLevelValue: (_recordIndex, slotIndex, value) => {
+        levelValueCalls.push([slotIndex, value]);
+        record[`Effect${slotIndex}Level`] = value;
+        return true;
+      },
+      getEffectIndexes: () => ({ recordIndex: 0, slotIndex: 1, kind: 'effect' })
+    });
+
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.changeEffectCorrection(effect, input);
+
+    assert.equal(record.Effect1, 'Adjusted');
+    assert.deepEqual(effectUpdates, ['Adjusted']);
+    assert.deepEqual(statusCalls, ['pending']);
+    assert.equal(effect.dataset.status, 'pending');
+    assert.equal(effect.dataset.correction, '');
+    assert.equal(effect.dataset.predictionValue, 'Adjusted');
+    assert.equal(effect.dataset.preserveOriginalLevel, 'true');
+    assert.equal(record.Effect1Level, 'none');
+    assert.deepEqual(levelValueCalls, [
+      [1, 'Base'],
+      [1, 'none']
+    ]);
+  });
+
   test('changeEffectCorrection clears effect record back to original when input empty', () => {
     const record = { Effect1: 'New Effect' };
     const item = new MockElement('div', 'item');
