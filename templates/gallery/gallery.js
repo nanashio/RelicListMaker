@@ -1231,6 +1231,46 @@
             if (effect.dataset) {
                 effect.dataset.level = '';
             }
+        } else {
+            const normalizeLevelForComparison = (value) => {
+                if (value == null) {
+                    return 'none';
+                }
+                const text = String(value).trim();
+                if (!text) {
+                    return 'none';
+                }
+                return text.toLowerCase();
+            };
+
+            const normalizedOptions = sorted.map((value) => normalizeLevelForComparison(value));
+            const record = getRecordByIndex(indexes.recordIndex);
+            const levelKey = `Effect${indexes.slotIndex}Level`;
+            let currentLevel = 'none';
+            if (record && Object.prototype.hasOwnProperty.call(record, levelKey)) {
+                const rawLevel = record[levelKey];
+                if (rawLevel != null) {
+                    const text = String(rawLevel).trim();
+                    currentLevel = text || 'none';
+                }
+            }
+            const normalizedCurrent = normalizeLevelForComparison(currentLevel);
+            if (!normalizedOptions.includes(normalizedCurrent)) {
+                const hasNoneOption = normalizedOptions.includes('none');
+                const nextLevel = hasNoneOption ? 'none' : sorted[0];
+                const updated = updateRecordLevelValue(
+                    indexes.recordIndex,
+                    indexes.slotIndex,
+                    nextLevel,
+                    indexes.kind
+                );
+                if (updated) {
+                    levelChanged = true;
+                    if (effect.dataset) {
+                        effect.dataset.level = nextLevel === 'none' ? '' : String(nextLevel).trim().toLowerCase();
+                    }
+                }
+            }
         }
 
         if (effect.dataset) {
