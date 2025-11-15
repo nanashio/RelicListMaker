@@ -81,42 +81,50 @@ def test_process_video_creates_outputs_and_invokes_dependencies(tmp_path: Path, 
         Path(crop_dir).mkdir(parents=True, exist_ok=True)
         (Path(crop_dir) / "0001.png").write_text("image")
 
+    captured_params: dict[str, object] = {}
+
+    def fake_build_parameters(**kwargs):
+        captured_params.update(kwargs)
+        return types.SimpleNamespace(
+            crop_boxes=[(0, 0, 10, 10)],
+            ocr_settings=types.SimpleNamespace(engine=kwargs.get("ocr_engine", "tesseract")),
+            export_options=types.SimpleNamespace(
+                column_visibility={},
+                slot_range=range(1, 2),
+                demerit_slots=(),
+            ),
+            default_matching=types.SimpleNamespace(dictionary=["dummy"]),
+            slot_settings={},
+            slot_sources={},
+            demerit_matching=None,
+        )
+
     def fake_process_images(
         *,
         image_dir: str,
         output_path: str,
-        scale: float,
-        upsample: float,
-        preprocess: bool,
-        corrections_csv: str,
-        item_color: str | None,
-        column_visibility: dict[str, object] | None,
-        master_csv_path: str,
-        relic_type: str | None,
-        demerit_master_csv_path: str | None,
-        ocr_engine: str,
-        gcp_credentials: str | None,
-        gcp_credentials_filename: str | None,
+        crop_boxes,
+        ocr_settings,
+        export_options,
+        default_matching,
+        slot_settings,
+        slot_sources,
+        demerit_matching,
     ) -> None:
         calls.append((
             "process",
             (
                 image_dir,
                 output_path,
-                f"scale={scale}",
-                f"upsample={upsample}",
-                f"color={item_color}",
-                master_csv_path,
-                f"type={relic_type}",
-                f"demerit={demerit_master_csv_path}",
-                f"engine={ocr_engine}",
-                f"gcp={gcp_credentials}",
-                f"gcp_file={gcp_credentials_filename}",
+                f"crops={len(crop_boxes)}",
+                f"engine={ocr_settings.engine}",
+                f"demerit={bool(export_options.demerit_slots)}",
             ),
         ))
         Path(output_path).write_text("csv")
 
     monkeypatch.setattr(processors, "extract_and_crop", fake_extract_and_crop)
+    monkeypatch.setattr(processors, "build_processing_parameters", fake_build_parameters)
     monkeypatch.setattr(processors, "process_images", fake_process_images)
 
     overrides = {task.source_path: "green"}
@@ -149,14 +157,17 @@ def test_process_video_creates_outputs_and_invokes_dependencies(tmp_path: Path, 
     assert calls[0][1][3] == "full"
     assert calls[1][0] == "process"
     assert calls[1][1][0] == str(task.crops_dir)
-    assert "upsample=2.0" in calls[1][1][3]
-    assert "color=green" in calls[1][1][4]
-    assert calls[1][1][5].endswith("master_relics.csv")
-    assert calls[1][1][6] == "type=normal"
-    assert calls[1][1][7] == "demerit=None"
-    assert calls[1][1][8] == "engine=vision"
-    assert calls[1][1][9] == "gcp=/path/to/creds.json"
-    assert calls[1][1][10] == "gcp_file=packaged.json"
+    assert "engine=vision" in calls[1][1][3]
+
+    assert captured_params["scale"] == pytest.approx(1.0)
+    assert captured_params["upsample"] == pytest.approx(2.0)
+    assert captured_params["item_color"] == "green"
+    assert captured_params["master_csv_path"].endswith("master_relics.csv")
+    assert captured_params["relic_type"] == getattr(task, "relic_type", tasks.DEFAULT_RELIC_TYPE)
+    assert captured_params["demerit_master_csv_path"] is None
+    assert captured_params["ocr_engine"] == "vision"
+    assert captured_params["gcp_credentials"] == "/path/to/creds.json"
+    assert captured_params["gcp_credentials_filename"] == "packaged.json"
 
     assert isinstance(entry, dataset_builder.ProcessedVideoResult)
     assert entry.label == task.base_name

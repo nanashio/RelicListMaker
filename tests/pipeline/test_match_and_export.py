@@ -10,6 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import match_and_export  # noqa: E402
 from relic_pipeline.matching import MatchResult  # noqa: E402
+from relic_pipeline.settings import MatchingSettings, OCRSettings  # noqa: E402
 
 
 def test_ocr_and_match_returns_match_results(monkeypatch):
@@ -37,12 +38,19 @@ def test_ocr_and_match_returns_match_results(monkeypatch):
     monkeypatch.setattr(match_and_export, "batch_recognize", fake_batch_recognize)
     monkeypatch.setattr(match_and_export, "resolve_effect", fake_resolve_effect)
 
+    ocr_settings = OCRSettings(
+        config=match_and_export.OCR_CONFIG,
+        engine="tesseract",
+        preprocess=False,
+        resize_scale=1.0,
+    )
+    matching_settings = MatchingSettings(dictionary=["Dummy"], corrections={})
+
     results, recognized_lines = match_and_export.ocr_and_match(
         "dummy.png",
-        dictionary=["Dummy"],
         crop_boxes=[(0, 0, 10, 10)],
-        upsample=1.0,
-        preprocess=False,
+        ocr_settings=ocr_settings,
+        default_matching=matching_settings,
     )
 
     assert captured_paths == ["dummy.png"]
@@ -116,11 +124,31 @@ def test_process_images_emits_source_columns(monkeypatch, tmp_path):
 
     monkeypatch.setattr(match_and_export, "write_csv", fake_write_csv)
 
+    params = match_and_export.build_processing_parameters(
+        scale=1.0,
+        upsample=1.0,
+        preprocess=True,
+        column_visibility=None,
+        item_color="yellow",
+        relic_type="deep",
+        master_csv_path=None,
+        corrections_csv=None,
+        demerit_master_csv_path=None,
+        ocr_engine="tesseract",
+        gcp_credentials=None,
+        gcp_credentials_filename=None,
+    )
+
     match_and_export.process_images(
         image_dir=str(image_dir),
         output_path=str(tmp_path / "results.csv"),
-        relic_type="deep",
-        item_color="yellow",
+        crop_boxes=params.crop_boxes,
+        ocr_settings=params.ocr_settings,
+        export_options=params.export_options,
+        default_matching=params.default_matching,
+        slot_settings=params.slot_settings,
+        slot_sources=params.slot_sources,
+        demerit_matching=params.demerit_matching,
     )
 
     assert len(captured_rows) == 1
