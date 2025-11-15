@@ -55,7 +55,7 @@
 | ステップ1: 抽出・前処理レイヤのリファクタリング | `extract_frames.py` / `preprocess.py` 付近の責務分割と共通ユーティリティの整備。 | `python preprocess.py path/to/sample.png --out preprocessed/`<br>`pytest tests/test_merge_results.py` |
 | ステップ2: OCR と照合ロジックの整理 | `match_and_export.py` を中心に OCR 設定、辞書照合、CSV 出力のモジュール化。 | `pytest tests/test_relic_placeholders.py`<br>`pytest tests/test_gallery_js_modules.py` |
 | ステップ3: ギャラリー生成・共有モジュール | `generate_gallery.py` や `templates/gallery/` 配下の分離と依存注入の見直し。 | `pytest tests/test_generate_gallery.py`<br>`npm run test:node` |
-| ステップ4: ビューワーとブラウザ確認 | `viewer_server.py` や Playwright フィクスチャの検証、ブラウザ挙動の確認。 | `pytest tests/test_viewer_server.py`<br>`npm run test:browser` (CI 不可の場合は `npm run test:browser:headed` や `pytest -k browser` など代替手順を検討) |
+| ステップ4: ビューワーとブラウザ確認 | `viewer_server` パッケージや Playwright フィクスチャの検証、ブラウザ挙動の確認。 | `pytest tests/test_viewer_server.py`<br>`npm run test:browser` (CI 不可の場合は `npm run test:browser:headed` や `pytest -k browser` など代替手順を検討) |
 
 > **補足:** 各ステップ完了時には `git status` で差分を確認し、必要に応じて対象テストのみを `pytest <path>` で再実行する。
 
@@ -101,7 +101,7 @@ $ git status -sb
 $ git diff [--staged]
 
 # サーバ起動 (例)
-$ python viewer_server.py --results ./results
+$ python -m viewer_server.main --results-dir ./results
 ```
 
 ## 10. テストガイドライン

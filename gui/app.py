@@ -12,7 +12,7 @@ from typing import Iterator, Optional, Sequence
 
 from .adapters import TkinterDnD
 from .services import BackgroundTaskRunner, GuiState, PipelineExecutor
-from viewer_server import ServerContext, _open_browser
+from viewer_server import ServerContext, open_browser
 from version_info import get_version
 
 from .config_store import AppConfig, CONFIG_FILE_NAME, load_config, save_config
@@ -306,7 +306,7 @@ class RelicGuiApp:
         self.log_queue.put(text)
 
     def open_browser(self, results_dir: Path, target: Path | None, host: str, port: int) -> None:
-        _open_browser(results_dir, target, host, port)
+        open_browser(results_dir, target, host, port)
 
     def _apply_initial_results_refresh(self) -> None:
         self.handlers.refresh_results_list()

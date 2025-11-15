@@ -1,7 +1,7 @@
-# viewer_server.py リファクタリング計画
+# viewer_server パッケージ リファクタリング計画
 
 ## 0. コード分析
-- `viewer_server.py` は HTTP サーバーの起動・結果ディレクトリ探索・ギャラリーインデックス生成・レビュー保存 API を単一ファイルで実装している。
+- （旧 `viewer_server.py` としてスタートした）ビューワーサーバーは、HTTP サーバーの起動・結果ディレクトリ探索・ギャラリーインデックス生成・レビュー保存 API を単一ファイルで実装している。
 - `GalleryRequestHandler` が `SimpleHTTPRequestHandler` を継承しつつ、HTML テンプレート生成、CSV 読み書き、フィールド順序推論、バリデーション、JSON レスポンス生成をすべて内包している。
 - `_handle_save_request` は 150 行規模で、Content-Length 解析→JSON デコード→パス検証→CSV 入力→フィールド順序計算→CSV 書き戻し→レスポンス生成までを一括で行っている。
 - `ServerContext` がサーバー管理とブラウザ起動 (`_open_browser`) までを担い、GUI からの制御と CLI 実行を同じフローで処理する構造になっている。
@@ -24,12 +24,12 @@
 3. **ハンドラの責務再編**（完了）: `GalleryRequestHandler` は静的ファイル配信と API ハンドラのルーティングのみを担い、インデックス生成は `viewer_server/index_page.py` に委譲する。`do_GET` と `do_POST` の分岐を整理し、API 呼び出しは `storage` / `validation` を組み合わせて処理する。
 4. **サーバー管理クラスの再構築**（完了）: `create_server` と `_open_browser` を `viewer_server/app.py` に再配置し、`ServerContext` はコンテキストマネージャ化（`__enter__` / `__exit__`）する。テストでは `ThreadingHTTPServer` をモックし、ライフサイクル制御を検証する。
 5. **テンプレート抽象化**（完了）: `INDEX_TEMPLATE` を `templates/index.html`（新設）に移動し、`Template` ではなく `string.Template` or `jinja2` を介したロードに変更。テキストアセット読み込み関数（既存 `generate_gallery` の `_load_text_asset` 相当）を再利用できる構造にする。
-6. **リグレッションテスト整備**（完了）: 保存 API 用に `pytest tests/test_viewer_server_api.py` を用意し、正常系・異常系・フィールド順序計算をカバーする。既存ブラウザ確認フローは `npm run test:browser` または `python viewer_server.py --results ./fixtures` で維持する。
+6. **リグレッションテスト整備**（完了）: 保存 API 用に `pytest tests/test_viewer_server_api.py` を用意し、正常系・異常系・フィールド順序計算をカバーする。既存ブラウザ確認フローは `npm run test:browser` または `python -m viewer_server.main --results-dir ./fixtures` で維持する。
 
 ## 4. テスト戦略
 - ストレージユーティリティは pytest の一時ディレクトリフィクスチャを用いて I/O を検証する。
 - API ハンドラは `http.client` もしくは `requests` を使った結合テスト、または `GalleryRequestHandler` の `handle` メソッドを直接呼び出すユニットテストで確認する。
-- ブラウザ自動テスト（Playwright）が利用できない環境では、代替として `pytest tests/test_viewer_server_api.py` + `python viewer_server.py --results tests/fixtures/results_demo` の手動確認をログへ残す。
+- ブラウザ自動テスト（Playwright）が利用できない環境では、代替として `pytest tests/test_viewer_server_api.py` + `python -m viewer_server.main --results-dir tests/fixtures/results_demo` の手動確認をログへ残す。
 
 ## 5. 進捗ログ
 | 日付 | トピック | メモ |

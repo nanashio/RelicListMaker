@@ -94,7 +94,7 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
 ├── preprocess.py        # OCR 前処理の検証と調整用スクリプト
 ├── gui/                # GUI アプリ本体とサービス・アダプタ群
 ├── gui_app.py           # 互換用の GUI エントリーポイント（`gui.main` を委譲）
-└── viewer_server.py     # 結果フォルダをブラウザ閲覧する簡易サーバー
+└── viewer_server/       # 結果フォルダをブラウザ閲覧する簡易サーバーパッケージ
 ```
 
 ### セットアップ
@@ -116,7 +116,7 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
    ```
 4. 実行完了後、`results/<動画名>/` に上記の出力が生成されます。静的サーバー経由で閲覧する場合は以下を実行してください。
    ```bash
-   python viewer_server.py --root results
+   python -m viewer_server.main --results-dir results
    ```
 
 ### OCR 前処理の調整
