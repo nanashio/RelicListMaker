@@ -14,7 +14,7 @@
 | 進行管理 (`pipeline/progress.py`) | ✅ 完了 | `ProgressReporter` プロトコルと CLI / コールバック実装を追加し、UI からの進行通知注入を可能にした。 |
 | 処理フロー (`pipeline/processors.py`) | ✅ 完了 | 動画単位の抽出→OCR→CSV 化を `process_video` に集約し、進行通知・出力ディレクトリ作成をモジュール化。 |
 | オーケストレーション (`pipeline/pipeline.py`) | ✅ 完了 | `PipelineSettings` / `PipelineResult` / `run_pipeline` を実装し、タスク引き渡しと戻り値の構造化を完了。 |
-| エントリーポイント (`main.py`) | ✅ 完了 | `run_pipeline` を呼び出す薄いラッパーに置き換え、GUI (`gui_app.py`) との API 共有ができる状態。 |
+| エントリーポイント (`main.py`) | ✅ 完了 | `run_pipeline` を呼び出す薄いラッパーに置き換え、GUI エントリ（`python -m gui`）との API 共有ができる状態。 |
 
 ### 完了済みハイライト
 - 入力収集からタスク生成までのパス正規化を統一し、上書き指定と動画パスの突き合わせを絶対パスベースで行えるようになった。
@@ -46,7 +46,7 @@
 | 3 | ✅ 完了 | `ProgressReporter` 抽象と CLI / GUI 向け実装を `pipeline/progress.py` に追加し、進行通知の責務を分離。 |
 | 4 | ✅ 完了 | 動画処理本体を `pipeline/processors.py` に整理し、進行レポート注入ポイントを固定。 |
 | 5 | ✅ 完了 | `run_pipeline` と `PipelineSettings` / `PipelineResult` を実装し、入力→処理→HTML 出力のフローをモジュール結合。 |
-| 6 | ✅ 完了 | `main.py` / `gui_app.py` を `run_pipeline` 経由の薄いラッパーに刷新し、再利用性を高めた。 |
+| 6 | ✅ 完了 | `main.py` / `python -m gui` を `run_pipeline` 経由の薄いラッパーに刷新し、再利用性を高めた。 |
 
 ### フォーカスすべき次アクション
 1. ✅ **進行レポーターのカバレッジ拡充**: `tests/pipeline/test_progress.py` で `CliProgressReporter` / `CallbackProgressReporter` の通知と例外ハンドリングを検証済み。
@@ -135,7 +135,7 @@ run_pipeline(settings=settings, reporter=reporter, tasks=custom_tasks)
 - HTML 生成後に返すメタデータ（CSV 相対パス、クロップ画像ディレクトリなど）は `PipelineResult` dataclass として定義し、他モジュールとの連携を明確化する。
 
 ## 想定されるメリット
-- GUI (`gui_app.py`) からも `run_pipeline` を直接呼び出せるため、進行状況や結果取得を共通化できる。
+- GUI エントリ（`python -m gui`）からも `run_pipeline` を直接呼び出せるため、進行状況や結果取得を共通化できる。
 - タスク生成や進行レポートを単体テストしやすくなり、エッジケース（空ディレクトリ、上書き指定ミス等）を早期検知できる。
 - 将来的に並列処理やキューイングを導入する際も、`processors.py` の実装差し替えで対応しやすくなる。
 

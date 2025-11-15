@@ -1,7 +1,7 @@
-"""GUIパッケージへの互換エントリーポイント."""
+"""GUI パッケージの正式エントリーポイント."""
 from __future__ import annotations
 
-from gui import RelicGuiApp, main
+from .app import RelicGuiApp, main
 
 __all__ = ["RelicGuiApp", "main"]
 
