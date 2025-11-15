@@ -9,21 +9,6 @@ from relic_pipeline.settings import DEFAULT_RESIZE_SCALE
 def upscale_image(img, scale=2.0):
     """画像を拡大（スケールはfloat対応）"""
     return cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-
-
-def prepare_crop_for_ocr(crop, resize_scale=DEFAULT_RESIZE_SCALE, apply_threshold=True, denoise=True):
-    """OCR向けにクロップ画像を前処理して返す"""
-    if crop is None or crop.size == 0:
-        return crop
-
-    return prepare_for_ocr(
-        crop,
-        resize_scale=resize_scale,
-        apply_threshold=apply_threshold,
-        denoise=denoise,
-    )
-
-
 def preprocess_for_ocr(img_path, out_dir="preprocessed", scale=DEFAULT_RESIZE_SCALE, save=True):
     """
     OCR前処理:
@@ -48,7 +33,7 @@ def preprocess_for_ocr(img_path, out_dir="preprocessed", scale=DEFAULT_RESIZE_SC
         print(f"[ERROR] 画像を開けませんでした: {img_path}")
         return None
 
-    th = prepare_crop_for_ocr(img, resize_scale=scale)
+    th = prepare_for_ocr(img, resize_scale=scale)
 
     if save:
         os.makedirs(out_dir, exist_ok=True)
