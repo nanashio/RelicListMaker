@@ -1274,7 +1274,7 @@
         }
 
         if (effect.dataset) {
-            effect.dataset.levelOptionsBase = sorted.join('|');
+            effect.dataset.levelOptionsBaseJson = JSON.stringify(sorted);
         }
 
         if (optionsChanged || levelChanged) {
@@ -1340,8 +1340,8 @@
                     if (Array.isArray(parsed)) {
                         baseOptions = parsed;
                     }
-                } catch (_error) {
-                    baseOptions = sanitizeLevelList(baseJson.split('|'));
+                } catch (error) {
+                    console.warn('レベル候補(base json)の解析に失敗しました:', error);
                 }
             }
             syncRecordLevelOptions(effect, baseOptions);

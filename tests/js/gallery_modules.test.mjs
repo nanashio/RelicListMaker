@@ -3415,7 +3415,7 @@ describe('record action handlers', () => {
     effect.dataset.levelCorrectionValue = 'Expert';
     effect.dataset.levelCorrection = 'expert';
     effect.dataset.level = 'expert';
-    effect.dataset.levelOptionsBase = 'Base|Expert';
+    effect.dataset.levelOptionsBaseJson = JSON.stringify(['Base', 'Expert']);
     effect.dataset.predictionOriginalValue = 'Prediction';
     effect.dataset.predictionValue = 'Manual';
     item.appendChild(effect);
@@ -3837,7 +3837,6 @@ describe('gallery events', () => {
     effect.dataset.recordIndex = '0';
     effect.dataset.slot = '1';
     effect.dataset.levelOriginalValue = 'Base';
-    effect.dataset.levelOptionsBase = 'Base|Alt';
     effect.dataset.levelOptionsBaseJson = JSON.stringify(['Base', 'Alt']);
     effect.dataset.predictionValue = 'Skill';
     item.appendChild(effect);
@@ -3905,7 +3904,6 @@ describe('gallery events', () => {
     effect.dataset.recordIndex = '0';
     effect.dataset.slot = '1';
     effect.dataset.levelOriginalValue = 'Base';
-    effect.dataset.levelOptionsBase = 'Base|Alt';
     effect.dataset.levelOptionsBaseJson = JSON.stringify(['Base', 'Alt']);
     effect.dataset.predictionValue = 'Initial';
     item.appendChild(effect);

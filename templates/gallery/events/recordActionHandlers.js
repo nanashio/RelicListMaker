@@ -219,13 +219,18 @@
         }
 
         function restoreLevelOptions(effect) {
-            const baseString = effect.dataset.levelOptionsBase || '';
-            if (!baseString) {
+            const json = effect.dataset.levelOptionsBaseJson || '';
+            if (!json) {
                 setLevelOptions(effect, []);
                 return;
             }
-            const restored = sanitizeLevelList(baseString.split('|'));
-            setLevelOptions(effect, sortLevelsAscending(restored));
+            try {
+                const parsed = JSON.parse(json);
+                setLevelOptions(effect, sortLevelsAscending(sanitizeLevelList(parsed)));
+            } catch (error) {
+                console.warn('レベル候補(base json)の復元に失敗しました:', error);
+                setLevelOptions(effect, []);
+            }
         }
 
         function computeEffectiveLevel(effect) {
