@@ -53,15 +53,10 @@ RelicListMaker は、動画から遺物の文字を読み取って一覧化す�
 ### 参考ドキュメント
 - CSV の列仕様や列表示フラグの挙動は `docs/reference-csv-columns.md` に詳細をまとめている。レビュー CSV のカラム構成を確認・更新する際は同ドキュメントを参照すること。
 
-### 補助列付き CSV のマイグレーション手順
-- 旧バージョンで出力された CSV に `Effect{n}Correction` / `Effect{n}LevelCorrection` / `Demerit{n}Correction` 列が残っている場合は、統合作業の前に `scripts/migrate_effect_corrections.py` で基列へ移行してください。
-- 標準的な使い方は次のとおりです。
-  ```bash
-  python scripts/migrate_effect_corrections.py results/sample.csv
-  ```
-  - 実行すると `results/sample.csv.bak` を作成しつつ、補助列の値を `Effect{n}` 系列へ転記してから補助列を削除します。
-  - 既存バックアップが不要な場合は `--no-backup` を付けると `.bak` を生成しません。
-- `merge_results.py` やビューアは補助列を受け付けないため、旧 CSV を扱う際は必ずマイグレーションを完了させてください。
+### 旧フォーマットの CSV について
+- 現行バージョンはビューアが `Effect{n}` / `Effect{n}Level` / `Demerit{n}` を直接更新する設計へ移行しており、`Effect{n}Correction` などの補助列は出力しません。
+- 過去の試験運用で補助列付き CSV を生成していた場合は、最新のパイプラインでもう一度書き出すか、表計算ソフト等で補助列の値を基列へコピーしてから補助列自体を削除してください。
+- `merge_results.py` は補助列が残存しているとエラーを発生させます。メッセージに列名と行番号が表示されるため、該当行の補助列を空にするか削除したうえで再実行してください。
 
 ### プロジェクト概要
 RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、レビュー可能なギャラリーとして出力するためのツールチェーンです。`main.py` を起点にフレーム抽出、OCR、辞書照合、HTML ギャラリー生成までを一括で実行し、結果は `results/<動画名>/` 以下にまとめられます。
