@@ -1,7 +1,7 @@
 """GUI パッケージの正式エントリーポイント."""
 from __future__ import annotations
 
-from .app import RelicGuiApp, main
+from gui.app import RelicGuiApp, main
 
 __all__ = ["RelicGuiApp", "main"]
 
