@@ -1,4 +1,5 @@
 import sys
+import types
 from argparse import Namespace
 from pathlib import Path
 
@@ -11,11 +12,34 @@ if str(PROJECT_ROOT) not in sys.path:
 from relic_pipeline.cli.commands import build_column_flags, process_images_command
 
 
-def test_process_images_command_invokes_runner_with_overrides():
-    captured: dict[str, object] = {}
+def test_process_images_command_invokes_runner_with_overrides(monkeypatch):
+    captured_runner: dict[str, object] = {}
+    captured_builder: dict[str, object] = {}
 
     def fake_runner(**kwargs):
-        captured.update(kwargs)
+        captured_runner.update(kwargs)
+
+    def fake_builder(**kwargs):
+        captured_builder.update(kwargs)
+        return types.SimpleNamespace(
+            crop_boxes=[(0, 0, 1, 1)],
+            ocr_settings=types.SimpleNamespace(engine=kwargs.get("ocr_engine", "tesseract")),
+            export_options=types.SimpleNamespace(
+                column_visibility={
+                    "RawText": True,
+                    "Score": True,
+                    "Source": True,
+                },
+                slot_range=range(1, 2),
+                demerit_slots=(),
+            ),
+            default_matching=types.SimpleNamespace(dictionary=["dummy"]),
+            slot_settings={},
+            slot_sources={},
+            demerit_matching=None,
+        )
+
+    monkeypatch.setattr("match_and_export.build_processing_parameters", fake_builder)
 
     args = Namespace(
         image_dir="crops-dir",
@@ -32,19 +56,22 @@ def test_process_images_command_invokes_runner_with_overrides():
     exit_code = process_images_command(args, runner=fake_runner)
 
     assert exit_code == 0
-    assert captured["image_dir"] == "crops-dir"
-    assert captured["output_path"] == "out.csv"
-    assert captured["scale"] == pytest.approx(1.25)
-    assert captured["upsample"] == pytest.approx(1.5)
-    assert captured["preprocess"] is False
-    assert captured["corrections_csv"] == "corr.csv"
-    assert captured["item_color"] == "blue"
-    assert captured["column_visibility"] == {
-        "RawText": False,
-        "Score": False,
-        "Source": True,
-    }
-    assert captured["relic_type"] == "deep"
+    assert captured_builder["scale"] == pytest.approx(1.25)
+    assert captured_builder["upsample"] == pytest.approx(1.5)
+    assert captured_builder["preprocess"] is False
+    assert captured_builder["corrections_csv"] == "corr.csv"
+    assert captured_builder["item_color"] == "blue"
+    assert captured_builder["column_visibility"]["RawText"] is False
+    assert captured_builder["column_visibility"]["Score"] is False
+    assert captured_builder["column_visibility"]["Source"] is True
+    assert captured_builder["relic_type"] == "deep"
+
+    assert captured_runner["image_dir"] == "crops-dir"
+    assert captured_runner["output_path"] == "out.csv"
+    assert captured_runner["crop_boxes"] == [(0, 0, 1, 1)]
+    assert captured_runner["ocr_settings"].engine == "tesseract"
+    assert captured_runner["export_options"].column_visibility["RawText"] is True
+    assert captured_runner["default_matching"].dictionary == ["dummy"]
 
 
 def test_build_column_flags_merges_defaults(capsys):

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Mapping, Optional
 
 from extract_frames import extract_and_crop
-from match_and_export import process_images
+from match_and_export import build_processing_parameters, process_images
 from resource_paths import templates_path
 
 from datasets.builder import ProcessedVideoResult
@@ -59,21 +59,31 @@ def process_video(
     task_relic_type = getattr(task, "relic_type", DEFAULT_RELIC_TYPE)
     master_csv_path, demerit_master_csv_path = _resolve_master_csv(task_relic_type)
 
-    process_images(
-        image_dir=str(task.crops_dir),
-        output_path=str(task.csv_path),
+    params = build_processing_parameters(
         scale=1.0,
         upsample=ocr_upsample,
         preprocess=True,
-        corrections_csv=str(task.corrections_csv),
-        item_color=item_color,
         column_visibility=csv_column_visibility,
-        master_csv_path=master_csv_path,
-        demerit_master_csv_path=demerit_master_csv_path,
+        item_color=item_color,
         relic_type=task_relic_type,
+        master_csv_path=master_csv_path,
+        corrections_csv=str(task.corrections_csv) if task.corrections_csv else None,
+        demerit_master_csv_path=demerit_master_csv_path,
         ocr_engine=ocr_engine,
         gcp_credentials=gcp_credentials,
         gcp_credentials_filename=gcp_credentials_filename,
+    )
+
+    process_images(
+        image_dir=str(task.crops_dir),
+        output_path=str(task.csv_path),
+        crop_boxes=params.crop_boxes,
+        ocr_settings=params.ocr_settings,
+        export_options=params.export_options,
+        default_matching=params.default_matching,
+        slot_settings=params.slot_settings,
+        slot_sources=params.slot_sources,
+        demerit_matching=params.demerit_matching,
     )
     reporter.advance(f"{video_name} のOCR/マッチング完了")
     print(f"[✓] {task.crops_dir} の結果を {task.csv_path} に出力しました")

@@ -6,7 +6,7 @@ from argparse import Namespace
 from typing import Callable, Mapping, MutableMapping, Sequence
 
 from ..io import normalize_column_visibility, parse_column_flag_value
-from ..settings import DEFAULT_COLUMN_VISIBILITY, DEFAULT_RESIZE_SCALE
+from ..settings import DEFAULT_COLUMN_VISIBILITY, DEFAULT_GCP_CREDENTIALS_FILENAME, DEFAULT_RESIZE_SCALE
 
 
 def _coerce_column_overrides(raw: object) -> MutableMapping[str, bool]:
@@ -55,26 +55,40 @@ def process_images_command(
 ) -> int:
     """Invoke the OCR pipeline for cropped images based on CLI arguments."""
 
-    overrides = _coerce_column_overrides(getattr(args, "column_visibility", None))
-    column_visibility = overrides or None
+    column_visibility = build_column_flags(getattr(args, "column_visibility", None))
 
     if runner is None:
         from match_and_export import process_images as runner  # Local import to avoid cycles
+    from match_and_export import build_processing_parameters
 
     try:
-        runner(
-            image_dir=str(getattr(args, "image_dir", "crops")),
-            output_path=str(getattr(args, "output_path", getattr(args, "output", "results.csv"))),
+        params = build_processing_parameters(
             scale=float(getattr(args, "scale", 1.0)),
             upsample=float(getattr(args, "upsample", DEFAULT_RESIZE_SCALE)),
             preprocess=bool(getattr(args, "preprocess", True)),
-            corrections_csv=getattr(args, "corrections_csv", None),
-            item_color=getattr(args, "item_color", None),
             column_visibility=column_visibility,
+            item_color=getattr(args, "item_color", None),
             relic_type=getattr(args, "relic_type", None),
+            master_csv_path=getattr(args, "master_csv_path", None),
+            corrections_csv=getattr(args, "corrections_csv", None),
+            demerit_master_csv_path=getattr(args, "demerit_master_csv_path", None),
             ocr_engine=str(getattr(args, "ocr_engine", "tesseract")),
             gcp_credentials=getattr(args, "gcp_credentials", None),
-            gcp_credentials_filename=getattr(args, "gcp_credentials_filename", None),
+            gcp_credentials_filename=getattr(
+                args, "gcp_credentials_filename", DEFAULT_GCP_CREDENTIALS_FILENAME
+            ),
+        )
+
+        runner(
+            image_dir=str(getattr(args, "image_dir", "crops")),
+            output_path=str(getattr(args, "output_path", getattr(args, "output", "results.csv"))),
+            crop_boxes=params.crop_boxes,
+            ocr_settings=params.ocr_settings,
+            export_options=params.export_options,
+            default_matching=params.default_matching,
+            slot_settings=params.slot_settings,
+            slot_sources=params.slot_sources,
+            demerit_matching=params.demerit_matching,
         )
     except Exception as error:  # pragma: no cover - defensive CLI wrapper
         print(f"[ERROR] OCR 処理に失敗しました: {error}")

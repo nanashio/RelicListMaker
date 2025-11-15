@@ -1,7 +1,7 @@
 import argparse
 import os
 import sys
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Mapping, Sequence
 
@@ -48,6 +48,19 @@ BASE_CROP_BOXES = [
 OCR_CONFIG = DEFAULT_OCR_CONFIG
 DEFAULT_UPSAMPLE = DEFAULT_RESIZE_SCALE
 CORRECTION_SCORE = 100.0
+
+
+@dataclass(slots=True)
+class ProcessingParameters:
+    """Structured container for OCR/matching/export configuration."""
+
+    crop_boxes: Sequence[tuple[int, int, int, int]]
+    ocr_settings: OCRSettings
+    export_options: ExportOptions
+    default_matching: MatchingSettings
+    slot_settings: Mapping[int, MatchingSettings]
+    slot_sources: Mapping[int, str]
+    demerit_matching: MatchingSettings | None = None
 
 
 def _resolve_packaged_credentials(filename: str | None) -> Path | None:
@@ -107,20 +120,137 @@ def scale_crop_boxes(boxes, scale=1.0):
     return scaled
 
 
+def build_processing_parameters(
+    *,
+    scale: float,
+    upsample: float,
+    preprocess: bool,
+    column_visibility: Mapping[str, object] | None,
+    item_color: str | None,
+    relic_type: str | None,
+    master_csv_path: str | None,
+    corrections_csv: str | None,
+    demerit_master_csv_path: str | None,
+    ocr_engine: str,
+    gcp_credentials: str | None,
+    gcp_credentials_filename: str | None,
+) -> ProcessingParameters:
+    normalized_engine = (ocr_engine or "tesseract").lower()
+    credentials_path: Path | None = None
+    if normalized_engine in {"vision", "google", "google-vision"}:
+        credentials_path = _resolve_gcp_credentials(
+            gcp_credentials,
+            gcp_credentials_filename,
+        )
+        print("[INFO] Google Cloud Vision API を利用して OCR を実行します")
+
+    ocr_settings = OCRSettings(
+        config=OCR_CONFIG,
+        engine=normalized_engine,
+        preprocess=preprocess,
+        resize_scale=upsample,
+        vision_credentials_path=credentials_path,
+    )
+
+    crop_boxes = scale_crop_boxes(BASE_CROP_BOXES, scale)
+    column_flags = normalize_column_visibility(
+        column_visibility,
+        defaults=dict(DEFAULT_COLUMN_VISIBILITY),
+    )
+
+    raw_relic_type = (relic_type or "").strip()
+    lowered_relic_type = raw_relic_type.lower()
+    if lowered_relic_type in {"深層", "深層遺物"}:
+        normalized_relic_type = "deep"
+    elif lowered_relic_type in {"deep"}:
+        normalized_relic_type = "deep"
+    elif lowered_relic_type in {"normal", "通常"}:
+        normalized_relic_type = "normal"
+    elif lowered_relic_type:
+        normalized_relic_type = "normal"
+    else:
+        normalized_relic_type = "normal"
+
+    display_relic_type = normalized_relic_type if raw_relic_type else ""
+
+    if master_csv_path:
+        master_path = master_csv_path
+    else:
+        if normalized_relic_type == "deep":
+            master_path = templates_path("master_relics_deep.csv")
+        else:
+            master_path = DICTIONARY_PATH
+
+    dictionary, level_map = load_master_effects_and_levels(
+        master_path, column=COLUMN_NAME_IN_CSV
+    )
+    if not dictionary:
+        print("辞書の読み込み失敗")
+
+    corrections_map = load_corrections(corrections_csv)
+    if corrections_map:
+        dictionary = normalize_master_values(list(dictionary) + list(corrections_map.values()))
+
+    default_matching = MatchingSettings(
+        dictionary=list(dictionary),
+        scorer=fuzz.WRatio,
+        corrections=corrections_map or {},
+        correction_score=CORRECTION_SCORE,
+    )
+
+    slot_settings: dict[int, MatchingSettings] = {}
+    slot_sources: dict[int, str] = {}
+    demerit_slots: list[int] = []
+    demerit_matching: MatchingSettings | None = None
+
+    if normalized_relic_type == "deep":
+        demerit_path = demerit_master_csv_path or DEMERIT_DICTIONARY_PATH
+        demerit_candidates = load_master_csv(demerit_path, column=COLUMN_NAME_IN_CSV)
+        if demerit_candidates:
+            if corrections_map:
+                demerit_candidates = normalize_master_values(
+                    list(demerit_candidates) + list(corrections_map.values())
+                )
+            demerit_matching = MatchingSettings(
+                dictionary=list(demerit_candidates),
+                scorer=fuzz.WRatio,
+                corrections=corrections_map or {},
+                correction_score=CORRECTION_SCORE,
+            )
+        else:
+            print(f"[WARN] デメリット辞書が見つかりません: {demerit_path}")
+        demerit_slots = list(range(1, len(crop_boxes) + 1))
+
+    export_options = ExportOptions(
+        column_visibility=column_flags,
+        slot_range=range(1, len(crop_boxes) + 1),
+        level_map=level_map,
+        item_color=item_color,
+        relic_type=display_relic_type,
+        demerit_slots=tuple(demerit_slots),
+    )
+
+    return ProcessingParameters(
+        crop_boxes=crop_boxes,
+        ocr_settings=ocr_settings,
+        export_options=export_options,
+        default_matching=default_matching,
+        slot_settings=slot_settings,
+        slot_sources=slot_sources,
+        demerit_matching=demerit_matching,
+    )
+
+
 def ocr_and_match(
     img_path,
-    dictionary,
-    corrections_map=None,
-    scale=1.0,
-    upsample=DEFAULT_UPSAMPLE,
-    preprocess=True,
-    crop_boxes=None,
-    ocr_engine: str = "tesseract",
-    vision_credentials_path: Path | None = None,
+    *,
+    crop_boxes: Sequence[tuple[int, int, int, int]],
+    ocr_settings: OCRSettings,
+    default_matching: MatchingSettings,
     slot_settings: Mapping[int, MatchingSettings] | None = None,
     slot_sources: Mapping[int, str] | None = None,
 ) -> tuple[list[MatchResult], list[list[str]]]:
-    boxes = crop_boxes or scale_crop_boxes(BASE_CROP_BOXES, scale)
+    boxes = crop_boxes
 
     try:
         img_cv = cv2.imread(img_path)
@@ -163,28 +293,13 @@ def ocr_and_match(
         if not valid_crops:
             return results, recognized_lines
 
-        ocr_settings = OCRSettings(
-            lang="jpn",
-            config=OCR_CONFIG,
-            engine=ocr_engine,
-            preprocess=preprocess,
-            resize_scale=upsample,
-            vision_credentials_path=vision_credentials_path,
-        )
         recognized_texts = batch_recognize(valid_crops, settings=ocr_settings)
-
-        default_settings = MatchingSettings(
-            dictionary=list(dictionary),
-            scorer=fuzz.WRatio,
-            corrections=corrections_map or {},
-            correction_score=CORRECTION_SCORE,
-        )
 
         slot_overrides = slot_settings or {}
         source_overrides = slot_sources or {}
 
         for position, text, slot_index in zip(valid_positions, recognized_texts, valid_slots):
-            settings = slot_overrides.get(slot_index, default_settings)
+            settings = slot_overrides.get(slot_index, default_matching)
             lines = [line.strip() for line in text.splitlines() if line.strip()]
             recognized_lines[position] = lines
 
@@ -218,29 +333,18 @@ def ocr_and_match(
 def process_images(
     image_dir="crops",
     output_path="results.csv",
-    scale=1.0,
-    upsample=DEFAULT_UPSAMPLE,
-    preprocess=True,
-    corrections_csv=None,
-    item_color=None,
-    column_visibility=None,
-    master_csv_path=None,
-    relic_type=None,
-    demerit_master_csv_path: str | None = None,
-    ocr_engine: str = "tesseract",
-    gcp_credentials: str | None = None,
-    gcp_credentials_filename: str | None = DEFAULT_GCP_CREDENTIALS_FILENAME,
+    *,
+    crop_boxes: Sequence[tuple[int, int, int, int]],
+    ocr_settings: OCRSettings,
+    export_options: ExportOptions,
+    default_matching: MatchingSettings,
+    slot_settings: Mapping[int, MatchingSettings] | None = None,
+    slot_sources: Mapping[int, str] | None = None,
+    demerit_matching: MatchingSettings | None = None,
 ):
     global _TESSERACT_NOTICE_SHOWN
-    normalized_engine = ocr_engine.lower()
-    credentials_path: Path | None = None
-    if normalized_engine in {"vision", "google", "google-vision"}:
-        credentials_path = _resolve_gcp_credentials(
-            gcp_credentials,
-            gcp_credentials_filename,
-        )
-        print("[INFO] Google Cloud Vision API を利用して OCR を実行します")
-    elif normalized_engine == "tesseract":
+    normalized_engine = (ocr_settings.engine or "tesseract").lower()
+    if normalized_engine == "tesseract":
         if not _TESSERACT_NOTICE_SHOWN:
             if is_system_tesseract_preferred():
                 reason = system_tesseract_reason()
@@ -251,81 +355,19 @@ def process_images(
             _TESSERACT_NOTICE_SHOWN = True
         version = pytesseract.get_tesseract_version()
         print(f"Tesseract Ver: {version}")
-    else:
-        raise ValueError(f"サポートされていない OCR エンジンです: {ocr_engine}")
+    elif normalized_engine not in {"vision", "google", "google-vision"}:
+        raise ValueError(f"サポートされていない OCR エンジンです: {ocr_settings.engine}")
 
-    raw_relic_type = (relic_type or "").strip()
-    lowered_relic_type = raw_relic_type.lower()
-    if lowered_relic_type in {"深層", "深層遺物"}:
-        normalized_relic_type = "deep"
-    elif lowered_relic_type in {"deep"}:
-        normalized_relic_type = "deep"
-    elif lowered_relic_type in {"normal", "通常"}:
-        normalized_relic_type = "normal"
-    elif lowered_relic_type:
-        normalized_relic_type = "normal"
-    else:
-        normalized_relic_type = "normal"
-
-    display_relic_type = normalized_relic_type if raw_relic_type else ""
-
-    if master_csv_path:
-        master_path = master_csv_path
-    else:
-        if normalized_relic_type == "deep":
-            master_path = templates_path("master_relics_deep.csv")
-        else:
-            master_path = DICTIONARY_PATH
-
-    dictionary, level_map = load_master_effects_and_levels(
-        master_path, column=COLUMN_NAME_IN_CSV
-    )
-    if not dictionary:
+    if not default_matching.dictionary:
         print("辞書の読み込み失敗")
         return
 
-    corrections_map = load_corrections(corrections_csv)
-    if corrections_map:
-        dictionary = normalize_master_values(list(dictionary) + list(corrections_map.values()))
-
-    slot_settings: dict[int, MatchingSettings] = {}
-    slot_sources: dict[int, str] = {}
-    demerit_slots: list[int] = []
-    demerit_settings: MatchingSettings | None = None
-
-    if normalized_relic_type == "deep":
-        demerit_path = demerit_master_csv_path or DEMERIT_DICTIONARY_PATH
-        demerit_candidates = load_master_csv(demerit_path, column=COLUMN_NAME_IN_CSV)
-        if demerit_candidates:
-            if corrections_map:
-                demerit_candidates = normalize_master_values(
-                    list(demerit_candidates) + list(corrections_map.values())
-                )
-            demerit_settings = MatchingSettings(
-                dictionary=list(demerit_candidates),
-                scorer=fuzz.WRatio,
-                corrections=corrections_map or {},
-                correction_score=CORRECTION_SCORE,
-            )
-        else:
-            print(f"[WARN] デメリット辞書が見つかりません: {demerit_path}")
-
-    crop_boxes = scale_crop_boxes(BASE_CROP_BOXES, scale)
-    column_flags = normalize_column_visibility(
-        column_visibility,
-        defaults=DEFAULT_COLUMN_VISIBILITY,
-    )
-    slot_range = range(1, len(crop_boxes) + 1)
-    if normalized_relic_type == "deep":
-        demerit_slots = list(slot_range)
-    export_options = ExportOptions(
-        column_visibility=column_flags,
-        slot_range=slot_range,
-        level_map=level_map,
-        item_color=item_color,
-        relic_type=display_relic_type,
-        demerit_slots=tuple(demerit_slots),
-    )
+    slot_overrides = slot_settings or {}
+    source_overrides = slot_sources or {}
+    column_flags = export_options.column_visibility
+    slot_range = list(export_options.slot_range)
+    if len(slot_range) != len(crop_boxes):
+        print("[WARN] スロット数とクロップ数が一致しません。設定を確認してください。")
 
     rows: list[dict[str, object]] = []
     for fname in sorted(os.listdir(image_dir)):
@@ -334,27 +376,22 @@ def process_images(
         img_path = os.path.join(image_dir, fname)
         match_results, recognized_lines = ocr_and_match(
             img_path,
-            dictionary,
-            corrections_map=corrections_map,
-            scale=scale,
-            upsample=upsample,
-            preprocess=preprocess,
             crop_boxes=crop_boxes,
-            ocr_engine=normalized_engine,
-            vision_credentials_path=credentials_path,
-            slot_settings=slot_settings,
-            slot_sources=slot_sources,
+            ocr_settings=ocr_settings,
+            default_matching=default_matching,
+            slot_settings=slot_overrides,
+            slot_sources=source_overrides,
         )
         demerit_row_matches: dict[int, MatchResult] = {}
-        if normalized_relic_type == "deep":
+        if export_options.demerit_slots:
             for idx, lines in zip(slot_range, recognized_lines):
                 if not lines or len(lines) < 2:
                     continue
                 demerit_text = " ".join(lines[1:]).strip()
                 if not demerit_text:
                     continue
-                if demerit_settings is not None:
-                    demerit_match = resolve_effect(demerit_text, settings=demerit_settings)
+                if demerit_matching is not None:
+                    demerit_match = resolve_effect(demerit_text, settings=demerit_matching)
                     demerit_match = replace(
                         demerit_match,
                         raw_text=demerit_text,
@@ -431,6 +468,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         dest="corrections_csv",
         default=None,
         help="フィードバックCSVのパス",
+    )
+    parser.add_argument(
+        "--master-csv",
+        dest="master_csv_path",
+        default=None,
+        help="効果辞書として利用する CSV のパス",
+    )
+    parser.add_argument(
+        "--demerit-master-csv",
+        dest="demerit_master_csv_path",
+        default=None,
+        help="深層遺物向けデメリット辞書の CSV パス",
     )
     parser.add_argument(
         "--item-color",
