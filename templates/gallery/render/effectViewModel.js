@@ -59,16 +59,20 @@
             const predictionSourceText = predictionSourceRaw == null ? '' : String(predictionSourceRaw);
             const levelSourceText = levelSourceRaw == null ? '' : String(levelSourceRaw);
             const sourceFields = [];
-            sourceFields.push({
-                key: predictionSourceKey,
-                value: predictionSourceText,
-                hasValue: hasPredictionSource
-            });
-            sourceFields.push({
-                key: levelSourceKey,
-                value: levelSourceText,
-                hasValue: hasLevelSource
-            });
+            if (hasPredictionSource) {
+                sourceFields.push({
+                    key: predictionSourceKey,
+                    value: predictionSourceText,
+                    hasValue: hasPredictionSource
+                });
+            }
+            if (hasLevelSource) {
+                sourceFields.push({
+                    key: levelSourceKey,
+                    value: levelSourceText,
+                    hasValue: hasLevelSource
+                });
+            }
 
             if (!predictionText && !rawText && !hasScoreValue && !allowEmptyDemerit) {
                 return null;
@@ -146,16 +150,20 @@
         const predictionSourceText = predictionSourceRaw == null ? '' : String(predictionSourceRaw);
         const levelSourceText = levelSourceRaw == null ? '' : String(levelSourceRaw);
         const sourceFields = [];
-        sourceFields.push({
-            key: predictionSourceKey,
-            value: predictionSourceText,
-            hasValue: hasPredictionSource
-        });
-        sourceFields.push({
-            key: levelSourceKey,
-            value: levelSourceText,
-            hasValue: hasLevelSource
-        });
+        if (hasPredictionSource) {
+            sourceFields.push({
+                key: predictionSourceKey,
+                value: predictionSourceText,
+                hasValue: hasPredictionSource
+            });
+        }
+        if (hasLevelSource) {
+            sourceFields.push({
+                key: levelSourceKey,
+                value: levelSourceText,
+                hasValue: hasLevelSource
+            });
+        }
 
         if (!predictionText && !rawText && !hasScoreValue) {
             return null;
