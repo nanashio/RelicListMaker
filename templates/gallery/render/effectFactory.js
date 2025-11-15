@@ -611,7 +611,6 @@
 
             const predictionLine = createEffectPredictionLine(context);
             effect.appendChild(predictionLine);
-            updateLevelBadge(effect);
 
             const rawLine = createEffectRawLine(context);
             effect.appendChild(rawLine);
@@ -693,17 +692,67 @@
             return effect;
         }
 
+        function formatPredictionSourceValue(value, hasValue) {
+            if (!hasValue) {
+                return '--';
+            }
+            if (value == null) {
+                return '--';
+            }
+            const text = String(value).trim();
+            if (!text) {
+                return '--';
+            }
+            if (text.toLowerCase() === 'none') {
+                return '--';
+            }
+            return text;
+        }
+
         function createEffectPredictionLine(context) {
             const predictionLine = createElement('div', 'prediction');
-            const labelText = context.isDemerit ? 'デメリット:' : '推定:';
-            const predictionLabel = createElement('span', 'prediction-label', labelText);
-            const predictionValueNode = createElement(
-                'span',
-                'prediction-value',
-                context.predictionText || '--'
-            );
-            predictionLine.appendChild(predictionLabel);
-            predictionLine.appendChild(predictionValueNode);
+
+            const sourceFields = Array.isArray(context && context.sourceFields)
+                ? context.sourceFields
+                : [];
+            const sourceItems = sourceFields.filter((field) => {
+                if (!field || typeof field.key === 'undefined') {
+                    return false;
+                }
+                const labelText = String(field.key).trim();
+                return labelText.length > 0;
+            });
+
+            if (sourceItems.length === 0) {
+                const fallbackLabel = context && context.isDemerit ? 'デメリット:' : '推定:';
+                const predictionLabel = createElement('span', 'prediction-label', fallbackLabel);
+                const predictionValueNode = createElement(
+                    'span',
+                    'prediction-value',
+                    (context && context.predictionText) || '--'
+                );
+                predictionLine.appendChild(predictionLabel);
+                predictionLine.appendChild(predictionValueNode);
+                predictionLine.style.display = state.showOcr ? '' : 'none';
+                return predictionLine;
+            }
+
+            const sourceLabel = createElement('span', 'prediction-label', 'OCR推定:');
+            predictionLine.appendChild(sourceLabel);
+
+            sourceItems.forEach((item, index) => {
+                if (index > 0) {
+                    const separator = createElement('span', 'prediction-separator', '/');
+                    predictionLine.appendChild(separator);
+                }
+                const valueNode = createElement(
+                    'span',
+                    'prediction-value',
+                    formatPredictionSourceValue(item.value, Boolean(item.hasValue))
+                );
+                predictionLine.appendChild(valueNode);
+            });
+
             predictionLine.style.display = state.showOcr ? '' : 'none';
             return predictionLine;
         }
@@ -776,67 +825,6 @@
                 context.levelCorrection || (context.preserveOriginalLevel ? context.levelValue : '') || '';
             levelInput.value = initialLevelValue;
             updateLevelInputAvailability(levelInput, sortedLevelChoices);
-        }
-
-        function updateLevelBadge(effect) {
-            const predictionLine = effect.querySelector('.prediction');
-            if (!predictionLine) {
-                return;
-            }
-            let badge = predictionLine.querySelector('.level-badge');
-            const originalValue = effect.dataset.levelOriginalValue || '';
-            const preserveOriginalLevel = effect.dataset.preserveOriginalLevel !== 'false';
-            const correctionValue = effect.dataset.levelCorrectionValue || '';
-            const optionsDisplay = effect.dataset.levelOptionsDisplay || '';
-            const optionsList = optionsDisplay
-                ? optionsDisplay
-                      .split('|')
-                      .map((value) => value.trim())
-                      .filter((value) => value && !isNonePlaceholder(value))
-                : [];
-
-            if (correctionValue) {
-                if (!badge) {
-                    badge = createElement('span', 'level-badge level-badge--corrected');
-                    predictionLine.appendChild(badge);
-                }
-                badge.textContent = correctionValue;
-                badge.className = 'level-badge level-badge--corrected';
-                badge.title = originalValue ? `OCR: ${originalValue}` : '';
-                return;
-            }
-
-            if (originalValue && preserveOriginalLevel) {
-                if (!badge) {
-                    badge = createElement('span', 'level-badge');
-                    predictionLine.appendChild(badge);
-                }
-                badge.textContent = originalValue;
-                badge.className = 'level-badge';
-                badge.title = '';
-                return;
-            }
-
-            if (optionsList.length) {
-                const primaryOption = optionsList[0];
-                if (!badge) {
-                    badge = createElement('span', 'level-badge level-badge--missing');
-                    predictionLine.appendChild(badge);
-                }
-                badge.textContent = primaryOption;
-                badge.className = 'level-badge level-badge--missing';
-                if (optionsList.length > 1) {
-                    const tooltipText = optionsList.join(' / ');
-                    badge.title = `候補: ${tooltipText}`;
-                } else {
-                    badge.title = `候補: ${primaryOption}`;
-                }
-                return;
-            }
-
-            if (badge) {
-                badge.remove();
-            }
         }
 
         function updateEffectStatus(effect, status) {
@@ -1004,7 +992,6 @@
 
             effect.dataset.levelOptionsDisplay = buildLevelOptionsDisplay(sortedFinalValues);
             effect.dataset.levelOptions = sortedFinalValues.map((value) => value.toLowerCase()).join('|');
-            updateLevelBadge(effect);
         }
 
         function getEffectIndexes(effect) {
@@ -1060,7 +1047,6 @@
         return {
             createEffect,
             updateEffectStatus,
-            updateLevelBadge,
             rebuildLevelSelectOptions,
             setCorrectionLevelCandidates,
             getEffectIndexes,

@@ -734,22 +734,9 @@ h1 {
     font-weight: 600;
 }
 
-.level-badge {
-    font-size: 12px;
-    padding: var(--space-2xs) var(--space-md);
-    border-radius: 999px;
-    background: var(--color-badge-blue-background);
-    color: var(--color-badge-blue-text);
-}
-
-.level-badge--missing {
-    background: var(--color-warning-background);
-    color: var(--color-badge-orange-text);
-}
-
-.level-badge--corrected {
-    background: var(--color-success-background);
-    color: var(--color-success-text);
+.prediction-separator {
+    font-weight: 400;
+    color: var(--color-text-muted);
 }
 
 .level-input {

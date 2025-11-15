@@ -29,7 +29,6 @@
             createCorrectionInput,
             setCorrectionLevelCandidates,
             rebuildLevelSelectOptions,
-            updateLevelBadge,
             getEffectIndexes,
             updateInputValueAttribute,
             updateLevelInputAvailability,
@@ -60,7 +59,6 @@
             createCorrectionInput,
             setCorrectionLevelCandidates,
             rebuildLevelSelectOptions,
-            updateLevelBadge,
             getEffectIndexes,
             updateInputValueAttribute,
             updateLevelInputAvailability,
@@ -530,7 +528,6 @@
             );
             applyDatasetLevel(effect, storedLevel);
 
-            updateLevelBadge(effect);
             refreshItemFromEffect(effect);
             syncLinkedDemeritEffect(effect);
 
@@ -620,7 +617,6 @@
                             rebuildLevelSelectOptions(effect, levelInput);
                         }
                         setCorrectionLevelCandidates(effect, []);
-                        updateLevelBadge(effect);
                     } else {
                         resetCorrectionInput(effect);
                         setCorrectionLevelCandidates(effect, []);
