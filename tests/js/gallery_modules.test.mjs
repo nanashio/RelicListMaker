@@ -2331,36 +2331,6 @@ describe('gallery effect factory', () => {
     assert.equal(enabledInput.attributes['aria-readonly'], undefined);
   });
 
-  test('updateLevelBadge prioritizes correction and available options', () => {
-    const effect = new MockElement('div', 'effect');
-    const predictionLine = new MockElement('div', 'prediction');
-    effect.appendChild(predictionLine);
-    effect.dataset.levelOriginalValue = 'Base';
-    effect.dataset.preserveOriginalLevel = 'true';
-    effect.dataset.levelOptionsDisplay = 'Base|Alt';
-    effect.dataset.levelCorrectionValue = '';
-    effectFactory.updateLevelBadge(effect);
-    let badge = predictionLine.querySelector('.level-badge');
-    assert.ok(badge, 'badge should exist after initial render');
-    assert.equal(badge.textContent, 'Base');
-    assert.equal(badge.className.includes('level-badge--corrected'), false);
-
-    effect.dataset.levelCorrectionValue = 'Custom';
-    effectFactory.updateLevelBadge(effect);
-    badge = predictionLine.querySelector('.level-badge');
-    assert.equal(badge.textContent, 'Custom');
-    assert.ok(badge.className.includes('level-badge--corrected'));
-
-    effect.dataset.levelCorrectionValue = '';
-    effect.dataset.preserveOriginalLevel = 'false';
-    effect.dataset.levelOptionsDisplay = 'Alt|Beta';
-    effectFactory.updateLevelBadge(effect);
-    badge = predictionLine.querySelector('.level-badge');
-    assert.equal(badge.textContent, 'Alt');
-    assert.ok(badge.className.includes('level-badge--missing'));
-    assert.equal(badge.title, '候補: Alt / Beta');
-  });
-
   test('parseLevelOptions is delegated to effect view model', () => {
     const viewModel = global.window.galleryRenderFactory.effectViewModel;
     assert.strictEqual(effectFactory.parseLevelOptions, viewModel.parseLevelOptions);
@@ -2703,7 +2673,6 @@ describe('record action handlers', () => {
       createCorrectionInput: () => new MockElement('input'),
       setCorrectionLevelCandidates: () => {},
       rebuildLevelSelectOptions: () => {},
-      updateLevelBadge: () => {},
       getEffectIndexes: () => ({ recordIndex: 0, slotIndex: 0 }),
       updateInputValueAttribute: () => {},
       updateLevelInputAvailability: () => {},
@@ -3115,7 +3084,6 @@ describe('record action handlers', () => {
 
     const statusCalls = [];
     const effectStatusCalls = [];
-    const badgeCalls = [];
     const refreshCalls = [];
     const filterCalls = [];
     const scheduleCalls = [];
@@ -3135,7 +3103,6 @@ describe('record action handlers', () => {
         record[`Effect${slotIndex}Level`] = value;
         return true;
       },
-      updateLevelBadge: (target) => badgeCalls.push(target),
       getEffectIndexes: () => ({ recordIndex: 2, slotIndex: 1 })
     });
 
@@ -3144,7 +3111,6 @@ describe('record action handlers', () => {
 
     assert.deepEqual(statusCalls, ['corrected']);
     assert.deepEqual(effectStatusCalls, ['corrected']);
-    assert.equal(badgeCalls.length, 1);
     assert.equal(refreshCalls.length, 1);
     assert.equal(filterCalls.length, 1);
     assert.equal(scheduleCalls.length, 0);
@@ -3241,7 +3207,6 @@ describe('record action handlers', () => {
     levelInput.value = '';
     effect.appendChild(levelInput);
 
-    const badgeCalls = [];
     const refreshCalls = [];
     const filterCalls = [];
     const scheduleCalls = [];
@@ -3265,14 +3230,12 @@ describe('record action handlers', () => {
         }
         return true;
       },
-      updateLevelBadge: (target) => badgeCalls.push(target),
       getEffectIndexes: () => ({ recordIndex: 1, slotIndex: 3 })
     });
 
     const handlers = handlerFactory.createRecordActionHandlers(deps);
     handlers.changeEffectLevel(effect, levelInput);
 
-    assert.equal(badgeCalls.length, 1);
     assert.equal(refreshCalls.length, 1);
     assert.equal(filterCalls.length, 1);
     assert.equal(scheduleCalls.length, 1);
@@ -3313,7 +3276,6 @@ describe('record action handlers', () => {
     const deps = buildBaseDeps(record, item, {
       refreshItemCaches: () => {},
       applyFilters: () => {},
-      updateLevelBadge: () => {},
       recordStatusChange: () => false,
       updateEffectStatus: () => {},
       syncDemeritAvailability: (target, options) => syncCalls.push([target, options]),
@@ -3400,7 +3362,6 @@ describe('record action handlers', () => {
           }
           return true;
         },
-        updateLevelBadge: () => {},
         refreshItemCaches: () => {},
         applyFilters: () => {},
         recordStatusChange: () => false,
@@ -3467,7 +3428,6 @@ describe('record action handlers', () => {
 
     const rebuildCalls = [];
     const candidateCalls = [];
-    const badgeCalls = [];
     const refreshCalls = [];
     const filterCalls = [];
     const scheduleCalls = [];
@@ -3501,7 +3461,6 @@ describe('record action handlers', () => {
       },
       rebuildLevelSelectOptions: (_effect, selectEl) => rebuildCalls.push(selectEl),
       setCorrectionLevelCandidates: (_effect, candidates) => candidateCalls.push(candidates),
-      updateLevelBadge: (target) => badgeCalls.push(target),
       createCorrectionInput: (context, value, predictionDefault) => {
         createCorrectionCalls.push([context && context.isDemerit, value, predictionDefault]);
         return replacementInput;
@@ -3524,7 +3483,6 @@ describe('record action handlers', () => {
     assert.equal(levelInput.value, '');
     assert.deepEqual(candidateCalls, [[]]);
     assert.deepEqual(rebuildCalls, [levelInput]);
-    assert.equal(badgeCalls.length, 1);
     assert.equal(refreshCalls.length, 1);
     assert.equal(filterCalls.length, 1);
     assert.equal(scheduleCalls.length, 1);
@@ -3601,7 +3559,6 @@ describe('gallery events', () => {
         input.dataset.kind = context && context.isDemerit ? 'demerit' : 'effect';
         return input;
       },
-      updateLevelBadge: () => {},
       getEffectIndexes: (effect) => ({
         recordIndex: Number(effect.dataset.recordIndex),
         slotIndex: Number(effect.dataset.slot)

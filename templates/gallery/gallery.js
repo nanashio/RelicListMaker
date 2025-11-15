@@ -1802,7 +1802,6 @@
     const {
         createEffect,
         updateEffectStatus,
-        updateLevelBadge,
         rebuildLevelSelectOptions,
         setCorrectionLevelCandidates,
         getEffectIndexes,
@@ -1896,7 +1895,6 @@
                   setCorrectionLevelCandidates,
                   rebuildLevelSelectOptions,
                   createCorrectionInput,
-                  updateLevelBadge,
                   getEffectIndexes,
                   updateInputValueAttribute,
                   updateLevelInputAvailability,

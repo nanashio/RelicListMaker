@@ -611,7 +611,6 @@
 
             const predictionLine = createEffectPredictionLine(context);
             effect.appendChild(predictionLine);
-            updateLevelBadge(effect);
 
             const rawLine = createEffectRawLine(context);
             effect.appendChild(rawLine);
@@ -738,19 +737,19 @@
                 return predictionLine;
             }
 
+            const sourceLabel = createElement('span', 'prediction-label', 'OCR推定:');
+            predictionLine.appendChild(sourceLabel);
+
             sourceItems.forEach((item, index) => {
                 if (index > 0) {
                     const separator = createElement('span', 'prediction-separator', '/');
                     predictionLine.appendChild(separator);
                 }
-                const labelText = String(item.key).trim();
-                const label = createElement('span', 'prediction-label', `${labelText}:`);
                 const valueNode = createElement(
                     'span',
                     'prediction-value',
                     formatPredictionSourceValue(item.value, Boolean(item.hasValue))
                 );
-                predictionLine.appendChild(label);
                 predictionLine.appendChild(valueNode);
             });
 
@@ -826,67 +825,6 @@
                 context.levelCorrection || (context.preserveOriginalLevel ? context.levelValue : '') || '';
             levelInput.value = initialLevelValue;
             updateLevelInputAvailability(levelInput, sortedLevelChoices);
-        }
-
-        function updateLevelBadge(effect) {
-            const predictionLine = effect.querySelector('.prediction');
-            if (!predictionLine) {
-                return;
-            }
-            let badge = predictionLine.querySelector('.level-badge');
-            const originalValue = effect.dataset.levelOriginalValue || '';
-            const preserveOriginalLevel = effect.dataset.preserveOriginalLevel !== 'false';
-            const correctionValue = effect.dataset.levelCorrectionValue || '';
-            const optionsDisplay = effect.dataset.levelOptionsDisplay || '';
-            const optionsList = optionsDisplay
-                ? optionsDisplay
-                      .split('|')
-                      .map((value) => value.trim())
-                      .filter((value) => value && !isNonePlaceholder(value))
-                : [];
-
-            if (correctionValue) {
-                if (!badge) {
-                    badge = createElement('span', 'level-badge level-badge--corrected');
-                    predictionLine.appendChild(badge);
-                }
-                badge.textContent = correctionValue;
-                badge.className = 'level-badge level-badge--corrected';
-                badge.title = originalValue ? `OCR: ${originalValue}` : '';
-                return;
-            }
-
-            if (originalValue && preserveOriginalLevel) {
-                if (!badge) {
-                    badge = createElement('span', 'level-badge');
-                    predictionLine.appendChild(badge);
-                }
-                badge.textContent = originalValue;
-                badge.className = 'level-badge';
-                badge.title = '';
-                return;
-            }
-
-            if (optionsList.length) {
-                const primaryOption = optionsList[0];
-                if (!badge) {
-                    badge = createElement('span', 'level-badge level-badge--missing');
-                    predictionLine.appendChild(badge);
-                }
-                badge.textContent = primaryOption;
-                badge.className = 'level-badge level-badge--missing';
-                if (optionsList.length > 1) {
-                    const tooltipText = optionsList.join(' / ');
-                    badge.title = `候補: ${tooltipText}`;
-                } else {
-                    badge.title = `候補: ${primaryOption}`;
-                }
-                return;
-            }
-
-            if (badge) {
-                badge.remove();
-            }
         }
 
         function updateEffectStatus(effect, status) {
@@ -1054,7 +992,6 @@
 
             effect.dataset.levelOptionsDisplay = buildLevelOptionsDisplay(sortedFinalValues);
             effect.dataset.levelOptions = sortedFinalValues.map((value) => value.toLowerCase()).join('|');
-            updateLevelBadge(effect);
         }
 
         function getEffectIndexes(effect) {
@@ -1110,7 +1047,6 @@
         return {
             createEffect,
             updateEffectStatus,
-            updateLevelBadge,
             rebuildLevelSelectOptions,
             setCorrectionLevelCandidates,
             getEffectIndexes,

@@ -18,7 +18,6 @@
             setCorrectionLevelCandidates,
             rebuildLevelSelectOptions,
             createCorrectionInput,
-            updateLevelBadge,
             getEffectIndexes,
             updateInputValueAttribute,
             updateLevelInputAvailability,
@@ -56,9 +55,6 @@
         }
         if (typeof createCorrectionInput !== 'function') {
             throw new Error('createGalleryEvents: createCorrectionInput helper is required');
-        }
-        if (typeof updateLevelBadge !== 'function') {
-            throw new Error('createGalleryEvents: updateLevelBadge helper is required');
         }
         if (typeof getEffectIndexes !== 'function') {
             throw new Error('createGalleryEvents: getEffectIndexes helper is required');
@@ -225,7 +221,6 @@
                 createCorrectionInput,
                 setCorrectionLevelCandidates,
                 rebuildLevelSelectOptions,
-                updateLevelBadge,
                 getEffectIndexes,
                 updateInputValueAttribute,
                 updateLevelInputAvailability,
