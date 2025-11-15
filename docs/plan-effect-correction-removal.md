@@ -17,6 +17,7 @@
 - ✅ フェーズ 3-4 フォローアップ: 統合データセット（`merged`）の深層遺物がタイプ別デメリットルールを確実に参照するよう `effectFactory` を調整し、Node.js テストで入力プレースホルダーとレビュー操作の可用性を確認しました。【F:templates/gallery/render/effectFactory.js†L160-L214】【F:templates/gallery/render/effectFactory.js†L287-L336】【F:tests/js/gallery_modules.test.mjs†L2118-L2171】
 - ✅ フェーズ 3-3: `Effect{n}LevelSuppressed` 列を完全廃止し、出力・マージ・ビューアのいずれでも候補リストの `none` 判定に一本化しました。生成 CSV に列が現れないことと `Effect{n}LevelOptions` の保持をテストで確認済みです。【F:relic_pipeline/io/exporter.py†L150-L159】【F:tests/test_merge_results.py†L244-L269】【F:docs/reference-csv-columns.md†L55-L96】
 - ✅ フェーズ 3-5: リポジトリ内のサンプル CSV を再確認し、`templates/master_relics*.csv` のみが管理対象で補助列が残存していないことを確認しました。`datasets/` と `tests/` に CSV は含まれておらず、補助列付きファイルのクリーンアップは不要と結論づけています。【F:templates/master_relics.csv†L1-L6】【F:templates/master_relics_deep.csv†L1-L6】【F:templates/master_relics_demerit.csv†L1-L6】
+- ✅ 次のアクション (2025-11-15): README にレビュー手順と補助列マイグレーション手順を追加し、ビューアが基列を直接更新する運用と `scripts/migrate_effect_corrections.py` の利用方法を共有しました。【F:README.md†L29-L36】【F:README.md†L74-L85】
 
 ## 段階的削除方針
 補助列を即時削除すると既存のレビュー CSV からの復元や未保存データの損失リスクがあるため、段階的な移行を推奨します。以下の 3 フェーズで順次機能を削除します。
@@ -51,5 +52,5 @@
 - CSV 出力を参照する外部ツールがある場合は API 互換性の確認と修正依頼のスケジュールを調整する。
 
 ## 次のアクション
-- レビュー手順書・GUI ドキュメントを刷新し、基列を直接編集する新しいフローとステータス更新ルールを共有する。
-- `scripts/migrate_effect_corrections.py` の運用手順をレビュー手順書へ組み込み、補助列付き CSV が投入された際のエラー解消フローを共有する。
+- ✅ レビュー手順書・GUI ドキュメントを刷新し、基列を直接編集する新しいフローとステータス更新ルールを README で共有済み。【F:README.md†L29-L36】
+- ✅ `scripts/migrate_effect_corrections.py` の運用手順を README へ組み込み、補助列付き CSV が投入された際のエラー解消フローを提示しました。【F:README.md†L74-L85】
