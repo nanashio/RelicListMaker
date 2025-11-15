@@ -1989,7 +1989,7 @@ describe('gallery effect factory', () => {
       Effect1Status: 'pending',
       Demerit1: 'Heavy Burden',
       Demerit1RawText: 'Heavy Burden',
-      Demerit1Score: 35.2
+      Demerit1Score: 45.5
     };
     const localFactory = global.window.galleryRenderFactory.createEffectFactory({
       state: {
@@ -2024,6 +2024,7 @@ describe('gallery effect factory', () => {
     assert.equal(effect.attributes['aria-hidden'], undefined);
     assert.equal(effect.dataset.hiddenDemerit, undefined);
     assert.equal(effect.classList.contains('effect--demerit-noinput'), true);
+    assert.equal(effect.classList.contains('low-confidence'), true);
   });
 
   test('deep relic treats hyphen placeholder effect as demerit exempt', () => {
@@ -2069,6 +2070,7 @@ describe('gallery effect factory', () => {
     assert.equal(effect.style.display, '');
     assert.equal(effect.dataset.hiddenDemerit, undefined);
     assert.equal(effect.classList.contains('effect--demerit-noinput'), true);
+    assert.equal(effect.classList.contains('low-confidence'), true);
   });
 
   test('deep relic enables demerit controls when matching level is available', () => {
