@@ -123,12 +123,6 @@ coll = COLLECT(
 # dist 出力に videos ディレクトリを確保
 if dist_root.exists() and dist_root.is_file():
     dist_root.unlink()
-legacy_exe = project_dir / 'dist' / 'nightreign-relic.exe'
-if legacy_exe.exists():
-    legacy_exe.unlink()
-legacy_viewer_exe = project_dir / 'dist' / 'nightreign-relic-viewer.exe'
-if legacy_viewer_exe.exists():
-    legacy_viewer_exe.unlink()
 videos_target_dir = dist_root / 'videos'
 if backup_videos_dir.exists():
     if videos_target_dir.exists():
