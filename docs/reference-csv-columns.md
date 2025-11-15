@@ -5,33 +5,33 @@
 ## マスターCSVのカラム
 
 ### `templates/master_relics.csv`
-| カラム名 | 役割 | 現行コード参照 | 備考 | ビューア表示 |
-| --- | --- | --- | --- | --- |
-| `EffectBase` | 辞書照合の基準となる効果名。`load_master_csv` や `load_master_effects_and_levels` が既定列として読み込む。 | ○（`DEFAULT_MASTER_COLUMN` として常時読込） | `DEFAULT_MASTER_COLUMN` の定義により標準キーとして扱われる。【F:relic_data.py†L12-L204】 | 効果補正欄の検索入力候補（master_relics の datalist として表示）。【F:templates/gallery/gallery.js†L611-L690】【F:templates/gallery/render/effectFactory.js†L857-L888】 |
-| `Category` | 効果を系統別に分類するためのラベル。 | × | 現在のコードからは参照されず、運用メモとして利用する。【F:templates/master_relics.csv†L1-L10】 | 表示なし |
-| `Levels` | 効果ごとに許容される段階（+1、+2 など）の候補値。 | ○（レベル候補の構築に利用） | `load_master_effects_and_levels` が候補リストを構築し、`build_row` が `Effect{n}LevelOptions` を生成する際に参照する。未設定を表すプレースホルダーは `none` に統一されており、ビューアでは空欄として解釈される。【F:relic_data.py†L157-L204】【F:relic_pipeline/io/exporter.py†L164-L174】【F:templates/master_relics.csv†L1-L27】【F:templates/gallery/render/galleryView.js†L533-L568】 | 効果カードのレベルバッジとレベルセレクト候補として表示。【F:templates/gallery/render/effectFactory.js†L612-L779】【F:templates/gallery/render/effectFactory.js†L780-L835】 |
-| `Overlap` | 効果の重複可否などを記録する運用メモ列。 | × | 自動処理では使用されず、テンプレート上で `〇`/`✕` を手入力する想定。【01e9e0†L1-L7】 | 表示なし |
-| `Demerit` | デメリットの有無と発生段階を兼ねる列。 | ○（デメリット抽出に使用） | `_normalize_boolean_flag` と `_extract_level_tokens` を通じて `hasDemerit` と対応レベルを算出する。現状のテンプレートではすべて `FALSE` で常時デメリット無しとして扱われるが、`TRUE` や `＋１` などを指定すれば深淵版と同様に解釈される。【F:relic_data.py†L74-L126】【F:relic_data.py†L207-L245】【F:templates/master_relics.csv†L1-L35】 | 深淵遺物カードのデメリット入力欄の有効/非表示判定に利用。【F:templates/gallery/render/effectFactory.js†L321-L369】 |
-| `note` | 効果に関する自由記述メモ。 | × | テンプレート内に記載されるメモ列で、コードからは参照されない。【F:templates/master_relics.csv†L1-L10】 | 表示なし |
+| カラム名 | 役割 | 現行コード参照 | 備考 |
+| --- | --- | --- | --- |
+| `EffectBase` | 辞書照合の基準となる効果名。`load_master_csv` や `load_master_effects_and_levels` が既定列として読み込む。 | ○（`DEFAULT_MASTER_COLUMN` として常時読込） | `DEFAULT_MASTER_COLUMN` の定義により標準キーとして扱われる。【F:relic_data.py†L12-L204】 |
+| `Category` | 効果を系統別に分類するためのラベル。 | × | 現在のコードからは参照されず、運用メモとして利用する。【F:templates/master_relics.csv†L1-L10】 |
+| `Levels` | 効果ごとに許容される段階（+1、+2 など）の候補値。 | ○（レベル候補の構築に利用） | `load_master_effects_and_levels` が候補リストを構築し、`build_row` が `Effect{n}LevelOptions` を生成する際に参照する。未設定を表すプレースホルダーは `none` に統一されており、ビューアでは空欄として解釈される。【F:relic_data.py†L157-L204】【F:relic_pipeline/io/exporter.py†L164-L174】【F:templates/master_relics.csv†L1-L27】【F:templates/gallery/render/galleryView.js†L533-L568】 |
+| `Overlap` | 効果の重複可否などを記録する運用メモ列。 | × | 自動処理では使用されず、テンプレート上で `〇`/`✕` を手入力する想定。【01e9e0†L1-L7】 |
+| `Demerit` | デメリットの有無と発生段階を兼ねる列。 | ○（デメリット抽出に使用） | `_normalize_boolean_flag` と `_extract_level_tokens` を通じて `hasDemerit` と対応レベルを算出する。現状のテンプレートではすべて `FALSE` で常時デメリット無しとして扱われるが、`TRUE` や `＋１` などを指定すれば深淵版と同様に解釈される。【F:relic_data.py†L74-L126】【F:relic_data.py†L207-L245】【F:templates/master_relics.csv†L1-L35】 |
+| `note` | 効果に関する自由記述メモ。 | × | テンプレート内に記載されるメモ列で、コードからは参照されない。【F:templates/master_relics.csv†L1-L10】 |
 
 ### `templates/master_relics_deep.csv`
-| カラム名 | 役割 | 現行コード参照 | 備考 | ビューア表示 |
-| --- | --- | --- | --- | --- |
-| `EffectBase` | 深淵遺物向け辞書の基準名。通常版と同様に `EffectBase` がキーになる。 | ○（通常辞書と同等に読込） | 共通テンプレートとして定義される。【F:templates/master_relics_deep.csv†L1-L6】 | 効果補正欄の検索入力候補（深淵データでも共通の datalist として表示）。【F:templates/gallery/gallery.js†L611-L690】【F:templates/gallery/render/effectFactory.js†L857-L888】 |
-| `Category` | 効果区分のメモ列。 | × | 自動処理では未使用で、テンプレート上のメモとして扱う。【F:templates/master_relics_deep.csv†L1-L6】 | 表示なし |
-| `Levels` | 深淵遺物専用のレベル候補。 | ○（レベル候補の構築に利用） | `load_master_effects_and_levels` は列の有無を自動判定し、未設定を表すプレースホルダーは `none` に統一されてビューアでは空欄として扱われる。【F:relic_data.py†L178-L204】【F:templates/master_relics_deep.csv†L1-L6】【F:templates/gallery/render/galleryView.js†L533-L568】 | 効果カードのレベルバッジとレベルセレクト候補として表示。【F:templates/gallery/render/effectFactory.js†L612-L779】【F:templates/gallery/render/effectFactory.js†L780-L835】 |
-| `Overlap` | 重複可否のメモ列。 | × | テンプレート内のみで管理。【0bfb5e†L1-L10】 | 表示なし |
-| `Demerit` | デメリットの有無と内容を兼ねる列。〇/✕ 等をブール値に変換しつつ、デメリット欄の文字列からレベル候補を抽出する。 | ○（デメリット抽出に使用） | `_normalize_boolean_flag` や `_extract_level_tokens` を通じて `hasDemerit` と `levels` を算出する。値は `TRUE` で常時デメリット有り、`FALSE` で常時無し、`＋１` などのレベル表記でその段階のみデメリット有りとする。【F:relic_data.py†L74-L126】【F:relic_data.py†L207-L245】【F:templates/master_relics_deep.csv†L1-L35】 | 深淵遺物カードのデメリット入力欄の有効/非表示判定に利用。【F:templates/gallery/render/effectFactory.js†L321-L369】 |
-| `Existing` | 通常版テンプレート（`templates/master_relics.csv`）にも同名効果が存在することを示すメモ列。 | × | テンプレートのヘッダーでのみ定義され、コードからは参照されない。【F:templates/master_relics_deep.csv†L1-L60】 | 表示なし |
-| `note` | 効果の補足説明。 | × | テンプレート内に記入されるメモでコードは参照しない。【F:templates/master_relics_deep.csv†L1-L6】 | 表示なし |
+| カラム名 | 役割 | 現行コード参照 | 備考 |
+| --- | --- | --- | --- |
+| `EffectBase` | 深淵遺物向け辞書の基準名。通常版と同様に `EffectBase` がキーになる。 | ○（通常辞書と同等に読込） | 共通テンプレートとして定義される。【F:templates/master_relics_deep.csv†L1-L6】 |
+| `Category` | 効果区分のメモ列。 | × | 自動処理では未使用で、テンプレート上のメモとして扱う。【F:templates/master_relics_deep.csv†L1-L6】 |
+| `Levels` | 深淵遺物専用のレベル候補。 | ○（レベル候補の構築に利用） | `load_master_effects_and_levels` は列の有無を自動判定し、未設定を表すプレースホルダーは `none` に統一されてビューアでは空欄として扱われる。【F:relic_data.py†L178-L204】【F:templates/master_relics_deep.csv†L1-L6】【F:templates/gallery/render/galleryView.js†L533-L568】 |
+| `Overlap` | 重複可否のメモ列。 | × | テンプレート内のみで管理。【0bfb5e†L1-L10】 |
+| `Demerit` | デメリットの有無と内容を兼ねる列。〇/✕ 等をブール値に変換しつつ、デメリット欄の文字列からレベル候補を抽出する。 | ○（デメリット抽出に使用） | `_normalize_boolean_flag` や `_extract_level_tokens` を通じて `hasDemerit` と `levels` を算出する。値は `TRUE` で常時デメリット有り、`FALSE` で常時無し、`＋１` などのレベル表記でその段階のみデメリット有りとする。【F:relic_data.py†L74-L126】【F:relic_data.py†L207-L245】【F:templates/master_relics_deep.csv†L1-L35】 |
+| `Existing` | 通常版テンプレート（`templates/master_relics.csv`）にも同名効果が存在することを示すメモ列。 | × | テンプレートのヘッダーでのみ定義され、コードからは参照されない。【F:templates/master_relics_deep.csv†L1-L60】 |
+| `note` | 効果の補足説明。 | × | テンプレート内に記入されるメモでコードは参照しない。【F:templates/master_relics_deep.csv†L1-L6】 |
 
 ### `templates/master_relics_demerit.csv`
-| カラム名 | 役割 | 現行コード参照 | 備考 | ビューア表示 |
-| --- | --- | --- | --- | --- |
-| `EffectBase` | デメリット辞書の基準名。深淵遺物用のデメリット推定に利用される。 | ○（デメリット辞書のキーとして読込） | テンプレートで定義される。【F:templates/master_relics_demerit.csv†L1-L9】【F:relic_data.py†L207-L245】 | デメリット補正欄の検索入力候補（datalist）として表示。【F:templates/gallery/gallery.js†L611-L690】【F:templates/gallery/render/effectFactory.js†L857-L888】 |
-| `Category` | デメリット種別のメモ。 | × | 現状の自動処理では未使用で、テンプレート上の分類メモのみ。【F:templates/master_relics_demerit.csv†L1-L9】 | 表示なし |
-| `Overlap` | 重複可否メモ。 | × | 同上。 | 表示なし |
-| `note` | デメリット内容の補足メモ。 | × | 同上。 | 表示なし |
+| カラム名 | 役割 | 現行コード参照 | 備考 |
+| --- | --- | --- | --- |
+| `EffectBase` | デメリット辞書の基準名。深淵遺物用のデメリット推定に利用される。 | ○（デメリット辞書のキーとして読込） | テンプレートで定義される。【F:templates/master_relics_demerit.csv†L1-L9】【F:relic_data.py†L207-L245】 |
+| `Category` | デメリット種別のメモ。 | × | 現状の自動処理では未使用で、テンプレート上の分類メモのみ。【F:templates/master_relics_demerit.csv†L1-L9】 |
+| `Overlap` | 重複可否メモ。 | × | 同上。 |
+| `note` | デメリット内容の補足メモ。 | × | 同上。 |
 
 `templates/master_relics_demerit.csv` は効果名やカテゴリなどのメモ用途を中心としたテンプレートであり、デメリット列は存在しない。【F:templates/master_relics_demerit.csv†L1-L9】
 
