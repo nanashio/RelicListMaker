@@ -20,26 +20,24 @@ def test_inline_color_selection_updates_queue_entry_color() -> None:
 
     try:
         sample_path = r"C:\\temp\\video.mp4"
-        app._dropped_videos = [{"path": sample_path, "color": "none"}]
-        app._dropped_video_set = {sample_path}
-        app._refresh_queue_view()
+        app.handlers.set_queue_entries([{"path": sample_path, "color": "none"}])
         root.update()
 
-        queue_tree = app.queue_tree
-        inline_combo = app.inline_color_combo
+        queue_tree = app.ui.queue_tree
+        inline_combo = app.handlers.inline_color_editor.widget
         assert queue_tree is not None
         assert inline_combo is not None
 
         item_id = queue_tree.get_children()[0]
-        assert app._queue_item_paths[item_id] == sample_path
-        app._show_inline_color_editor(item_id)
+        assert queue_tree.set(item_id, "fullpath") == sample_path
+        app.handlers.show_inline_color_editor(item_id)
         root.update()
 
         inline_combo.set("red")
         inline_combo.event_generate("<<ComboboxSelected>>")
         root.update()
 
-        assert app._dropped_videos[0]["color"] == "red"
+        assert app.state.queue_entries[0]["color"] == "red"
     finally:
         root.destroy()
 
@@ -56,18 +54,16 @@ def test_inline_color_update_survives_focus_out() -> None:
 
     try:
         sample_path = "/tmp/sample.mp4"
-        app._dropped_videos = [{"path": sample_path, "color": "none"}]
-        app._dropped_video_set = {sample_path}
-        app._refresh_queue_view()
+        app.handlers.set_queue_entries([{"path": sample_path, "color": "none"}])
         root.update()
 
-        queue_tree = app.queue_tree
-        inline_combo = app.inline_color_combo
+        queue_tree = app.ui.queue_tree
+        inline_combo = app.handlers.inline_color_editor.widget
         assert queue_tree is not None
         assert inline_combo is not None
 
         item_id = queue_tree.get_children()[0]
-        app._show_inline_color_editor(item_id)
+        app.handlers.show_inline_color_editor(item_id)
         root.update_idletasks()
 
         # フォーカス喪失が先に発生しても選択イベントで更新される想定
@@ -76,7 +72,7 @@ def test_inline_color_update_survives_focus_out() -> None:
         inline_combo.event_generate("<<ComboboxSelected>>")
         root.update()
 
-        assert app._dropped_videos[0]["color"] == "green"
+        assert app.state.queue_entries[0]["color"] == "green"
     finally:
         root.destroy()
 
@@ -93,27 +89,25 @@ def test_inline_color_selection_after_editor_hidden() -> None:
 
     try:
         sample_path = "/tmp/sample2.mp4"
-        app._dropped_videos = [{"path": sample_path, "color": "none"}]
-        app._dropped_video_set = {sample_path}
-        app._refresh_queue_view()
+        app.handlers.set_queue_entries([{"path": sample_path, "color": "none"}])
         root.update_idletasks()
 
-        queue_tree = app.queue_tree
-        inline_combo = app.inline_color_combo
+        queue_tree = app.ui.queue_tree
+        inline_combo = app.handlers.inline_color_editor.widget
         assert queue_tree is not None
         assert inline_combo is not None
 
         item_id = queue_tree.get_children()[0]
-        app._show_inline_color_editor(item_id)
+        app.handlers.show_inline_color_editor(item_id)
         root.update_idletasks()
 
         # エディタが自動的に閉じたケースを模倣
-        app._hide_inline_color_editor()
+        app.handlers.hide_inline_color_editor()
         inline_combo.set("blue")
         inline_combo.event_generate("<<ComboboxSelected>>")
         root.update()
 
-        assert app._dropped_videos[0]["color"] == "blue"
+        assert app.state.queue_entries[0]["color"] == "blue"
     finally:
         root.destroy()
 
@@ -130,26 +124,24 @@ def test_inline_relic_type_selection_updates_entry() -> None:
 
     try:
         sample_path = "/tmp/deep_run.mp4"
-        app._dropped_videos = [
-            {"path": sample_path, "color": "none", "relic_type": "normal"}
-        ]
-        app._dropped_video_set = {sample_path}
-        app._refresh_queue_view()
+        app.handlers.set_queue_entries(
+            [{"path": sample_path, "color": "none", "relic_type": "normal"}]
+        )
         root.update_idletasks()
 
-        queue_tree = app.queue_tree
-        inline_type = app.inline_type_combo
+        queue_tree = app.ui.queue_tree
+        inline_type = app.handlers.inline_type_editor.widget
         assert queue_tree is not None
         assert inline_type is not None
 
         item_id = queue_tree.get_children()[0]
-        app._show_inline_relic_type_editor(item_id)
+        app.handlers.show_inline_relic_type_editor(item_id)
         root.update_idletasks()
 
         inline_type.set("深層遺物")
         inline_type.event_generate("<<ComboboxSelected>>")
         root.update()
 
-        assert app._dropped_videos[0]["relic_type"] == "deep"
+        assert app.state.queue_entries[0]["relic_type"] == "deep"
     finally:
         root.destroy()
