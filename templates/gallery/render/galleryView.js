@@ -73,6 +73,10 @@
                   ? filterNamespace.buildItemSearchCaches
                   : null;
 
+        if (typeof buildItemSearchCaches !== 'function') {
+            throw new Error('createGalleryView: buildItemSearchCaches helper is required');
+        }
+
         const filterItemsFn =
             typeof config.filterItems === 'function'
                 ? config.filterItems
@@ -86,6 +90,10 @@
                 : filterNamespace && typeof filterNamespace.evaluateItemVisibility === 'function'
                   ? filterNamespace.evaluateItemVisibility
                   : null;
+
+        if (typeof filterItemsFn !== 'function' && typeof evaluateItemVisibilityFn !== 'function') {
+            throw new Error('createGalleryView: filter helpers are not available');
+        }
 
         if (!hasDocument && typeof createElementConfig !== 'function') {
             throw new Error('createGalleryView: createElement helper is required when document is unavailable');
@@ -225,28 +233,6 @@
             };
         }
 
-        function createFallbackItemEnhancers(additionalEnhancers = []) {
-            const enhancers = [];
-            const addEnhancer = (fn) => {
-                const normalized = normalizeItemEnhancer(fn);
-                if (normalized) {
-                    enhancers.push(normalized);
-                }
-            };
-
-            addEnhancer(syncDuplicateState);
-            addEnhancer(syncFavoriteState);
-            addEnhancer(syncItemColorState);
-            addEnhancer(syncItemRelicTypeState);
-            addEnhancer(refreshItemCaches);
-
-            if (Array.isArray(additionalEnhancers)) {
-                additionalEnhancers.forEach(addEnhancer);
-            }
-
-            return enhancers;
-        }
-
         let itemEnhancers = null;
 
         if (typeof createItemEnhancersFn === 'function') {
@@ -266,7 +252,31 @@
         }
 
         if (!Array.isArray(itemEnhancers)) {
-            itemEnhancers = createFallbackItemEnhancers(additionalItemEnhancers);
+            itemEnhancers = [];
+
+            const enhancers = [
+                syncDuplicateState,
+                syncFavoriteState,
+                syncItemColorState,
+                syncItemRelicTypeState,
+                refreshItemCaches
+            ];
+
+            enhancers.forEach((enhancer) => {
+                const normalized = normalizeItemEnhancer(enhancer);
+                if (normalized) {
+                    itemEnhancers.push(normalized);
+                }
+            });
+
+            if (Array.isArray(additionalItemEnhancers)) {
+                additionalItemEnhancers.forEach((enhancer) => {
+                    const normalized = normalizeItemEnhancer(enhancer);
+                    if (normalized) {
+                        itemEnhancers.push(normalized);
+                    }
+                });
+            }
         }
 
         const itemFactory = createItemFactoryFn({
@@ -663,55 +673,6 @@
             applyItemRelicType(item, relicType);
         }
 
-        function legacyBuildItemCaches(baseTokens, effectEntries) {
-            const tokens = [];
-            const statuses = new Set();
-            const effectStates = [];
-
-            const addToken = (value) => {
-                if (!value) {
-                    return;
-                }
-                const text = String(value).trim();
-                if (text) {
-                    tokens.push(text);
-                }
-            };
-
-            baseTokens.forEach(addToken);
-
-            effectEntries.forEach((entry) => {
-                if (!entry || typeof entry !== 'object') {
-                    return;
-                }
-                addToken(entry.prediction);
-                addToken(entry.raw);
-                addToken(entry.correction);
-                addToken(entry.level);
-                addToken(entry.levelOptions);
-                addToken(entry.levelCorrection);
-                const statusValue = entry.status || 'pending';
-                statuses.add(statusValue);
-                effectStates.push(statusValue || 'pending');
-            });
-
-            if (!statuses.size) {
-                statuses.add('pending');
-            }
-
-            const combined = tokens
-                .filter((token) => token && token.trim() !== '')
-                .join(' ')
-                .replace(/\s+/g, ' ')
-                .trim();
-
-            return {
-                searchCache: combined ? ` ${combined} ` : '',
-                statusCache: `|${Array.from(statuses).join('|')}|`,
-                effectStates
-            };
-        }
-
         function refreshItemCaches(item) {
             if (!item) {
                 return;
@@ -754,10 +715,7 @@
                 });
             });
 
-            const caches =
-                typeof buildItemSearchCaches === 'function'
-                    ? buildItemSearchCaches({ baseTokens, effects: effectEntries })
-                    : legacyBuildItemCaches(baseTokens, effectEntries);
+            const caches = buildItemSearchCaches({ baseTokens, effects: effectEntries }) || {};
 
             const { searchCache = '', statusCache = '', effectStates = [] } = caches || {};
             item.dataset.searchCache = searchCache || '';
@@ -772,57 +730,6 @@
                 .join(',');
         }
 
-        function legacyApplyFilters(term, filter, colorFilter, showDuplicates) {
-            const includePending = filter === 'with-pending';
-            const resolvedOnly = filter === 'resolved';
-            const favoriteOnly = filter === 'favorite';
-
-            state.items.forEach((item) => {
-                if (!item) {
-                    return;
-                }
-                if (item.dataset.duplicate === 'true' && !showDuplicates) {
-                    item.style.display = 'none';
-                    return;
-                }
-
-                const cache = item.dataset.searchCache || '';
-                const matchesSearch = !term || (cache && cache.includes(term));
-
-                let matchesFilter = true;
-
-                if (filter !== 'all') {
-                    const statuses = item.dataset.statusCache || '';
-                    if (resolvedOnly) {
-                        const effectStates = (item.dataset.effectStates || '').split(',').filter(Boolean);
-                        matchesFilter =
-                            effectStates.length >= 3 &&
-                            effectStates.every((stateValue, idx) => {
-                                if (idx < 3) {
-                                    return stateValue === 'pass' || stateValue === 'corrected';
-                                }
-                                return true;
-                            });
-                    } else if (includePending) {
-                        matchesFilter = statuses.includes('|pending|');
-                    } else if (favoriteOnly) {
-                        matchesFilter = item.dataset.favorite === 'true';
-                    }
-                }
-
-                if (matchesFilter && colorFilter !== 'all') {
-                    const itemColor = normalizeItemColor(item.dataset.itemColor || '');
-                    if (colorFilter === 'none') {
-                        matchesFilter = itemColor === '';
-                    } else {
-                        matchesFilter = itemColor === colorFilter;
-                    }
-                }
-
-                item.style.display = matchesSearch && matchesFilter ? '' : 'none';
-            });
-        }
-
         function applyFilters() {
             const searchInputValue = dom.searchInput && dom.searchInput.value ? dom.searchInput.value : '';
             const term = searchInputValue.trim().toLowerCase();
@@ -830,10 +737,6 @@
             const colorFilter = dom.colorFilter ? dom.colorFilter.value : 'all';
             const showDuplicates = includeDuplicatesNow();
 
-            const shouldUseFilterUtils =
-                typeof filterItemsFn === 'function' || typeof evaluateItemVisibilityFn === 'function';
-
-            if (shouldUseFilterUtils) {
             const itemStates = state.items.map((item) => {
                 if (!item) {
                     return {
@@ -864,25 +767,20 @@
                 includeDuplicates: showDuplicates
             };
 
-                const visibility = typeof filterItemsFn === 'function' ? filterItemsFn(itemStates, options) : null;
+            const visibility = typeof filterItemsFn === 'function' ? filterItemsFn(itemStates, options) : null;
 
-                state.items.forEach((item, index) => {
-                    if (!item) {
-                        return;
-                    }
-                    let visible = true;
-                    if (Array.isArray(visibility) && index < visibility.length) {
-                        visible = Boolean(visibility[index]);
-                    } else if (typeof evaluateItemVisibilityFn === 'function') {
-                        visible = Boolean(evaluateItemVisibilityFn(itemStates[index], options));
-                    }
-                    item.style.display = visible ? '' : 'none';
-                });
-                updateSummary();
-                return;
-            }
-
-            legacyApplyFilters(term, filter, colorFilter, showDuplicates);
+            state.items.forEach((item, index) => {
+                if (!item) {
+                    return;
+                }
+                let visible = true;
+                if (Array.isArray(visibility) && index < visibility.length) {
+                    visible = Boolean(visibility[index]);
+                } else if (typeof evaluateItemVisibilityFn === 'function') {
+                    visible = Boolean(evaluateItemVisibilityFn(itemStates[index], options));
+                }
+                item.style.display = visible ? '' : 'none';
+            });
             updateSummary();
         }
 
