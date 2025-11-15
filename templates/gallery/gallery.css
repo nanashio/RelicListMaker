@@ -842,6 +842,18 @@ h1 {
     font-weight: 600;
 }
 
+.effect--demerit.effect--demerit-noinput {
+    border-color: var(--color-border-muted);
+    background: var(--color-disabled-background);
+}
+
+.effect--demerit.effect--demerit-noinput .prediction-label,
+.effect--demerit.effect--demerit-noinput .effect-score,
+.effect--demerit.effect--demerit-noinput .status-indicator {
+    color: var(--color-text-muted);
+    font-weight: 400;
+}
+
 .effect.low-confidence:is([data-status="pass"], [data-status="corrected"]) {
     border-color: var(--color-info-border-strong);
     background: var(--color-info-background);
