@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import os
 import shutil
@@ -62,11 +63,13 @@ def _build_fixture_tree(base_dir: Path) -> None:
 
     _write_png(crops_dir / "sample_red.png", (220, 38, 38))
     _write_png(crops_dir / "sample_blue.png", (37, 99, 235))
+    _write_png(crops_dir / "sample_green.png", (34, 139, 34))
 
     (gallery_dir / "sample.csv").write_text(
-        "Image,Duplicate,ItemColor,Effect1,Effect1Score,Effect1Source,Effect1Status,RawText1\n"
-        "sample_red.png,False,red,神秘,95.0,神秘,pass,神秘\n"
-        "sample_blue.png,False,blue,最大HP上昇,85.0,最大HP上昇,pending,最大HPが上昇\n",
+        "Image,Duplicate,ItemColor,Effect1,Effect1Score,Effect1Source,Effect1Status,RawText1,Effect1Level,Effect1LevelOptions,RelicType\n"
+        "sample_red.png,False,red,神秘,95.0,神秘,pass,神秘,none,none,normal\n"
+        "sample_blue.png,False,blue,最大HP上昇,85.0,最大HP上昇,pending,最大HPが上昇,none,none,normal\n"
+        "sample_green.png,False,green,物理攻撃力上昇,88.0,物理攻撃力上昇,pending,物理攻撃力上昇,none,none|＋１|＋２|＋３|＋４,deep\n",
         encoding="utf-8",
         newline="\n",
     )
@@ -75,33 +78,60 @@ def _build_fixture_tree(base_dir: Path) -> None:
     master_options = [
         "神秘",
         "最大HP上昇",
+        "物理攻撃力上昇",
         "炎のダメージ",
     ]
 
-    viewer_html = (
-        template
-        .replace("__CSS_FILE__", "gallery.css")
-        .replace("__JS_FILE__", "index.js")
-        .replace("__CORE_JS__", "gallery.js")
-        .replace("__RESULTS_CSV__", "sample.csv")
-        .replace("__IMAGE_DIR__", "crops")
-        .replace("__LABEL_SYMBOLS__", "[\"①\", \"②\", \"③\"]")
-        .replace("__MASTER_CSV__", "")
-        .replace("__MASTER_JSON__", "")
-        .replace("__MASTER_OPTIONS__", json.dumps(master_options, ensure_ascii=False))
-        .replace("__MASTER_OPTIONS_MAP__", "{}")
-        .replace("__MASTER_LEVELS__", "{}")
-        .replace("__MASTER_LEVELS_BY_TYPE__", "{}")
-        .replace("__MASTER_CSV_MAP__", "{}")
-        .replace("__MASTER_DEMERIT_CSV__", "")
-        .replace("__MASTER_DEMERIT_JSON__", "")
-        .replace("__MASTER_DEMERIT_OPTIONS__", "[]")
-        .replace("__MASTER_DEMERIT_OPTIONS_MAP__", "{}")
-        .replace("__MASTER_DEMERIT_CSV_MAP__", "{}")
-        .replace("__DATASETS__", "[]")
-        .replace("__ACTIVE_DATASET__", "0")
-        .replace("__ITEM_IMAGE_VIEW_BOX__", DEFAULT_ITEM_IMAGE_VIEW_BOX)
-    )
+    master_levels = {
+        "神秘": ["none"],
+        "最大HP上昇": ["none"],
+        "物理攻撃力上昇": ["none", "＋１", "＋２", "＋３", "＋４"],
+    }
+
+    master_levels_by_type = {
+        "normal": {
+            "神秘": ["none"],
+            "最大HP上昇": ["none"],
+            "物理攻撃力上昇": ["none", "＋１", "＋２"],
+        },
+        "deep": {
+            "神秘": ["none"],
+            "最大HP上昇": ["none"],
+            "物理攻撃力上昇": ["none", "＋１", "＋２", "＋３", "＋４"],
+        },
+    }
+
+    def _escape_attr(value: str) -> str:
+        return html.escape(value or "", quote=True)
+
+    replacements = {
+        "__CSS_FILE__": "gallery.css",
+        "__JS_FILE__": "index.js",
+        "__CORE_JS__": "gallery.js",
+        "__RESULTS_CSV__": "sample.csv",
+        "__IMAGE_DIR__": "crops",
+        "__LABEL_SYMBOLS__": json.dumps(["①", "②", "③"], ensure_ascii=False),
+        "__MASTER_CSV__": "",
+        "__MASTER_JSON__": "",
+        "__MASTER_OPTIONS__": json.dumps(master_options, ensure_ascii=False),
+        "__MASTER_OPTIONS_MAP__": json.dumps({}, ensure_ascii=False),
+        "__MASTER_LEVELS__": json.dumps(master_levels, ensure_ascii=False),
+        "__MASTER_LEVELS_BY_TYPE__": json.dumps(master_levels_by_type, ensure_ascii=False),
+        "__MASTER_CSV_MAP__": json.dumps({}, ensure_ascii=False),
+        "__MASTER_DEMERIT_CSV__": "",
+        "__MASTER_DEMERIT_JSON__": "",
+        "__MASTER_DEMERIT_OPTIONS__": json.dumps([], ensure_ascii=False),
+        "__MASTER_DEMERIT_OPTIONS_MAP__": json.dumps({}, ensure_ascii=False),
+        "__MASTER_DEMERIT_CSV_MAP__": json.dumps({}, ensure_ascii=False),
+        "__MASTER_DEMERIT_RULES_MAP__": json.dumps({}, ensure_ascii=False),
+        "__DATASETS__": json.dumps([], ensure_ascii=False),
+        "__ACTIVE_DATASET__": "0",
+        "__ITEM_IMAGE_VIEW_BOX__": DEFAULT_ITEM_IMAGE_VIEW_BOX,
+    }
+
+    viewer_html = template
+    for placeholder, raw_value in replacements.items():
+        viewer_html = viewer_html.replace(placeholder, _escape_attr(raw_value))
     (gallery_dir / "index.html").write_text(viewer_html, encoding="utf-8")
 
 

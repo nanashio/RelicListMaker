@@ -159,6 +159,78 @@ test.describe('Relic viewer', () => {
     }
   });
 
+  test('通常遺物のレベル候補に深層遺物専用の段階が混入しない', async ({ page }) => {
+    const savePayloads: Array<{ records?: Array<Record<string, string>> }> = [];
+
+    await page.route('**/__viewer_api__/save', async (route) => {
+      const request = route.request();
+      const bodyText = request.postData() ?? '';
+      if (bodyText) {
+        try {
+          const parsed = JSON.parse(bodyText) as { records?: Array<Record<string, string>> };
+          savePayloads.push(parsed);
+        } catch (error) {
+          savePayloads.push({ records: [] });
+          console.warn('保存リクエストの解析に失敗しました', error);
+        }
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok' })
+      });
+    });
+
+    await page.goto('/sample/gallery/index.html');
+
+    const targetItem = page
+      .locator('.item')
+      .filter({ has: page.locator('img[src$="sample_green.png"]') })
+      .first();
+    await expect(targetItem).toBeVisible();
+
+    const effect = targetItem.locator('.effect[data-kind="effect"][data-slot="1"]').first();
+    const levelSelect = effect.locator('.level-input');
+    await expect(levelSelect).toBeVisible();
+
+    const readLevelOptions = async () => {
+      const options = await effect.evaluate((node) => {
+        const json = node.dataset.levelOptionsBaseJson || '[]';
+        try {
+          const parsed = JSON.parse(json);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (_error) {
+          return [];
+        }
+      });
+      return options as string[];
+    };
+
+    await expect.poll(readLevelOptions).toEqual(['none', '＋１', '＋２', '＋３', '＋４']);
+
+    const relicTypeSelect = targetItem.locator('.item-relic-type-select');
+    await expect(relicTypeSelect).toHaveValue('deep');
+
+    const saveResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes('__viewer_api__/save') && response.request().method() === 'POST'
+    );
+
+    await relicTypeSelect.selectOption('normal');
+
+    await saveResponsePromise;
+
+    await expect.poll(readLevelOptions).toEqual(['none', '＋１', '＋２']);
+
+    expect(savePayloads.length).toBeGreaterThan(0);
+    const latestPayload = savePayloads[savePayloads.length - 1];
+    const targetRecord = latestPayload.records?.find((record) => record.Image === 'sample_green.png');
+    expect(targetRecord).toBeTruthy();
+    expect(targetRecord?.RelicType).toBe('normal');
+    expect(targetRecord?.Effect1LevelOptions).toBe('none|＋１|＋２');
+  });
+
   test('静的アセットが 404 を返さない', async ({ page }) => {
     const assetStatuses = new Map<string, number>();
 

@@ -1172,6 +1172,118 @@
         });
     }
 
+    function isNoneValue(value) {
+        if (value == null) {
+            return true;
+        }
+        const text = String(value).trim();
+        if (!text) {
+            return true;
+        }
+        return text.toLowerCase() === 'none';
+    }
+
+    function normalizeLevelOptionsForRecord(options) {
+        const list = Array.isArray(options) ? options : [];
+        const sanitized = sanitizeLevelList(list);
+        const unique = [];
+        const seen = new Set();
+        sanitized.forEach((value) => {
+            if (value == null) {
+                return;
+            }
+            const text = String(value).trim();
+            if (!text) {
+                return;
+            }
+            const key = text.toLowerCase();
+            if (seen.has(key)) {
+                return;
+            }
+            seen.add(key);
+            unique.push(text);
+        });
+        const sorted = sortLevelsAscending(unique);
+        const serialized = sorted.length ? sorted.join('|') : 'none';
+        return { sorted, serialized };
+    }
+
+    function syncRecordLevelOptions(effect, options) {
+        if (!effect || typeof getEffectIndexes !== 'function') {
+            return false;
+        }
+        const indexes = getEffectIndexes(effect);
+        if (!indexes || indexes.kind === 'demerit') {
+            return false;
+        }
+
+        const { sorted, serialized } = normalizeLevelOptionsForRecord(options);
+        const optionsChanged = updateRecordLevelOptions(
+            indexes.recordIndex,
+            indexes.slotIndex,
+            serialized,
+            indexes.kind
+        );
+
+        let levelChanged = false;
+        if (!sorted.length || sorted.every((value) => isNoneValue(value))) {
+            levelChanged = updateRecordLevelValue(indexes.recordIndex, indexes.slotIndex, 'none', indexes.kind);
+            if (effect.dataset) {
+                effect.dataset.level = '';
+            }
+        } else {
+            const normalizeLevelForComparison = (value) => {
+                if (value == null) {
+                    return 'none';
+                }
+                const text = String(value).trim();
+                if (!text) {
+                    return 'none';
+                }
+                return text.toLowerCase();
+            };
+
+            const normalizedOptions = sorted.map((value) => normalizeLevelForComparison(value));
+            const record = getRecordByIndex(indexes.recordIndex);
+            const levelKey = `Effect${indexes.slotIndex}Level`;
+            let currentLevel = 'none';
+            if (record && Object.prototype.hasOwnProperty.call(record, levelKey)) {
+                const rawLevel = record[levelKey];
+                if (rawLevel != null) {
+                    const text = String(rawLevel).trim();
+                    currentLevel = text || 'none';
+                }
+            }
+            const normalizedCurrent = normalizeLevelForComparison(currentLevel);
+            if (!normalizedOptions.includes(normalizedCurrent)) {
+                const hasNoneOption = normalizedOptions.includes('none');
+                const nextLevel = hasNoneOption ? 'none' : sorted[0];
+                const updated = updateRecordLevelValue(
+                    indexes.recordIndex,
+                    indexes.slotIndex,
+                    nextLevel,
+                    indexes.kind
+                );
+                if (updated) {
+                    levelChanged = true;
+                    if (effect.dataset) {
+                        effect.dataset.level = nextLevel === 'none' ? '' : String(nextLevel).trim().toLowerCase();
+                    }
+                }
+            }
+        }
+
+        if (effect.dataset) {
+            effect.dataset.levelOptionsBase = sorted.join('|');
+        }
+
+        if (optionsChanged || levelChanged) {
+            storageManager.scheduleSave();
+        }
+
+        return optionsChanged || levelChanged;
+    }
+
     function applyMasterDataForRelicType(relicType, context = {}) {
         const requested = normalizeRelicTypeValue(relicType);
         const fallback = normalizeRelicTypeValue(datasetState.relicType || '');
@@ -1211,7 +1323,13 @@
                 setCorrectionLevelCandidates,
                 rebuildLevelSelectOptions,
                 sanitizeLevelList,
-                sortLevelsAscending
+                sortLevelsAscending,
+                onOptionsApplied: (targetEffect, options) => {
+                    if (targetEffect !== effect) {
+                        return false;
+                    }
+                    return syncRecordLevelOptions(targetEffect, options);
+                }
             });
 
             const baseJson = effect.dataset.levelOptionsBaseJson || '';
@@ -1226,6 +1344,7 @@
                     baseOptions = sanitizeLevelList(baseJson.split('|'));
                 }
             }
+            syncRecordLevelOptions(effect, baseOptions);
             updateLevelInputAvailability(levelInput, baseOptions);
 
             if (
