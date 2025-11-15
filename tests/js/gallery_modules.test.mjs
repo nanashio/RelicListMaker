@@ -2115,6 +2115,59 @@ describe('gallery effect factory', () => {
     assert.equal(effect.dataset.hiddenDemerit, undefined);
   });
 
+  test('merged dataset deep relic keeps demerit availability using type-specific rules', () => {
+    const record = {
+      RelicType: '深層遺物',
+      Effect1: 'Test Effect',
+      Effect1Level: '＋3',
+      Effect1Status: 'pending',
+      Demerit1: 'Heavy Burden',
+      Demerit1RawText: 'Heavy Burden',
+      Demerit1Score: 38.7,
+      Demerit1Status: 'pending'
+    };
+    const state = {
+      showOcr: true,
+      masterOptions: [],
+      masterDemeritOptions: ['Heavy Burden'],
+      masterDemeritRules: {},
+      masterDemeritRulesByType: {
+        deep: {
+          'test effect': { hasDemerit: true, levels: ['＋3', '＋4'] }
+        }
+      },
+      labelSymbols: ['Ⅰ'],
+      records: [record]
+    };
+    const localFactory = global.window.galleryRenderFactory.createEffectFactory({
+      state,
+      datasetState: { kind: 'merged', relicType: 'merged' },
+      masterDatalistId: 'master-id',
+      demeritDatalistId: 'master-demerit-id',
+      createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+      applyMasterLevelOptions: () => {},
+      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+    });
+
+    const item = new MockElement('div', 'item');
+    const primaryEffect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0);
+    const demeritEffect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
+    item.appendChild(primaryEffect);
+    item.appendChild(demeritEffect);
+
+    localFactory.syncDemeritAvailability(demeritEffect, { refreshStatus: true });
+
+    const correctionInput = demeritEffect.querySelector('.correction-input');
+    const passButton = demeritEffect.querySelector('.review-button.pass');
+    assert.ok(correctionInput, 'correction input should exist');
+    assert.equal(correctionInput.placeholder, 'デメリット候補から選択');
+    assert.ok(passButton, 'pass button should exist');
+    assert.equal(passButton.disabled, true);
+  });
+
   test('syncDemeritAvailability disables controls after level loses demerit match', () => {
     const record = {
       RelicType: '深層遺物',
