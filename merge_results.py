@@ -263,20 +263,26 @@ def _normalize_effect_status(value: object) -> str:
     return text
 
 
-def _apply_corrections(row: dict[str, object]) -> dict[str, object]:
+def _ensure_no_correction_columns(
+    row: dict[str, object], *, source: Path, row_index: int
+) -> None:
     if not row:
-        return {}
+        return
 
-    updated: dict[str, object] = {}
-    for key, value in row.items():
-        if not isinstance(key, str):
-            updated[key] = value
-            continue
-        if key.endswith("Correction"):
-            continue
-        updated[key] = value
+    remaining = [
+        key
+        for key in row.keys()
+        if isinstance(key, str) and key.endswith("Correction")
+    ]
+    if not remaining:
+        return
 
-    return updated
+    columns = ", ".join(sorted(remaining))
+    raise MergeResultsError(
+        "補助列が残存しています。`scripts/migrate_effect_corrections.py` で"
+        " 基列へ移行してから再実行してください: "
+        f"{source} #{row_index} ({columns})"
+    )
 
 
 def _slot_has_content(row: dict[str, object], slot: int) -> bool:
@@ -373,7 +379,12 @@ def merge_results(
                     continue
 
                 for row_index, row in enumerate(reader, start=1):
-                    normalized_row = _apply_corrections(dict(row))
+                    _ensure_no_correction_columns(
+                        row,
+                        source=dataset.csv_path,
+                        row_index=row_index,
+                    )
+                    normalized_row = dict(row)
 
                     if _is_duplicate(normalized_row.get("Duplicate")):
                         continue
