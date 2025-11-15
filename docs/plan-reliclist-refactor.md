@@ -10,7 +10,7 @@
   - 動画入力ディレクトリ (`videos/`) を走査し、`extract_frames.extract_and_crop`、`match_and_export.process_images`、`generate_gallery.generate_html` を順に呼び出す統括モジュール。
   - `relic_data.load_master_csv` でマスターデータを読み込み、`resource_paths.templates_path` でテンプレート資産を参照する。
 - `match_and_export.py`
-  - `preprocess.prepare_crop_for_ocr` で前処理し、`pytesseract` と RapidFuzz (`rapidfuzz.process`) を用いて OCR と一致検索を行う。
+  - `relic_pipeline.ocr.preprocess.prepare_for_ocr` で前処理し、`pytesseract` と RapidFuzz (`rapidfuzz.process`) を用いて OCR と一致検索を行う。
   - `relic_data` からマスター効果/レベル情報を受け取り、`tesseract_bundle` でバンドル済み Tesseract を初期化する。
 - `generate_gallery.py`
   - `relic_data` 経由でマスター CSV/JSON を読み込み、テンプレート (`gallery.html`, `gallery/gallery.css`, `gallery/gallery.js` 等) を `resource_paths.templates_path` からコピーする。
@@ -25,7 +25,7 @@
 - 進捗コールバックの制御と、最終的なデータセット情報の集約。
 
 ### `match_and_export.py`（OCR/マッチング処理）
-- クロップ領域のスケーリングと前処理 (`prepare_crop_for_ocr`) による画像整形。
+- クロップ領域のスケーリングと前処理 (`prepare_for_ocr`) による画像整形。
 - Tesseract 設定 (`configure_pytesseract`) と外部バイナリ選択通知の管理。
 - OCR 結果の正規化（レベル検出、補正 CSV の適用、カラム表示制御）。
 - RapidFuzz による効果名マッチングとスコア計算、複数スロットの出力行生成。
