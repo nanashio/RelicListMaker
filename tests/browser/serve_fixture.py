@@ -62,11 +62,13 @@ def _build_fixture_tree(base_dir: Path) -> None:
 
     _write_png(crops_dir / "sample_red.png", (220, 38, 38))
     _write_png(crops_dir / "sample_blue.png", (37, 99, 235))
+    _write_png(crops_dir / "sample_green.png", (34, 139, 34))
 
     (gallery_dir / "sample.csv").write_text(
-        "Image,Duplicate,ItemColor,Effect1,Effect1Score,Effect1Source,Effect1Status,RawText1\n"
-        "sample_red.png,False,red,神秘,95.0,神秘,pass,神秘\n"
-        "sample_blue.png,False,blue,最大HP上昇,85.0,最大HP上昇,pending,最大HPが上昇\n",
+        "Image,Duplicate,ItemColor,Effect1,Effect1Score,Effect1Source,Effect1Status,RawText1,Effect1Level,Effect1LevelOptions,RelicType\n"
+        "sample_red.png,False,red,神秘,95.0,神秘,pass,神秘,none,none,normal\n"
+        "sample_blue.png,False,blue,最大HP上昇,85.0,最大HP上昇,pending,最大HPが上昇,none,none,normal\n"
+        "sample_green.png,False,green,物理攻撃力上昇,88.0,物理攻撃力上昇,pending,物理攻撃力上昇,none,none|＋１|＋２|＋３|＋４,deep\n",
         encoding="utf-8",
         newline="\n",
     )
@@ -75,8 +77,28 @@ def _build_fixture_tree(base_dir: Path) -> None:
     master_options = [
         "神秘",
         "最大HP上昇",
+        "物理攻撃力上昇",
         "炎のダメージ",
     ]
+
+    master_levels = {
+        "神秘": ["none"],
+        "最大HP上昇": ["none"],
+        "物理攻撃力上昇": ["none", "＋１", "＋２", "＋３", "＋４"],
+    }
+
+    master_levels_by_type = {
+        "normal": {
+            "神秘": ["none"],
+            "最大HP上昇": ["none"],
+            "物理攻撃力上昇": ["none", "＋１", "＋２"],
+        },
+        "deep": {
+            "神秘": ["none"],
+            "最大HP上昇": ["none"],
+            "物理攻撃力上昇": ["none", "＋１", "＋２", "＋３", "＋４"],
+        },
+    }
 
     viewer_html = (
         template
@@ -90,8 +112,8 @@ def _build_fixture_tree(base_dir: Path) -> None:
         .replace("__MASTER_JSON__", "")
         .replace("__MASTER_OPTIONS__", json.dumps(master_options, ensure_ascii=False))
         .replace("__MASTER_OPTIONS_MAP__", "{}")
-        .replace("__MASTER_LEVELS__", "{}")
-        .replace("__MASTER_LEVELS_BY_TYPE__", "{}")
+        .replace("__MASTER_LEVELS__", json.dumps(master_levels, ensure_ascii=False))
+        .replace("__MASTER_LEVELS_BY_TYPE__", json.dumps(master_levels_by_type, ensure_ascii=False))
         .replace("__MASTER_CSV_MAP__", "{}")
         .replace("__MASTER_DEMERIT_CSV__", "")
         .replace("__MASTER_DEMERIT_JSON__", "")
