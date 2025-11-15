@@ -9,7 +9,15 @@ from relic_pipeline.settings import DEFAULT_RESIZE_SCALE
 def upscale_image(img, scale=2.0):
     """画像を拡大（スケールはfloat対応）"""
     return cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-def preprocess_for_ocr(img_path, out_dir="preprocessed", scale=DEFAULT_RESIZE_SCALE, save=True):
+def preprocess_for_ocr(
+    img_path,
+    out_dir="preprocessed",
+    scale=DEFAULT_RESIZE_SCALE,
+    *,
+    apply_threshold=True,
+    denoise=True,
+    save=True,
+):
     """
     OCR前処理:
       - 拡大
@@ -33,7 +41,12 @@ def preprocess_for_ocr(img_path, out_dir="preprocessed", scale=DEFAULT_RESIZE_SC
         print(f"[ERROR] 画像を開けませんでした: {img_path}")
         return None
 
-    th = prepare_for_ocr(img, resize_scale=scale)
+    th = prepare_for_ocr(
+        img,
+        resize_scale=scale,
+        apply_threshold=apply_threshold,
+        denoise=denoise,
+    )
 
     if save:
         os.makedirs(out_dir, exist_ok=True)
@@ -52,7 +65,24 @@ if __name__ == "__main__":
     parser.add_argument("--out", default="preprocessed", help="出力ディレクトリ")
     parser.add_argument("--scale", type=int, default=2, help="拡大倍率（デフォルト2倍）")
     parser.add_argument("--nosave", action="store_true", help="保存せずに処理済み画像を返す")
+    parser.add_argument(
+        "--no-threshold",
+        action="store_true",
+        help="Otsu 二値化をスキップ",
+    )
+    parser.add_argument(
+        "--no-denoise",
+        action="store_true",
+        help="メディアンブラーによるノイズ除去をスキップ",
+    )
 
     args = parser.parse_args()
 
-    preprocess_for_ocr(args.image, args.out, args.scale, save=not args.nosave)
+    preprocess_for_ocr(
+        args.image,
+        args.out,
+        args.scale,
+        apply_threshold=not args.no_threshold,
+        denoise=not args.no_denoise,
+        save=not args.nosave,
+    )
