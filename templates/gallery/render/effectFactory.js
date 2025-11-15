@@ -577,21 +577,14 @@
                 return [];
             }
             const json = effect.dataset.levelOptionsBaseJson;
-            if (json) {
-                try {
-                    const parsed = JSON.parse(json);
-                    return sanitizeLevelList(parsed);
-                } catch (error) {
-                    console.warn('レベル候補(base json)の解析に失敗しました:', error);
-                }
+            if (!json) {
+                return [];
             }
-            const legacyBase = effect.dataset.levelOptionsBase;
-            if (legacyBase != null) {
-                return sanitizeLevelList(legacyBase.split('|'));
-            }
-            const display = effect.dataset.levelOptionsDisplay;
-            if (display != null) {
-                return sanitizeLevelList(display.split('|'));
+            try {
+                const parsed = JSON.parse(json);
+                return sanitizeLevelList(parsed);
+            } catch (error) {
+                console.warn('レベル候補(base json)の解析に失敗しました:', error);
             }
             return [];
         }
@@ -675,15 +668,12 @@
             effect.dataset.levelOriginal = context.levelValueLower;
             effect.dataset.levelOriginalValue = context.levelValue;
             const levelOptionsRaw = Array.isArray(context.levelOptions) ? context.levelOptions : [];
+            const sanitizedBaseOptions = sanitizeLevelList(levelOptionsRaw);
             const levelOptionsDisplay =
                 context.levelOptionsDisplay || buildLevelOptionsDisplay(levelOptionsRaw);
-            const levelOptionsBase =
-                context.levelOptionsDisplayRaw != null
-                    ? String(context.levelOptionsDisplayRaw)
-                    : levelOptionsRaw.join('|');
             effect.dataset.levelOptions = context.levelOptionsLower.join('|');
             effect.dataset.levelOptionsDisplay = levelOptionsDisplay;
-            effect.dataset.levelOptionsBase = levelOptionsBase;
+            effect.dataset.levelOptionsBaseJson = JSON.stringify(sanitizedBaseOptions);
             effect.dataset.levelCorrection = context.levelCorrectionLower;
             effect.dataset.levelCorrectionValue = context.levelCorrection;
             effect.dataset.correction = context.correctionValueLower;
