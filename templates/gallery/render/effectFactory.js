@@ -195,18 +195,57 @@
             });
         }
 
-        function hasUsableDemeritRules() {
-            const rules = state && state.masterDemeritRules;
-            if (!rules || typeof rules !== 'object') {
+        function hasDemeritRuleEntries(map) {
+            if (!map || typeof map !== 'object') {
                 return false;
             }
-            return Object.keys(rules).some((key) => {
+            return Object.keys(map).some((key) => {
                 if (typeof key !== 'string' || !key.trim()) {
                     return false;
                 }
-                const entry = rules[key];
+                const entry = map[key];
                 return entry && typeof entry === 'object';
             });
+        }
+
+        function hasUsableDemeritRules() {
+            const rules = state && state.masterDemeritRules;
+            return hasDemeritRuleEntries(rules);
+        }
+
+        function resolveActiveDemeritRules(record) {
+            const directRules = state && state.masterDemeritRules;
+            if (hasDemeritRuleEntries(directRules)) {
+                return directRules;
+            }
+
+            const byType = state && state.masterDemeritRulesByType;
+            if (!byType || typeof byType !== 'object') {
+                return directRules;
+            }
+
+            const lookupTypes = [];
+            const recordType = normalizeRelicTypeValue(record && record.RelicType);
+            if (recordType) {
+                lookupTypes.push(recordType);
+            }
+            const datasetType = normalizeRelicTypeValue(datasetState.relicType || '');
+            if (datasetType && datasetType !== 'merged' && !lookupTypes.includes(datasetType)) {
+                lookupTypes.push(datasetType);
+            }
+
+            for (let index = 0; index < lookupTypes.length; index += 1) {
+                const key = lookupTypes[index];
+                if (!key) {
+                    continue;
+                }
+                const candidate = byType[key];
+                if (hasDemeritRuleEntries(candidate)) {
+                    return candidate;
+                }
+            }
+
+            return directRules;
         }
 
         function shouldAllowEmptyDemerit(record) {
@@ -290,7 +329,7 @@
             if (relicType !== 'deep') {
                 return { disable: true, placeholder: 'デメリット対象外' };
             }
-            const rules = state && state.masterDemeritRules;
+            const rules = resolveActiveDemeritRules(record);
             if (!rules || typeof rules !== 'object') {
                 return { disable: false };
             }
