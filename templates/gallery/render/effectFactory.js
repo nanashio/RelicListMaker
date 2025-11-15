@@ -493,8 +493,10 @@
             const evaluation = evaluateDemeritAvailability(record, slotIndex);
             const shouldDisable = Boolean(evaluation && evaluation.disable);
             const shouldHide = Boolean(evaluation && evaluation.hide);
+            const placeholder = evaluation && evaluation.placeholder ? evaluation.placeholder : 'デメリット対象外';
+            const shouldHighlightNoInput =
+                placeholder === 'デメリット対象外' || placeholder === '指定レベルのデメリットなし';
             if (shouldDisable) {
-                const placeholder = evaluation && evaluation.placeholder ? evaluation.placeholder : 'デメリット対象外';
                 if (input.value) {
                     input.value = '';
                 }
@@ -506,6 +508,11 @@
                     tabIndex: -1
                 });
                 input.placeholder = placeholder;
+                if (shouldHighlightNoInput) {
+                    effect.classList.add('effect--demerit-noinput');
+                } else {
+                    effect.classList.remove('effect--demerit-noinput');
+                }
                 if (passButton) {
                     passButton.disabled = true;
                 }
@@ -553,6 +560,7 @@
             if (defaultPlaceholder) {
                 input.placeholder = defaultPlaceholder;
             }
+            effect.classList.remove('effect--demerit-noinput');
             delete effect.dataset.hiddenDemerit;
             if (typeof effect.removeAttribute === 'function') {
                 effect.removeAttribute('aria-hidden');

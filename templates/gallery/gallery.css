@@ -819,6 +819,11 @@ h1 {
     margin-left: 0;
 }
 
+.effect--demerit.effect--demerit-noinput {
+    border-color: var(--color-border-muted);
+    background: var(--color-disabled-background);
+}
+
 .effect--demerit .prediction-label {
     color: var(--color-warning-text-strong);
 }
