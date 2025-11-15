@@ -444,6 +444,28 @@ class AppEventHandlers:
                 self._queue_item_paths[item_id] = path
         self.update_queue_controls()
 
+    def set_queue_entries(self, entries: Sequence[dict[str, object]]) -> None:
+        """Replace the current queue entries with normalized values."""
+
+        normalized: list[dict[str, object]] = []
+        dropped: set[str] = set()
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            copied = dict(entry)
+            path_value = copied.get("path")
+            if path_value is None:
+                normalized_path = ""
+            else:
+                normalized_path = str(path_value)
+            if normalized_path:
+                copied["path"] = normalized_path
+                dropped.add(normalized_path)
+            normalized.append(copied)
+        self.app.state.queue_entries = normalized
+        self._dropped_video_set = dropped
+        self.refresh_queue_view()
+
     def update_queue_controls(self) -> None:
         tree = self.app.ui.queue_tree
         if tree is None:
