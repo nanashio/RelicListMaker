@@ -1,4 +1,5 @@
 (() => {
+    const hasOwn = Object.prototype.hasOwnProperty;
     function parseLevelOptions(raw) {
         if (raw == null) {
             return [];
@@ -45,10 +46,29 @@
             const predictionRaw = record[`Demerit${slot}`];
             const raw = record[`Demerit${slot}RawText`];
             const score = record[`Demerit${slot}Score`];
+            const predictionSourceKey = `Demerit${slot}Source`;
+            const levelSourceKey = `Demerit${slot}LevelSource`;
+            const hasPredictionSource = hasOwn.call(record, predictionSourceKey);
+            const hasLevelSource = hasOwn.call(record, levelSourceKey);
+            const predictionSourceRaw = hasPredictionSource ? record[predictionSourceKey] : null;
+            const levelSourceRaw = hasLevelSource ? record[levelSourceKey] : null;
 
             const predictionText = predictionRaw == null ? '' : String(predictionRaw);
             const rawText = raw == null ? '' : String(raw);
             const hasScoreValue = score != null && !Number.isNaN(Number(score));
+            const predictionSourceText = predictionSourceRaw == null ? '' : String(predictionSourceRaw);
+            const levelSourceText = levelSourceRaw == null ? '' : String(levelSourceRaw);
+            const sourceFields = [];
+            sourceFields.push({
+                key: predictionSourceKey,
+                value: predictionSourceText,
+                hasValue: hasPredictionSource
+            });
+            sourceFields.push({
+                key: levelSourceKey,
+                value: levelSourceText,
+                hasValue: hasLevelSource
+            });
 
             if (!predictionText && !rawText && !hasScoreValue && !allowEmptyDemerit) {
                 return null;
@@ -81,6 +101,13 @@
                 rawLower,
                 effectKind: 'demerit',
                 isDemerit: true,
+                predictionSourceKey,
+                hasPredictionSource,
+                predictionSourceText,
+                levelSourceKey,
+                hasLevelSource,
+                levelSourceText,
+                sourceFields,
                 numericScore,
                 hasFiniteScore,
                 scoreDisplay,
@@ -106,10 +133,29 @@
         const prediction = record[`Effect${slot}`];
         const raw = record[`RawText${slot}`];
         const score = record[`Effect${slot}Score`];
+        const predictionSourceKey = `Effect${slot}Source`;
+        const levelSourceKey = `Effect${slot}LevelSource`;
+        const hasPredictionSource = hasOwn.call(record, predictionSourceKey);
+        const hasLevelSource = hasOwn.call(record, levelSourceKey);
+        const predictionSourceRaw = hasPredictionSource ? record[predictionSourceKey] : null;
+        const levelSourceRaw = hasLevelSource ? record[levelSourceKey] : null;
 
         const predictionText = prediction == null ? '' : String(prediction);
         const rawText = raw == null ? '' : String(raw);
         const hasScoreValue = score != null && !Number.isNaN(Number(score));
+        const predictionSourceText = predictionSourceRaw == null ? '' : String(predictionSourceRaw);
+        const levelSourceText = levelSourceRaw == null ? '' : String(levelSourceRaw);
+        const sourceFields = [];
+        sourceFields.push({
+            key: predictionSourceKey,
+            value: predictionSourceText,
+            hasValue: hasPredictionSource
+        });
+        sourceFields.push({
+            key: levelSourceKey,
+            value: levelSourceText,
+            hasValue: hasLevelSource
+        });
 
         if (!predictionText && !rawText && !hasScoreValue) {
             return null;
@@ -165,6 +211,13 @@
             rawLower,
             effectKind: 'effect',
             isDemerit: false,
+            predictionSourceKey,
+            hasPredictionSource,
+            predictionSourceText,
+            levelSourceKey,
+            hasLevelSource,
+            levelSourceText,
+            sourceFields,
             numericScore,
             hasFiniteScore,
             scoreDisplay,

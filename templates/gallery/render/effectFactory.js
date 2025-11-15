@@ -693,17 +693,67 @@
             return effect;
         }
 
+        function formatPredictionSourceValue(value, hasValue) {
+            if (!hasValue) {
+                return '--';
+            }
+            if (value == null) {
+                return '--';
+            }
+            const text = String(value).trim();
+            if (!text) {
+                return '--';
+            }
+            if (text.toLowerCase() === 'none') {
+                return '--';
+            }
+            return text;
+        }
+
         function createEffectPredictionLine(context) {
             const predictionLine = createElement('div', 'prediction');
-            const labelText = context.isDemerit ? 'デメリット:' : '推定:';
-            const predictionLabel = createElement('span', 'prediction-label', labelText);
-            const predictionValueNode = createElement(
-                'span',
-                'prediction-value',
-                context.predictionText || '--'
-            );
-            predictionLine.appendChild(predictionLabel);
-            predictionLine.appendChild(predictionValueNode);
+
+            const sourceFields = Array.isArray(context && context.sourceFields)
+                ? context.sourceFields
+                : [];
+            const sourceItems = sourceFields.filter((field) => {
+                if (!field || typeof field.key === 'undefined') {
+                    return false;
+                }
+                const labelText = String(field.key).trim();
+                return labelText.length > 0;
+            });
+
+            if (sourceItems.length === 0) {
+                const fallbackLabel = context && context.isDemerit ? 'デメリット:' : '推定:';
+                const predictionLabel = createElement('span', 'prediction-label', fallbackLabel);
+                const predictionValueNode = createElement(
+                    'span',
+                    'prediction-value',
+                    (context && context.predictionText) || '--'
+                );
+                predictionLine.appendChild(predictionLabel);
+                predictionLine.appendChild(predictionValueNode);
+                predictionLine.style.display = state.showOcr ? '' : 'none';
+                return predictionLine;
+            }
+
+            sourceItems.forEach((item, index) => {
+                if (index > 0) {
+                    const separator = createElement('span', 'prediction-separator', '/');
+                    predictionLine.appendChild(separator);
+                }
+                const labelText = String(item.key).trim();
+                const label = createElement('span', 'prediction-label', `${labelText}:`);
+                const valueNode = createElement(
+                    'span',
+                    'prediction-value',
+                    formatPredictionSourceValue(item.value, Boolean(item.hasValue))
+                );
+                predictionLine.appendChild(label);
+                predictionLine.appendChild(valueNode);
+            });
+
             predictionLine.style.display = state.showOcr ? '' : 'none';
             return predictionLine;
         }

@@ -734,6 +734,11 @@ h1 {
     font-weight: 600;
 }
 
+.prediction-separator {
+    font-weight: 400;
+    color: var(--color-text-muted);
+}
+
 .level-badge {
     font-size: 12px;
     padding: var(--space-2xs) var(--space-md);
