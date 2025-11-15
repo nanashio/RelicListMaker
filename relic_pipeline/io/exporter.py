@@ -84,7 +84,6 @@ def _ensure_effect_slots(row: MutableMapping[str, object], options: ExportOption
         row.setdefault(effect_key, "")
         row.setdefault(level_key, "none")
         row.setdefault(status_key, "pending")
-        row.setdefault(f"Effect{idx}Kind", "effect")
 
         if column_flags.get("LevelOptions", True):
             row.setdefault(f"Effect{idx}LevelOptions", "none")
@@ -100,7 +99,6 @@ def _ensure_effect_slots(row: MutableMapping[str, object], options: ExportOption
             row.setdefault(f"Demerit{idx}", "")
             row.setdefault(f"Demerit{idx}Level", "none")
             row.setdefault(f"Demerit{idx}Status", "pending")
-            row.setdefault(f"Demerit{idx}Kind", "demerit")
             if column_flags.get("LevelOptions", True):
                 row.setdefault(f"Demerit{idx}LevelOptions", "none")
             if column_flags.get("RawText", True):
@@ -137,7 +135,6 @@ def build_row(
         effect_key = f"Effect{idx}"
         row[effect_key] = match.matched_text
         row[f"Effect{idx}Status"] = "pending"
-        row[f"Effect{idx}Kind"] = "effect"
 
         if column_flags.get("RawText", True):
             row[f"RawText{idx}"] = match.raw_text
@@ -163,7 +160,6 @@ def build_row(
         if demerit_match is not None:
             row[f"Demerit{idx}"] = demerit_match.matched_text
             row[f"Demerit{idx}Status"] = "pending"
-            row[f"Demerit{idx}Kind"] = "demerit"
             if column_flags.get("RawText", True):
                 row[f"Demerit{idx}RawText"] = demerit_match.raw_text
             if column_flags.get("Score", True):
@@ -174,7 +170,6 @@ def build_row(
         elif idx in demerit_slots:
             row.setdefault(f"Demerit{idx}", "")
             row.setdefault(f"Demerit{idx}Status", "pending")
-            row.setdefault(f"Demerit{idx}Kind", "demerit")
             if column_flags.get("RawText", True):
                 row.setdefault(f"Demerit{idx}RawText", "")
             if column_flags.get("Score", True):
@@ -250,7 +245,6 @@ def write_csv(
         if column_flags.get("LevelOptions", True):
             fieldnames.append(f"Effect{idx}LevelOptions")
         fieldnames.append(f"Effect{idx}Status")
-        fieldnames.append(f"Effect{idx}Kind")
 
     for idx in demerit_slots:
         fieldnames.append(f"Demerit{idx}")
@@ -258,7 +252,6 @@ def write_csv(
         if column_flags.get("LevelOptions", True):
             fieldnames.append(f"Demerit{idx}LevelOptions")
         fieldnames.append(f"Demerit{idx}Status")
-        fieldnames.append(f"Demerit{idx}Kind")
 
     if column_flags.get("RawText", True):
         for idx in slot_range:
