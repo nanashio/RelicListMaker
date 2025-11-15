@@ -62,27 +62,40 @@ def find_viewer(results_dir: Path, video_name: Optional[str]) -> tuple[Optional[
         return None, False
     if not video_name:
         return candidates[0], True
+
     normalized = video_name.strip()
-    legacy_suffix = "_viewer.html"
+    suffix = "gallery/index.html"
+
     for candidate in candidates:
+        aliases = {candidate.as_posix(), candidate.name}
         try:
             relative = candidate.relative_to(results_dir)
-            rel_posix = relative.as_posix()
         except ValueError:
-            rel_posix = candidate.as_posix()
+            relative = None
+        if relative is not None:
+            rel_posix = relative.as_posix()
+            aliases.add(rel_posix)
+        else:
+            rel_posix = None
 
-        if rel_posix.endswith("gallery/index.html"):
-            base = rel_posix[: -len("gallery/index.html")].rstrip("/")
-            if base:
-                last_segment = base.split("/")[-1]
-                if last_segment == normalized:
-                    return candidate, True
+        if rel_posix and rel_posix.endswith(suffix):
+            prefix = rel_posix[: -len(suffix)].rstrip("/")
+        else:
+            prefix = None
 
-        name = candidate.name
-        stem = candidate.stem
-        parent_name = candidate.parent.name
-        if name == f"{normalized}{legacy_suffix}" or stem == f"{normalized}_viewer" or parent_name == normalized:
+        if prefix:
+            aliases.add(prefix)
+            aliases.update(part for part in prefix.split("/") if part)
+
+        gallery_parent = candidate.parent
+        if gallery_parent.name == "gallery":
+            container = gallery_parent.parent
+            if container != results_dir and container.name:
+                aliases.add(container.name)
+
+        if normalized in aliases:
             return candidate, True
+
     return candidates[0], False
 
 
