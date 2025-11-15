@@ -1,17 +1,19 @@
 # Effect{n}Correction 系列段階的削除計画
 
 ## 背景
-現在のギャラリー UI では `Effect{n}Correction` / `Effect{n}LevelCorrection` / `Demerit{n}Correction` 列に一時的な修正値を保持し、保存時に `Effect{n}` / `Effect{n}Level` / `Demerit{n}` へ転記する設計となっています。ギャラリー側では補助列を通じて訂正候補の提示や入力値の復元を実現していますが、ユーザー要求により補助列を廃止し、直接 `Effect{n}` などの基列のみで運用できる形へ移行する必要があります。プロジェクトはまだ未リリースで既存のレビュー CSV は存在しないため、段階的削除は主に今後作成されるデータと開発中のフローを安全に移行することが目的です。また `Effect{n}LevelSuppressed` 列は、`Effect{n}LevelOptions` に基づき `none` しか候補がない場合はレベル選択を無効化するロジックへ置き換え済みで、出力 CSV でも生成されなくなっています。【F:templates/gallery/render/effectViewModel.js†L1-L24】【F:templates/gallery/render/effectFactory.js†L117-L135】【F:tests/js/gallery_modules.test.mjs†L1742-L1748】【F:tests/js/gallery_modules.test.mjs†L2237-L2251】【F:relic_pipeline/io/exporter.py†L150-L159】【F:tests/test_merge_results.py†L244-L269】
+ギャラリー UI とバックエンドはかつて `Effect{n}Correction` / `Effect{n}LevelCorrection` / `Demerit{n}Correction` 列に一時的な修正値を保持し、保存時に基列へ転記する設計でした。現在は補助列を廃止し、ビューアが直接 `Effect{n}` / `Effect{n}Level` / `Demerit{n}` を更新する実装へ移行済みです。プロジェクトは未リリースのため既存レビュー CSV は無く、段階的削除の目的は今後のデータと開発フローの移行安全性を確保することにあります。また `Effect{n}LevelSuppressed` 列は `Effect{n}LevelOptions` の候補有無を参照する実装に置き換え済みで、出力 CSV には生成されません。【F:templates/gallery/render/effectViewModel.js†L1-L188】【F:templates/gallery/render/effectFactory.js†L1-L960】【F:templates/gallery/events/recordActionHandlers.js†L1-L640】【F:merge_results.py†L1-L320】
 
 ## 進捗状況 (2025-11-21 時点)
 - ✅ フェーズ 1-2: `docs/reference-csv-columns.md` で補助列を非推奨化し、レビュー CSV へ値を書き戻さない運用方針を明文化しました。【F:docs/reference-csv-columns.md†L55-L96】
 - ✅ フェーズ 1-2: ギャラリー UI の補正入力を常時読み取り専用に変更し、非表示となっていた効果・デメリットを再表示しつつ保存処理では補助列を利用しない挙動に統一しました。【F:templates/gallery/gallery.js†L1-L200】【F:templates/gallery/render/effectFactory.js†L1-L140】
-- ✅ フェーズ 1-4: `_apply_corrections` を追加して補助列の値を統合処理で `Effect{n}` / `Demerit{n}` 等へ反映するようにし、補助列が残っていても最終出力では基列へ転記されることを確認しました。レベル補正のみが入力されたケースでも `Effect{n}Status` が `corrected` に更新されるよう調整し、pytest フィクスチャへ確認用データセットを追加しています。【F:merge_results.py†L253-L333】【F:tests/test_merge_results.py†L204-L289】
+- ✅ フェーズ 1-4: `_apply_corrections` を暫定導入し旧 CSV の補助列から基列へ転記できるようにしていましたが、補助列廃止に伴い `Correction` 接尾辞の列を破棄する簡素なガードへ置き換えました。`merge_results` はレビュー済み行のみを対象とし、基列に直接記録された値とステータスをそのまま採用します。【F:merge_results.py†L266-L286】【F:tests/test_merge_results.py†L248-L324】
 - ✅ フェーズ 2-1: 既存 CSV が存在しないことを確認済みで、追加マイグレーションは不要と判断しました。検証用に `scripts/migrate_effect_corrections.py` を試作しましたが、計画上は実行不要ステップとして扱っています。【F:scripts/migrate_effect_corrections.py†L1-L113】
 - ✅ フェーズ 2-2: レベル抑制判定を `Effect{n}LevelOptions` の候補有無に集約し、`none` しかない場合はセレクトを無効化することで旧 `Effect{n}LevelSuppressed` の挙動を再現しました。UI の処理と単体テストで `none` の除外や `LevelOptionsDisplay` の更新を確認済みです。【F:templates/gallery/render/effectViewModel.js†L1-L24】【F:templates/gallery/render/effectFactory.js†L117-L135】【F:tests/js/gallery_modules.test.mjs†L1742-L1748】【F:tests/js/gallery_modules.test.mjs†L2237-L2251】
 - ✅ フェーズ 2-3: マイグレーション後の CSV を模した pytest シナリオを追加し、補助列を完全に削除したデータでも `merge_results` が補正済み値とステータスを維持することを確認しました。【F:tests/test_merge_results.py†L340-L366】
 - ✅ フェーズ 2-4: 補助列未依存の Playwright シナリオを追加し、効果名を直接編集した際に保存 API が補助列を含まないペイロードを送信することと、基列 `Effect{n}` / `Effect{n}Status` が更新されることを検証しました。Playwright をインストール済みのローカル環境でシナリオが成功することも確認済みです。【F:tests/browser/viewer.spec.ts†L100-L160】
-- ✅ フェーズ 3-1, 3-2: 補助列 `Effect{n}Correction` / `Effect{n}LevelCorrection` / `Demerit{n}Correction` を正式に廃止し、ドキュメント・バックエンド・フロントエンドから参照を除去しました。ビューアは `Effect{n}` / `Effect{n}Level` を直接更新する実装へ移行済みです。【F:docs/reference-csv-columns.md†L55-L88】【F:merge_results.py†L1-L510】【F:templates/gallery/events/recordActionHandlers.js†L1-L660】
+- ✅ フェーズ 3-1, 3-2: 補助列 `Effect{n}Correction` / `Effect{n}LevelCorrection` / `Demerit{n}Correction` の参照をフロントエンド・バックエンド双方から削除し、ビューアが基列へ直接書き込む実装へ更新しました。`recordActionHandlers` は補助列を触らずに `Effect{n}` / `Effect{n}Level` / `Demerit{n}` を更新し、`merge_results` と GUI のレビュー判定も基列のみを参照するよう統一しています。【F:templates/gallery/render/effectViewModel.js†L1-L188】【F:templates/gallery/render/effectFactory.js†L90-L1028】【F:templates/gallery/events/recordActionHandlers.js†L240-L660】【F:merge_results.py†L266-L286】【F:gui/handlers.py†L19-L52】【F:tests/js/gallery_modules.test.mjs†L1758-L3404】【F:tests/test_merge_results.py†L232-L324】
+- ✅ フェーズ 3-2 フォローアップ: 効果値が既存値から変化していない場合は `Effect{n}Status` のレビュー状態を維持するようにし、手動補正を解除したときのみ未レビューへ戻る挙動を保証しました。これにより補正列廃止後も `only_reviewed=True` の統合作業でレビュー済み行が欠落しないことを確認しています。【F:templates/gallery/events/recordActionHandlers.js†L350-L460】【F:merge_results.py†L266-L286】
+- ✅ フェーズ 3-4: 補助列依存のユーティリティとテストシナリオを整理し、レビュー済み CSV が基列のみで成立することを pytest / Node.js テストで検証しました。旧形式 CSV についてはマイグレーションスクリプトを維持しつつ、新しいサンプルデータと統合テストを基列主体に刷新しています。【F:merge_results.py†L266-L286】【F:tests/test_merge_results.py†L40-L324】【F:tests/js/gallery_modules.test.mjs†L1758-L3404】
 - ✅ フェーズ 3-3: `Effect{n}LevelSuppressed` 列を完全廃止し、出力・マージ・ビューアのいずれでも候補リストの `none` 判定に一本化しました。生成 CSV に列が現れないことと `Effect{n}LevelOptions` の保持をテストで確認済みです。【F:relic_pipeline/io/exporter.py†L150-L159】【F:tests/test_merge_results.py†L244-L269】【F:docs/reference-csv-columns.md†L55-L96】
 
 ## 段階的削除方針
@@ -47,6 +49,6 @@
 - CSV 出力を参照する外部ツールがある場合は API 互換性の確認と修正依頼のスケジュールを調整する。
 
 ## 次のアクション
-- フェーズ 1 用の実装タスクを issue 化し、優先度・担当者を設定する。
-- マイグレーションスクリプトの要件定義とサンプルデータでの検証計画を策定する。
-- Feature Flag による段階的リリース計画をプロダクトオーナーへレビュー依頼する。
+- フェーズ 3-5: `datasets/` や `results/` のサンプル CSV が補助列を持たない状態に更新されているかを確認し、残存していればクリーニングする。
+- レビュー手順書・GUI ドキュメントを刷新し、基列を直接編集する新しいフローとステータス更新ルールを共有する。
+- `_apply_corrections` の互換ガードを将来的に削除できるよう、実運用データの移行完了時期とロールバック方針を整理する。

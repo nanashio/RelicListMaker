@@ -26,8 +26,7 @@ def _slot_has_content(row: dict[str, object], slot: int) -> bool:
     effect_key = f"Effect{slot}"
     raw_key = f"RawText{slot}"
     score_key = f"Effect{slot}Score"
-    correction_key = f"Effect{slot}Correction"
-    for key in (effect_key, raw_key, correction_key, score_key):
+    for key in (effect_key, raw_key, score_key):
         if key not in row:
             continue
         value = row.get(key)

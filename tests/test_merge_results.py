@@ -87,11 +87,8 @@ def sample_results(tmp_path: Path) -> Path:
             "Effect1",
             "Effect1Status",
             "Effect1Level",
-            "Effect1Correction",
-            "Effect1LevelCorrection",
             "Demerit1",
             "Demerit1Status",
-            "Demerit1Correction",
         ],
         [
             [
@@ -100,11 +97,8 @@ def sample_results(tmp_path: Path) -> Path:
                 "red",
                 "text1",
                 "effect1",
-                "pass",
+                "pending",
                 "Lv1",
-                "",
-                "",
-                "",
                 "",
                 "",
             ],
@@ -115,12 +109,9 @@ def sample_results(tmp_path: Path) -> Path:
                 "text2",
                 "effect2",
                 "pass",
+                "none",
                 "",
-                "",
-                "",
-                "",
-                "",
-                "",
+                "pending",
             ],
         ],
     )
@@ -187,11 +178,8 @@ def sample_results(tmp_path: Path) -> Path:
             "Effect1Status",
             "Effect1Level",
             "Effect1LevelOptions",
-            "Effect1Correction",
-            "Effect1LevelCorrection",
             "Demerit1",
             "Demerit1Status",
-            "Demerit1Correction",
         ],
         [
             [
@@ -199,15 +187,12 @@ def sample_results(tmp_path: Path) -> Path:
                 "False",
                 "gold",
                 "raw effect",
-                "Original Effect",
-                "pending",
-                "Lv1",
-                "Lv1|Lv2",
                 "Corrected Effect",
+                "corrected",
                 "Lv2",
-                "Original Downside",
-                "pending",
+                "Lv2",
                 "Corrected Downside",
+                "corrected",
             ],
             [
                 "patch002.png",
@@ -218,9 +203,6 @@ def sample_results(tmp_path: Path) -> Path:
                 "pass",
                 "none",
                 "none",
-                "",
-                " ",
-                "",
                 "",
                 "",
             ],
@@ -240,7 +222,6 @@ def sample_results(tmp_path: Path) -> Path:
             "Effect1",
             "Effect1Status",
             "Effect1Level",
-            "Effect1LevelCorrection",
         ],
         [
             [
@@ -249,8 +230,7 @@ def sample_results(tmp_path: Path) -> Path:
                 "silver",
                 "raw effect e",
                 "Effect With Level",
-                "pending",
-                "Lv1",
+                "corrected",
                 "Lv3",
             ],
         ],
@@ -273,9 +253,9 @@ def test_merge_results_filters_duplicates_and_copies_images(sample_results: Path
     assert "Effect1Correction" not in (reader.fieldnames or [])
     assert "Effect1LevelCorrection" not in (reader.fieldnames or [])
 
-    assert len(rows) == 5
+    assert len(rows) == 4
     datasets = {row["Dataset"] for row in rows}
-    assert datasets == {"video_a", "video_b", "video_d", "video_e"}
+    assert datasets == {"video_b", "video_d", "video_e"}
 
     duplicate_flags = {row.get("Duplicate") for row in rows}
     assert duplicate_flags == {"False"}
@@ -310,7 +290,7 @@ def test_merge_results_filters_duplicates_and_copies_images(sample_results: Path
     assert video_b_entry["Demerit1Status"] == "corrected"
 
     copied_images = sorted((merged_dir / "crops").iterdir())
-    assert len(copied_images) == 5
+    assert len(copied_images) == 4
     for image_path in copied_images:
         assert image_path.is_file()
 
