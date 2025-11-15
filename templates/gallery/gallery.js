@@ -1172,6 +1172,78 @@
         });
     }
 
+    function isNoneValue(value) {
+        if (value == null) {
+            return true;
+        }
+        const text = String(value).trim();
+        if (!text) {
+            return true;
+        }
+        return text.toLowerCase() === 'none';
+    }
+
+    function normalizeLevelOptionsForRecord(options) {
+        const list = Array.isArray(options) ? options : [];
+        const sanitized = sanitizeLevelList(list);
+        const unique = [];
+        const seen = new Set();
+        sanitized.forEach((value) => {
+            if (value == null) {
+                return;
+            }
+            const text = String(value).trim();
+            if (!text) {
+                return;
+            }
+            const key = text.toLowerCase();
+            if (seen.has(key)) {
+                return;
+            }
+            seen.add(key);
+            unique.push(text);
+        });
+        const sorted = sortLevelsAscending(unique);
+        const serialized = sorted.length ? sorted.join('|') : 'none';
+        return { sorted, serialized };
+    }
+
+    function syncRecordLevelOptions(effect, options) {
+        if (!effect || typeof getEffectIndexes !== 'function') {
+            return false;
+        }
+        const indexes = getEffectIndexes(effect);
+        if (!indexes || indexes.kind === 'demerit') {
+            return false;
+        }
+
+        const { sorted, serialized } = normalizeLevelOptionsForRecord(options);
+        const optionsChanged = updateRecordLevelOptions(
+            indexes.recordIndex,
+            indexes.slotIndex,
+            serialized,
+            indexes.kind
+        );
+
+        let levelChanged = false;
+        if (!sorted.length || sorted.every((value) => isNoneValue(value))) {
+            levelChanged = updateRecordLevelValue(indexes.recordIndex, indexes.slotIndex, 'none', indexes.kind);
+            if (effect.dataset) {
+                effect.dataset.level = '';
+            }
+        }
+
+        if (effect.dataset) {
+            effect.dataset.levelOptionsBase = sorted.join('|');
+        }
+
+        if (optionsChanged || levelChanged) {
+            storageManager.scheduleSave();
+        }
+
+        return optionsChanged || levelChanged;
+    }
+
     function applyMasterDataForRelicType(relicType, context = {}) {
         const requested = normalizeRelicTypeValue(relicType);
         const fallback = normalizeRelicTypeValue(datasetState.relicType || '');
@@ -1211,7 +1283,13 @@
                 setCorrectionLevelCandidates,
                 rebuildLevelSelectOptions,
                 sanitizeLevelList,
-                sortLevelsAscending
+                sortLevelsAscending,
+                onOptionsApplied: (targetEffect, options) => {
+                    if (targetEffect !== effect) {
+                        return false;
+                    }
+                    return syncRecordLevelOptions(targetEffect, options);
+                }
             });
 
             const baseJson = effect.dataset.levelOptionsBaseJson || '';
@@ -1226,6 +1304,7 @@
                     baseOptions = sanitizeLevelList(baseJson.split('|'));
                 }
             }
+            syncRecordLevelOptions(effect, baseOptions);
             updateLevelInputAvailability(levelInput, baseOptions);
 
             if (
