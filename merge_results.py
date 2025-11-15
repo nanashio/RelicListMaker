@@ -279,8 +279,8 @@ def _ensure_no_correction_columns(
 
     columns = ", ".join(sorted(remaining))
     raise MergeResultsError(
-        "補助列が残存しています。`scripts/migrate_effect_corrections.py` で"
-        " 基列へ移行してから再実行してください: "
+        "補助列が残存しています。Effect{n}Correction などの列を基列へ転記"
+        " してから削除し、再実行してください: "
         f"{source} #{row_index} ({columns})"
     )
 
