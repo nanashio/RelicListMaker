@@ -137,7 +137,6 @@ def test_process_images_emits_source_columns(monkeypatch, tmp_path):
     assert row["Effect1LevelSource"] == "+1"
     assert row["Effect1LevelOptions"] == "+1"
     assert row["Effect1Status"] == "pending"
-    assert row["Effect1Kind"] == "effect"
     assert row["RawText1"] == "Effect Raw +1"
     assert row["Effect1Score"] == 98.5
 
@@ -147,7 +146,6 @@ def test_process_images_emits_source_columns(monkeypatch, tmp_path):
     assert row["Demerit1LevelSource"] == "none"
     assert row["Demerit1LevelOptions"] == "none"
     assert row["Demerit1Status"] == "pending"
-    assert row["Demerit1Kind"] == "demerit"
     assert row["Demerit1RawText"] == "Demerit Raw"
     assert row["Demerit1Score"] == 55.0
 

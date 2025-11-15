@@ -62,7 +62,6 @@ def test_ensure_effect_slots_adds_placeholder_values():
     assert row["Effect3"] == ""
     assert row["Effect2Status"] == "pending"
     assert row["Effect2Level"] == "none"
-    assert row["Effect2Kind"] == "effect"
     assert row["RawText2"] == ""
     assert row["Effect2Score"] == 0.0
     assert row["Effect2Source"] == ""
@@ -90,7 +89,6 @@ def test_ensure_effect_slots_adds_demerit_columns():
     assert row["Demerit2"] == ""
     assert row["Demerit2Level"] == "none"
     assert row["Demerit2Status"] == "pending"
-    assert row["Demerit2Kind"] == "demerit"
     assert row["Demerit2LevelOptions"] == "none"
     assert row["Demerit2RawText"] == ""
     assert row["Demerit2Score"] == 0.0
@@ -118,13 +116,11 @@ def test_write_csv_includes_demerit_columns(tmp_path: Path):
             "Effect1": "効果A",
             "Effect1Level": "none",
             "Effect1Status": "pending",
-            "Effect1Kind": "effect",
             "Effect1Source": "効果A",
             "Effect1LevelSource": "none",
             "Demerit1": "効果A",
             "Demerit1Level": "none",
             "Demerit1Status": "pending",
-            "Demerit1Kind": "demerit",
             "Demerit1LevelOptions": "none",
             "Demerit1RawText": "OCR",
             "Demerit1Score": 87.5,
@@ -143,7 +139,8 @@ def test_write_csv_includes_demerit_columns(tmp_path: Path):
     if DEFAULT_COLUMN_VISIBILITY.get("LevelOptions", True):
         assert "Demerit1LevelOptions" in header
     assert "Demerit1Status" in header
-    assert "Demerit1Kind" in header
+    assert "Effect1Kind" not in header
+    assert "Demerit1Kind" not in header
     if DEFAULT_COLUMN_VISIBILITY.get("RawText", True):
         assert "Demerit1RawText" in header
     if DEFAULT_COLUMN_VISIBILITY.get("Score", True):
@@ -151,6 +148,57 @@ def test_write_csv_includes_demerit_columns(tmp_path: Path):
     if DEFAULT_COLUMN_VISIBILITY.get("Source", True):
         assert "Demerit1Source" in header
         assert "Demerit1LevelSource" in header
+
+
+def test_write_csv_effect_columns_follow_new_order(tmp_path: Path):
+    column_flags = dict(DEFAULT_COLUMN_VISIBILITY)
+    rows = [
+        {
+            "Image": "sample.png",
+            "Duplicate": False,
+            "Effect1": "効果A",
+            "Effect1Level": "none",
+            "Effect1Status": "pending",
+            "Effect2": "",
+            "Effect2Level": "none",
+            "Effect2Status": "pending",
+            "Demerit1": "",
+            "Demerit1Level": "none",
+            "Demerit1Status": "pending",
+        }
+    ]
+
+    output = tmp_path / "results.csv"
+
+    write_csv(rows, path=output, column_flags=column_flags)
+
+    header = output.read_text(encoding="utf-8").splitlines()[0].split(",")
+
+    def slice_columns(prefix: str) -> list[str]:
+        start = header.index(prefix)
+        columns = [prefix]
+        for name in header[start + 1 :]:
+            if not name.startswith(prefix[:-1]):
+                break
+            columns.append(name)
+        return columns
+
+    effect_columns = slice_columns("Effect1")
+    expected_effect_columns: list[str] = []
+    for idx in range(1, 3):
+        expected_effect_columns.append(f"Effect{idx}")
+        expected_effect_columns.append(f"Effect{idx}Level")
+        if column_flags.get("LevelOptions", True):
+            expected_effect_columns.append(f"Effect{idx}LevelOptions")
+        expected_effect_columns.append(f"Effect{idx}Status")
+    assert effect_columns == expected_effect_columns
+
+    demerit_columns = slice_columns("Demerit1")
+    expected_demerit_columns = ["Demerit1", "Demerit1Level"]
+    if column_flags.get("LevelOptions", True):
+        expected_demerit_columns.append("Demerit1LevelOptions")
+    expected_demerit_columns.append("Demerit1Status")
+    assert demerit_columns == expected_demerit_columns
 
 
 def test_build_row_merges_demerit_results():
@@ -183,7 +231,6 @@ def test_build_row_merges_demerit_results():
     )
 
     assert row["Effect1"] == "Effect Matched"
-    assert row["Effect1Kind"] == "effect"
     assert row["RawText1"] == "Effect Raw"
     assert row["Effect1Score"] == 91.2
     assert row["Effect1Source"] == "Effect Matched"
