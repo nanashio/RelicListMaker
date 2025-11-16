@@ -8,6 +8,11 @@
 - `match_and_export.py` 内の `ocr_and_match` / `process_images` は、既存 API の引数・戻り値を維持したラッパーとして残されています。内部実装は `relic_pipeline` 配下のモジュールへ委譲する形に置き換わっており、段階的移行のフォールバックとして機能しています。【F:docs/plan-ocr-pipeline-refactor.md†L116-L138】【F:match_and_export.py†L244-L420】
 - 上記ラッパーを CLI から呼び出すため、`match_and_export.py` には旧来の `build_arg_parser` や CLI エントリーポイント (`main`) も残存しています。計画では CLI 層を `relic_pipeline/cli/commands.py` へ移す前提になっており、現状は互換アダプタとして維持されています。【F:docs/plan-ocr-pipeline-refactor.md†L116-L144】【F:match_and_export.py†L421-L470】
 
+## 直近の進捗
+- `match_and_export` が保持していた OCR/マッチング実装を `relic_pipeline/processing.py` に移し、後方互換の窓口として再公開する構成に切り替えた。CLI や既存コードは従来のインポートを継続しつつ、新しいモジュールを正引きすることで移行フェーズを開始できる。【F:relic_pipeline/processing.py†L1-L230】【F:match_and_export.py†L1-L87】
+- パイプライン側の呼び出しを `relic_pipeline.processing` に付け替え、互換ラッパー経由の依存を取り除いた。【F:pipeline/processors.py†L7-L88】
+- CLI コマンドのデフォルト実装を `relic_pipeline.processing.process_images` ベースに変更し、今後 `match_and_export.main` を廃止しても呼び出し経路が保たれるようにした。【F:relic_pipeline/cli/commands.py†L51-L98】
+
 ## 削除に向けた計画
 1. `pipeline/processors.py` などパイプラインから `match_and_export.process_images` を直接呼んでいる箇所を `relic_pipeline` モジュール直呼びにリライトし、ラッパーを経由しないパスを用意する。動作確認後、テストも新 API ベースへ更新する。【F:pipeline/processors.py†L15-L68】【F:match_and_export.py†L333-L420】
 2. CLI 側は `relic_pipeline/cli/commands.process_images_command` を単独エントリとして昇格させ、`match_and_export.py` の `build_arg_parser` / `main` を呼び出すルートを廃止する。`README` やテストの CLI 例も新エントリに合わせて更新する。【F:docs/plan-ocr-pipeline-refactor.md†L116-L144】【F:match_and_export.py†L421-L470】

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Mapping, Optional
 
 from extract_frames import extract_and_crop
-from match_and_export import build_processing_parameters, process_images
+from relic_pipeline.processing import build_processing_parameters, process_images
 from resource_paths import templates_path
 
 from datasets.builder import ProcessedVideoResult
