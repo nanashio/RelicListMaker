@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 from relic_pipeline import processing
 from relic_pipeline.cli import process_images_command
 from relic_pipeline.cli.main import build_arg_parser, main as cli_main
@@ -26,7 +28,19 @@ process_images = processing.process_images
 def main(argv=None) -> int:
     """互換 CLI エントリーポイント (新 CLI へ委譲)."""
 
+    _warn_deprecated_cli()
     return cli_main(argv)
+
+
+def _warn_deprecated_cli() -> None:
+    """後方互換 CLI 経由での実行を警告する."""
+
+    message = (
+        "[DEPRECATED] match_and_export.py は後方互換のために残されています。"
+        " `python -m relic_pipeline.cli.main` または `RelicListMakerCLI.exe` を"
+        " 利用してください。\n"
+    )
+    sys.stderr.write(message)
 
 
 __all__ = [
