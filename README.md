@@ -125,6 +125,14 @@ python preprocess.py path/to/image.png --out preprocessed/
 ```
 生成された出力を確認し、しきい値やリサイズ係数などの調整に活用してください。
 
+### クロップ済み画像の CLI 実行
+クロップ済みの画像を直接処理する場合は、`relic_pipeline.cli` のエントリポイントを利用できます。`match_and_export.py` は後方互換用に残していますが、今後は新しい CLI から `process_images_command` を直接呼び出してください。
+
+```bash
+python -m relic_pipeline.cli.main crops/ --output results.csv --ocr-engine vision --upsample 2.0
+```
+CLI 引数の詳細は `--help` で確認できます。
+
 ### パイプライン API を直接呼び出す
 `pipeline` パッケージでは、CLI や GUI 以外のスクリプトからも解析処理を再利用できるように `run_pipeline` API を公開しています。
 標準の入力収集を利用する場合は、動画ディレクトリと結果ディレクトリを `PipelineSettings` へ指定するだけで処理を開始できます。
