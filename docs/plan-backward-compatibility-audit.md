@@ -16,10 +16,17 @@
 - PyInstaller 出力の役割を整理し、GUI 版を `RelicListMaker.exe`、CLI 版を `RelicListMakerCLI.exe` として生成するように変更した。PyInstaller ではコンソール表示の有無をビルド時に固定する必要があるため 1 実行ファイルへの統合は不可と判断し、タスクスケジューラ設定は CLI 版へ張り替える方針で進める。【F:pyinstaller.spec†L75-L147】【F:relic_pipeline/cli/__main__.py†L1-L8】【F:docs/guide-pyinstaller-windows.md†L38-L76】
 - ビルドスクリプトと配布ガイドを確認し、PyInstaller 出力の既定が GUI/CLI 分割構成に統一されていること、タスクスケジューラの案内も `RelicListMakerCLI.exe` 呼び出し前提に更新済みであることを確認した。リポジトリ内に旧 CLI 固有の自動化設定は残っていない。【F:docs/build_windows.ps1†L201-L214】【F:docs/guide-pyinstaller-windows.md†L34-L76】
 
+## 現状評価（2025-11-16 確認）
+- リポジトリ内の CLI エントリポイントは `relic_pipeline/cli/main.py` に一本化され、README でもクロップ済み画像の処理手順が同エントリポイント前提に整理されている。PyInstaller 配布ガイドも `RelicListMakerCLI.exe` を後方互換経路の代替として案内しており、互換ラッパーを経由する導線は残っていない。【F:relic_pipeline/cli/main.py†L1-L115】【F:README.md†L118-L134】【F:docs/guide-pyinstaller-windows.md†L38-L76】【F:pyinstaller.spec†L75-L147】
+- Windows 向けの自動化スクリプトでは、ビルド完了時の案内を GUI/CLI の 2 実行ファイル体制で統一済みであり、旧 `match_and_export.py` に紐づくパスや呼び出しは含まれていないことを再確認した。【F:docs/build_windows.ps1†L201-L214】
+
 ## 削除に向けた計画
 1. ✅ パイプラインから互換レイヤー経由の呼び出しを排除し、`relic_pipeline.processing` 直呼びに統一した。テストもスタブを整理し、新 API 前提のフィクスチャへ更新済み。【F:pipeline/processors.py†L7-L88】【F:tests/pipeline/test_processors.py†L1-L138】【F:tests/pipeline/test_processing.py†L1-L178】
 2. ✅ CLI 側を `relic_pipeline/cli/main.py` に一本化し、README でも新エントリの利用を案内する形に揃えた。【F:relic_pipeline/cli/main.py†L1-L115】【F:README.md†L118-L134】
 3. ✅ 外部環境の差し替え確認を終えて `match_and_export.py` を削除し、ドキュメント・ビルド手順・テストからの参照を解消した。CLI 実行は `RelicListMakerCLI.exe` 前提で配布する方針に固定している。【F:docs/guide-pyinstaller-windows.md†L38-L76】【F:docs/build_windows.ps1†L201-L214】【F:tests/conftest.py†L1-L17】【F:README.md†L118-L134】
+
+## 残タスク
+- なし。互換レイヤーに紐づく呼び出しやビルド導線はすべて新経路へ移行済みのため、後続作業が発生した場合のみ本計画を再開する。
 
 ## 運用メモ
 - ファイル名変更に伴い、参照リンクやタスク管理ツールでは `docs/plan-backward-compatibility-audit.md` を使用してください。旧ファイル名への参照が残っている場合は順次置き換えます。
