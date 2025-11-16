@@ -16,7 +16,7 @@
 
 ## ファイル命名
 - Python スクリプトは `snake_case.py` を用い、主な責務を表す動詞＋名詞、あるいは名詞のみで表現します。
-  - 例: `extract_frames.py`, `match_and_export.py`
+  - 例: `extract_frames.py`, `relic_pipeline/processing.py`
 - 設定や定数をまとめたモジュールは `*_config.py`, `*_settings.py`, `*_constants.py` などとします。
 - CLI エントリーポイントやアプリケーション本体は `main.py` のようにシンプルな名前を使用します。
 - ドキュメント（Markdown）については「[ドキュメント命名](#ドキュメント命名)」を参照し、用途ごとのプレフィックスを必ず付与します。

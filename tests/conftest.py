@@ -15,11 +15,6 @@ if str(PROJECT_ROOT) not in sys.path:
 if "cv2" not in sys.modules:
     sys.modules["cv2"] = types.SimpleNamespace()
 
-# `match_and_export` をテスト全体でインポートしておくことで、
-# `tests/pipeline/test_processors.py` が挿入するスタブより先に
-# 実装モジュールをロードし、プライベート関数の互換性テストが可能になる。
-import match_and_export  # noqa: F401  pylint: disable=unused-import
-
 
 @pytest.fixture
 def sample_results_dir(tmp_path: Path) -> Path:

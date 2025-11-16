@@ -8,7 +8,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-import match_and_export  # noqa: E402
 from relic_pipeline import processing  # noqa: E402
 from relic_pipeline.matching import MatchResult  # noqa: E402
 from relic_pipeline.settings import MatchingSettings, OCRSettings  # noqa: E402
@@ -46,8 +45,6 @@ def test_ocr_and_match_returns_match_results(monkeypatch):
         resize_scale=1.0,
     )
     matching_settings = MatchingSettings(dictionary=["Dummy"], corrections={})
-
-    assert match_and_export.ocr_and_match is processing.ocr_and_match
 
     results, recognized_lines = processing.ocr_and_match(
         "dummy.png",
@@ -126,8 +123,6 @@ def test_process_images_emits_source_columns(monkeypatch, tmp_path):
         captured_rows.extend(rows)
 
     monkeypatch.setattr(processing, "write_csv", fake_write_csv)
-
-    assert match_and_export.process_images is processing.process_images
 
     params = processing.build_processing_parameters(
         scale=1.0,

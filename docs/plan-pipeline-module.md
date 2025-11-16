@@ -84,7 +84,7 @@ pipeline/
 - 依存方向は **入力収集 → タスク生成 → 処理 → HTML 出力** の一方向を維持する。
   - `inputs.py` はファイルシステム情報のみを扱い、下位モジュールに依存しない。
   - `tasks.py` は `inputs.py` の結果を受け取り、処理対象のメタデータを生成する。進行管理への依存は禁止する。
-  - `processors.py` は `tasks.VideoTask` と抽象化された進行レポーターを受け取り、`extract_frames` / `match_and_export` など既存の処理モジュールを呼び出す。
+  - `processors.py` は `tasks.VideoTask` と抽象化された進行レポーターを受け取り、`extract_frames` / `relic_pipeline.processing` など既存の処理モジュールを呼び出す。
   - `pipeline.py` は `inputs`・`tasks`・`processors` を組み合わせ、最終的な `generate_html` 呼び出しを担当する。
   - `progress.py` は CLI 表示や GUI コールバックを差し替えられるよう `ProgressReporter` インターフェース（例: `step(message)` / `advance(message)`）を提供し、`pipeline.py` から注入する。
 
