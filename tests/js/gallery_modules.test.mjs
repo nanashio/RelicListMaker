@@ -1326,11 +1326,15 @@ describe('gallery dataset utils', () => {
 
   test('parseDatasets normalizes entries and filters invalid', () => {
     const json = JSON.stringify([
-      'alpha.csv',
+      { csv: 'alpha.csv' },
       { csv: 'beta.csv', imgDir: ' images ', label: ' Beta ', folder: ' sub ' },
-      { kind: 'merged', sources: [{ csv: 'child.csv', imgDir: 'child', label: ' Child ' }] },
+      {
+        csv: '',
+        kind: 'merged',
+        sources: [{ csv: 'child.csv', imgDir: 'child', label: ' Child ' }]
+      },
       null,
-      { csv: '' }
+      { label: 'invalid' }
     ]);
 
     const list = datasetUtils.parseDatasets(json);
@@ -1357,6 +1361,7 @@ describe('gallery dataset utils', () => {
     assert.deepEqual(list[2].sources, [
       { label: 'Child', csv: 'child.csv', imgDir: 'child', folder: '', index: 0 }
     ]);
+    assert.equal(list[2].relicType, 'merged');
   });
 
   test('resolveDatasetState derives merged descriptors', () => {

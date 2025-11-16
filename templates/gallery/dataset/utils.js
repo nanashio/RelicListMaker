@@ -1,89 +1,47 @@
 (() => {
     'use strict';
 
-    function normalizeDatasetSources(rawSources) {
-        if (!Array.isArray(rawSources)) {
-            return [];
-        }
-        const result = [];
-        rawSources.forEach((source, index) => {
-            if (!source || typeof source !== 'object') {
-                return;
-            }
-            const csv = typeof source.csv === 'string' ? source.csv.trim() : '';
-            if (!csv) {
-                return;
-            }
-            const imgDir = typeof source.imgDir === 'string' ? source.imgDir.trim() : '';
-            const label = typeof source.label === 'string' ? source.label.trim() : '';
-            const folder = typeof source.folder === 'string' ? source.folder.trim() : '';
-            const sourceIndex = Number.isFinite(source.index) ? Number(source.index) : index;
-            result.push({
-                label,
-                csv,
-                imgDir,
-                folder,
-                index: sourceIndex
-            });
-        });
-        return result;
-    }
-
     function normalizeDatasetEntry(entry, index) {
-        if (entry == null) {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
             return null;
         }
 
-        let label = '';
-        let csv = '';
-        let imgDir = '';
-        let folder = '';
-        let kind = '';
-        let sources = [];
-        let relicType = '';
+        const label = typeof entry.label === 'string' ? entry.label.trim() : '';
+        const csv = typeof entry.csv === 'string' ? entry.csv.trim() : '';
+        const imgDir = typeof entry.imgDir === 'string' ? entry.imgDir.trim() : '';
+        const folder = typeof entry.folder === 'string' ? entry.folder.trim() : '';
+        const kind = typeof entry.kind === 'string' ? entry.kind.trim().toLowerCase() : '';
+        const relicType = typeof entry.relicType === 'string' ? entry.relicType.trim().toLowerCase() : '';
 
-        if (typeof entry === 'string') {
-            csv = entry;
-        } else if (Array.isArray(entry)) {
-            if (entry.length > 0) {
-                csv = entry[0];
-            }
-            if (entry.length > 1) {
-                imgDir = entry[1];
-            }
-            if (entry.length > 2) {
-                label = entry[2];
-            }
-        } else if (typeof entry === 'object') {
-            label = entry.label ?? entry.name ?? '';
-            csv = entry.csv ?? entry.results ?? entry.results_csv ?? entry.resultsCsv ?? '';
-            imgDir = entry.imgDir ?? entry.img_dir ?? entry.imageDir ?? entry.image_dir ?? entry.images ?? '';
-            folder = entry.folder ?? '';
-            kind = typeof entry.kind === 'string' ? entry.kind.trim() : typeof entry.type === 'string' ? entry.type.trim() : '';
-            if (!kind && entry.merged === true) {
-                kind = 'merged';
-            }
-            const rawSources = entry.sources ?? entry.merge ?? entry.mergeSources ?? entry.children ?? null;
-            sources = normalizeDatasetSources(rawSources);
-            relicType = entry.relicType ?? entry.relic_type ?? '';
-        } else {
-            csv = String(entry);
-        }
+        const sources = Array.isArray(entry.sources)
+            ? entry.sources
+                  .map((source, sourceIndex) => {
+                      if (!source || typeof source !== 'object') {
+                          return null;
+                      }
+                      const sourceCsv = typeof source.csv === 'string' ? source.csv.trim() : '';
+                      if (!sourceCsv) {
+                          return null;
+                      }
+                      const sourceLabel = typeof source.label === 'string' ? source.label.trim() : '';
+                      const sourceImgDir = typeof source.imgDir === 'string' ? source.imgDir.trim() : '';
+                      const sourceFolder = typeof source.folder === 'string' ? source.folder.trim() : '';
+                      const sourceIndexValue = Number.isFinite(source.index)
+                          ? Number(source.index)
+                          : sourceIndex;
+                      return {
+                          label: sourceLabel,
+                          csv: sourceCsv,
+                          imgDir: sourceImgDir,
+                          folder: sourceFolder,
+                          index: sourceIndexValue
+                      };
+                  })
+                  .filter((source) => source !== null)
+            : [];
 
-        label = typeof label === 'string' ? label.trim() : '';
-        csv = typeof csv === 'string' ? csv.trim() : '';
-        imgDir = typeof imgDir === 'string' ? imgDir.trim() : '';
-        folder = typeof folder === 'string' ? folder.trim() : '';
-        kind = typeof kind === 'string' ? kind.trim().toLowerCase() : '';
-        relicType = typeof relicType === 'string' ? relicType.trim().toLowerCase() : '';
-
-        if (!relicType && kind === 'merged') {
-            relicType = 'merged';
-        }
-
-        const hasCsv = Boolean(csv);
-        const acceptsEmptyCsv = kind === 'merged' && sources.length > 0;
-        if (!hasCsv && !acceptsEmptyCsv) {
+        const isMerged = kind === 'merged' && sources.length > 0;
+        if (!csv && !isMerged) {
             return null;
         }
 
@@ -97,8 +55,8 @@
             sources
         };
 
-        if (relicType) {
-            entryData.relicType = relicType;
+        if (relicType || kind === 'merged') {
+            entryData.relicType = relicType || 'merged';
         }
 
         return entryData;
@@ -228,7 +186,6 @@
 
     function createDatasetUtils() {
         return {
-            normalizeDatasetSources,
             normalizeDatasetEntry,
             parseDatasets,
             parseDatasetIndex,
