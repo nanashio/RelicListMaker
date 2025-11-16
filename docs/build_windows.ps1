@@ -210,6 +210,7 @@ try {
         & $copyReport
     }
     Write-Host "  - RelicListMaker.exe (GUI launcher)" -ForegroundColor Green
+    Write-Host "  - RelicListMakerCLI.exe (console CLI)" -ForegroundColor Green
     Write-Host "  - videos/ keeps previous contents" -ForegroundColor Green
 }
 catch {

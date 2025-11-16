@@ -89,7 +89,7 @@ a = Analysis(
 )
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
-exe = EXE(
+gui_exe = EXE(
     pyz,
     a.scripts,
     [],
@@ -109,11 +109,52 @@ exe = EXE(
     entitlements_file=None,
 )
 
+cli_analysis = Analysis(
+    ["relic_pipeline/cli/__main__.py"],
+    pathex=[str(project_dir)],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+cli_pyz = PYZ(cli_analysis.pure, cli_analysis.zipped_data, cipher=block_cipher)
+
+cli_exe = EXE(
+    cli_pyz,
+    cli_analysis.scripts,
+    [],
+    exclude_binaries=True,
+    name="RelicListMakerCLI",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
+
 coll = COLLECT(
-    exe,
+    gui_exe,
+    cli_exe,
     a.binaries,
+    cli_analysis.binaries,
     a.zipfiles,
+    cli_analysis.zipfiles,
     a.datas,
+    cli_analysis.datas,
     strip=False,
     upx=True,
     upx_exclude=[],

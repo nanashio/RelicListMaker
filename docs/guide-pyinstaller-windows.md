@@ -26,7 +26,7 @@ PS> pip install -r requirements-build.txt
 - リポジトリ直下の `tesseract/` に OS ごとのフォルダを作成し、実行ファイルと `tessdata/` を配置する。
   - 例) `tesseract/windows-x64/tesseract.exe`、`tesseract/windows-x64/tessdata/jpn.traineddata`
   - 共通で利用したい `tesseract/tessdata/` があればそちらも探索対象になる。
-- `match_and_export.py` では起動時に同梱ディレクトリを自動検出し、見つかった場合は環境変数 `TESSDATA_PREFIX` を設定した上で `pytesseract` をバンドル済みバイナリに向ける。
+- `relic_pipeline.processing` では起動時に同梱ディレクトリを自動検出し、見つかった場合は環境変数 `TESSDATA_PREFIX` を設定した上で `pytesseract` をバンドル済みバイナリに向ける。
 - バンドルが見つからない場合のみ、システムにインストールされた Tesseract を利用する。
 
 ## PyInstaller ビルド
@@ -37,6 +37,7 @@ PS> pyinstaller --clean --noconfirm pyinstaller.spec
 
 - 出力は `dist/RelicListMaker/` に配置される。
 - `templates/` 配下の HTML/CSS/JS と `master_relics.csv`、および `tesseract/` 以下のファイルは自動でバンドルされる。
+- GUI ランチャーは `RelicListMaker.exe`（ウィンドウ付き）として生成される。CLI 用のコンソール実行ファイルは `RelicListMakerCLI.exe` として生成される。旧 `match_and_export.py` を直接呼び出す運用は終了し、スケジューラやタスクランナーからはこの CLI 実行ファイルを利用する。
 - 既存の `dist/RelicListMaker/videos/` はビルド前後でバックアップ・復元されるため、同梱したサンプル動画が消えることはない。
 
 ### PowerShell スクリプトでの自動化
@@ -59,10 +60,20 @@ PS> powershell -ExecutionPolicy Bypass -File .\docs\build_windows.ps1
 - `dist/RelicListMaker/` を配布単位として扱う。
 - 実行時には以下の構成を想定している。
   - `RelicListMaker.exe`：GUI ランチャー。本体の解析処理とビューワサーバーが統合されている。
+  - `RelicListMakerCLI.exe`：クロップ済み画像に対する OCR/CSV 生成の新しい CLI エントリポイント。既存のタスクスケジューラ設定はこの実行ファイルを呼び出す形に置き換える。
   - `templates/` (PyInstaller が展開)
   - `videos/` : ビルド時に自動生成。入力動画を配置する（手動でコピー／差し替え可）
   - `results/` : 実行時に自動生成される
 - 配布時に同梱したいサンプル動画があれば `videos/` に配置しておく。
+
+### CLI 実行例
+```powershell
+PS> cd dist/RelicListMaker
+PS> .\RelicListMakerCLI.exe crops --output results.csv --scale 1.0 --upsample 2.0 --column RawText=false
+```
+
+- 旧来の `python match_and_export.py` 相当の処理を実行する。引数は `relic_pipeline.cli.main` と同一で、`--help` で一覧を確認できる。
+- Google Cloud Vision を利用する場合は、配布フォルダ直下に認証 JSON を配置し `--ocr-engine vision --gcp-credentials-filename <ファイル名>` を指定する。
 
 ## 実行方法
 ```powershell
