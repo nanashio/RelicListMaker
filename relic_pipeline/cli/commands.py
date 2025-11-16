@@ -58,8 +58,8 @@ def process_images_command(
     column_visibility = build_column_flags(getattr(args, "column_visibility", None))
 
     if runner is None:
-        from match_and_export import process_images as runner  # Local import to avoid cycles
-    from match_and_export import build_processing_parameters
+        from relic_pipeline.processing import process_images as runner  # Local import to avoid cycles
+    from relic_pipeline.processing import build_processing_parameters
 
     try:
         params = build_processing_parameters(

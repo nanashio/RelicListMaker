@@ -39,7 +39,7 @@ def test_process_images_command_invokes_runner_with_overrides(monkeypatch):
             demerit_matching=None,
         )
 
-    monkeypatch.setattr("match_and_export.build_processing_parameters", fake_builder)
+    monkeypatch.setattr("relic_pipeline.processing.build_processing_parameters", fake_builder)
 
     args = Namespace(
         image_dir="crops-dir",
