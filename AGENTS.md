@@ -5,7 +5,7 @@
 基本的な受け答えは、全て日本語で行うこと。
 
 ## プロジェクト構成とモジュール配置
-リポジトリ 直下 に 主要 スクリプト が あり `main.py` が パイプライン を 統括 します。`extract_frames.py` は フレーム 抽出、`match_and_export.py` は OCR と 辞書 照合、`generate_gallery.py` は HTML 出力、`preprocess.py` は 任意 前処理 を 担当 します。素材 動画 は `videos/` へ 配置 し、処理 生成 物 は `results/<video名>/` 配下 に `frames/` `crops/` `*.csv` `gallery/index.html` として まとまり、サムネイル を クリック すると 拡大 でき、フィルター で 対象 を 絞れます。各 エフェクト 行 に 推定・一致 度・OCR 文字列 が 表示 され、○/× で レビュー できます。辞書 `master_relics.csv` は ルート に 置き 相対 パス を 守って ください。
+リポジトリ 直下 に 主要 スクリプト が あり `main.py` が パイプライン を 統括 します。`extract_frames.py` は フレーム 抽出、`relic_pipeline/processing.py` は OCR と 辞書 照合、`generate_gallery.py` は HTML 出力、`preprocess.py` は 任意 前処理 を 担当 します。素材 動画 は `videos/` へ 配置 し、処理 生成 物 は `results/<video名>/` 配下 に `frames/` `crops/` `*.csv` `gallery/index.html` として まとまり、サムネイル を クリック すると 拡大 でき、フィルター で 対象 を 絞れます。各 エフェクト 行 に 推定・一致 度・OCR 文字列 が 表示 され、○/× で レビュー できます。辞書 `master_relics.csv` は ルート に 置き 相対 パス を 守って ください。
 
 ## ビルド・テスト・開発コマンド
 - `python -m venv .venv && source .venv/bin/activate`: 仮想 環境 を 作成 して 依存 を 分離。
@@ -24,7 +24,7 @@ PEP 8 準拠 の 4 スペース インデント と snake_case を 基本 に �
 コミット メッセージ は 命令 形・現在 形（例 `Add OCR scale flag`）で 簡潔 に まとめ、パイプライン フェーズ ごと に 変更 を 分割。PR では 目的、ユーザー 影響、検証 コマンド、関連 Issue、成果 物 を 箇条書き し、OCR 定数 や 出力 パス を 触った 場合 は 再現 手順 を 明示。
 
 ## OCR とアセット管理
-`pytesseract` が 参照 する Tesseract 日本語 データ と `master_relics.csv` を 常に 最新 状態 に 保ち、更新 理由 と Diff を 残して ください。`match_and_export.py` は ガウシアン ブラー + Otsu 二値化 + メディアン ブラー と `--oem 3 --psm 6 -c preserve_interword_spaces=1` 設定 で OCR 精度 を 向上 させ、レビュー CSV で得た NG 例 から 辞書 を 見直す 運用 を 想定 しています (`results/<video名>/corrections.csv` を用意 すれば RawText 対応 の 修正 を 優先 可能)。前処理 や パイプライン を 変更 した 場合 は 1920x1080 基準 の クロップ 座標 と `results/<video名>/` に 出力 された 生成 物 を レビュー 時 に 共有 してください。
+`pytesseract` が 参照 する Tesseract 日本語 データ と `master_relics.csv` を 常に 最新 状態 に 保ち、更新 理由 と Diff を 残して ください。OCR/マッチング処理は `relic_pipeline.processing` が担い、ガウシアン ブラー + Otsu 二値化 + メディアン ブラー と `--oem 3 --psm 6 -c preserve_interword_spaces=1` 設定 を基準としています。レビュー CSV で得た NG 例 から 辞書 を 見直す 運用 を 想定 しており (`results/<video名>/corrections.csv` を用意 すれば RawText 対応 の 修正 を 優先 可能)、前処理 や パイプライン を 変更 した 場合 は 1920x1080 基準 の クロップ 座標 と `results/<video名>/` に 出力 された 生成 物 を レビュー 時 に 共有 してください。
 
 ## エージェント作業ポリシー
 コミットやプッシュは、ユーザーから明示的な指示があるまで実行しないこと。

@@ -1,7 +1,7 @@
 # Tesseract バンドル配置
 
 このディレクトリ以下に同梱したい Tesseract 実行ファイルと `tessdata/` を配置します。
-アプリ起動時に `match_and_export.py` が最初に以下の順序で探索します。
+アプリ起動時に `relic_pipeline.processing` から呼び出される `tesseract_bundle.configure_pytesseract()` が最初に以下の順序で探索します。【F:relic_pipeline/processing.py†L32-L48】【F:tesseract_bundle.py†L18-L63】
 
 1. 実行中プラットフォーム名を含むサブディレクトリ（例: `windows-x64`, `linux-x64`, `macos-arm64`）
 2. そのほかのサブディレクトリ

@@ -89,7 +89,6 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
 ├── docs/                # テスト手順やリファクタリング方針などのドキュメント
 ├── main.py              # フレーム抽出→OCR→HTML 出力まで統括するパイプライン入口
 ├── extract_frames.py    # フレーム抽出とシーンスキップで効率的にクロップを生成
-├── match_and_export.py  # Tesseract OCR と RapidFuzz で効果名・レベルを推定
 ├── generate_gallery.py  # CSV とクロップから gallery/index.html を生成
 ├── preprocess.py        # OCR 前処理の検証と調整用スクリプト
 ├── gui/                # GUI アプリ本体とサービス・アダプタ群（`python -m gui` で起動）
@@ -126,7 +125,7 @@ python preprocess.py path/to/image.png --out preprocessed/
 生成された出力を確認し、しきい値やリサイズ係数などの調整に活用してください。
 
 ### クロップ済み画像の CLI 実行
-クロップ済みの画像を直接処理する場合は、`relic_pipeline.cli` のエントリポイントを利用できます。`match_and_export.py` は後方互換用に残していますが、今後は新しい CLI から `process_images_command` を直接呼び出してください。
+クロップ済みの画像を直接処理する場合は、`relic_pipeline.cli` のエントリポイントを利用してください。後方互換のラッパーだった `match_and_export.py` は削除済みのため、`process_images_command` を直接呼び出す経路に統一しています。
 
 ```bash
 python -m relic_pipeline.cli.main crops/ --output results.csv --ocr-engine vision --upsample 2.0

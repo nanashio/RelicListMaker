@@ -2,14 +2,14 @@
 
 ## 目的・スコープ
 - RelicList の動画→OCR→HTML 出力パイプラインを対象に、既存コードの構造的課題を洗い出し、段階的なリファクタリング計画を策定する。
-- 対象範囲は `main.py` を起点としたバッチ処理と、結果閲覧用 HTML を生成する `generate_gallery.py` を中心に、OCR/マッチングを担う `match_and_export.py` を含む。
+- 対象範囲は `main.py` を起点としたバッチ処理と、結果閲覧用 HTML を生成する `generate_gallery.py` を中心に、OCR/マッチングを担う `relic_pipeline.processing` を含む。
 - GUI（`python -m gui`）やテストコードは直接のスコープ外とし、必要に応じて別計画を立案する。
 
 ## 現状構造（主要ファイルの依存関係）
 - `main.py`
-  - 動画入力ディレクトリ (`videos/`) を走査し、`extract_frames.extract_and_crop`、`match_and_export.process_images`、`generate_gallery.generate_html` を順に呼び出す統括モジュール。
+  - 動画入力ディレクトリ (`videos/`) を走査し、`extract_frames.extract_and_crop`、`relic_pipeline.processing.process_images`、`generate_gallery.generate_html` を順に呼び出す統括モジュール。
   - `relic_data.load_master_csv` でマスターデータを読み込み、`resource_paths.templates_path` でテンプレート資産を参照する。
-- `match_and_export.py`
+- `relic_pipeline/processing.py`
   - `relic_pipeline.ocr.preprocess.prepare_for_ocr` で前処理し、`pytesseract` と RapidFuzz (`rapidfuzz.process`) を用いて OCR と一致検索を行う。
   - `relic_data` からマスター効果/レベル情報を受け取り、`tesseract_bundle` でバンドル済み Tesseract を初期化する。
 - `generate_gallery.py`
@@ -24,7 +24,7 @@
 - アイテム色推定 (`detect_item_color`) とユーザー指定による上書き処理。
 - 進捗コールバックの制御と、最終的なデータセット情報の集約。
 
-### `match_and_export.py`（OCR/マッチング処理）
+### `relic_pipeline/processing.py`（OCR/マッチング処理）
 - クロップ領域のスケーリングと前処理 (`prepare_for_ocr`) による画像整形。
 - Tesseract 設定 (`configure_pytesseract`) と外部バイナリ選択通知の管理。
 - OCR 結果の正規化（レベル検出、補正 CSV の適用、カラム表示制御）。
@@ -40,8 +40,8 @@
 
 ## 現状のボトルネックと優先度候補
 ### ファイル肥大化と責務過多
-- `main.py` 254 行、`match_and_export.py` 424 行、`generate_gallery.py` 434 行と、大型スクリプトにロジックが集中している。
-- `_process_single_video`（`main.py`）や `process_images`（`match_and_export.py`）などの関数が I/O、状態管理、集計を兼ねており単体テストが困難。
+- `main.py` 254 行、`relic_pipeline/processing.py` 200 行超、`generate_gallery.py` 434 行と、大型スクリプトにロジックが集中している。
+- `_process_single_video`（`main.py`）や `process_images`（`relic_pipeline/processing.py`）などの関数が I/O、状態管理、集計を兼ねており単体テストが困難。
 - **優先度: 高** — パイプライン単位でモジュール分割・関数抽出を行い、ユニットテスト可能な境界を作る。
 
 ### 設定値・依存関係の散在
@@ -50,7 +50,7 @@
 - **優先度: 中** — 設定モジュールの新設、もしくは dataclass ベースの設定オブジェクト導入を検討。
 
 ### 出力フォーマットの複雑化
-- CSV カラム表示制御や複数データセットのメタ情報構築が `match_and_export.py` / `generate_gallery.py` に散在し、仕様把握に時間を要する。
+- CSV カラム表示制御や複数データセットのメタ情報構築が `relic_pipeline/processing.py` / `generate_gallery.py` に散在し、仕様把握に時間を要する。
 - HTML テンプレートとの整合性チェックが手動で、変更時の副作用が不透明。
 - **優先度: 中** — CSV/HTML のスキーマ定義を文書化し、型ヒントや dataclass で構造を表現する。
 

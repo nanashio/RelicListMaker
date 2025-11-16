@@ -21,15 +21,6 @@ if "extract_frames" not in sys.modules:
     extract_stub.extract_and_crop = _stub_extract_and_crop  # type: ignore[attr-defined]
     sys.modules["extract_frames"] = extract_stub
 
-if "match_and_export" not in sys.modules:
-    match_stub = types.ModuleType("match_and_export")
-
-    def _stub_process_images(*_args, **_kwargs):  # pragma: no cover - 実際の呼び出しはモックで上書き
-        raise AssertionError("process_images should be patched in tests")
-
-    match_stub.process_images = _stub_process_images  # type: ignore[attr-defined]
-    sys.modules["match_and_export"] = match_stub
-
 import datasets.builder as dataset_builder
 import pipeline.processors as processors
 import pipeline.tasks as tasks

@@ -37,7 +37,7 @@
 
 ## 出力CSV（OCR結果）のカラム
 
-OCRパイプライン（`match_and_export.py` → `relic_pipeline.io.exporter`）は、エクスポートオプションと列表示フラグに応じて結果CSVを生成する。
+OCRパイプライン（`relic_pipeline.processing` → `relic_pipeline.io.exporter`）は、エクスポートオプションと列表示フラグに応じて結果CSVを生成する。【F:relic_pipeline/processing.py†L123-L200】【F:relic_pipeline/io/exporter.py†L18-L204】
 
 ### 基本メタデータ
 | カラム名 | 役割 | 現行コード参照 | 出力条件・備考 | ビューア表示 |
@@ -48,7 +48,7 @@ OCRパイプライン（`match_and_export.py` → `relic_pipeline.io.exporter`�
 | `RelicType` | 遺物の種別（通常/深淵など）。 | ○（列フラグで制御） | 列表示フラグが有効な場合に書き出される。未設定値は `none` としてCSVに保持し、ビューアでは空欄表示に変換される。選択肢としては `none`（未設定）、`normal`、`deep` を利用する。【F:relic_pipeline/io/exporter.py†L133-L134】【F:templates/gallery/gallery.js†L15-L19】【F:templates/gallery/render/galleryView.js†L533-L590】 | 種別セレクトと種別フィルターに利用。【F:templates/gallery/render/itemFactory.js†L248-L266】【F:templates/gallery/render/galleryView.js†L533-L663】 |
 
 ### 効果スロット列
-各スロット `n` について以下の列が並ぶ。スロット数はクロップ枚数に応じて `ExportOptions.slot_range` が決まり、`_ensure_effect_slots` が欠損を補完する。【F:match_and_export.py†L313-L329】【F:relic_pipeline/io/exporter.py†L75-L117】【F:relic_pipeline/io/exporter.py†L232-L301】
+各スロット `n` について以下の列が並ぶ。スロット数はクロップ枚数に応じて `ExportOptions.slot_range` が決まり、`_ensure_effect_slots` が欠損を補完する。【F:relic_pipeline/io/exporter.py†L75-L117】【F:relic_pipeline/io/exporter.py†L232-L300】
 
 | カラム名 | 役割 | 現行コード参照 | 出力条件・備考 | ビューア表示 |
 | --- | --- | --- | --- | --- |
@@ -64,11 +64,11 @@ OCRパイプライン（`match_and_export.py` → `relic_pipeline.io.exporter`�
 ### デメリット列
 | カラム名 | 役割 | 現行コード参照 | 出力条件・備考 | ビューア表示 |
 | --- | --- | --- | --- | --- |
-| `Demerit{n}` | 最新のデメリット名。 | ○（列定義あり） | デメリットスロットが指定されている場合に生成される。OCR直後はマッチ結果で初期化され、ビューアでのレビュー後は補正済みの内容に更新される。デメリットが存在しない場合は空欄のまま保持され、未設定プレースホルダーには `none` を用いる。【F:match_and_export.py†L348-L371】【F:relic_pipeline/io/exporter.py†L101-L188】【F:relic_pipeline/io/exporter.py†L279-L285】【F:templates/gallery/render/effectFactory.js†L238-L356】 | デメリットカードの推定欄に表示。【F:templates/gallery/render/effectFactory.js†L612-L707】【F:templates/gallery/render/effectViewModel.js†L44-L104】 |
-| `Demerit{n}Level` など | デメリットに紐づくレベルやスコア等の列。 | ○（列定義あり） | 効果スロット列と同様の命名規則で追加され、`_ensure_effect_slots` が欠損を補完する。【F:match_and_export.py†L348-L371】【F:relic_pipeline/io/exporter.py†L101-L117】【F:relic_pipeline/io/exporter.py†L166-L188】【F:relic_pipeline/io/exporter.py†L253-L290】 | 表示なし |
+| `Demerit{n}` | 最新のデメリット名。 | ○（列定義あり） | デメリットスロットが指定されている場合に生成される。OCR直後はマッチ結果で初期化され、ビューアでのレビュー後は補正済みの内容に更新される。デメリットが存在しない場合は空欄のまま保持され、未設定プレースホルダーには `none` を用いる。【F:relic_pipeline/io/exporter.py†L101-L188】【F:relic_pipeline/io/exporter.py†L279-L285】【F:templates/gallery/render/effectFactory.js†L238-L356】 | デメリットカードの推定欄に表示。【F:templates/gallery/render/effectFactory.js†L612-L707】【F:templates/gallery/render/effectViewModel.js†L44-L104】 |
+| `Demerit{n}Level` など | デメリットに紐づくレベルやスコア等の列。 | ○（列定義あり） | 効果スロット列と同様の命名規則で追加され、`_ensure_effect_slots` が欠損を補完する。【F:relic_pipeline/io/exporter.py†L101-L117】【F:relic_pipeline/io/exporter.py†L166-L188】【F:relic_pipeline/io/exporter.py†L253-L290】 | 表示なし |
 | `Demerit{n}Status` | デメリットのレビュー状況。初期値は `pending`。 | ○（ビューアで更新） | デメリット補正欄に入力が入ると `corrected` が適用され、空に戻すと `pending` へ戻る。【F:templates/gallery/render/effectViewModel.js†L24-L103】【F:templates/gallery/events/recordActionHandlers.js†L432-L620】 パスボタンは `pending`⇔`pass` を切り替え、承認すると関連する訂正値を消去した上で保存をスケジュールする。これらの状態変更は `recordStatusChange` がCSV行に書き戻し、保存キューへ積む。【F:templates/gallery/gallery.js†L2195-L2214】 | デメリットカードのステータス表示とボタン状態に反映。【F:templates/gallery/render/effectFactory.js†L612-L650】【F:templates/gallery/render/effectFactory.js†L842-L855】 |
-| `Demerit{n}Source` | デメリット名のマッチ元情報。 | ○（列定義あり） | OCR照合で得た原本テキストを保持する。レビュー後に `Demerit{n}` が更新された後も初期マッチ値を参照できる。列表示フラグ `Source` が有効な場合に出力される。【F:match_and_export.py†L348-L371】【F:relic_pipeline/io/exporter.py†L150-L188】【F:relic_pipeline/io/exporter.py†L279-L285】 | 推定欄（`.prediction`）で `Demerit{n}Source` のラベル付きテキストとして表示され、`none` や空値は `--` に置き換えられる。【F:templates/gallery/render/effectFactory.js†L705-L759】 |
-| `Demerit{n}LevelSource` | デメリットレベルのマッチ元情報。 | ○（列定義あり） | デメリットの段階について OCR 照合で得た原本テキストを保持し、未設定時は `none` に正規化される。列表示フラグ `Source` が有効な場合に出力される。【F:match_and_export.py†L348-L371】【F:relic_pipeline/io/exporter.py†L166-L188】【F:relic_pipeline/io/exporter.py†L279-L285】 | 推定欄（`.prediction`）で `Demerit{n}LevelSource` のラベル付きテキストとして表示され、`none` や空値は `--` に置き換えられる。【F:templates/gallery/render/effectFactory.js†L705-L759】 |
+| `Demerit{n}Source` | デメリット名のマッチ元情報。 | ○（列定義あり） | OCR照合で得た原本テキストを保持する。レビュー後に `Demerit{n}` が更新された後も初期マッチ値を参照できる。列表示フラグ `Source` が有効な場合に出力される。【F:relic_pipeline/io/exporter.py†L150-L188】【F:relic_pipeline/io/exporter.py†L279-L285】 | 推定欄（`.prediction`）で `Demerit{n}Source` のラベル付きテキストとして表示され、`none` や空値は `--` に置き換えられる。【F:templates/gallery/render/effectFactory.js†L705-L759】 |
+| `Demerit{n}LevelSource` | デメリットレベルのマッチ元情報。 | ○（列定義あり） | デメリットの段階について OCR 照合で得た原本テキストを保持し、未設定時は `none` に正規化される。列表示フラグ `Source` が有効な場合に出力される。【F:relic_pipeline/io/exporter.py†L166-L188】【F:relic_pipeline/io/exporter.py†L279-L285】 | 推定欄（`.prediction`）で `Demerit{n}LevelSource` のラベル付きテキストとして表示され、`none` や空値は `--` に置き換えられる。【F:templates/gallery/render/effectFactory.js†L705-L759】 |
 
 > **補足**: 旧仕様で出力していた `Effect{n}Kind` / `Demerit{n}Kind` 列は廃止され、スロットの種類は列名（`Effect` または `Demerit`）から判別する運用に統一された。【F:relic_pipeline/io/exporter.py†L70-L198】
 
