@@ -66,3 +66,12 @@ def extract_and_crop(video_path, frame_dir="frames", crop_dir="crops", save_full
 
     cap.release()
     print(f"[✓] {video_name}: {saved_count}フレーム抽出完了（重複スキップ済み）")
+
+
+if __name__ == "__main__":
+    import sys
+
+    from relic_cli.__main__ import main as cli_main
+    from relic_cli.utils import extend_argv
+
+    sys.exit(cli_main(extend_argv(["extract-frames"], sys.argv[1:])))

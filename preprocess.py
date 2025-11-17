@@ -1,6 +1,5 @@
 import cv2
 import os
-import argparse
 
 from relic_pipeline.ocr.preprocess import prepare_for_ocr
 from relic_pipeline.settings import DEFAULT_RESIZE_SCALE
@@ -60,29 +59,9 @@ def preprocess_for_ocr(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="OCR用前処理スクリプト")
-    parser.add_argument("image", help="入力画像ファイル")
-    parser.add_argument("--out", default="preprocessed", help="出力ディレクトリ")
-    parser.add_argument("--scale", type=int, default=2, help="拡大倍率（デフォルト2倍）")
-    parser.add_argument("--nosave", action="store_true", help="保存せずに処理済み画像を返す")
-    parser.add_argument(
-        "--no-threshold",
-        action="store_true",
-        help="Otsu 二値化をスキップ",
-    )
-    parser.add_argument(
-        "--no-denoise",
-        action="store_true",
-        help="メディアンブラーによるノイズ除去をスキップ",
-    )
+    import sys
 
-    args = parser.parse_args()
+    from relic_cli.__main__ import main as cli_main
+    from relic_cli.utils import extend_argv
 
-    preprocess_for_ocr(
-        args.image,
-        args.out,
-        args.scale,
-        apply_threshold=not args.no_threshold,
-        denoise=not args.no_denoise,
-        save=not args.nosave,
-    )
+    sys.exit(cli_main(extend_argv(["preprocess"], sys.argv[1:])))
