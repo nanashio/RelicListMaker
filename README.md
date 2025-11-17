@@ -115,6 +115,8 @@ python -m relic_cli --help
 python -m relic_cli extract-frames videos/sample.mp4 --frame-dir frames --crop-dir crops
 # 例: OCR 前処理
 python -m relic_cli preprocess crops/sample.png --out preprocessed --scale 1.5
+# 例: 結果の統合 (デフォルトの results/ を対象)
+python -m relic_cli merge-results results --target-name merged --include-unreviewed
 ```
 
 `extract_frames.py` や `preprocess.py` は当面の互換レイヤーとして残してあり、旧コマンド (`python extract_frames.py ...`) からは自動的に `python -m relic_cli` へ委譲されます。新しい書式へ移行する際は、`--help` を参照しながら必要なオプションを渡してください。

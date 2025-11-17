@@ -30,9 +30,11 @@
 - `relic_cli/` パッケージと `__main__.py` を追加し、最低限 `extract-frames` と `preprocess` をサブコマンド化して動作確認する。✅ 本コミットで実装済み（`python -m relic_cli` で呼び出し可能）。
 - READMEの実行手順をサブコマンド形式に更新し、旧コマンドは互換レイヤーとして一定期間サポートする。✅ `README.md` に `python -m relic_cli` の解説を追加し、`preprocess.py`/`extract_frames.py` は互換レイヤーである旨を明記した。
 - 段階的に `merge_results.py` の関数群を `relic_cli/commands/merge_results.py` へ移し、ユニットテストを追加してリグレッションを防ぐ。
+  - ▶️ `python -m relic_cli merge-results` サブコマンドを追加し、既存の `merge_results.merge_results` を呼び出す形で CLI 入口を整備した。今後はヘルパー関数の切り出しとテスト追加を進める。
 
 ## 直近の実施内容
 - `relic_cli/` パッケージを新規追加し、`extract-frames` / `preprocess` サブコマンドを提供。
 - 既存の `extract_frames.py` / `preprocess.py` からは `python -m relic_cli` に委譲する互換レイヤーを用意し、旧CLI利用者の導線を維持。
 - サブコマンド共有ヘルパー（`relic_cli.utils`）を用意し、今後のコマンド追加に備えて土台を整備。
 - `README.md` に CLI サブコマンドの使い方セクションを追加し、実行例や互換ラッパーの位置づけを明文化。
+- `merge_results.py` に対する CLI サブコマンド (`python -m relic_cli merge-results`) を追加し、統合ユーティリティの起動経路を他サブコマンドと揃えた。
