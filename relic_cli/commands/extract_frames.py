@@ -32,7 +32,7 @@ def register_subcommand(subparsers: argparse._SubParsersAction[argparse.Argument
 
 
 def _handle(args: argparse.Namespace) -> int:
-    from extract_frames import extract_and_crop
+    from pipeline.extraction import extract_and_crop
 
     video_path = Path(args.video)
     if not video_path.exists():

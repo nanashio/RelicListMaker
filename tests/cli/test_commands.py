@@ -82,3 +82,41 @@ def test_build_column_flags_merges_defaults(capsys):
     assert flags["RawText"] is False
     assert flags["Score"] is True
     assert flags["Unknown"] is True
+
+
+def test_preprocess_handle_invokes_runner(monkeypatch, tmp_path: Path):
+    from relic_cli.commands import preprocess as preprocess_cmd
+
+    called: dict[str, object] = {}
+
+    def fake_preprocess(image, out_dir, scale, *, apply_threshold, denoise, save):
+        called.update(
+            image=image,
+            out=out_dir,
+            scale=scale,
+            apply_threshold=apply_threshold,
+            denoise=denoise,
+            save=save,
+        )
+        return tmp_path / "processed.png"
+
+    monkeypatch.setattr(preprocess_cmd, "preprocess_for_ocr", fake_preprocess)
+
+    args = Namespace(
+        image=str(tmp_path / "crops" / "sample.png"),
+        out="preprocessed",
+        scale=1.5,
+        no_threshold=True,
+        no_denoise=False,
+        nosave=True,
+    )
+
+    exit_code = preprocess_cmd._handle(args)
+
+    assert exit_code == 0
+    assert called["image"].endswith("sample.png")
+    assert called["out"] == "preprocessed"
+    assert called["scale"] == 1.5
+    assert called["apply_threshold"] is False
+    assert called["denoise"] is True
+    assert called["save"] is False

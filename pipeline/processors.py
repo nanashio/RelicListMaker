@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Mapping, Optional
 
-from extract_frames import extract_and_crop
+from pipeline.extraction import extract_and_crop
 from relic_pipeline.processing import build_processing_parameters, process_images
 from resource_paths import templates_path
 
