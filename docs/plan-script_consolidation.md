@@ -69,6 +69,21 @@
    - 対象: `extract_frames.py` / `preprocess.py` / `generate_gallery.py` / `merge_results.py` / `main.py` / `gallery_assets.py` など互換目的で残存しているモジュール。
    - README・ドキュメント・テスト・外部ツール（PyInstaller 仕様書など）で旧スクリプトを案内している箇所を洗い出し、削除に伴う差分を一覧化する。
 
+### ステップ1進捗（互換ラッパー参照の棚卸し：2025-11-17）
+- ルート互換モジュールを削除する際に同時更新が必要となる参照箇所を整理した。以下の一覧はユーザー向けドキュメント／開発者ドキュメント／コード／テストごとに分類しており、削除タスクをチケット化する際の影響調査メモとして利用できる。
+
+| モジュール | ドキュメントでの参照 | コード・テストでの参照 | 備考 |
+| --- | --- | --- | --- |
+| `main.py` | `AGENTS.md` の使用例、`README.md` の概要／ツリー表示／実行例、`docs/guide-refactoring-playbook.md` のスモークテスト記述、`docs/plan-reliclist-refactor.md`・`docs/plan-pipeline-module.md` の計画説明 | （直接 import なし、互換ラッパー単体で完結） | ドキュメント群のコマンド表記を `python -m relic_cli run-pipeline` へ置換し、`README` のツリーから `main.py` を除外する必要がある。 |
+| `extract_frames.py` | `AGENTS.md` の役割紹介、`README.md` のツリー／互換レイヤー説明、`docs/guide-refactoring-playbook.md` の手順表、`docs/guide-naming-conventions.md` の命名例 | （直接 import なし） | 互換削除後は CLI サブコマンドへの誘導に一本化するため、`python extract_frames.py` の記述を `python -m relic_cli extract-frames` へ更新する。 |
+| `preprocess.py` | `AGENTS.md` のコマンド例、`README.md` のツリー／互換レイヤー説明／実行例、`docs/guide-refactoring-playbook.md` の表記、`docs/guide-naming-conventions.md` の例示 | `tests/cli/test_commands.py` が CLI から再利用しているものの、直接モジュール参照は `relic_cli.commands.preprocess` のみ | README 等の `python preprocess.py` 記載を CLI 版へ差し替える。テストは既に新実装を import しているため削除時の影響は限定的。 |
+| `generate_gallery.py` | `AGENTS.md`、`README.md`（ツリー・互換説明）、`docs/plan-reliclist-refactor.md`、`docs/guide-refactoring-playbook.md`（ステップ3）、`docs/plan-gallery-refactor.md` | `pipeline/pipeline.py`、`relic_cli/commands/generate_gallery.py`、`relic_cli/commands/merge_results/merge.py`、`tests/test_generate_gallery.py` がモジュールを直接 import | モジュール削除時は `gallery` パッケージ内の正式 API へ import 元を移し替える必要がある。テストや CLI コマンドの import 先をまとめて置換するタスクが必要。 |
+| `merge_results.py` | `README.md`（補助列エラーの注意）、`docs/reference-csv-columns.md`、`docs/plan-effect-correction-removal.md`、本ドキュメントの既存説明 | `relic_cli/commands/merge_results/` 配下、`gui/controllers.py` / `gui/services.py`、`tests/test_merge_results.py` が `merge_results` を import | 互換ラッパー削除時は GUI とテストの import を `relic_cli.commands.merge_results` へ切り替える必要がある。README・参照ドキュメントの module path も CLI サブコマンド表記へ更新する。 |
+| `gallery_assets.py` | `docs/plan-script_consolidation.md` 内で互換対象として言及されているのみ | （該当ファイルは既に削除済み） | 参照箇所の更新は本メモの記述修正のみで済む。 |
+
+- 上記一覧に含まれない自動化スクリプトや PyInstaller 設定では旧ファイル名を直接参照していないことを確認した。
+- 次ステップでは README・各ガイドのコマンド表記を `python -m relic_cli <command>` へ順次書き換えるとともに、`generate_gallery.py` / `merge_results.py` を参照するコードを `relic_cli` パッケージか `gallery` 配下の正式 API に移すリファクタリングを行う。
+
 2. **公式ドキュメントと配布物の更新案内**
    - README や `docs/` 配下のガイドを全面的に `python -m relic_cli <command>` 形式へ書き換え、旧コマンドを使用しないよう明示する。
    - `viewer_server` や GUI など別経路で互換ラッパーを叩いていないか確認し、必要なら `relic_cli` サブコマンドに切り替える手順を追記する。
