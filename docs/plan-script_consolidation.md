@@ -57,3 +57,34 @@
 - `extract_frames.py` と `preprocess.py` の実装をそれぞれ `pipeline/extraction.py` と `relic_cli.commands.preprocess` に移動し、ルート直下には互換ラッパーだけを残して CLI からもパイプラインからも共通ロジックを参照できるよう整理した。
 - ギャラリーアセット準備モジュールを `gallery_assets.py` から `gallery/assets.py` へ移設し、`gallery.render` やテストからの参照も
   パッケージ内のモジュール経由に更新してルート直下の Python ファイル削減をさらに進めた。
+
+## 最新状況（2024-02-21）
+- ルート直下の互換ラッパー（`extract_frames.py` / `preprocess.py` / `generate_gallery.py` / `merge_results.py`）がいずれも `relic_cli` サブコマンドへ委譲していることを確認。CLI ハブを通じた起動とモジュール直呼びの双方で同一実装を共有できる状態を維持している。
+- `relic_cli/commands/merge_results/` 配下のヘルパー群に対し `pytest tests/cli/test_merge_results_helpers.py` を実行し、データセット収集や画像コピーのユニットテストが引き続き成功することを確認した。
+
+## 次フェーズ計画（互換ラッパー廃止）
+`python -m relic_cli` を既定の入口として定着させたため、ルート直下に残る互換ラッパーを段階的に削除し、新しい CLI のみを正式サポートとする。以下の工程を順に進める。
+
+1. **互換ラッパーと参照元の棚卸し**
+   - 対象: `extract_frames.py` / `preprocess.py` / `generate_gallery.py` / `merge_results.py` / `main.py` / `gallery_assets.py` など互換目的で残存しているモジュール。
+   - README・ドキュメント・テスト・外部ツール（PyInstaller 仕様書など）で旧スクリプトを案内している箇所を洗い出し、削除に伴う差分を一覧化する。
+
+2. **公式ドキュメントと配布物の更新案内**
+   - README や `docs/` 配下のガイドを全面的に `python -m relic_cli <command>` 形式へ書き換え、旧コマンドを使用しないよう明示する。
+   - `viewer_server` や GUI など別経路で互換ラッパーを叩いていないか確認し、必要なら `relic_cli` サブコマンドに切り替える手順を追記する。
+
+3. **互換ラッパー削除とエントリーポイント整備**
+   - ルート直下の互換モジュールを削除し、`python extract_frames.py` 等の呼び出しを不可にする。
+   - 代替として `python -m relic_cli` を呼び出す `console_scripts` エントリーポイントや `.bat` / `.sh` ランチャーが必要であれば `setup.cfg` / `pyproject.toml` / `package.json` に追加する。
+
+4. **テスト・CI・配布パッケージの更新**
+   - `pytest` ジョブや GitHub Actions、PyInstaller スクリプトなどで旧スクリプトを実行していないか確認し、`python -m relic_cli ...` へ置き換える。
+   - ルート直下ファイル削除後の差分に合わせて `pyinstaller.spec` や `requirements-build.txt` の参照パスを更新し、ビルドが通ることを確認する。
+
+5. **リリースノートと移行ガイドの告知**
+   - `README` または `docs/changelog.md`（未作成なら新規）に互換ラッパー廃止の理由と新 CLI への移行手順を記載し、バージョンタグ発行時に周知する。
+   - 必要に応じて `python -m relic_cli --help` の出力例や主要サブコマンドのハイライトを添付し、利用者が迷わないようにする。
+
+### 次フェーズのトラッキング方法
+- 上記 1〜5 の完了状態をこのドキュメントに反映し、各ステップの完了日と確認済みテストコマンドを追記する。
+- 互換ラッパー削除後に発見した外部依存（自動化スクリプト、他プロジェクトなど）があれば、影響範囲と代替策を本メモ内に記録する。
