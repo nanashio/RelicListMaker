@@ -32,7 +32,9 @@
 - 段階的に `merge_results.py` の関数群を `relic_cli/commands/merge_results.py` へ移し、ユニットテストを追加してリグレッションを防ぐ。
   - ✅ `python -m relic_cli merge-results` サブコマンドを追加し、既存の `merge_results.merge_results` を呼び出す形で CLI 入口を整備した。
   - ✅ `merge_results.py` 本体の実装を `relic_cli/commands/merge_results.py` へ移し、ルート直下のモジュールは互換レイヤーとしてエクスポートのみに集約した。
-  - ▶️ CLI 側へ移したロジックを責務単位で分割し、専用ユニットテストを追加して将来の分解（例: 画像コピー、CSV スキャン）を安全に進められるようにする。
+  - ✅ CLI 側へ移したロジックを `relic_cli.commands.merge_results` パッケージ内で責務別モジュール（`datasets.py` / `images.py` / `rows.py` / `viewer.py`）へ分割し、
+    CSV 走査や画像コピーといった粒度で再利用可能なヘルパーに整理した。
+  - ✅ 新設したヘルパー向けに `tests/cli/test_merge_results_helpers.py` を追加し、データセット収集と画像コピーのユニットテストを実装してリグレッション検知の足場を整備。
 - ギャラリー生成コマンドを `relic_cli` に取り込み、テンプレートや辞書のパスを CLI 引数で上書きできるようにする。
   - ✅ `python -m relic_cli generate-gallery` サブコマンドを追加し、旧 `generate_gallery.py` は互換レイヤーとして CLI へ委譲するだけにした。README に実行例も追記済み。
 - メインパイプライン (`main.py`) も `relic_cli` から起動できるようにし、動画処理～HTML生成までを一括コマンドに集約する。
