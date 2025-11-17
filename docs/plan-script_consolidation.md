@@ -49,3 +49,4 @@
 - `merge_results.py` の実装を `relic_cli/commands/merge_results.py` に取り込み、既存 CLI から直接ロジックを呼び出す構造に変更。ルートスクリプトは過去互換エントリーポイントとしてエイリアス定義だけを持つようにした。
 - ギャラリー生成の CLI 化により、`generate_gallery.py` へ直接依存していたワークフローでも `python -m relic_cli generate-gallery` へ統一できるようにした。互換レイヤーを維持したまま、テンプレート・辞書パスの指定やラベル記号の上書きなどを `--help` から把握可能にしている。
 - `main.py` が担っていたパイプライン実行も `run-pipeline` サブコマンド経由で扱えるようにし、動画選択や OCR 設定、ビューアの view-box 上書き等を CLI 引数で完結できるようになった。
+- `extract_frames.py` と `preprocess.py` の実装をそれぞれ `pipeline/extraction.py` と `relic_cli.commands.preprocess` に移動し、ルート直下には互換ラッパーだけを残して CLI からもパイプラインからも共通ロジックを参照できるよう整理した。

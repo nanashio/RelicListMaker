@@ -12,14 +12,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-if "extract_frames" not in sys.modules:
-    extract_stub = types.ModuleType("extract_frames")
+if "pipeline.extraction" not in sys.modules:
+    extraction_stub = types.ModuleType("pipeline.extraction")
 
     def _stub_extract_and_crop(*_args, **_kwargs):  # pragma: no cover - 実際の呼び出しはモックで上書き
         raise AssertionError("extract_and_crop should be patched in tests")
 
-    extract_stub.extract_and_crop = _stub_extract_and_crop  # type: ignore[attr-defined]
-    sys.modules["extract_frames"] = extract_stub
+    extraction_stub.extract_and_crop = _stub_extract_and_crop  # type: ignore[attr-defined]
+    sys.modules["pipeline.extraction"] = extraction_stub
 
 import datasets.builder as dataset_builder
 import pipeline.processors as processors
