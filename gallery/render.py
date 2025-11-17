@@ -6,7 +6,7 @@ import json
 import os
 from typing import Optional, Sequence
 
-import gallery_assets
+from . import assets as gallery_assets
 
 from .config import GalleryConfig, default_config
 from .models import GalleryDependencies, GalleryPayload, build_gallery_payload
