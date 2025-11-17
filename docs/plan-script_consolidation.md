@@ -33,6 +33,8 @@
   - ▶️ `python -m relic_cli merge-results` サブコマンドを追加し、既存の `merge_results.merge_results` を呼び出す形で CLI 入口を整備した。今後はヘルパー関数の切り出しとテスト追加を進める。
 - ギャラリー生成コマンドを `relic_cli` に取り込み、テンプレートや辞書のパスを CLI 引数で上書きできるようにする。
   - ✅ `python -m relic_cli generate-gallery` サブコマンドを追加し、旧 `generate_gallery.py` は互換レイヤーとして CLI へ委譲するだけにした。README に実行例も追記済み。
+- メインパイプライン (`main.py`) も `relic_cli` から起動できるようにし、動画処理～HTML生成までを一括コマンドに集約する。
+  - ✅ `python -m relic_cli run-pipeline` サブコマンドを追加し、動画ディレクトリや OCR 設定、列表示の上書きなどを CLI 経由で渡せるよう整備した。README にも利用例を追記済み。
 
 ## 直近の実施内容
 - `relic_cli/` パッケージを新規追加し、`extract-frames` / `preprocess` サブコマンドを提供。
@@ -41,3 +43,4 @@
 - `README.md` に CLI サブコマンドの使い方セクションを追加し、実行例や互換ラッパーの位置づけを明文化。
 - `merge_results.py` に対する CLI サブコマンド (`python -m relic_cli merge-results`) を追加し、統合ユーティリティの起動経路を他サブコマンドと揃えた。
 - ギャラリー生成の CLI 化により、`generate_gallery.py` へ直接依存していたワークフローでも `python -m relic_cli generate-gallery` へ統一できるようにした。互換レイヤーを維持したまま、テンプレート・辞書パスの指定やラベル記号の上書きなどを `--help` から把握可能にしている。
+- `main.py` が担っていたパイプライン実行も `run-pipeline` サブコマンド経由で扱えるようにし、動画選択や OCR 設定、ビューアの view-box 上書き等を CLI 引数で完結できるようになった。

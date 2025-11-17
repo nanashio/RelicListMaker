@@ -111,6 +111,8 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
 
 ```bash
 python -m relic_cli --help
+# 例: パイプラインを動画ディレクトリ全体に適用
+python -m relic_cli run-pipeline --video-dir videos --result-dir results --ocr-upsample 1.8
 # 例: フレーム抽出
 python -m relic_cli extract-frames videos/sample.mp4 --frame-dir frames --crop-dir crops
 # 例: OCR 前処理

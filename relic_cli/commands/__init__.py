@@ -5,4 +5,5 @@ __all__ = [
     "preprocess",
     "merge_results",
     "generate_gallery",
+    "run_pipeline",
 ]
