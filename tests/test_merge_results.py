@@ -9,8 +9,8 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from generate_gallery import DEFAULT_ITEM_IMAGE_VIEW_BOX
-from merge_results import (
+from gallery import DEFAULT_ITEM_IMAGE_VIEW_BOX
+from relic_cli.commands.merge_results import (
     MERGED_CSV_NAME,
     MERGED_DIR_NAME,
     merge_results,

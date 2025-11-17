@@ -16,9 +16,9 @@
 
 ## ファイル命名
 - Python スクリプトは `snake_case.py` を用い、主な責務を表す動詞＋名詞、あるいは名詞のみで表現します。
-  - 例: `extract_frames.py`, `relic_pipeline/processing.py`
+  - 例: `relic_cli/commands/extract_frames.py`, `relic_pipeline/processing.py`
 - 設定や定数をまとめたモジュールは `*_config.py`, `*_settings.py`, `*_constants.py` などとします。
-- CLI エントリーポイントやアプリケーション本体は `main.py` のようにシンプルな名前を使用します。
+- CLI エントリーポイントやアプリケーション本体は `__main__.py` のようにシンプルな名前を使用します（例: `relic_cli/__main__.py`, `gui/__main__.py`）。
 - ドキュメント（Markdown）については「[ドキュメント命名](#ドキュメント命名)」を参照し、用途ごとのプレフィックスを必ず付与します。
 - 静的アセット（HTML, CSS, JS, 画像等）は、用途を示すプレフィックスとファイル種別を併記します。
   - 例: `viewer_styles.css`, `gallery_thumbnail.png`

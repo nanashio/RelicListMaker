@@ -110,7 +110,7 @@ gui_exe = EXE(
 )
 
 cli_analysis = Analysis(
-    ["relic_pipeline/cli/__main__.py"],
+    ["relic_cli/__main__.py"],
     pathex=[str(project_dir)],
     binaries=[],
     datas=datas,

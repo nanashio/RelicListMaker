@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 from datasets.builder import DatasetBuildResult, ProcessedVideoResult, build_dataset_entries
-from generate_gallery import generate_html
+from gallery import generate_html
 from relic_data import load_master_csv, normalize_master_values
 from resource_paths import templates_path
 from relic_pipeline.settings import (

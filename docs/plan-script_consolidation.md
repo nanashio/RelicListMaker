@@ -3,12 +3,14 @@
 ## 背景
 `main.py`・`extract_frames.py` などのスクリプトがリポジトリ直下に散在しており、利用目的が重なって見えるためエントリーポイントを整理したい。
 
+> **2025-03-04 アップデート**: 互換ラッパーとして残していた `main.py` / `extract_frames.py` / `preprocess.py` / `generate_gallery.py` / `merge_results.py` は削除済みで、`python -m relic_cli <command>` が唯一の公式エントリとなった。以下の「現状の役割整理」は歴史的な位置づけを残すために記載している。
+
 ## 現状の役割整理
-- `main.py` (66行): パイプライン設定を組み立てて `pipeline.run_pipeline` を呼び出す実行エントリーポイント。【F:main.py†L1-L44】
-- `extract_frames.py` (68行): 動画からフレームを間引き抽出し、クロップも行うシンプルな単機能スクリプト。【F:extract_frames.py†L1-L51】
-- `preprocess.py` (88行): OCR向けの前処理を個別画像に適用するユーティリティ CLI。【F:preprocess.py†L1-L48】
-- `generate_gallery.py` (58行): ギャラリー生成のエントリーポイント兼、テンプレート関連の公開シンボル集約。【F:generate_gallery.py†L1-L45】
-- `merge_results.py` (463行): 複数の結果ディレクトリを統合するロジックを持つ大きめのユーティリティ。レビューCSVの優先順位や既存統合結果のメタ収集など責務が多い。【F:merge_results.py†L1-L77】
+- `main.py` (66行): パイプライン設定を組み立てて `pipeline.run_pipeline` を呼び出す実行エントリーポイント（現在は削除済み）。
+- `extract_frames.py` (68行): 動画からフレームを間引き抽出し、クロップも行うシンプルな単機能スクリプト（現在は削除済み）。
+- `preprocess.py` (88行): OCR向けの前処理を個別画像に適用するユーティリティ CLI（現在は削除済み）。
+- `generate_gallery.py` (58行): ギャラリー生成のエントリーポイント兼、テンプレート関連の公開シンボル集約（現在は削除済み）。
+- `merge_results.py` (463行): 複数の結果ディレクトリを統合するロジックを持つ大きめのユーティリティ。レビューCSVの優先順位や既存統合結果のメタ収集など責務が多い（現在は削除済み）。
 - その他 (`gallery/assets.py` など): テンプレート資材の配置やバンドル生成など補助的な CLI が点在している。
 
 ## 現行配置の課題
@@ -46,6 +48,7 @@
   - ✅ README のセットアップ手順と CLI サンプルに `bundle-tesseract` の説明を追加し、ユーザーが手元の環境でバンドル済みバイナリの存在を確認する導線を用意した。
 
 ## 直近の実施内容
+- 2025-03-04: 互換ラッパー（`main.py` / `extract_frames.py` / `preprocess.py` / `generate_gallery.py` / `merge_results.py`）を削除し、`gallery/__init__.py` でギャラリー API を再エクスポート。GUI・テスト・CLI の import を `relic_cli/commands/` と `gallery` パッケージに統一した。
 - `relic_cli/` パッケージを新規追加し、`extract-frames` / `preprocess` サブコマンドを提供。
 - 既存の `extract_frames.py` / `preprocess.py` からは `python -m relic_cli` に委譲する互換レイヤーを用意し、旧CLI利用者の導線を維持。
 - サブコマンド共有ヘルパー（`relic_cli.utils`）を用意し、今後のコマンド追加に備えて土台を整備。
@@ -58,9 +61,10 @@
 - ギャラリーアセット準備モジュールを `gallery_assets.py` から `gallery/assets.py` へ移設し、`gallery.render` やテストからの参照も
   パッケージ内のモジュール経由に更新してルート直下の Python ファイル削減をさらに進めた。
 
-## 最新状況（2024-02-21）
-- ルート直下の互換ラッパー（`extract_frames.py` / `preprocess.py` / `generate_gallery.py` / `merge_results.py`）がいずれも `relic_cli` サブコマンドへ委譲していることを確認。CLI ハブを通じた起動とモジュール直呼びの双方で同一実装を共有できる状態を維持している。
-- `relic_cli/commands/merge_results/` 配下のヘルパー群に対し `pytest tests/cli/test_merge_results_helpers.py` を実行し、データセット収集や画像コピーのユニットテストが引き続き成功することを確認した。
+## 最新状況（2025-03-04）
+- 互換ラッパーとして残していた `main.py` / `extract_frames.py` / `preprocess.py` / `generate_gallery.py` / `merge_results.py` を削除し、`python -m relic_cli <command>` のみが公式エントリになった。GUI・テスト・CLI は `relic_cli/commands/` 配下を直接 import する構成に統一済み。
+- `gallery/__init__.py` でギャラリー用のデフォルト定数・API を再エクスポートし、従来 `generate_gallery.py` から取得していた定数（`DEFAULT_ITEM_IMAGE_VIEW_BOX` など）を `gallery` パッケージ経由で参照できるようにした。
+- README・AGENTS・`docs/guide-naming-conventions.md`・`docs/guide-refactoring-playbook.md` などに残っていた旧コマンド表記を `python -m relic_cli ...` へ置き換え、互換ラッパー削除後の導線と実行例を明記した。
 
 ## 次フェーズ計画（互換ラッパー廃止）
 `python -m relic_cli` を既定の入口として定着させたため、ルート直下に残る互換ラッパーを段階的に削除し、新しい CLI のみを正式サポートとする。以下の工程を順に進める。
@@ -74,11 +78,11 @@
 
 | モジュール | ドキュメントでの参照 | コード・テストでの参照 | 備考 |
 | --- | --- | --- | --- |
-| `main.py` | `AGENTS.md` の使用例、`README.md` の概要／ツリー表示／実行例、`docs/guide-refactoring-playbook.md` のスモークテスト記述、`docs/plan-reliclist-refactor.md`・`docs/plan-pipeline-module.md` の計画説明 | （直接 import なし、互換ラッパー単体で完結） | ドキュメント群のコマンド表記を `python -m relic_cli run-pipeline` へ置換し、`README` のツリーから `main.py` を除外する必要がある。 |
-| `extract_frames.py` | `AGENTS.md` の役割紹介、`README.md` のツリー／互換レイヤー説明、`docs/guide-refactoring-playbook.md` の手順表、`docs/guide-naming-conventions.md` の命名例 | （直接 import なし） | 互換削除後は CLI サブコマンドへの誘導に一本化するため、`python extract_frames.py` の記述を `python -m relic_cli extract-frames` へ更新する。 |
-| `preprocess.py` | `AGENTS.md` のコマンド例、`README.md` のツリー／互換レイヤー説明／実行例、`docs/guide-refactoring-playbook.md` の表記、`docs/guide-naming-conventions.md` の例示 | `tests/cli/test_commands.py` が CLI から再利用しているものの、直接モジュール参照は `relic_cli.commands.preprocess` のみ | README 等の `python preprocess.py` 記載を CLI 版へ差し替える。テストは既に新実装を import しているため削除時の影響は限定的。 |
-| `generate_gallery.py` | `AGENTS.md`、`README.md`（ツリー・互換説明）、`docs/plan-reliclist-refactor.md`、`docs/guide-refactoring-playbook.md`（ステップ3）、`docs/plan-gallery-refactor.md` | `pipeline/pipeline.py`、`relic_cli/commands/generate_gallery.py`、`relic_cli/commands/merge_results/merge.py`、`tests/test_generate_gallery.py` がモジュールを直接 import | モジュール削除時は `gallery` パッケージ内の正式 API へ import 元を移し替える必要がある。テストや CLI コマンドの import 先をまとめて置換するタスクが必要。 |
-| `merge_results.py` | `README.md`（補助列エラーの注意）、`docs/reference-csv-columns.md`、`docs/plan-effect-correction-removal.md`、本ドキュメントの既存説明 | `relic_cli/commands/merge_results/` 配下、`gui/controllers.py` / `gui/services.py`、`tests/test_merge_results.py` が `merge_results` を import | 互換ラッパー削除時は GUI とテストの import を `relic_cli.commands.merge_results` へ切り替える必要がある。README・参照ドキュメントの module path も CLI サブコマンド表記へ更新する。 |
+| `main.py`（削除済） | `AGENTS.md` の使用例、`README.md` の概要／ツリー表示／実行例、`docs/guide-refactoring-playbook.md` のスモークテスト記述、`docs/plan-reliclist-refactor.md`・`docs/plan-pipeline-module.md` の計画説明 | （直接 import なし、互換ラッパー単体で完結） | 2025-03-04 に CLI 表記へ更新し、`README` のツリーから `main.py` を除外済み。 |
+| `extract_frames.py`（削除済） | `AGENTS.md` の役割紹介、`README.md` のツリー／互換レイヤー説明、`docs/guide-refactoring-playbook.md` の手順表、`docs/guide-naming-conventions.md` の命名例 | （直接 import なし） | 2025-03-04 に CLI サブコマンドへの誘導へ置換済み。旧コマンド記述は `python -m relic_cli extract-frames` に統一。 |
+| `preprocess.py`（削除済） | `AGENTS.md` のコマンド例、`README.md` のツリー／実行例、`docs/guide-refactoring-playbook.md` の表記、`docs/guide-naming-conventions.md` の例示 | `tests/cli/test_commands.py` が CLI から再利用しているものの、直接モジュール参照は `relic_cli.commands.preprocess` のみ | 2025-03-04 に README などの `python preprocess.py` 記述をサブコマンド表記へ差し替え済み。 |
+| `generate_gallery.py`（削除済） | `AGENTS.md`、`README.md`、`docs/plan-reliclist-refactor.md`、`docs/guide-refactoring-playbook.md`（ステップ3）、`docs/plan-gallery-refactor.md` | `pipeline/pipeline.py`、`relic_cli/commands/generate_gallery.py`、`relic_cli/commands/merge_results/merge.py`、`tests/test_generate_gallery.py` がモジュールを直接 import | 2025-03-04 に `gallery` パッケージ経由へ import 元を移し、テストと CLI を `gallery.generate_html` に切り替え済み。 |
+| `merge_results.py`（削除済） | `README.md`（補助列エラーの注意）、`docs/reference-csv-columns.md`、`docs/plan-effect-correction-removal.md`、本ドキュメントの既存説明 | `relic_cli/commands/merge_results/` 配下、`gui/controllers.py` / `gui/services.py`、`tests/test_merge_results.py` | 2025-03-04 に GUI・テスト・README を `relic_cli.commands.merge_results` 表記へ更新し、互換モジュールを廃止。 |
 | `gallery_assets.py` | `docs/plan-script_consolidation.md` 内で互換対象として言及されているのみ | （該当ファイルは既に削除済み） | 参照箇所の更新は本メモの記述修正のみで済む。 |
 
 - 上記一覧に含まれない自動化スクリプトや PyInstaller 設定では旧ファイル名を直接参照していないことを確認した。
@@ -93,6 +97,12 @@
 - README の「基本的なワークフロー」を `run-pipeline` サブコマンド前提へ差し替え、CLI セクションでも新しい書式を正式な入口として案内するよう修正した。
 - `docs/guide-refactoring-playbook.md` のステップ別チェックリストとテスト手順を `relic_cli` ベースへ置き換え、調査テンプレートからも旧 `preprocess.py` 参照を排除した。
 
+### ステップ3進捗（互換ラッパー削除: 2025-03-04）
+- `main.py` / `extract_frames.py` / `preprocess.py` / `generate_gallery.py` / `merge_results.py` を削除し、GUI・CLI・テストすべてが `relic_cli/commands/` と `gallery` パッケージを直接 import する構成へ移行した。
+- `gallery/__init__.py` にデフォルト定数（`DEFAULT_ITEM_IMAGE_VIEW_BOX` など）と `generate_html` を再エクスポートし、`relic_cli/commands/generate_gallery.py` や `tests/test_generate_gallery.py` からは `gallery` パッケージ経由で機能を参照するようにした。
+- `gui/controllers.py` / `gui/services.py` / `tests/test_merge_results.py` を `relic_cli.commands.merge_results` へ切り替え、README・AGENTS・`docs/guide-naming-conventions.md`・`docs/guide-refactoring-playbook.md` に残っていた旧スクリプト名を `python -m relic_cli <command>` 表記へ更新した。
+- テスト確認: `pytest tests/test_generate_gallery.py tests/test_merge_results.py`
+
 3. **互換ラッパー削除とエントリーポイント整備**
    - ルート直下の互換モジュールを削除し、`python extract_frames.py` 等の呼び出しを不可にする。
    - 代替として `python -m relic_cli` を呼び出す `console_scripts` エントリーポイントや `.bat` / `.sh` ランチャーが必要であれば `setup.cfg` / `pyproject.toml` / `package.json` に追加する。
@@ -100,6 +110,10 @@
 4. **テスト・CI・配布パッケージの更新**
    - `pytest` ジョブや GitHub Actions、PyInstaller スクリプトなどで旧スクリプトを実行していないか確認し、`python -m relic_cli ...` へ置き換える。
    - ルート直下ファイル削除後の差分に合わせて `pyinstaller.spec` や `requirements-build.txt` の参照パスを更新し、ビルドが通ることを確認する。
+
+### ステップ4進捗（PyInstaller CLI更新: 2025-03-05）
+- `pyinstaller.spec` の CLI バンドル対象を `relic_cli/__main__.py` へ更新し、生成される `RelicListMakerCLI.exe` が新しい公式サブコマンドハブを実行するようにした。
+- `python -m relic_cli --help` で CLI のエントリポイントを確認し、PyInstaller 向けエントリと一致していることを手元で検証済み。
 
 5. **リリースノートと移行ガイドの告知**
    - `README` または `docs/changelog.md`（未作成なら新規）に互換ラッパー廃止の理由と新 CLI への移行手順を記載し、バージョンタグ発行時に周知する。

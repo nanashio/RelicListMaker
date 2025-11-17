@@ -9,8 +9,9 @@ import pytest
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from gallery import assets as gallery_assets
+from gallery import DEFAULT_ITEM_IMAGE_VIEW_BOX as API_DEFAULT_VIEW_BOX
+from gallery import generate_html as api_generate_html
 from gallery.assets import GalleryAssets, PreparedAsset
-import generate_gallery
 import gallery.normalization as gallery_normalization
 import gallery.render as gallery_render
 from gallery.models import GalleryDependencies
@@ -183,7 +184,7 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
         {"csv": "b/results.csv", "imgDir": "b/images", "label": "B"},
     ]
 
-    generate_gallery.generate_html(
+    api_generate_html(
         str(results_csv),
         str(img_dir),
         str(output_html),
@@ -305,7 +306,7 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
         {"csv": "a/results.csv", "imgDir": "a/images", "label": "A"},
     ]
 
-    generate_gallery.generate_html(
+    api_generate_html(
         str(results_csv),
         str(img_dir),
         str(output_html),
@@ -355,7 +356,7 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
     master_demerit_rules_map = json.loads(html.unescape(parts[15]))
     assert "deep" in master_demerit_rules_map
     assert isinstance(master_demerit_rules_map["deep"], dict)
-    assert parts[21] == html.escape(generate_gallery.DEFAULT_ITEM_IMAGE_VIEW_BOX, quote=True)
+    assert parts[21] == html.escape(API_DEFAULT_VIEW_BOX, quote=True)
     assert copied_assets.count("gallery.css") == 1
 
 
@@ -412,7 +413,7 @@ def test_generate_html_embeds_known_master_types(monkeypatch, tmp_path):
         load_master_effects_and_levels=fake_load_master_effects_and_levels,
     )
 
-    generate_gallery.generate_html(
+    api_generate_html(
         str(results_csv),
         "images",
         str(output_html),
@@ -503,7 +504,7 @@ def test_generate_html_resolves_dataset_base_dir(monkeypatch, tmp_path):
     ]
 
     output_html = gallery_dir / "index.html"
-    generate_gallery.generate_html(
+    api_generate_html(
         str(results_csv),
         "video_a/crops",
         str(output_html),
@@ -578,7 +579,7 @@ def test_generate_html_respects_asset_overrides(monkeypatch, tmp_path):
     custom_core.parent.mkdir(parents=True, exist_ok=True)
     custom_core.write_text("console.log('core');", encoding="utf-8")
 
-    generate_gallery.generate_html(
+    api_generate_html(
         str(results_csv),
         str(img_dir),
         str(output_html),

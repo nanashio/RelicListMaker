@@ -5,7 +5,7 @@ import argparse
 from pathlib import Path
 from typing import Sequence
 
-from generate_gallery import (
+from gallery import (
     DEFAULT_CONFIG,
     DEFAULT_MASTER_CSV,
     DEFAULT_MASTER_DEMERIT_CSV,

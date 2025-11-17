@@ -6,6 +6,7 @@
 - 今後の拡張（効果スロットの追加、フィルタ条件の増加、ストレージ方式の変更）に備えた柔軟なアーキテクチャを用意する。
 
 ## 現状整理（要約）
+- 2025-03-04 時点で `generate_gallery.py` は削除され、ギャラリー生成ロジックは `gallery.render.generate_html` と `relic_cli/commands/generate_gallery.py` へ統合済み。本ドキュメントでは設計上の課題を明確にするため旧モジュール名を引用している。
 - IIFE 内に状態管理、データセット解決、DOM 構築、イベント登録、バックエンド連携を集約。
 - `state` と `dom` の共有が密で、副作用の把握が困難。
 - `buildGallery` / `createItem` / `createEffect` などが 100 行以上となりテストが難しい。

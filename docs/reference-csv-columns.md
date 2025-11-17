@@ -75,11 +75,11 @@ OCRパイプライン（`relic_pipeline.processing` → `relic_pipeline.io.expor
 ### 追加メタデータ列
 | カラム名 | 役割 | 現行コード参照 | 出力条件・備考 | ビューア表示 |
 | --- | --- | --- | --- | --- |
-| `Dataset` | 統合ビューアで利用するデータセット名。 | ○（列フラグで制御） | 列表示フラグで非表示にでき、`merge_results.py` で統合時に値を埋める。【F:relic_pipeline/io/exporter.py†L195-L204】【F:merge_results.py†L320-L352】 | 統合ビューア時のデータセットバッジとして表示。【F:templates/gallery/render/itemFactory.js†L270-L288】 |
-| `DatasetFolder` | データセットの元フォルダ。 | ○（列フラグで制御） | 同上。【F:relic_pipeline/io/exporter.py†L195-L204】【F:merge_results.py†L320-L352】 | データセットバッジのツールチップに表示。【F:templates/gallery/render/itemFactory.js†L270-L288】 |
-| `SourceCsv` | 元になったCSVファイルパス。 | ○（列フラグで制御） | 同上。【F:relic_pipeline/io/exporter.py†L195-L204】【F:merge_results.py†L320-L352】 | 表示なし |
-| `SourceImage` | 元になった画像ファイルパス。 | ○（列フラグで制御） | 同上。【F:relic_pipeline/io/exporter.py†L195-L204】【F:merge_results.py†L320-L352】 | 表示なし |
-| `BaseImage` | ビューアで参照する基準画像。 | ○（列フラグで制御） | 同上。【F:relic_pipeline/io/exporter.py†L195-L204】【F:merge_results.py†L320-L352】 | ファイル名表示の優先名称として利用。【F:templates/gallery/render/itemFactory.js†L92-L113】【F:templates/gallery/render/itemFactory.js†L270-L288】 |
+| `Dataset` | 統合ビューアで利用するデータセット名。 | ○（列フラグで制御） | 列表示フラグで非表示にでき、`relic_cli.commands.merge_results.merge` で統合時に値を埋める。【F:relic_pipeline/io/exporter.py†L195-L204】【F:relic_cli/commands/merge_results/merge.py†L60-L110】 | 統合ビューア時のデータセットバッジとして表示。【F:templates/gallery/render/itemFactory.js†L270-L288】 |
+| `DatasetFolder` | データセットの元フォルダ。 | ○（列フラグで制御） | 同上。【F:relic_pipeline/io/exporter.py†L195-L204】【F:relic_cli/commands/merge_results/merge.py†L60-L110】 | データセットバッジのツールチップに表示。【F:templates/gallery/render/itemFactory.js†L270-L288】 |
+| `SourceCsv` | 元になったCSVファイルパス。 | ○（列フラグで制御） | 同上。【F:relic_pipeline/io/exporter.py†L195-L204】【F:relic_cli/commands/merge_results/merge.py†L60-L110】 | 表示なし |
+| `SourceImage` | 元になった画像ファイルパス。 | ○（列フラグで制御） | 同上。【F:relic_pipeline/io/exporter.py†L195-L204】【F:relic_cli/commands/merge_results/merge.py†L60-L110】 | 表示なし |
+| `BaseImage` | ビューアで参照する基準画像。 | ○（列フラグで制御） | 同上。【F:relic_pipeline/io/exporter.py†L195-L204】【F:relic_cli/commands/merge_results/merge.py†L60-L110】 | ファイル名表示の優先名称として利用。【F:templates/gallery/render/itemFactory.js†L92-L113】【F:templates/gallery/render/itemFactory.js†L270-L288】 |
 | その他の列 | 入力行に存在する追加キー。 | ○（`write_csv` が維持） | `write_csv` がヘッダーに追加して保持する。レビュー担当者のメモなど任意の列を維持できる。【F:relic_pipeline/io/exporter.py†L292-L300】 | 表示なし |
 
 ### 列表示フラグ

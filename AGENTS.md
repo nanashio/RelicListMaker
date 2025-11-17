@@ -5,13 +5,13 @@
 基本的な受け答えは、全て日本語で行うこと。
 
 ## プロジェクト構成とモジュール配置
-リポジトリ 直下 に 主要 スクリプト が あり `main.py` が パイプライン を 統括 しますが、現在は `python -m relic_cli <command>` のサブコマンド構成が正式入口です。`extract_frames.py` / `preprocess.py` / `generate_gallery.py` / `merge_results.py` は後方互換の薄いラッパーとして残しており、内部で `relic_cli` の `run-pipeline` / `extract-frames` / `preprocess` / `generate-gallery` / `merge-results` を呼び出します。`relic_pipeline/processing.py` は OCR と 辞書 照合 を 担当 し、素材 動画 は `videos/` へ 配置 します。処理 生成 物 は `results/<video名>/` 配下 に `frames/` `crops/` `*.csv` `gallery/index.html` として まとまり、サムネイル を クリック すると 拡大 でき、フィルター で 対象 を 絞れます。各 エフェクト 行 に 推定・一致 度・OCR 文字列 が 表示 され、○/× で レビュー できます。辞書 `master_relics.csv` は ルート に 置き 相対 パス を 守って ください。
+リポジトリ直下の旧スクリプトは 2025-03 時点で削除済みで、現在は `python -m relic_cli <command>` のサブコマンド構成のみを公式エントリとして扱います。`run-pipeline` / `extract-frames` / `preprocess` / `generate-gallery` / `merge-results` などのコマンドは `relic_cli/commands/` 配下に集約され、GUI や外部ツールからも同パッケージを import して共通ロジックを再利用できます。`relic_pipeline/processing.py` は OCR と 辞書 照合 を 担当 し、素材 動画 は `videos/` へ 配置 します。処理 生成 物 は `results/<動画名>/` 配下 に `frames/` `crops/` `*.csv` `gallery/index.html` としてまとまり、サムネイル を クリック すると 拡大 でき、フィルター で 対象 を 絞れます。各 エフェクト 行 に 推定・一致 度・OCR 文字列 が 表示 され、○/× で レビュー できます。辞書 `master_relics.csv` は ルート に 置き 相対 パス を 守って ください。
 
 ## ビルド・テスト・開発コマンド
 - `python -m venv .venv && source .venv/bin/activate`: 仮想 環境 を 作成 して 依存 を 分離。
 - `pip install -r requirements.txt`: OpenCV NumPy Tesseract 連携 など 必須 パッケージ を 範囲 指定 で 導入。
-- `python -m relic_cli run-pipeline --video-dir videos --result-dir results`: `videos/` を 処理 し `results/<video名>/` に クロップ・CSV・HTML を 出力 (HTML では 拡大・検索・ソート・○/× レビュー が 可能)。`python main.py` は 後方互換 のみ で 利用 可能。
-- `python -m relic_cli preprocess <path/to/image.png> --out preprocessed/`: 画像 の 前処理 を 試し 調整。旧 `python preprocess.py ...` も ラッパー として 互換 を 維持。
+- `python -m relic_cli run-pipeline --video-dir videos --result-dir results`: `videos/` を 処理 し `results/<動画名>/` に クロップ・CSV・HTML を 出力 (HTML では 拡大・検索・ソート・○/× レビュー が 可能)。
+- `python -m relic_cli preprocess <path/to/image.png> --out preprocessed/`: 画像 の 前処理 を 試し 調整。
 - `tesseract --version`: システム バイナリ と 日本語 データ の 認識 状態 を 確認。
 
 ## コーディング規約と命名
