@@ -6,6 +6,7 @@ import sys
 from typing import Iterable
 
 from relic_cli.commands import (
+    bundle_tesseract,
     extract_frames,
     generate_gallery,
     merge_results,
@@ -15,6 +16,7 @@ from relic_cli.commands import (
 
 
 COMMAND_MODULES = [
+    bundle_tesseract,
     extract_frames,
     preprocess,
     merge_results,
