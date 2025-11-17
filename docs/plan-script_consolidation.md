@@ -9,7 +9,7 @@
 - `preprocess.py` (88行): OCR向けの前処理を個別画像に適用するユーティリティ CLI。【F:preprocess.py†L1-L48】
 - `generate_gallery.py` (58行): ギャラリー生成のエントリーポイント兼、テンプレート関連の公開シンボル集約。【F:generate_gallery.py†L1-L45】
 - `merge_results.py` (463行): 複数の結果ディレクトリを統合するロジックを持つ大きめのユーティリティ。レビューCSVの優先順位や既存統合結果のメタ収集など責務が多い。【F:merge_results.py†L1-L77】
-- その他 (`gallery_assets.py` など): テンプレート資材の配置やバンドル生成など補助的な CLI が点在している。
+- その他 (`gallery/assets.py` など): テンプレート資材の配置やバンドル生成など補助的な CLI が点在している。
 
 ## 現行配置の課題
 - 役割ごとに単一ファイルが増え、ルート直下の見通しが悪い。
@@ -55,3 +55,5 @@
 - ギャラリー生成の CLI 化により、`generate_gallery.py` へ直接依存していたワークフローでも `python -m relic_cli generate-gallery` へ統一できるようにした。互換レイヤーを維持したまま、テンプレート・辞書パスの指定やラベル記号の上書きなどを `--help` から把握可能にしている。
 - `main.py` が担っていたパイプライン実行も `run-pipeline` サブコマンド経由で扱えるようにし、動画選択や OCR 設定、ビューアの view-box 上書き等を CLI 引数で完結できるようになった。
 - `extract_frames.py` と `preprocess.py` の実装をそれぞれ `pipeline/extraction.py` と `relic_cli.commands.preprocess` に移動し、ルート直下には互換ラッパーだけを残して CLI からもパイプラインからも共通ロジックを参照できるよう整理した。
+- ギャラリーアセット準備モジュールを `gallery_assets.py` から `gallery/assets.py` へ移設し、`gallery.render` やテストからの参照も
+  パッケージ内のモジュール経由に更新してルート直下の Python ファイル削減をさらに進めた。

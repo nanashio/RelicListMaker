@@ -8,8 +8,8 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-import gallery_assets
-from gallery_assets import GalleryAssets, PreparedAsset
+from gallery import assets as gallery_assets
+from gallery.assets import GalleryAssets, PreparedAsset
 import generate_gallery
 import gallery.normalization as gallery_normalization
 import gallery.render as gallery_render

@@ -6,10 +6,11 @@ import json
 import os
 from typing import Optional, Sequence
 
-import gallery_assets
+from . import assets as gallery_assets
 
 from .config import GalleryConfig, default_config
 from .models import GalleryDependencies, GalleryPayload, build_gallery_payload
+from resource_paths import project_root
 
 
 def _escape_attr(value: str) -> str:
@@ -21,8 +22,8 @@ def _resolve_asset_path(default_path: str, override: Optional[str]) -> str:
         return default_path
     if os.path.isabs(override):
         return override
-    base_dir = os.path.dirname(__file__)
-    return os.path.join(base_dir, override)
+    base_dir = project_root()
+    return os.path.join(str(base_dir), override)
 
 
 def load_text_asset(default_path: str, override: Optional[str] = None) -> str:
