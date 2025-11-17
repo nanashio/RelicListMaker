@@ -40,6 +40,11 @@
 - メインパイプライン (`main.py`) も `relic_cli` から起動できるようにし、動画処理～HTML生成までを一括コマンドに集約する。
   - ✅ `python -m relic_cli run-pipeline` サブコマンドを追加し、動画ディレクトリや OCR 設定、列表示の上書きなどを CLI 経由で渡せるよう整備した。README にも利用例を追記済み。
 
+- バンドル済み Tesseract の配置確認や有効化を CLI から行えるようにする。
+  - ✅ `python -m relic_cli bundle-tesseract` サブコマンドを追加し、バンドル済み実行ファイルの検出、`pytesseract` への適用、WSL などでシステム版を優先する際のステータス表示を行えるようにした。
+  - ✅ `--require` でバンドル欠如をエラー扱いにでき、`--activate` で `configure_pytesseract()` を明示的に実行するため、CI や配布前チェックで同梱アセットの健全性を確かめやすくなった。
+  - ✅ README のセットアップ手順と CLI サンプルに `bundle-tesseract` の説明を追加し、ユーザーが手元の環境でバンドル済みバイナリの存在を確認する導線を用意した。
+
 ## 直近の実施内容
 - `relic_cli/` パッケージを新規追加し、`extract-frames` / `preprocess` サブコマンドを提供。
 - 既存の `extract_frames.py` / `preprocess.py` からは `python -m relic_cli` に委譲する互換レイヤーを用意し、旧CLI利用者の導線を維持。

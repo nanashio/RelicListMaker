@@ -103,7 +103,7 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
    source .venv/bin/activate
    pip install -r requirements.txt
    ```
-2. **Tesseract OCR**: システムに日本語データを含む Tesseract がインストールされていることを確認します。付属の `tesseract` ディレクトリを利用する場合は、`tesseract_bundle.py` が自動で `pytesseract` のパスを調整します。Windows 向け配布物には **Tesseract 5.4.0.20240606 (UB Mannheim 版 64bit)** の実行ファイルと DLL が含まれており、アプリは常に同梱版を使用します。GitHub Actions のリリースワークフローがインストーラから実行ファイルと DLL を取得して同梱するため、手動でバイナリをコミットする必要はありません。`tessdata/` には英語 (`eng`)、日本語 (`jpn`)、OSD (`osd`) の学習データのみを含め、縦書き用データはバンドルしていません。WSL などの Linux 開発環境では、ローカルにインストール済みの Tesseract が優先され、同梱版はフォールバックとして扱われます。
+2. **Tesseract OCR**: システムに日本語データを含む Tesseract がインストールされていることを確認します。付属の `tesseract` ディレクトリを利用する場合は、`tesseract_bundle.py` が自動で `pytesseract` のパスを調整します。Windows 向け配布物には **Tesseract 5.4.0.20240606 (UB Mannheim 版 64bit)** の実行ファイルと DLL が含まれており、アプリは常に同梱版を使用します。GitHub Actions のリリースワークフローがインストーラから実行ファイルと DLL を取得して同梱するため、手動でバイナリをコミットする必要はありません。`tessdata/` には英語 (`eng`)、日本語 (`jpn`)、OSD (`osd`) の学習データのみを含め、縦書き用データはバンドルしていません。WSL などの Linux 開発環境では、ローカルにインストール済みの Tesseract が優先され、同梱版はフォールバックとして扱われます。バンドル済みの配置を検証したい場合は `python -m relic_cli bundle-tesseract --require` を実行してください。
 3. **テンプレート辞書**: `templates/master_relics.csv` が最新であることを確認し、必要に応じて CSV を更新します。
 
 ### CLI サブコマンド (`python -m relic_cli`)
@@ -121,6 +121,8 @@ python -m relic_cli preprocess crops/sample.png --out preprocessed --scale 1.5
 python -m relic_cli merge-results results --target-name merged --include-unreviewed
 # 例: ギャラリー HTML の生成
 python -m relic_cli generate-gallery --results-csv results/sample.csv --image-dir results/sample/crops --output-html results/sample/gallery/index.html
+# 例: 同梱 Tesseract の検出・有効化
+python -m relic_cli bundle-tesseract --activate --require
 ```
 
 `extract_frames.py` や `preprocess.py`、`generate_gallery.py` は当面の互換レイヤーとして残してあり、旧コマンド (`python extract_frames.py ...`) からは自動的に `python -m relic_cli` へ委譲されます。新しい書式へ移行する際は、`--help` を参照しながら必要なオプションを渡してください。
