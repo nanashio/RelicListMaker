@@ -6,7 +6,7 @@ import shutil
 from dataclasses import dataclass
 from typing import Optional, Sequence
 
-from resource_paths import templates_path
+from resource_paths import project_root, templates_path
 
 ADDITIONAL_GALLERY_SCRIPTS: tuple[str, ...] = (
     "gallery/utils/dom.js",
@@ -52,8 +52,8 @@ def _resolve_asset_path(default_path: str, override: Optional[str]) -> str:
         return default_path
     if os.path.isabs(override):
         return override
-    base_dir = os.path.dirname(__file__)
-    return os.path.join(base_dir, override)
+    base_dir = project_root()
+    return os.path.join(str(base_dir), override)
 
 
 def _normalize_relative_path(path: str) -> str:
