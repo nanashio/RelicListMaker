@@ -65,7 +65,7 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
 | 技術 | 用途 |
 | --- | --- |
 | Python 3.10+ | パイプライン全体と GUI ランチャー (`tkinter`) の実装 |
-| OpenCV / NumPy | フレーム抽出や画像前処理 (`extract_frames.py`, `preprocess.py`) を支える画像処理基盤 |
+| OpenCV / NumPy | フレーム抽出や画像前処理 (`python -m relic_cli extract-frames` / `python -m relic_cli preprocess`) を支える画像処理基盤 |
 | Tesseract OCR + pytesseract | 遺物名・効果文のテキスト認識を担う OCR エンジン |
 | RapidFuzz | OCR 結果と `templates/master_relics.csv` を照合して最適な遺物候補を推定 |
 | PyInstaller | `RelicListMaker.exe` を含む Windows 向け配布物のパッケージングに使用 |
@@ -88,9 +88,10 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
 ├── tesseract/           # バンドル済み Tesseract (同梱環境向け)
 ├── docs/                # テスト手順やリファクタリング方針などのドキュメント
 ├── main.py              # フレーム抽出→OCR→HTML 出力まで統括するパイプライン入口
-├── extract_frames.py    # フレーム抽出とシーンスキップで効率的にクロップを生成
+├── relic_cli/           # `python -m relic_cli` で呼び出す CLI サブコマンド群
+├── extract_frames.py    # サブコマンド `extract-frames` への互換ラッパー
 ├── generate_gallery.py  # CSV とクロップから gallery/index.html を生成
-├── preprocess.py        # OCR 前処理の検証と調整用スクリプト
+├── preprocess.py        # サブコマンド `preprocess` への互換ラッパー
 ├── gui/                # GUI アプリ本体とサービス・アダプタ群（`python -m gui` で起動）
 └── viewer_server.py     # 結果フォルダをブラウザ閲覧する簡易サーバー
 ```
@@ -105,6 +106,19 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
 2. **Tesseract OCR**: システムに日本語データを含む Tesseract がインストールされていることを確認します。付属の `tesseract` ディレクトリを利用する場合は、`tesseract_bundle.py` が自動で `pytesseract` のパスを調整します。Windows 向け配布物には **Tesseract 5.4.0.20240606 (UB Mannheim 版 64bit)** の実行ファイルと DLL が含まれており、アプリは常に同梱版を使用します。GitHub Actions のリリースワークフローがインストーラから実行ファイルと DLL を取得して同梱するため、手動でバイナリをコミットする必要はありません。`tessdata/` には英語 (`eng`)、日本語 (`jpn`)、OSD (`osd`) の学習データのみを含め、縦書き用データはバンドルしていません。WSL などの Linux 開発環境では、ローカルにインストール済みの Tesseract が優先され、同梱版はフォールバックとして扱われます。
 3. **テンプレート辞書**: `templates/master_relics.csv` が最新であることを確認し、必要に応じて CSV を更新します。
 
+### CLI サブコマンド (`python -m relic_cli`)
+リポジトリ直下に散在していたユーティリティスクリプトは `relic_cli/` パッケージに集約され、以下のようにサブコマンド形式で呼び出せます。
+
+```bash
+python -m relic_cli --help
+# 例: フレーム抽出
+python -m relic_cli extract-frames videos/sample.mp4 --frame-dir frames --crop-dir crops
+# 例: OCR 前処理
+python -m relic_cli preprocess crops/sample.png --out preprocessed --scale 1.5
+```
+
+`extract_frames.py` や `preprocess.py` は当面の互換レイヤーとして残してあり、旧コマンド (`python extract_frames.py ...`) からは自動的に `python -m relic_cli` へ委譲されます。新しい書式へ移行する際は、`--help` を参照しながら必要なオプションを渡してください。
+
 ### 基本的なワークフロー
 1. `videos/` ディレクトリに処理対象の動画ファイル (`.mp4`, `.avi`, `.mov`, `.mkv` など) を配置します。
 2. 必要であれば `results/` をクリーンアップし、仮想環境を有効化します。
@@ -118,11 +132,11 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
    ```
 
 ### OCR 前処理の調整
-OCR 精度を改善したい場合は、個別の画像に対して前処理パイプラインを試せる `preprocess.py` を利用します。
+OCR 精度を改善したい場合は、個別の画像に対して前処理パイプラインを試せる `relic_cli preprocess` サブコマンドを利用します。
 ```bash
-python preprocess.py path/to/image.png --out preprocessed/
+python -m relic_cli preprocess path/to/image.png --out preprocessed/
 ```
-生成された出力を確認し、しきい値やリサイズ係数などの調整に活用してください。
+`python preprocess.py ...` も互換目的で利用可能ですが、今後のアップデートではサブコマンド形式のみがメンテナンスされる予定です。生成された出力を確認し、しきい値やリサイズ係数などの調整に活用してください。
 
 ### クロップ済み画像の CLI 実行
 クロップ済みの画像を直接処理する場合は、`relic_pipeline.cli` のエントリポイントを利用してください。後方互換のラッパーだった `match_and_export.py` は削除済みのため、`process_images_command` を直接呼び出す経路に統一しています。
