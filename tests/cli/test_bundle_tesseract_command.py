@@ -50,3 +50,16 @@ def test_bundle_tesseract_activate_prefers_system(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "システムの Tesseract" in output
     assert "wsl" in output
+
+
+def test_bundle_tesseract_activate_missing_system_fails(monkeypatch, capsys):
+    monkeypatch.setattr(command, "find_bundled_tesseract", lambda: None)
+    monkeypatch.setattr(command, "configure_pytesseract", lambda: None)
+    monkeypatch.setattr(command, "is_system_tesseract_preferred", lambda: True)
+    monkeypatch.setattr(command, "system_tesseract_reason", lambda: "missing")
+
+    exit_code = command._handle(Namespace(activate=True, require=False))
+
+    assert exit_code == 1
+    output = capsys.readouterr().out
+    assert "利用可能な Tesseract" in output

@@ -68,6 +68,9 @@ def _handle(args: argparse.Namespace) -> int:
 
     if is_system_tesseract_preferred():
         reason = system_tesseract_reason() or "system"
+        if reason == "missing":
+            print("[ERROR] 利用可能な Tesseract が見つからないため終了します")
+            return 1
         print(f"[INFO] システムの Tesseract を優先します (理由: {reason})")
         return 0
 
