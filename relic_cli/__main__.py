@@ -5,10 +5,15 @@ import argparse
 import sys
 from typing import Iterable
 
-from relic_cli.commands import extract_frames, merge_results, preprocess
+from relic_cli.commands import (
+    extract_frames,
+    generate_gallery,
+    merge_results,
+    preprocess,
+)
 
 
-COMMAND_MODULES = [extract_frames, preprocess, merge_results]
+COMMAND_MODULES = [extract_frames, preprocess, merge_results, generate_gallery]
 
 
 def build_parser() -> argparse.ArgumentParser:
