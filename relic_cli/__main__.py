@@ -10,10 +10,17 @@ from relic_cli.commands import (
     generate_gallery,
     merge_results,
     preprocess,
+    run_pipeline,
 )
 
 
-COMMAND_MODULES = [extract_frames, preprocess, merge_results, generate_gallery]
+COMMAND_MODULES = [
+    extract_frames,
+    preprocess,
+    merge_results,
+    generate_gallery,
+    run_pipeline,
+]
 
 
 def build_parser() -> argparse.ArgumentParser:
