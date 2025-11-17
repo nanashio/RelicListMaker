@@ -48,11 +48,9 @@ __all__ = [
 
 
 if __name__ == "__main__":
-    generate_html(
-        RESULTS_CSV_PATH,
-        IMG_DIR,
-        OUTPUT_HTML,
-        LABEL_SYMBOLS,
-        master_csv_path=DEFAULT_MASTER_CSV,
-        master_json_path=DEFAULT_MASTER_JSON,
-    )
+    import sys
+
+    from relic_cli.__main__ import main as cli_main
+    from relic_cli.utils import extend_argv
+
+    sys.exit(cli_main(extend_argv(["generate-gallery"], sys.argv[1:])))

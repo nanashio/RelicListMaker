@@ -90,7 +90,7 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
 ├── main.py              # フレーム抽出→OCR→HTML 出力まで統括するパイプライン入口
 ├── relic_cli/           # `python -m relic_cli` で呼び出す CLI サブコマンド群
 ├── extract_frames.py    # サブコマンド `extract-frames` への互換ラッパー
-├── generate_gallery.py  # CSV とクロップから gallery/index.html を生成
+├── generate_gallery.py  # サブコマンド `generate-gallery` への互換ラッパー
 ├── preprocess.py        # サブコマンド `preprocess` への互換ラッパー
 ├── gui/                # GUI アプリ本体とサービス・アダプタ群（`python -m gui` で起動）
 └── viewer_server.py     # 結果フォルダをブラウザ閲覧する簡易サーバー
@@ -117,9 +117,11 @@ python -m relic_cli extract-frames videos/sample.mp4 --frame-dir frames --crop-d
 python -m relic_cli preprocess crops/sample.png --out preprocessed --scale 1.5
 # 例: 結果の統合 (デフォルトの results/ を対象)
 python -m relic_cli merge-results results --target-name merged --include-unreviewed
+# 例: ギャラリー HTML の生成
+python -m relic_cli generate-gallery --results-csv results/sample.csv --image-dir results/sample/crops --output-html results/sample/gallery/index.html
 ```
 
-`extract_frames.py` や `preprocess.py` は当面の互換レイヤーとして残してあり、旧コマンド (`python extract_frames.py ...`) からは自動的に `python -m relic_cli` へ委譲されます。新しい書式へ移行する際は、`--help` を参照しながら必要なオプションを渡してください。
+`extract_frames.py` や `preprocess.py`、`generate_gallery.py` は当面の互換レイヤーとして残してあり、旧コマンド (`python extract_frames.py ...`) からは自動的に `python -m relic_cli` へ委譲されます。新しい書式へ移行する際は、`--help` を参照しながら必要なオプションを渡してください。
 
 ### 基本的なワークフロー
 1. `videos/` ディレクトリに処理対象の動画ファイル (`.mp4`, `.avi`, `.mov`, `.mkv` など) を配置します。
