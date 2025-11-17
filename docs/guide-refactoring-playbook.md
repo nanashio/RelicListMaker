@@ -51,8 +51,8 @@
 ## 5. ステップ別チェックリスト
 | ステップ | 主な作業内容 | 完了後に必ず実施するコマンド |
 | --- | --- | --- |
-| ステップ0: ベースライン確認 | 既存コードの読解、対象範囲の洗い出し、事前の課題整理。 | `python -m venv .venv && source .venv/bin/activate`<br>`pip install -r requirements.txt`<br>`python main.py` ※サンプル動画で基本フローを確認 |
-| ステップ1: 抽出・前処理レイヤのリファクタリング | `extract_frames.py` / `preprocess.py` 付近の責務分割と共通ユーティリティの整備。 | `python preprocess.py path/to/sample.png --out preprocessed/`<br>`pytest tests/test_merge_results.py` |
+| ステップ0: ベースライン確認 | 既存コードの読解、対象範囲の洗い出し、事前の課題整理。 | `python -m venv .venv && source .venv/bin/activate`<br>`pip install -r requirements.txt`<br>`python -m relic_cli run-pipeline --video-dir videos --result-dir results` ※サンプル動画で基本フローを確認 |
+| ステップ1: 抽出・前処理レイヤのリファクタリング | `extract_frames.py` / `preprocess.py` 付近の責務分割と共通ユーティリティの整備。 | `python -m relic_cli preprocess path/to/sample.png --out preprocessed/`<br>`pytest tests/test_merge_results.py` |
 | ステップ2: OCR と照合ロジックの整理 | `relic_pipeline.processing` を中心に OCR 設定、辞書照合、CSV 出力のモジュール化。 | `pytest tests/test_relic_placeholders.py`<br>`pytest tests/test_gallery_js_modules.py` |
 | ステップ3: ギャラリー生成・共有モジュール | `generate_gallery.py` や `templates/gallery/` 配下の分離と依存注入の見直し。 | `pytest tests/test_generate_gallery.py`<br>`npm run test:node` |
 | ステップ4: ビューワーとブラウザ確認 | `viewer_server` パッケージや Playwright フィクスチャの検証、ブラウザ挙動の確認。 | `pytest tests/test_viewer_server.py`<br>`npm run test:browser` (CI 不可の場合は `npm run test:browser:headed` や `pytest -k browser` など代替手順を検討) |
@@ -65,14 +65,14 @@
   - **新規モジュール単体テスト**: 分離した純粋関数（例: 正規化ユーティリティ、DOM ビルダー）を `tests/unit/` などに追加。
   - **OCR 設定の回帰テスト**: サンプル画像を使って `pytest tests/ocr/`（必要に応じて新設）で `relic_pipeline.processing` の推論結果を検証。
   - **ブラウザ操作の拡張シナリオ**: Playwright で色分け、レビュー操作、フィルタ組み合わせのシナリオを拡張し、`npm run test:browser` で回帰を防止。
-  - **統合パイプラインのスモークテスト**: 小規模動画を用いた `python main.py --limit N` などのモード（未実装ならタスク化）で全フローの健全性を継続確認。
+  - **統合パイプラインのスモークテスト**: 小規模動画を用いた `python -m relic_cli run-pipeline --video-dir videos --result-dir results --limit N` などのモード（未実装ならタスク化）で全フローの健全性を継続確認。
 
 ## 7. ペンディング事項テンプレート
 未着手や調査中の項目は以下フォーマットで管理し、進捗に合わせて更新する。
 
 | 発見日 | 項目 | 概要 | 現状ステータス | 次のアクション | 担当 | 備考 |
 | --- | --- | --- | --- | --- | --- | --- |
-| YYYY-MM-DD | 例: OCR 閾値調整 | サンプル動画で低コントラストが残存。閾値/リサイズの最適化が必要。 | 調査中 | `preprocess.py` に試験オプション追加 → `pytest tests/ocr/` で検証 | @owner | 追加データ取得待ち |
+| YYYY-MM-DD | 例: OCR 閾値調整 | サンプル動画で低コントラストが残存。閾値/リサイズの最適化が必要。 | 調査中 | `python -m relic_cli preprocess ...` に試験オプション追加 → `pytest tests/ocr/` で検証 | @owner | 追加データ取得待ち |
 
 ```markdown
 | 発見日 | 項目 | 概要 | 現状ステータス | 次のアクション | 担当 | 備考 |

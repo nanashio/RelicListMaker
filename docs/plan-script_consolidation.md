@@ -88,6 +88,11 @@
    - README や `docs/` 配下のガイドを全面的に `python -m relic_cli <command>` 形式へ書き換え、旧コマンドを使用しないよう明示する。
    - `viewer_server` や GUI など別経路で互換ラッパーを叩いていないか確認し、必要なら `relic_cli` サブコマンドに切り替える手順を追記する。
 
+### ステップ2進捗（CLI 表記の明示: 2025-02-15）
+- `AGENTS.md` の基本コマンドを `python -m relic_cli run-pipeline` / `python -m relic_cli preprocess` に更新し、旧 `main.py` や `preprocess.py` は互換レイヤーである旨を明記した。
+- README の「基本的なワークフロー」を `run-pipeline` サブコマンド前提へ差し替え、CLI セクションでも新しい書式を正式な入口として案内するよう修正した。
+- `docs/guide-refactoring-playbook.md` のステップ別チェックリストとテスト手順を `relic_cli` ベースへ置き換え、調査テンプレートからも旧 `preprocess.py` 参照を排除した。
+
 3. **互換ラッパー削除とエントリーポイント整備**
    - ルート直下の互換モジュールを削除し、`python extract_frames.py` 等の呼び出しを不可にする。
    - 代替として `python -m relic_cli` を呼び出す `console_scripts` エントリーポイントや `.bat` / `.sh` ランチャーが必要であれば `setup.cfg` / `pyproject.toml` / `package.json` に追加する。

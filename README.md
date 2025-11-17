@@ -125,14 +125,14 @@ python -m relic_cli generate-gallery --results-csv results/sample.csv --image-di
 python -m relic_cli bundle-tesseract --activate --require
 ```
 
-`extract_frames.py` や `preprocess.py`、`generate_gallery.py` は当面の互換レイヤーとして残してあり、旧コマンド (`python extract_frames.py ...`) からは自動的に `python -m relic_cli` へ委譲されます。新しい書式へ移行する際は、`--help` を参照しながら必要なオプションを渡してください。
+`extract_frames.py` や `preprocess.py`、`generate_gallery.py` は当面の互換レイヤーとして残してありますが、今後は `python -m relic_cli <command>` が正式な実行方法です。旧コマンド (`python extract_frames.py ...`) を呼び出した場合も `relic_cli` へ委譲されますが、`--help` でサブコマンドの詳細を確認し、新しい書式での運用に切り替えてください。
 
 ### 基本的なワークフロー
 1. `videos/` ディレクトリに処理対象の動画ファイル (`.mp4`, `.avi`, `.mov`, `.mkv` など) を配置します。
 2. 必要であれば `results/` をクリーンアップし、仮想環境を有効化します。
 3. メインパイプラインを実行します。
    ```bash
-   python main.py
+   python -m relic_cli run-pipeline --video-dir videos --result-dir results
    ```
 4. 実行完了後、`results/<動画名>/` に上記の出力が生成されます。静的サーバー経由で閲覧する場合は以下を実行してください。
    ```bash
@@ -144,7 +144,7 @@ OCR 精度を改善したい場合は、個別の画像に対して前処理パ�
 ```bash
 python -m relic_cli preprocess path/to/image.png --out preprocessed/
 ```
-`python preprocess.py ...` も互換目的で利用可能ですが、今後のアップデートではサブコマンド形式のみがメンテナンスされる予定です。生成された出力を確認し、しきい値やリサイズ係数などの調整に活用してください。
+互換レイヤーとして `python preprocess.py ...` も当面は動作しますが、メンテナンス対象は `relic_cli` サブコマンドのみです。生成された出力を確認し、しきい値やリサイズ係数などの調整に活用してください。
 
 ### クロップ済み画像の CLI 実行
 クロップ済みの画像を直接処理する場合は、`relic_pipeline.cli` のエントリポイントを利用してください。後方互換のラッパーだった `match_and_export.py` は削除済みのため、`process_images_command` を直接呼び出す経路に統一しています。
