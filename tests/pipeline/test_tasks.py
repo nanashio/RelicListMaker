@@ -44,3 +44,30 @@ def test_decide_item_color_detects_from_name(tmp_path, monkeypatch):
     task = tasks_mod.create_tasks(["videos/green_item.mp4"], result_dir="results")[0]
 
     assert tasks_mod.decide_item_color(task, {}) == "green"
+
+
+def test_create_tasks_avoids_overwriting_existing_results(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "videos").mkdir()
+    existing_dir = tmp_path / "results" / "test_video"
+    existing_dir.mkdir(parents=True)
+    video_path = Path("videos/test_video.mp4")
+
+    tasks = tasks_mod.create_tasks([video_path], result_dir="results")
+
+    assert tasks[0].output_dir == (tmp_path / "results" / "test_video_2").resolve(strict=False)
+    assert tasks[0].csv_path == tasks[0].output_dir / "test_video_2.csv"
+
+
+def test_create_tasks_assigns_unique_names_within_same_batch(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "videos").mkdir()
+    paths = [
+        Path("videos/sample.mp4"),
+        Path("videos/sample copy.mp4"),
+        Path("videos/sample.mp4"),
+    ]
+
+    tasks = tasks_mod.create_tasks(paths, result_dir="results")
+
+    assert [task.output_dir.name for task in tasks] == ["sample", "sample copy", "sample_2"]
