@@ -77,23 +77,34 @@ try {
     Write-Info "Working directory: $repoRoot"
 
     $releaseVersion = $null
+    $releaseTag = $null
     try {
-        $releaseVersion = (git describe --tags --abbrev=0).Trim()
+        $releaseTag = (git describe --tags --abbrev=0).Trim()
     }
     catch {
-        $releaseVersion = $null
+        $releaseTag = $null
     }
-    if (-not $releaseVersion) {
+
+    if ($releaseTag) {
+        $releaseVersion = "{0}-dev" -f $releaseTag
+    }
+    else {
+        $commitHash = $null
         try {
-            $releaseVersion = (git rev-parse --short HEAD).Trim()
+            $commitHash = (git rev-parse --short HEAD).Trim()
         }
         catch {
-            $releaseVersion = $null
+            $commitHash = $null
+        }
+
+        if ($commitHash) {
+            $releaseVersion = "{0}-dev" -f $commitHash
+        }
+        else {
+            $releaseVersion = '0.0.0-dev'
         }
     }
-    if (-not $releaseVersion) {
-        $releaseVersion = '0.0.0-dev'
-    }
+
     Set-Content -Path $versionFile -Value $releaseVersion -Encoding UTF8
     Write-Info ("Embedding release version: {0}" -f $releaseVersion)
 
