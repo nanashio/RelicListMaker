@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Mapping, Optional
+from typing import Iterable, Mapping, Optional, Set
 
 
 COLOR_KEYWORDS = {
@@ -55,20 +55,53 @@ def detect_item_color(name: str) -> Optional[str]:
     return None
 
 
-def create_video_task(video_path: Path | str, result_dir: Path | str) -> VideoTask:
+def _normalize_source_path(video_path: Path | str) -> Path:
     source_path = Path(video_path).expanduser()
     if source_path.is_absolute():
-        source_path = source_path.resolve()
-    else:
-        source_path = (Path.cwd() / source_path).resolve()
+        return source_path.resolve()
+    return (Path.cwd() / source_path).resolve()
 
+
+def _normalize_result_root(result_dir: Path | str) -> Path:
     result_root = Path(result_dir).expanduser()
     if result_root.is_absolute():
-        result_root = result_root.resolve(strict=False)
-    else:
-        result_root = (Path.cwd() / result_root).resolve(strict=False)
+        return result_root.resolve(strict=False)
+    return (Path.cwd() / result_root).resolve(strict=False)
 
-    base_name = source_path.stem
+
+def _ensure_unique_base_name(
+    base_name: str, result_root: Path, used_names: Optional[Set[str]] = None
+) -> str:
+    """結果ディレクトリや同一バッチ内での重複を避けるための名称を決定する."""
+
+    assigned_names: Set[str]
+    if used_names is None:
+        assigned_names = set()
+    else:
+        assigned_names = used_names
+
+    candidate = base_name
+    suffix = 2
+    while True:
+        output_dir = result_root / candidate
+        if candidate not in assigned_names and not output_dir.exists():
+            assigned_names.add(candidate)
+            return candidate
+        candidate = f"{base_name}_{suffix}"
+        suffix += 1
+
+
+def create_video_task(
+    video_path: Path | str,
+    result_dir: Path | str,
+    *,
+    used_names: Optional[Set[str]] = None,
+) -> VideoTask:
+    source_path = _normalize_source_path(video_path)
+    result_root = _normalize_result_root(result_dir)
+
+    original_base_name = source_path.stem
+    base_name = _ensure_unique_base_name(original_base_name, result_root, used_names)
     output_dir = result_root / base_name
     frames_dir = output_dir / "frames"
     crops_dir = output_dir / "crops"
@@ -82,12 +115,18 @@ def create_video_task(video_path: Path | str, result_dir: Path | str) -> VideoTa
         crops_dir=crops_dir,
         csv_path=csv_path,
         corrections_csv=corrections_csv,
-        relic_type=detect_relic_type(base_name),
+        relic_type=detect_relic_type(original_base_name),
     )
 
 
 def create_tasks(video_paths: Iterable[Path | str], result_dir: Path | str) -> list[VideoTask]:
-    return [create_video_task(path, result_dir) for path in video_paths]
+    result_root = _normalize_result_root(result_dir)
+    used_names: Set[str] = set()
+    tasks: list[VideoTask] = []
+    for path in video_paths:
+        task = create_video_task(path, result_root, used_names=used_names)
+        tasks.append(task)
+    return tasks
 
 
 def decide_item_color(task: VideoTask, overrides: Mapping[Path, str]) -> Optional[str]:
