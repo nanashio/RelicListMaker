@@ -545,6 +545,51 @@ h1 {
     gap: var(--space-xs);
 }
 
+.item-tags-control {
+    flex: 1 1 100%;
+    border-top: 1px solid var(--color-border-extra-light);
+    padding-top: var(--space-sm);
+    margin-top: var(--space-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.item-tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2xs);
+    font-size: 12px;
+    color: var(--color-text-secondary);
+}
+
+.item-tags-list[data-empty='true'] {
+    font-style: italic;
+    opacity: 0.8;
+}
+
+.item-tag-pill {
+    padding: 0 var(--space-sm);
+    line-height: 20px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border-light);
+    background: var(--color-surface-subtle);
+}
+
+.item-tags-input {
+    width: 100%;
+    padding: var(--space-xs) var(--space-sm);
+    font-size: 13px;
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-md);
+    box-sizing: border-box;
+}
+
+.item-tags-input:focus {
+    outline: 2px solid var(--color-focus-outline);
+    outline-offset: 2px;
+}
+
 .item-color-label {
     font-size: 12px;
     color: var(--color-text-secondary);

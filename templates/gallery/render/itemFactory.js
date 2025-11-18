@@ -198,6 +198,7 @@
             controls.appendChild(createColorControls(context.recordIndex));
             controls.appendChild(createRelicTypeControls(context.recordIndex));
             controls.appendChild(createItemMetaInfo(context));
+            controls.appendChild(createItemTagsControl(context));
             return controls;
         }
 
@@ -285,6 +286,25 @@
             metaInfo.appendChild(filename);
 
             return metaInfo;
+        }
+
+        function createItemTagsControl(context) {
+            const container = createElement('div', 'item-tags-control');
+            const inputId = `item-tags-${context.recordIndex}`;
+            const list = createElement('div', 'item-tags-list');
+            list.dataset.empty = 'true';
+            container.appendChild(list);
+
+            const input = createElement('input', 'item-tags-input');
+            input.type = 'text';
+            input.id = inputId;
+            input.placeholder = 'タグ スペース区切りで入力';
+            input.autocomplete = 'off';
+            input.dataset.recordIndex = String(context.recordIndex);
+            input.dataset.action = 'update-tags';
+            container.appendChild(input);
+
+            return container;
         }
 
         function createItemPosition(visibleIndex, visibleTotal) {

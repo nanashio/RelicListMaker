@@ -36,6 +36,7 @@ def parse_column_flag_value(value: object) -> bool | None:
     return None
 
 LEVEL_OPTIONS_SEPARATOR = " | "
+TAG_SEPARATOR_PATTERN = re.compile(r"[\s,;、，　；]+")
 
 
 def normalize_column_visibility(
@@ -126,6 +127,8 @@ def build_row(
         row["ItemColor"] = options.item_color or "none"
     if column_flags.get("RelicType", True):
         row["RelicType"] = options.relic_type or "none"
+    if column_flags.get("Tags", True):
+        row["Tags"] = ""
 
     level_map = options.level_map or {}
     demerit_slots = set(options.demerit_slots or [])
@@ -188,6 +191,7 @@ def build_row(
         "SourceImage",
         "BaseImage",
         "RelicType",
+        "Tags",
     ):
         if not column_flags.get(hidden_key, True):
             row.pop(hidden_key, None)
@@ -238,6 +242,8 @@ def write_csv(
         fieldnames.append("ItemColor")
     if column_flags.get("RelicType", True):
         fieldnames.append("RelicType")
+    if column_flags.get("Tags", True):
+        fieldnames.append("Tags")
 
     for idx in slot_range:
         fieldnames.append(f"Effect{idx}")
@@ -279,5 +285,28 @@ def write_csv(
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         for row in row_list:
-            writer.writerow(row)
+            serialized_row = row.copy()
+            if "Tags" in serialized_row:
+                serialized_row["Tags"] = _serialize_tags_value(serialized_row.get("Tags"))
+            writer.writerow(serialized_row)
 
+def _serialize_tags_value(value: object) -> str:
+    """Normalize tag tokens and join them with semicolons for CSV output."""
+
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    tokens = [token.strip() for token in TAG_SEPARATOR_PATTERN.split(text) if token.strip()]
+    if not tokens:
+        return ""
+    seen: set[str] = set()
+    unique_tokens: list[str] = []
+    for token in tokens:
+        key = token.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_tokens.append(token)
+    return ";".join(unique_tokens)

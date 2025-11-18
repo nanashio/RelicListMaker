@@ -45,6 +45,20 @@
             throw new Error('createGalleryView: isRecordFavorite helper is required');
         }
 
+        const dataUtils = typeof window !== 'undefined' && window ? window.galleryDataUtils : null;
+        const parseTagTokens =
+            dataUtils && typeof dataUtils.parseTagTokens === 'function'
+                ? dataUtils.parseTagTokens
+                : null;
+        const formatTagTokens =
+            dataUtils && typeof dataUtils.formatTagTokens === 'function'
+                ? dataUtils.formatTagTokens
+                : null;
+
+        if (typeof parseTagTokens !== 'function' || typeof formatTagTokens !== 'function') {
+            throw new Error('createGalleryView: tag utilities are required');
+        }
+
         const colorOptions = Array.isArray(itemColorOptions) ? itemColorOptions.slice() : [];
         const hasDocument = typeof document !== 'undefined' && document;
         const filterNamespace = typeof window !== 'undefined' && window ? window.galleryFilterUtils : null;
@@ -241,6 +255,7 @@
                 syncFavoriteState,
                 syncItemColorState,
                 syncItemRelicTypeState,
+                syncItemTagsState,
                 refreshItemCaches,
                 additionalEnhancers: additionalItemEnhancers
             });
@@ -259,6 +274,7 @@
                 syncFavoriteState,
                 syncItemColorState,
                 syncItemRelicTypeState,
+                syncItemTagsState,
                 refreshItemCaches
             ];
 
@@ -601,6 +617,57 @@
             }
         }
 
+        function normalizeItemTags(value) {
+            return formatTagTokens(value);
+        }
+
+        function applyItemTags(item, tagsValue) {
+            if (!item) {
+                return;
+            }
+            const normalized = normalizeItemTags(tagsValue);
+            const tokens = parseTagTokens(normalized);
+            if (tokens.length) {
+                item.dataset.tags = tokens.join(' ');
+            } else {
+                delete item.dataset.tags;
+            }
+            const input = item.querySelector('.item-tags-input');
+            if (input) {
+                const displayValue = tokens.join(' ');
+                const isEditing = Boolean(
+                    (input.dataset && input.dataset.editingTags === 'true') ||
+                        (typeof document !== 'undefined' && document &&
+                            document.activeElement === input)
+                );
+                if (!isEditing && input.value !== displayValue) {
+                    input.value = displayValue;
+                }
+            }
+            const list = item.querySelector('.item-tags-list');
+            if (list) {
+                list.textContent = '';
+                if (!tokens.length) {
+                    list.dataset.empty = 'true';
+                } else {
+                    list.dataset.empty = 'false';
+                    tokens.forEach((token) => {
+                        const pill = createElement('span', 'item-tag-pill', token);
+                        list.appendChild(pill);
+                    });
+                }
+            }
+        }
+
+        function syncItemTagsState(item) {
+            if (!item) {
+                return;
+            }
+            const context = getItemContext(item);
+            const tagsValue = context && context.record ? context.record.Tags : '';
+            applyItemTags(item, tagsValue);
+        }
+
         function updateFavoriteVisuals(item, isFavorite) {
             if (!item) {
                 return;
@@ -690,6 +757,15 @@
             const datasetToken = item.dataset.datasetLabel;
             if (datasetToken) {
                 baseTokens.push(datasetToken);
+            }
+            const tagsToken = item.dataset.tags;
+            if (tagsToken) {
+                tagsToken
+                    .split(/\s+/)
+                    .filter(Boolean)
+                    .forEach((token) => {
+                        baseTokens.push(token);
+                    });
             }
 
             const effectEntries = [];
@@ -797,6 +873,8 @@
             normalizeItemColor,
             applyItemRelicType,
             normalizeItemRelicType,
+            applyItemTags,
+            normalizeItemTags,
             refreshItemCaches
         };
     }

@@ -19,12 +19,14 @@ _RESERVED_FIELDS = [
     "SourceImage",
     "Duplicate",
     "ItemColor",
+    "Tags",
 ]
 _EXTRA_FIELD_PREFIXES = ("Effect", "RawText", "Demerit")
 
 _SAVE_LOCK = threading.Lock()
 
 _LEVEL_FIELD_PATTERN = re.compile(r"^Effect(\d+)(Level(?:Source|Options)?)$", re.IGNORECASE)
+_TAG_SEPARATOR_PATTERN = re.compile(r"[\s,;、，　；]+")
 
 
 def _normalize_level_placeholder(value: object) -> str:
@@ -177,7 +179,12 @@ def write_records(csv_path: Path, records: list[dict], field_order: list[str]) -
                     if not isinstance(record, dict):
                         continue
                     _ensure_effect_level_placeholders(record)
-                    row = {field: record.get(field, "") for field in field_order}
+                    row = {}
+                    for field in field_order:
+                        value = record.get(field, "")
+                        if field == "Tags":
+                            value = _serialize_tags_field(value)
+                        row[field] = value
                     writer.writerow(row)
             tmp_path.replace(csv_path)
         except OSError as exc:
@@ -185,3 +192,21 @@ def write_records(csv_path: Path, records: list[dict], field_order: list[str]) -
                 with contextlib.suppress(OSError):
                     tmp_path.unlink()
             raise StorageError("write-failed", str(exc)) from exc
+def _serialize_tags_field(value: object) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    tokens = [token.strip() for token in _TAG_SEPARATOR_PATTERN.split(text) if token.strip()]
+    if not tokens:
+        return ""
+    seen: set[str] = set()
+    unique_tokens: list[str] = []
+    for token in tokens:
+        key = token.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_tokens.append(token)
+    return ";".join(unique_tokens)

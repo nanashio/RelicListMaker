@@ -29,6 +29,7 @@
 | 2025-11-05 | データセットビルダー導入 | `datasets/builder.py` を追加し、`ProcessedVideoResult` / `DatasetBuildResult` と `build_dataset_entries` を実装。`pipeline/processors.py`・`pipeline/pipeline.py` を更新してビルダー経由でデータセットを生成し、`tests/test_dataset_builder.py` を新設。`pytest` で回帰確認済み。 |
 | 2025-11-06 | 旧テンプレート確認 | レガシー HTML が `templates/gallery/gallery.js` を直接読み込んでいないかリポジトリ全体を検索し、`gallery/index.js` 経由の構成のみが残っていることを確認。追加リファクタリングは不要と判断し、現行モジュール群の維持方針を共有。 |
 | 2025-11-18 | 一括テスト確認 | `npm run test:all` を実行し、Python/Node テストは成功。Playwright はブラウザ未取得により失敗したため、`npx playwright install --with-deps` と `npx playwright install chromium` を試行したが 403 Forbidden 応答で取得できなかったことを記録。代替として `pytest` と `node --test tests/js/gallery_modules.test.mjs` の完了結果を共有。 |
+| 2025-11-18 | タグ保存とビューア操作の回帰確認 | ユーザーの要望で Playwright を除外したため、`pytest` と `node --test tests/js/gallery_modules.test.mjs` を個別に実行し、タグ編集機能を含む Python/Node テストの完走結果を記録。 |
 
 ## 実行計画
 
@@ -43,7 +44,7 @@
 | 6 | ✅ 完了 | エントリポイント刷新とモジュール読込方式の最終統合。 |
 
 ### フォーカスすべき次アクション
-1. **回帰テストの継続**: 各ステップ完了時に `npm run test:all` を実行し、ES Modules 化後のリグレッションを監視する。Playwright のブラウザ未取得環境では `docs/guide-testing.md` の代替フロー（`pytest` / `node --test`）を用いて最低限の回帰確認を確保する。最新の実行（2025-11-04）は Python/Node が成功し、Playwright はブラウザバイナリ不足で失敗したため、環境差異の記録とフォローアップを継続する。
+1. **回帰テストの継続**: 各ステップ完了時に `npm run test:all` を実行し、ES Modules 化後のリグレッションを監視する。Playwright のブラウザ未取得環境やユーザーからの除外指示がある場合は `docs/guide-testing.md` の代替フロー（`pytest` / `node --test`）を用いて最低限の回帰確認を確保する。最新の実行（2025-11-18）はユーザー要望により Playwright を走らせず、`pytest` と `node --test tests/js/gallery_modules.test.mjs` の完走結果を記録している。
 2. **ブラウザフィクスチャの確認**: Playwright フィクスチャが新しいエントリポイント (`gallery/index.js`) を正しく取り込めているかを今後の変更時にもチェックする。2025-10-29 時点では `tests/browser/serve_fixture.py` の複製対象が `MODULE_DEPENDENCIES` と一致していることを再確認済み。必要に応じて `tests/browser/` 配下のフィクスチャ更新履歴を追記する。
 3. **配布バンドルの最適化検討**: モジュール統合が完了したため、必要であればビルド／バンドル戦略（Vite 等）の導入可否を評価し、判断結果を本ドキュメントへ記録する。新しいアセット準備モジュールの導入に伴い、コピー対象とバンドル戦略の見直しを行う際は `gallery/assets.py` の API 更新もセットで検討する。
 4. ✅ **旧テンプレートの洗い出し（2025-11-06）**: `gallery.js` を直接読み込むレガシー HTML が残っていないか `rg "gallery.js" -n` 等で確認し、`gallery/index.js` を経由する新構成のみが利用されていることを再確認。追加の移行作業は不要と判断。

@@ -1039,6 +1039,7 @@ describe('gallery view', () => {
   beforeEach(() => {
     global.window = {};
     global.document = createDocumentStub();
+    runScript('templates/gallery/utils/data.js');
     runScript('templates/gallery/utils/filter.js');
     runScript('templates/gallery/render/itemEnhancers.js');
     runScript('templates/gallery/render/itemFactory.js');
@@ -1249,6 +1250,71 @@ describe('gallery view', () => {
     assert.equal(item.dataset.fromFactory, '0');
     assert.equal(item.dataset.extra, 'true');
     assert.equal(extraCalls.length, 1);
+  });
+
+  test('applyItemTags keeps focused input text until editing ends', () => {
+    const state = {
+      records: [{ Image: 'alpha.png', Tags: 'alpha' }],
+      items: [],
+      labelSymbols: [],
+      imageDir: 'images',
+      showOcr: false
+    };
+    const datasetState = { kind: 'normal', list: [], activeIndex: 0 };
+    const galleryElement = createStubElement('div');
+    global.document.body.appendChild(galleryElement);
+    const statusElement = createStubElement('div');
+    global.document.body.appendChild(statusElement);
+    const dom = {
+      gallery: galleryElement,
+      galleryStatus: statusElement,
+      summary: null,
+      showDuplicatesToggle: { checked: false },
+      showOcrToggle: { checked: false },
+      searchInput: { value: '' },
+      filterSelect: { value: 'all' },
+      colorFilter: { value: 'all' }
+    };
+    const duplicates = {
+      has: () => false,
+      set: () => {}
+    };
+
+    const galleryView = galleryFactory.createGalleryView({
+      state,
+      datasetState,
+      dom,
+      duplicates,
+      itemColorOptions: [],
+      createEffect: () => null,
+      bindImage: () => {},
+      createElement: defaultCreateElement,
+      joinPath: (_base, leaf) => leaf || '',
+      getFileName: (path) => String(path || ''),
+      showStatus: () => {},
+      clearStatus: () => {},
+      getRecordByIndex: (index) => state.records[index] || null,
+      isRecordDuplicate: () => false,
+      isRecordFavorite: () => false
+    });
+
+    galleryView.buildGallery();
+    const item = dom.gallery.children[0];
+    const input = item.querySelector('.item-tags-input');
+    assert.ok(input, 'タグ入力が生成されていること');
+
+    input.value = 'alpha ';
+    input.dataset.editingTags = 'true';
+
+    galleryView.applyItemTags(item, 'alpha beta');
+    assert.equal(input.value, 'alpha ', '編集中は正規化で上書きされない');
+    assert.equal(item.dataset.tags, 'alpha beta');
+    const list = item.querySelector('.item-tags-list');
+    assert.equal(list.children.length, 2, 'ピルは正しく更新される');
+
+    delete input.dataset.editingTags;
+    galleryView.applyItemTags(item, 'alpha beta');
+    assert.equal(input.value, 'alpha beta', 'フォーカスが外れたら表示を同期');
   });
 
 });
@@ -2639,12 +2705,21 @@ describe('record action handlers', () => {
       buildGallery: () => {},
       applyItemColor: () => {},
       applyItemRelicType: () => {},
+      applyItemTags: () => {},
       updateFavoriteVisuals: () => {},
       updateDuplicateVisuals: () => {},
       refreshItemCaches: () => {},
       getItemContext: () => ({ item, record, recordIndex: 0 }),
       normalizeItemColor: (value) => (value ? value.toLowerCase() : ''),
       normalizeItemRelicType: (value) => (value ? value.toLowerCase() : ''),
+      normalizeItemTags: (value) =>
+        (value
+          ? String(value)
+              .split(/[\s,;、，　；]+/)
+              .map((token) => token.trim())
+              .filter(Boolean)
+              .join(' ')
+          : ''),
       isRecordDuplicate: (targetRecord) => Boolean(targetRecord.__duplicate),
       isRecordFavorite: (targetRecord) => Boolean(targetRecord.__favorite),
       setRecordDuplicate: (_index, next) => {
@@ -2670,6 +2745,17 @@ describe('record action handlers', () => {
           record.RelicType = nextType;
         } else {
           delete record.RelicType;
+        }
+        return changed;
+      },
+      setRecordTags: (_index, nextValue) => {
+        const normalized = nextValue ? String(nextValue) : '';
+        const current = record.Tags || '';
+        const changed = current !== normalized;
+        if (normalized) {
+          record.Tags = normalized;
+        } else {
+          delete record.Tags;
         }
         return changed;
       },
@@ -2719,6 +2805,48 @@ describe('record action handlers', () => {
     assert.equal(scheduleCalls.length, 1);
     assert.equal(buildCalls.length, 1);
     assert.deepEqual(visualCalls, [[item, true]]);
+  });
+
+  test('updateItemTags normalizes tokens, updates record, and schedules save', () => {
+    const record = { Tags: 'alpha beta' };
+    const item = new MockElement('div', 'item');
+    const input = new MockElement('input', 'item-tags-input');
+    item.appendChild(input);
+    input.value = 'beta, gamma   delta';
+
+    const scheduleCalls = [];
+    const filterCalls = [];
+    const cacheRefreshes = [];
+    const appliedTags = [];
+    const deps = buildBaseDeps(record, item, {
+      scheduleSave: () => scheduleCalls.push(true),
+      applyFilters: () => filterCalls.push(true),
+      refreshItemCaches: (target) => cacheRefreshes.push(target),
+      applyItemTags: (target, value) => appliedTags.push([target, value]),
+      normalizeItemTags: (value) =>
+        (value
+          ? String(value)
+              .split(/[\s,;、，　；]+/)
+              .map((token) => token.trim().toLowerCase())
+              .filter(Boolean)
+              .filter((token, index, list) => list.indexOf(token) === index)
+              .join(' ')
+          : ''),
+      setRecordTags: (_index, nextValue) => {
+        const changed = record.Tags !== nextValue;
+        record.Tags = nextValue;
+        return changed;
+      }
+    });
+
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.updateItemTags(input);
+
+    assert.equal(record.Tags, 'beta gamma delta');
+    assert.deepEqual(appliedTags, [[item, 'beta gamma delta']]);
+    assert.deepEqual(cacheRefreshes, [item]);
+    assert.equal(scheduleCalls.length, 1);
+    assert.equal(filterCalls.length, 1);
   });
 
   test('toggleItemColor normalizes value and toggles selection', () => {
@@ -3833,6 +3961,61 @@ describe('gallery events', () => {
     assert.equal(filterCalls.length, 1);
     assert.deepEqual(applyRelicTypeCalls, [[item, 'deep']]);
     assert.equal(select.value, 'deep');
+  });
+
+  test('tag input focus handlers keep temporary whitespace and resync on blur', () => {
+    const record = { Tags: 'alpha beta' };
+    const item = new MockElement('div', 'item');
+    item.dataset.recordIndex = '0';
+    item.dataset.tags = 'alpha beta';
+    const tagsInput = new MockElement('input', 'item-tags-input');
+    tagsInput.value = 'alpha ';
+    item.appendChild(tagsInput);
+    dom.gallery.appendChild(item);
+
+    galleryEvents.attachEventHandlers({
+      switchDataset: () => {},
+      buildGallery: () => {},
+      applyFilters: () => {},
+      setRelicTypeFilter: () => {},
+      setOcrVisibility: () => {},
+      getOcrToggleState: () => false,
+      getItemContext: () => ({ item, record, recordIndex: 0 }),
+      updateFavoriteVisuals: () => {},
+      updateDuplicateVisuals: () => {},
+      applyItemColor: () => {},
+      normalizeItemColor: (value) => value || '',
+      applyItemRelicType: () => {},
+      normalizeItemRelicType: (value) => value || '',
+      applyItemTags: () => {},
+      normalizeItemTags: (value) => value || '',
+      refreshItemCaches: () => {},
+      getRecordByIndex: () => record,
+      isRecordDuplicate: () => false,
+      isRecordFavorite: () => false,
+      setRecordDuplicate: () => false,
+      setRecordFavorite: () => false,
+      setRecordItemColor: () => false,
+      setRecordItemRelicType: () => false,
+      setRecordTags: () => false,
+      applyMasterDataForRelicType: () => {},
+      recordStatusChange: () => false,
+      updateRecordEffectValue: () => false,
+      updateRecordLevelValue: () => false,
+      updateRecordLevelOptions: () => false,
+      scheduleSave: () => {}
+    });
+
+    const focusInHandlers = dom.gallery.eventListeners.focusin || [];
+    assert.equal(focusInHandlers.length > 0, true);
+    focusInHandlers[0]({ target: tagsInput });
+    assert.equal(tagsInput.dataset.editingTags, 'true');
+
+    const focusOutHandlers = dom.gallery.eventListeners.focusout || [];
+    assert.equal(focusOutHandlers.length > 0, true);
+    focusOutHandlers[0]({ target: tagsInput });
+    assert.equal(tagsInput.dataset.editingTags, undefined);
+    assert.equal(tagsInput.value, 'alpha beta');
   });
 
   test('correction input change updates record state', () => {

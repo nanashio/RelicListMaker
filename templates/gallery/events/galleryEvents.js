@@ -176,6 +176,8 @@
                 normalizeItemColor = (value) => value,
                 applyItemRelicType = () => {},
                 normalizeItemRelicType = (value) => value,
+                applyItemTags = () => {},
+                normalizeItemTags = (value) => value,
                 refreshItemCaches = () => {},
                 applyMasterDataForRelicType = () => {},
                 isRecordDuplicate = () => false,
@@ -184,6 +186,7 @@
                 setRecordFavorite = () => false,
                 setRecordItemColor = () => false,
                 setRecordItemRelicType = () => false,
+                setRecordTags = () => false,
                 recordStatusChange = () => false,
                 updateRecordEffectValue = () => false,
                 updateRecordLevelValue = () => false,
@@ -198,18 +201,21 @@
                 buildGallery,
                 applyItemColor,
                 applyItemRelicType,
+                applyItemTags,
                 updateFavoriteVisuals,
                 updateDuplicateVisuals,
                 refreshItemCaches,
                 getItemContext,
                 normalizeItemColor,
                 normalizeItemRelicType,
+                normalizeItemTags,
                 isRecordDuplicate,
                 isRecordFavorite,
                 setRecordDuplicate,
                 setRecordFavorite,
                 setRecordItemColor,
                 setRecordItemRelicType,
+                setRecordTags,
                 applyMasterDataForRelicType,
                 recordStatusChange,
                 updateRecordEffectValue,
@@ -233,6 +239,7 @@
                 toggleFavorite,
                 toggleItemColor,
                 toggleItemRelicType,
+                updateItemTags,
                 changeEffectCorrection,
                 changeEffectLevel,
                 toggleReviewStatus
@@ -279,6 +286,44 @@
                         return;
                     }
                     toggleReviewStatus(effect, button);
+                });
+
+                dom.gallery.addEventListener('input', (event) => {
+                    const tagsInput = event.target.closest('.item-tags-input');
+                    if (tagsInput) {
+                        updateItemTags(tagsInput);
+                    }
+                });
+
+                dom.gallery.addEventListener('focusin', (event) => {
+                    const target = event.target;
+                    if (!target || typeof target.closest !== 'function') {
+                        return;
+                    }
+                    const tagsInput = target.closest('.item-tags-input');
+                    if (tagsInput) {
+                        tagsInput.dataset.editingTags = 'true';
+                    }
+                });
+
+                dom.gallery.addEventListener('focusout', (event) => {
+                    const target = event.target;
+                    if (!target || typeof target.closest !== 'function') {
+                        return;
+                    }
+                    const tagsInput = target.closest('.item-tags-input');
+                    if (!tagsInput) {
+                        return;
+                    }
+                    delete tagsInput.dataset.editingTags;
+                    const item = typeof tagsInput.closest === 'function' ? tagsInput.closest('.item') : null;
+                    if (!item) {
+                        return;
+                    }
+                    const nextDisplayValue = (item.dataset && item.dataset.tags) || '';
+                    if (tagsInput.value !== nextDisplayValue) {
+                        tagsInput.value = nextDisplayValue;
+                    }
                 });
 
                 dom.gallery.addEventListener('change', (event) => {

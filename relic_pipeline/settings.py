@@ -15,6 +15,7 @@ DEFAULT_GCP_CREDENTIALS_FILENAME = "service-account-file.json"
 DEFAULT_COLUMN_VISIBILITY: dict[str, bool] = {
     "ItemColor": True,
     "RelicType": True,
+    "Tags": True,
     "RawText": True,
     "Score": True,
     "Source": True,
