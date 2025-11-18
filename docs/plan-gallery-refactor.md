@@ -28,6 +28,7 @@
 | 2025-11-04 | 生成スクリプト実装・検証 | `gallery/assets.py` を新設してアセット準備を集約し、`build_gallery_payload`・`render_gallery_template` を導入。`pytest` と `npm run test:node` は成功、Playwright はブラウザ未取得のため失敗（代替手順適用済み）と記録。 |
 | 2025-11-05 | データセットビルダー導入 | `datasets/builder.py` を追加し、`ProcessedVideoResult` / `DatasetBuildResult` と `build_dataset_entries` を実装。`pipeline/processors.py`・`pipeline/pipeline.py` を更新してビルダー経由でデータセットを生成し、`tests/test_dataset_builder.py` を新設。`pytest` で回帰確認済み。 |
 | 2025-11-06 | 旧テンプレート確認 | レガシー HTML が `templates/gallery/gallery.js` を直接読み込んでいないかリポジトリ全体を検索し、`gallery/index.js` 経由の構成のみが残っていることを確認。追加リファクタリングは不要と判断し、現行モジュール群の維持方針を共有。 |
+| 2025-11-18 | 一括テスト確認 | `npm run test:all` を実行し、Python/Node テストは成功。Playwright はブラウザ未取得により失敗したため、`npx playwright install --with-deps` と `npx playwright install chromium` を試行したが 403 Forbidden 応答で取得できなかったことを記録。代替として `pytest` と `node --test tests/js/gallery_modules.test.mjs` の完了結果を共有。 |
 
 ## 実行計画
 

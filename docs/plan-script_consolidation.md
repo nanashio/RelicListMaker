@@ -114,6 +114,7 @@
 ### ステップ4進捗（PyInstaller CLI更新: 2025-03-05）
 - `pyinstaller.spec` の CLI バンドル対象を `relic_cli/__main__.py` へ更新し、生成される `RelicListMakerCLI.exe` が新しい公式サブコマンドハブを実行するようにした。
 - `python -m relic_cli --help` で CLI のエントリポイントを確認し、PyInstaller 向けエントリと一致していることを手元で検証済み。
+- 2025-11-18: CLI 統合後の一括テストとして `npm run test:all` を実行し、`pytest` と Node テストは成功したが Playwright はブラウザバイナリ未取得により失敗。`npx playwright install --with-deps` および `npx playwright install chromium` を試行したものの、プロキシ環境下で 403 Forbidden を返して取得できなかったため、代替として Python/Node テストの完了結果のみを記録した。
 
 5. **リリースノートと移行ガイドの告知**
    - `README` または `docs/changelog.md`（未作成なら新規）に互換ラッパー廃止の理由と新 CLI への移行手順を記載し、バージョンタグ発行時に周知する。
