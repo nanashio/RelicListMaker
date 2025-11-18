@@ -23,7 +23,7 @@
 2. **バリデーションレイヤの抽出**（完了）: API 入力検証を `viewer_server/validation.py` に切り出し、Content-Length、JSON 解析、パス検証、payload 検証を責務単位で関数化する。HTTP ハンドラは例外キャッチしてレスポンスに変換する構造へ変更する。
 3. **ハンドラの責務再編**（完了）: `GalleryRequestHandler` は静的ファイル配信と API ハンドラのルーティングのみを担い、インデックス生成は `viewer_server/index_page.py` に委譲する。`do_GET` と `do_POST` の分岐を整理し、API 呼び出しは `storage` / `validation` を組み合わせて処理する。
 4. **サーバー管理クラスの再構築**（完了）: `create_server` と `_open_browser` を `viewer_server/app.py` に再配置し、`ServerContext` はコンテキストマネージャ化（`__enter__` / `__exit__`）する。テストでは `ThreadingHTTPServer` をモックし、ライフサイクル制御を検証する。
-5. **テンプレート抽象化**（完了）: `INDEX_TEMPLATE` を `templates/index.html`（新設）に移動し、`Template` ではなく `string.Template` or `jinja2` を介したロードに変更。テキストアセット読み込み関数（既存 `generate_gallery` の `_load_text_asset` 相当）を再利用できる構造にする。
+5. **テンプレート抽象化**（完了）: `INDEX_TEMPLATE` を `templates/index.html`（新設）に移動し、`Template` ではなく `string.Template` or `jinja2` を介したロードに変更。テキストアセット読み込み関数（`gallery.render.load_text_asset` 相当）を再利用できる構造にする。
 6. **リグレッションテスト整備**（完了）: 保存 API 用に `pytest tests/test_viewer_server_api.py` を用意し、正常系・異常系・フィールド順序計算をカバーする。既存ブラウザ確認フローは `npm run test:browser` または `python -m viewer_server.main --results-dir ./fixtures` で維持する。
 
 ## 4. テスト戦略

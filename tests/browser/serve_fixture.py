@@ -11,7 +11,7 @@ import sys
 import zlib
 from pathlib import Path
 
-DEFAULT_ITEM_IMAGE_VIEW_BOX = "inset(0px 180px 0px 0px)"  # generate_gallery.DEFAULT_ITEM_IMAGE_VIEW_BOX と同期すること
+DEFAULT_ITEM_IMAGE_VIEW_BOX = "inset(0px 180px 0px 0px)"  # gallery.DEFAULT_ITEM_IMAGE_VIEW_BOX と同期すること
 
 
 def _repo_root() -> Path:

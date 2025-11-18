@@ -3,6 +3,8 @@
 ## 目的・スコープ
 - RelicList の動画→OCR→HTML 出力パイプラインを対象に、既存コードの構造的課題を洗い出し、段階的なリファクタリング計画を策定する。
 - 対象範囲は `main.py` を起点としたバッチ処理と、結果閲覧用 HTML を生成する `generate_gallery.py` を中心に、OCR/マッチングを担う `relic_pipeline.processing` を含む。
+
+> **2025-03-04 更新:** 旧 `main.py` / `generate_gallery.py` は削除済みで、パイプラインは `python -m relic_cli run-pipeline`、ギャラリー生成は `gallery.render.generate_html` へ統合された。以下の記述は設計背景を記録する目的で旧ファイル名を残している。
 - GUI（`python -m gui`）やテストコードは直接のスコープ外とし、必要に応じて別計画を立案する。
 
 ## 現状構造（主要ファイルの依存関係）

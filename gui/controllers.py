@@ -5,7 +5,7 @@ from tkinter import messagebox
 
 from .adapters import redirect_streams
 from .services import GuiState
-from merge_results import MergeResultsError
+from relic_cli.commands.merge_results import MergeResultsError
 
 
 class PipelineController:

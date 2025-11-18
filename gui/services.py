@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Mapping
 
-from merge_results import merge_results
+from relic_cli.commands.merge_results import merge_results
 from pipeline import (
     DEFAULT_GCP_CREDENTIALS_FILENAME,
     DEFAULT_OCR_ENGINE,

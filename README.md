@@ -56,10 +56,10 @@ RelicListMaker は、動画から遺物の文字を読み取って一覧化す�
 ### 旧フォーマットの CSV について
 - 現行バージョンはビューアが `Effect{n}` / `Effect{n}Level` / `Demerit{n}` を直接更新する設計へ移行しており、`Effect{n}Correction` などの補助列は出力しません。
 - 過去の試験運用で補助列付き CSV を生成していた場合は、最新のパイプラインでもう一度書き出すか、表計算ソフト等で補助列の値を基列へコピーしてから補助列自体を削除してください。
-- `merge_results.py` は補助列が残存しているとエラーを発生させます。メッセージに列名と行番号が表示されるため、該当行の補助列を空にするか削除したうえで再実行してください。
+- `python -m relic_cli merge-results`（内部では `relic_cli.commands.merge_results`）は補助列が残存しているとエラーを発生させます。メッセージに列名と行番号が表示されるため、該当行の補助列を空にするか削除したうえで再実行してください。
 
 ### プロジェクト概要
-RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、レビュー可能なギャラリーとして出力するためのツールチェーンです。`main.py` を起点にフレーム抽出、OCR、辞書照合、HTML ギャラリー生成までを一括で実行し、結果は `results/<動画名>/` 以下にまとめられます。
+RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、レビュー可能なギャラリーとして出力するためのツールチェーンです。`python -m relic_cli run-pipeline` を起点にフレーム抽出、OCR、辞書照合、HTML ギャラリー生成までを一括で実行し、結果は `results/<動画名>/` 以下にまとめられます。
 
 ### 主な使用技術
 | 技術 | 用途 |
@@ -87,11 +87,8 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
 │   └── master_relics.csv  # 遺物名のマスターデータ
 ├── tesseract/           # バンドル済み Tesseract (同梱環境向け)
 ├── docs/                # テスト手順やリファクタリング方針などのドキュメント
-├── main.py              # フレーム抽出→OCR→HTML 出力まで統括するパイプライン入口
 ├── relic_cli/           # `python -m relic_cli` で呼び出す CLI サブコマンド群
-├── extract_frames.py    # サブコマンド `extract-frames` への互換ラッパー
-├── generate_gallery.py  # サブコマンド `generate-gallery` への互換ラッパー
-├── preprocess.py        # サブコマンド `preprocess` への互換ラッパー
+│   └── commands/        # run-pipeline / extract-frames / preprocess などの実装
 ├── gui/                # GUI アプリ本体とサービス・アダプタ群（`python -m gui` で起動）
 └── viewer_server.py     # 結果フォルダをブラウザ閲覧する簡易サーバー
 ```
@@ -125,8 +122,7 @@ python -m relic_cli generate-gallery --results-csv results/sample.csv --image-di
 python -m relic_cli bundle-tesseract --activate --require
 ```
 
-`extract_frames.py` や `preprocess.py`、`generate_gallery.py` は当面の互換レイヤーとして残してありますが、今後は `python -m relic_cli <command>` が正式な実行方法です。旧コマンド (`python extract_frames.py ...`) を呼び出した場合も `relic_cli` へ委譲されますが、`--help` でサブコマンドの詳細を確認し、新しい書式での運用に切り替えてください。
-
+ルート直下の旧スクリプトは削除済みのため、`python -m relic_cli <command>` を直接利用してください。
 ### 基本的なワークフロー
 1. `videos/` ディレクトリに処理対象の動画ファイル (`.mp4`, `.avi`, `.mov`, `.mkv` など) を配置します。
 2. 必要であれば `results/` をクリーンアップし、仮想環境を有効化します。
@@ -144,8 +140,7 @@ OCR 精度を改善したい場合は、個別の画像に対して前処理パ�
 ```bash
 python -m relic_cli preprocess path/to/image.png --out preprocessed/
 ```
-互換レイヤーとして `python preprocess.py ...` も当面は動作しますが、メンテナンス対象は `relic_cli` サブコマンドのみです。生成された出力を確認し、しきい値やリサイズ係数などの調整に活用してください。
-
+生成された出力を確認し、しきい値やリサイズ係数などの調整に活用してください。
 ### クロップ済み画像の CLI 実行
 クロップ済みの画像を直接処理する場合は、`relic_pipeline.cli` のエントリポイントを利用してください。後方互換のラッパーだった `match_and_export.py` は削除済みのため、`process_images_command` を直接呼び出す経路に統一しています。
 

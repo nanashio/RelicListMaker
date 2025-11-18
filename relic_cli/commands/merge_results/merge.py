@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from generate_gallery import generate_html
+from gallery import generate_html
 from relic_data import load_master_csv
 
 from .constants import (
