@@ -290,28 +290,19 @@
 
         function createItemTagsControl(context) {
             const container = createElement('div', 'item-tags-control');
-            const header = createElement('div', 'item-tags-header');
             const inputId = `item-tags-${context.recordIndex}`;
-            const label = createElement('label', 'item-tags-title', 'タグ');
-            label.setAttribute('for', inputId);
-            const list = createElement('div', 'item-tags-list', 'タグ未設定');
-            list.dataset.emptyText = 'タグ未設定';
+            const list = createElement('div', 'item-tags-list');
             list.dataset.empty = 'true';
-            header.appendChild(label);
-            header.appendChild(list);
-            container.appendChild(header);
+            container.appendChild(list);
 
             const input = createElement('input', 'item-tags-input');
             input.type = 'text';
             input.id = inputId;
-            input.placeholder = 'スペース・カンマ区切りで入力';
+            input.placeholder = 'タグ スペース区切りで入力';
             input.autocomplete = 'off';
             input.dataset.recordIndex = String(context.recordIndex);
             input.dataset.action = 'update-tags';
             container.appendChild(input);
-
-            const hint = createElement('p', 'item-tags-hint', '自由にタグを追加できます');
-            container.appendChild(hint);
 
             return container;
         }

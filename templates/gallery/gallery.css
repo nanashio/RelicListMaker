@@ -555,19 +555,6 @@ h1 {
     gap: var(--space-xs);
 }
 
-.item-tags-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-sm);
-}
-
-.item-tags-title {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--color-text-secondary);
-}
-
 .item-tags-list {
     display: flex;
     flex-wrap: wrap;
@@ -601,12 +588,6 @@ h1 {
 .item-tags-input:focus {
     outline: 2px solid var(--color-focus-outline);
     outline-offset: 2px;
-}
-
-.item-tags-hint {
-    font-size: 11px;
-    color: var(--color-text-muted);
-    margin: 0;
 }
 
 .item-color-label {

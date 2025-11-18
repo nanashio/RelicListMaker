@@ -644,7 +644,6 @@
                 list.textContent = '';
                 if (!tokens.length) {
                     list.dataset.empty = 'true';
-                    list.textContent = list.dataset.emptyText || 'タグ未設定';
                 } else {
                     list.dataset.empty = 'false';
                     tokens.forEach((token) => {
