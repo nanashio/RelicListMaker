@@ -46,11 +46,21 @@ def _run_git_command(args: list[str]) -> Optional[str]:
     return _normalize(completed.stdout)
 
 
-def _version_from_git() -> Optional[str]:
-    for command in (["describe", "--tags", "--abbrev=0"], ["rev-parse", "--short", "HEAD"]):
-        detected = _run_git_command(command)
-        if detected:
-            return detected
+def _latest_release_tag() -> Optional[str]:
+    return _run_git_command(["describe", "--tags", "--abbrev=0"])
+
+
+def _short_commit_hash() -> Optional[str]:
+    return _run_git_command(["rev-parse", "--short", "HEAD"])
+
+
+def _development_version() -> Optional[str]:
+    release_tag = _latest_release_tag()
+    if release_tag:
+        return f"{release_tag}-dev"
+    commit_hash = _short_commit_hash()
+    if commit_hash:
+        return f"{commit_hash}-dev"
     return None
 
 
@@ -62,11 +72,18 @@ def get_version() -> str:
         _normalize(os.getenv("RELICLISTMAKER_VERSION")),
         _normalize(os.getenv("GITHUB_REF_NAME")),
         _version_from_file(),
-        _version_from_git(),
     )
     for candidate in candidates:
         if candidate:
             return candidate
+
+    development_version = _development_version()
+    if development_version:
+        return development_version
+
+    commit_hash = _short_commit_hash()
+    if commit_hash:
+        return commit_hash
     return "0.0.0-dev"
 
 

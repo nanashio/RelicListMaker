@@ -107,6 +107,17 @@ jobs:
             }
           }
 
+      - name: Embed release version file
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'
+          if (-not $version) {
+            throw 'GitHub ref name is empty. Cannot embed release version.'
+          }
+          Set-Content -Path 'RELEASE_VERSION' -Value $version -Encoding UTF8
+          Write-Host ("Embedded release version: {0}" -f $version)
+
       - name: Build executable with PyInstaller
         shell: pwsh
         run: |
