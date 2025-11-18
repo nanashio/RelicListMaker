@@ -295,6 +295,37 @@
                     }
                 });
 
+                dom.gallery.addEventListener('focusin', (event) => {
+                    const target = event.target;
+                    if (!target || typeof target.closest !== 'function') {
+                        return;
+                    }
+                    const tagsInput = target.closest('.item-tags-input');
+                    if (tagsInput) {
+                        tagsInput.dataset.editingTags = 'true';
+                    }
+                });
+
+                dom.gallery.addEventListener('focusout', (event) => {
+                    const target = event.target;
+                    if (!target || typeof target.closest !== 'function') {
+                        return;
+                    }
+                    const tagsInput = target.closest('.item-tags-input');
+                    if (!tagsInput) {
+                        return;
+                    }
+                    delete tagsInput.dataset.editingTags;
+                    const item = typeof tagsInput.closest === 'function' ? tagsInput.closest('.item') : null;
+                    if (!item) {
+                        return;
+                    }
+                    const nextDisplayValue = (item.dataset && item.dataset.tags) || '';
+                    if (tagsInput.value !== nextDisplayValue) {
+                        tagsInput.value = nextDisplayValue;
+                    }
+                });
+
                 dom.gallery.addEventListener('change', (event) => {
                     const relicTypeSelect = event.target.closest('.item-relic-type-select');
                     if (relicTypeSelect) {

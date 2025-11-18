@@ -635,7 +635,12 @@
             const input = item.querySelector('.item-tags-input');
             if (input) {
                 const displayValue = tokens.join(' ');
-                if (input.value !== displayValue) {
+                const isEditing = Boolean(
+                    (input.dataset && input.dataset.editingTags === 'true') ||
+                        (typeof document !== 'undefined' && document &&
+                            document.activeElement === input)
+                );
+                if (!isEditing && input.value !== displayValue) {
                     input.value = displayValue;
                 }
             }
