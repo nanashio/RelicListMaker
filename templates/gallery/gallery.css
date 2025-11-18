@@ -1,3 +1,5 @@
+@import './vendor/tom-select/tom-select.css';
+
 :root {
     --space-2xs: 2px;
     --space-xs: 4px;
@@ -553,6 +555,17 @@ h1 {
     display: flex;
     flex-direction: column;
     gap: var(--space-xs);
+    position: relative;
+}
+
+.item-tags-control[data-tag-input-root='true'] .ts-wrapper {
+    width: 100%;
+}
+
+.item-tags-control[data-tag-input-root='true'] .tag-input-announcer {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    min-height: 16px;
 }
 
 .item-tags-list {
@@ -588,6 +601,14 @@ h1 {
 .item-tags-input:focus {
     outline: 2px solid var(--color-focus-outline);
     outline-offset: 2px;
+}
+
+.item-tags-input[data-tag-input-enhanced='true'] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
 }
 
 .item-color-label {

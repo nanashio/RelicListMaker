@@ -20,6 +20,7 @@ ADDITIONAL_GALLERY_SCRIPTS: tuple[str, ...] = (
     "gallery/storage/utils.js",
     "gallery/storage/manager.js",
     "gallery/app/controller.js",
+    "gallery/components/tagInput.js",
     "gallery/render/effectViewModel.js",
     "gallery/render/effectFactory.js",
     "gallery/render/itemEnhancers.js",
@@ -27,6 +28,8 @@ ADDITIONAL_GALLERY_SCRIPTS: tuple[str, ...] = (
     "gallery/render/galleryView.js",
     "gallery/events/recordActionHandlers.js",
     "gallery/events/galleryEvents.js",
+    "gallery/vendor/tom-select/tom-select.complete.js",
+    "gallery/vendor/tom-select/tom-select.css",
 )
 
 

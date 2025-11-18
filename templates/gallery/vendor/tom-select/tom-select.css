@@ -1,0 +1,85 @@
+.ts-wrapper {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ts-wrapper .ts-control {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px 8px;
+    border: 1px solid var(--color-border-light, #c3c8d2);
+    border-radius: var(--radius-md, 6px);
+    background-color: var(--color-surface, #fff);
+    min-height: 36px;
+    cursor: text;
+}
+
+.ts-wrapper.ts-wrapper--focus .ts-control {
+    border-color: var(--color-focus-outline, #3b82f6);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.ts-wrapper .ts-values {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+}
+
+.ts-wrapper .ts-input {
+    flex: 1 1 80px;
+    min-width: 80px;
+    border: none;
+    outline: none;
+    font: inherit;
+    font-size: 13px;
+    padding: 4px 0;
+    background: transparent;
+    color: inherit;
+}
+
+.ts-wrapper .ts-input::placeholder {
+    color: var(--color-text-tertiary, #8a8ea5);
+}
+
+.ts-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: var(--radius-lg, 999px);
+    border: 1px solid var(--color-border-light, #c3c8d2);
+    background: var(--color-surface-subtle, #f5f7fb);
+    font-size: 12px;
+    line-height: 18px;
+    color: var(--color-text-secondary, #4b4f63);
+}
+
+.ts-chip-remove {
+    border: none;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ts-chip-remove:focus-visible {
+    outline: 2px solid var(--color-focus-outline, #3b82f6);
+    border-radius: 4px;
+}
+
+.ts-hidden-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}

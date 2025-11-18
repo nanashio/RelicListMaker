@@ -194,6 +194,22 @@
                 scheduleSave = () => {}
             } = handlers;
 
+            function resolveTagsInputTarget(target) {
+                if (!target || typeof target.closest !== 'function') {
+                    return null;
+                }
+                const direct = target.closest('.item-tags-input');
+                if (direct) {
+                    return direct;
+                }
+                const root = target.closest('[data-tag-input-root="true"]');
+                if (!root || typeof root.querySelector !== 'function') {
+                    return null;
+                }
+                const input = root.querySelector('.item-tags-input');
+                return input || null;
+            }
+
             const recordActions = createRecordActionHandlersFn({
                 duplicates,
                 scheduleSave,
@@ -289,7 +305,7 @@
                 });
 
                 dom.gallery.addEventListener('input', (event) => {
-                    const tagsInput = event.target.closest('.item-tags-input');
+                    const tagsInput = resolveTagsInputTarget(event.target);
                     if (tagsInput) {
                         updateItemTags(tagsInput);
                     }
@@ -297,10 +313,7 @@
 
                 dom.gallery.addEventListener('focusin', (event) => {
                     const target = event.target;
-                    if (!target || typeof target.closest !== 'function') {
-                        return;
-                    }
-                    const tagsInput = target.closest('.item-tags-input');
+                    const tagsInput = resolveTagsInputTarget(target);
                     if (tagsInput) {
                         tagsInput.dataset.editingTags = 'true';
                     }
@@ -308,10 +321,7 @@
 
                 dom.gallery.addEventListener('focusout', (event) => {
                     const target = event.target;
-                    if (!target || typeof target.closest !== 'function') {
-                        return;
-                    }
-                    const tagsInput = target.closest('.item-tags-input');
+                    const tagsInput = resolveTagsInputTarget(target);
                     if (!tagsInput) {
                         return;
                     }

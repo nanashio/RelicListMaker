@@ -37,17 +37,23 @@ Choices.js や Select2 も実績のあるライブラリだが、**既存ビュ�
 5. **ステート同期**
    - Tom Select インスタンスの `onChange` イベントで `applyItemTags`／`setRecordTags` を呼び出し、CSV ストレージと UI を同期。
    - ローカルでの未確定入力は Tom Select の `input` を信頼し、`data-editing-tags="true"` などの属性でビューとの責務を明示。
-6. **オフライン配布**
-   - Tom Select の JS/CSS/フォントを `templates/gallery/vendor/tom-select/` にコピーするビルドステップを `package.json` の `build:gallery` スクリプトへ追加し、CDN へ依存しない構成とする。
-   - PyInstaller で作成する exe の `datas` 設定および GitHub Actions 上のビルドジョブに Tom Select アセットを含め、オフライン環境でもビューアが完全動作するようにする。
+6. **オフライン配布とアセット登録**
+   - `templates/gallery/vendor/tom-select/` 以下に Tom Select の JS/CSS を直接コミットし、`gallery/assets.py` の `ADDITIONAL_GALLERY_SCRIPTS` に `gallery/vendor/tom-select/tom-select.complete.js` と `gallery/vendor/tom-select/tom-select.css` を登録してテンプレートコピー時に確実に含まれるようにする。
+   - `templates/gallery/gallery.html` で `<script src="vendor/tom-select/tom-select.complete.js"></script>` をモジュール読み込み前に配置し、`gallery.css` では `@import './vendor/tom-select/tom-select.css';` を冒頭へ追加してビルドレス構成を維持する。
+   - PyInstaller/CI では既存の `copy_gallery_modules` が vendor 配下を丸ごと複製するため、必要に応じて `npm run build:gallery-assets` などの同期スクリプトで `node_modules` の更新分を vendor ディレクトリへ反映するだけでよい。
+
+7. **DOM/イベント整合性**
+   - `.item-tags-control` 自体を `data-tag-input-root="true"` でマークし、Tom Select が生成する `.ts-wrapper` 内部からでも元の `.item-tags-input` を参照できるよう、`galleryEvents` に `resolveTagsInputTarget` ヘルパーを用意する。
+   - `focusin` / `focusout` / `input` の各イベントではこのヘルパーでネイティブ input を逆引きし、既存の `updateItemTags` や表示同期ロジックをそのまま再利用する。
+   - TagInputController は各コンテナへライブリージョン (`.tag-input-announcer`) を挿入し、Tom Select の `item_add` / `item_remove` イベントから「タグ◯◯を追加/削除しました」を通知する。
 
 ## 実装ステップ
-1. `tagInput.js` を追加してタグ入力向けのクラス（`TagInputController`）を定義。
-2. `itemFactory.js` でタグコントロールを生成する際にコントローラを初期化し、`galleryView.applyItemTags` と `galleryEvents` の `updateItemTags` を渡して同期。
-3. `gallery.css` に Tom Select のテーマを読み込む記述と、既存クラスを上書きする調整スタイル（ピル行のスクロール、フォーカスリング等）を追加。
-4. Node テストでは `TagInputController` ではなく Tom Select ラッパーの初期化ユーティリティをモックし、複数タグの追加・削除・CSV 正規化が期待通りかを検証。
-5. ブラウザ上での回帰を `npm run test:node`／`pytest` と手動確認で担保し、必要に応じてスクリーンショットを撮影。
-6. PyInstaller ビルドと GitHub Actions の exe 生成ワークフローに Tom Select アセットを含めた結果を CI ログで確認し、オフライン配布が壊れていないことを証明する。
+1. `templates/gallery/vendor/tom-select/` に `tom-select.complete.js` / `tom-select.css` を配置し、`scripts/copy-tom-select-assets.mjs` を用意して `npm run build:gallery-assets` で `node_modules` から同期できるようにする（CI ではコミット済み資産を利用）。
+2. `templates/gallery/components/tagInput.js` を追加し、`window.galleryComponents.createTagInputController` を公開。内部で `window.TomSelect` と `galleryDataUtils` のトークナイザを利用しつつ、`WeakMap` で input⇔インスタンスを管理し、ライブリージョンも注入する。
+3. `galleryView.applyItemTags` から `tagInputController.syncValue` を呼び出して Tom Select と `.item-tags-list` の表示を同時に更新し、`galleryEvents` の `input`/`focusin`/`focusout` は `resolveTagsInputTarget` を介してネイティブ input を取得するように書き換える。
+4. `gallery.css` 先頭で vendor CSS を `@import` し、`.ts-wrapper`・`.ts-control`・`.ts-chip`・`.tag-input-announcer` および `.item-tags-input[data-tag-input-enhanced]` の見た目を調整して既存テーマと一貫性を保つ。
+5. Node テストに `tag input controller` のセクションを追加し、ダミー Tom Select を注入して `syncValue` が `setValue(..., true)` を呼ぶことや DOM 無し環境でのフォールバックを検証する。既存の `gallery view` テストも `.item-tags-input` が編集状態の際に上書きされないことを維持する。
+6. `templates/gallery/index.js` の依存配列と `gallery/assets.py` の `ADDITIONAL_GALLERY_SCRIPTS` に `components/tagInput.js` と vendor 資産を追加し、`templates/gallery/gallery.html` に vendor JS を読み込む `<script>` を追記したうえで `npm run test:node` / `pytest tests/test_gallery_js_modules.py` で回帰を確認する。
 
 ## 期待される効果
 - スペース区切りでのタグ追加が視覚的に分かりやすくなり、既存 CSV 仕様とも整合。
