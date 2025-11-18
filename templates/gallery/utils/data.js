@@ -318,6 +318,59 @@
         return records.map((record) => normalizeRecordRelicTypeField(record));
     }
 
+    function normalizeTagToken(value) {
+        if (value == null) {
+            return '';
+        }
+        const text = String(value).trim();
+        return text;
+    }
+
+    const TAG_SEPARATOR_PATTERN = /[\s,;、，　；]+/;
+
+    function parseTagTokens(source) {
+        const rawList = Array.isArray(source)
+            ? source
+            : (function collectRawTokens() {
+                  const text = normalizeTagToken(source);
+                  if (!text) {
+                      return [];
+                  }
+                  return text.split(TAG_SEPARATOR_PATTERN);
+              })();
+        const seen = new Set();
+        const tokens = [];
+        rawList.forEach((token) => {
+            const normalized = normalizeTagToken(token);
+            if (!normalized) {
+                return;
+            }
+            const key = normalized.toLowerCase();
+            if (seen.has(key)) {
+                return;
+            }
+            seen.add(key);
+            tokens.push(normalized);
+        });
+        return tokens;
+    }
+
+    function formatTagTokens(source) {
+        const tokens = parseTagTokens(source);
+        if (!tokens.length) {
+            return '';
+        }
+        return tokens.join(' ');
+    }
+
+    function serializeTagTokens(source) {
+        const tokens = parseTagTokens(source);
+        if (!tokens.length) {
+            return '';
+        }
+        return tokens.join(';');
+    }
+
     window.galleryDataUtils = {
         sanitizeLevelList,
         normalizeLevelPlaceholder,
@@ -331,6 +384,9 @@
         normalizeRecordLevelPlaceholders,
         normalizeEffectLevelPlaceholders,
         normalizeRecordRelicTypeField,
-        normalizeRelicTypeColumns
+        normalizeRelicTypeColumns,
+        parseTagTokens,
+        formatTagTokens,
+        serializeTagTokens
     };
 })();

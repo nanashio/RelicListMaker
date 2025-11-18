@@ -176,6 +176,8 @@
                 normalizeItemColor = (value) => value,
                 applyItemRelicType = () => {},
                 normalizeItemRelicType = (value) => value,
+                applyItemTags = () => {},
+                normalizeItemTags = (value) => value,
                 refreshItemCaches = () => {},
                 applyMasterDataForRelicType = () => {},
                 isRecordDuplicate = () => false,
@@ -184,6 +186,7 @@
                 setRecordFavorite = () => false,
                 setRecordItemColor = () => false,
                 setRecordItemRelicType = () => false,
+                setRecordTags = () => false,
                 recordStatusChange = () => false,
                 updateRecordEffectValue = () => false,
                 updateRecordLevelValue = () => false,
@@ -198,18 +201,21 @@
                 buildGallery,
                 applyItemColor,
                 applyItemRelicType,
+                applyItemTags,
                 updateFavoriteVisuals,
                 updateDuplicateVisuals,
                 refreshItemCaches,
                 getItemContext,
                 normalizeItemColor,
                 normalizeItemRelicType,
+                normalizeItemTags,
                 isRecordDuplicate,
                 isRecordFavorite,
                 setRecordDuplicate,
                 setRecordFavorite,
                 setRecordItemColor,
                 setRecordItemRelicType,
+                setRecordTags,
                 applyMasterDataForRelicType,
                 recordStatusChange,
                 updateRecordEffectValue,
@@ -233,6 +239,7 @@
                 toggleFavorite,
                 toggleItemColor,
                 toggleItemRelicType,
+                updateItemTags,
                 changeEffectCorrection,
                 changeEffectLevel,
                 toggleReviewStatus
@@ -279,6 +286,13 @@
                         return;
                     }
                     toggleReviewStatus(effect, button);
+                });
+
+                dom.gallery.addEventListener('input', (event) => {
+                    const tagsInput = event.target.closest('.item-tags-input');
+                    if (tagsInput) {
+                        updateItemTags(tagsInput);
+                    }
                 });
 
                 dom.gallery.addEventListener('change', (event) => {

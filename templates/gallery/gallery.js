@@ -118,7 +118,10 @@
         parseMasterOptions,
         parseMasterLevels,
         normalizeEffectLevelPlaceholders: normalizeEffectLevelPlaceholdersFromUtils,
-        normalizeRelicTypeColumns
+        normalizeRelicTypeColumns,
+        parseTagTokens,
+        formatTagTokens,
+        serializeTagTokens
     } = dataUtils;
 
     const dataUtilsMissing = [
@@ -132,7 +135,10 @@
         ['parseMasterOptions', parseMasterOptions],
         ['parseMasterLevels', parseMasterLevels],
         ['normalizeEffectLevelPlaceholders', normalizeEffectLevelPlaceholdersFromUtils],
-        ['normalizeRelicTypeColumns', normalizeRelicTypeColumns]
+        ['normalizeRelicTypeColumns', normalizeRelicTypeColumns],
+        ['parseTagTokens', parseTagTokens],
+        ['formatTagTokens', formatTagTokens],
+        ['serializeTagTokens', serializeTagTokens]
     ].filter(([, value]) => typeof value !== 'function');
 
     if (dataUtilsMissing.length) {
@@ -1505,6 +1511,40 @@
         return false;
     }
 
+    function normalizeRecordTags(value) {
+        if (typeof formatTagTokens !== 'function') {
+            return value == null ? '' : String(value).trim();
+        }
+        return formatTagTokens(value);
+    }
+
+    function serializeRecordTags(value) {
+        if (typeof serializeTagTokens !== 'function') {
+            return value == null ? '' : String(value).trim();
+        }
+        return serializeTagTokens(value);
+    }
+
+    function setRecordTags(recordIndex, tagsValue) {
+        const record = getRecordByIndex(recordIndex);
+        if (!record) {
+            return false;
+        }
+        const normalized = normalizeRecordTags(tagsValue);
+        if (normalized) {
+            if (record.Tags === normalized) {
+                return false;
+            }
+            record.Tags = normalized;
+            return true;
+        }
+        if (Object.prototype.hasOwnProperty.call(record, 'Tags')) {
+            delete record.Tags;
+            return true;
+        }
+        return false;
+    }
+
     function updateRecordField(recordIndex, key, value) {
         return recordUtils.updateRecordField(state.records, recordIndex, key, value);
     }
@@ -1972,7 +2012,10 @@
                 if (!record || typeof record !== 'object') {
                     return csvEscape('');
                 }
-                const value = Object.prototype.hasOwnProperty.call(record, key) ? record[key] : '';
+                let value = Object.prototype.hasOwnProperty.call(record, key) ? record[key] : '';
+                if (key === 'Tags') {
+                    value = serializeRecordTags(value);
+                }
                 return csvEscape(value);
             });
             lines.push(row.join(','));
@@ -2070,6 +2113,8 @@
         normalizeItemColor,
         applyItemRelicType,
         normalizeItemRelicType,
+        applyItemTags,
+        normalizeItemTags,
         refreshItemCaches
     } = galleryView;
 
@@ -2087,6 +2132,8 @@
         normalizeItemColor,
         applyItemRelicType,
         normalizeItemRelicType,
+        applyItemTags,
+        normalizeItemTags,
         refreshItemCaches,
         getRecordByIndex,
         isRecordDuplicate,
@@ -2095,6 +2142,7 @@
         setRecordFavorite,
         setRecordItemColor,
         setRecordItemRelicType,
+        setRecordTags,
         applyMasterDataForRelicType,
         recordStatusChange,
         updateRecordEffectValue,

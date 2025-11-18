@@ -7,18 +7,21 @@
             buildGallery,
             applyItemColor,
             applyItemRelicType,
+            applyItemTags,
             updateFavoriteVisuals,
             updateDuplicateVisuals,
             refreshItemCaches,
             getItemContext,
             normalizeItemColor,
             normalizeItemRelicType,
+            normalizeItemTags,
             isRecordDuplicate,
             isRecordFavorite,
             setRecordDuplicate,
             setRecordFavorite,
             setRecordItemColor,
             setRecordItemRelicType,
+            setRecordTags,
             recordStatusChange,
             updateRecordEffectValue,
             updateRecordLevelValue,
@@ -49,6 +52,7 @@
             setRecordFavorite,
             setRecordItemColor,
             setRecordItemRelicType,
+            setRecordTags,
             recordStatusChange,
             updateRecordEffectValue,
             updateRecordLevelValue,
@@ -64,7 +68,9 @@
             updateLevelInputAvailability,
             applyMasterLevelOptions,
             syncDemeritAvailability,
-            applyMasterDataForRelicType
+            applyMasterDataForRelicType,
+            applyItemTags,
+            normalizeItemTags
         };
 
         Object.entries(requiredFunctions).forEach(([name, fn]) => {
@@ -90,6 +96,8 @@
             typeof normalizeItemColor === 'function' ? normalizeItemColor : (value) => value;
         const normalizeRelicType =
             typeof normalizeItemRelicType === 'function' ? normalizeItemRelicType : (value) => value;
+        const normalizeTags = typeof normalizeItemTags === 'function' ? normalizeItemTags : (value) => value;
+        const safeApplyItemTags = typeof applyItemTags === 'function' ? applyItemTags : () => {};
 
         function getItemActionContext(control) {
             if (!control) {
@@ -395,6 +403,22 @@
             safeApplyFilters();
         }
 
+        function updateItemTags(input) {
+            const context = getItemActionContext(input);
+            if (!context) {
+                return;
+            }
+            const { item, recordIndex } = context;
+            const nextValue = normalizeTags(input.value || '');
+            const recordChanged = setRecordTags(recordIndex, nextValue);
+            safeApplyItemTags(item, nextValue);
+            safeRefreshItemCaches(item);
+            if (recordChanged) {
+                safeScheduleSave();
+            }
+            safeApplyFilters();
+        }
+
         function changeEffectCorrection(effect, input) {
             if (!effect || !input) {
                 return;
@@ -643,6 +667,7 @@
             toggleFavorite,
             toggleItemColor,
             toggleItemRelicType,
+            updateItemTags,
             changeEffectCorrection,
             changeEffectLevel,
             toggleReviewStatus

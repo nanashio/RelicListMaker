@@ -107,6 +107,37 @@ def test_write_csv_includes_relic_type_column(tmp_path: Path):
     assert "RelicType" in header
 
 
+def test_write_csv_includes_tags_column(tmp_path: Path):
+    column_flags = dict(DEFAULT_COLUMN_VISIBILITY)
+    rows = [{"Image": "sample.png", "Duplicate": False, "Tags": "試作 tag"}]
+    output = tmp_path / "results.csv"
+
+    write_csv(rows, path=output, column_flags=column_flags)
+
+    header = output.read_text(encoding="utf-8").splitlines()[0].split(",")
+    assert "Tags" in header
+
+
+def test_write_csv_serializes_tags_with_semicolons(tmp_path: Path):
+    column_flags = dict(DEFAULT_COLUMN_VISIBILITY)
+    rows = [
+        {
+            "Image": "sample.png",
+            "Duplicate": False,
+            "Tags": "alpha beta, gamma;delta",
+        }
+    ]
+    output = tmp_path / "results.csv"
+
+    write_csv(rows, path=output, column_flags=column_flags)
+
+    with output.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        saved = next(reader)
+
+    assert saved["Tags"] == "alpha;beta;gamma;delta"
+
+
 def test_write_csv_includes_demerit_columns(tmp_path: Path):
     column_flags = dict(DEFAULT_COLUMN_VISIBILITY)
     rows = [
@@ -271,3 +302,23 @@ def test_viewer_storage_normalizes_blank_effect_levels(tmp_path: Path):
 
     assert saved["Effect1Level"] == "none"
     assert saved["Effect1LevelSource"] == "none"
+
+
+def test_viewer_storage_serializes_tags_with_semicolons(tmp_path: Path):
+    field_order = ["Image", "Duplicate", "Tags"]
+    records = [
+        {
+            "Image": "sample.png",
+            "Duplicate": False,
+            "Tags": "alpha beta, gamma",
+        }
+    ]
+    output = tmp_path / "viewer.csv"
+
+    viewer_storage.write_records(output, records, field_order)
+
+    with output.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        saved = next(reader)
+
+    assert saved["Tags"] == "alpha;beta;gamma"

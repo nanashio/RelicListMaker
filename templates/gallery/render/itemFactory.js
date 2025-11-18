@@ -198,6 +198,7 @@
             controls.appendChild(createColorControls(context.recordIndex));
             controls.appendChild(createRelicTypeControls(context.recordIndex));
             controls.appendChild(createItemMetaInfo(context));
+            controls.appendChild(createItemTagsControl(context));
             return controls;
         }
 
@@ -285,6 +286,34 @@
             metaInfo.appendChild(filename);
 
             return metaInfo;
+        }
+
+        function createItemTagsControl(context) {
+            const container = createElement('div', 'item-tags-control');
+            const header = createElement('div', 'item-tags-header');
+            const inputId = `item-tags-${context.recordIndex}`;
+            const label = createElement('label', 'item-tags-title', 'タグ');
+            label.setAttribute('for', inputId);
+            const list = createElement('div', 'item-tags-list', 'タグ未設定');
+            list.dataset.emptyText = 'タグ未設定';
+            list.dataset.empty = 'true';
+            header.appendChild(label);
+            header.appendChild(list);
+            container.appendChild(header);
+
+            const input = createElement('input', 'item-tags-input');
+            input.type = 'text';
+            input.id = inputId;
+            input.placeholder = 'スペース・カンマ区切りで入力';
+            input.autocomplete = 'off';
+            input.dataset.recordIndex = String(context.recordIndex);
+            input.dataset.action = 'update-tags';
+            container.appendChild(input);
+
+            const hint = createElement('p', 'item-tags-hint', '自由にタグを追加できます');
+            container.appendChild(hint);
+
+            return container;
         }
 
         function createItemPosition(visibleIndex, visibleTotal) {
