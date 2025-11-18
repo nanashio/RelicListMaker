@@ -1039,6 +1039,7 @@ describe('gallery view', () => {
   beforeEach(() => {
     global.window = {};
     global.document = createDocumentStub();
+    runScript('templates/gallery/utils/data.js');
     runScript('templates/gallery/utils/filter.js');
     runScript('templates/gallery/render/itemEnhancers.js');
     runScript('templates/gallery/render/itemFactory.js');
@@ -2639,12 +2640,21 @@ describe('record action handlers', () => {
       buildGallery: () => {},
       applyItemColor: () => {},
       applyItemRelicType: () => {},
+      applyItemTags: () => {},
       updateFavoriteVisuals: () => {},
       updateDuplicateVisuals: () => {},
       refreshItemCaches: () => {},
       getItemContext: () => ({ item, record, recordIndex: 0 }),
       normalizeItemColor: (value) => (value ? value.toLowerCase() : ''),
       normalizeItemRelicType: (value) => (value ? value.toLowerCase() : ''),
+      normalizeItemTags: (value) =>
+        (value
+          ? String(value)
+              .split(/[\s,;、，　；]+/)
+              .map((token) => token.trim())
+              .filter(Boolean)
+              .join(' ')
+          : ''),
       isRecordDuplicate: (targetRecord) => Boolean(targetRecord.__duplicate),
       isRecordFavorite: (targetRecord) => Boolean(targetRecord.__favorite),
       setRecordDuplicate: (_index, next) => {
@@ -2670,6 +2680,17 @@ describe('record action handlers', () => {
           record.RelicType = nextType;
         } else {
           delete record.RelicType;
+        }
+        return changed;
+      },
+      setRecordTags: (_index, nextValue) => {
+        const normalized = nextValue ? String(nextValue) : '';
+        const current = record.Tags || '';
+        const changed = current !== normalized;
+        if (normalized) {
+          record.Tags = normalized;
+        } else {
+          delete record.Tags;
         }
         return changed;
       },
@@ -2719,6 +2740,48 @@ describe('record action handlers', () => {
     assert.equal(scheduleCalls.length, 1);
     assert.equal(buildCalls.length, 1);
     assert.deepEqual(visualCalls, [[item, true]]);
+  });
+
+  test('updateItemTags normalizes tokens, updates record, and schedules save', () => {
+    const record = { Tags: 'alpha beta' };
+    const item = new MockElement('div', 'item');
+    const input = new MockElement('input', 'item-tags-input');
+    item.appendChild(input);
+    input.value = 'beta, gamma   delta';
+
+    const scheduleCalls = [];
+    const filterCalls = [];
+    const cacheRefreshes = [];
+    const appliedTags = [];
+    const deps = buildBaseDeps(record, item, {
+      scheduleSave: () => scheduleCalls.push(true),
+      applyFilters: () => filterCalls.push(true),
+      refreshItemCaches: (target) => cacheRefreshes.push(target),
+      applyItemTags: (target, value) => appliedTags.push([target, value]),
+      normalizeItemTags: (value) =>
+        (value
+          ? String(value)
+              .split(/[\s,;、，　；]+/)
+              .map((token) => token.trim().toLowerCase())
+              .filter(Boolean)
+              .filter((token, index, list) => list.indexOf(token) === index)
+              .join(' ')
+          : ''),
+      setRecordTags: (_index, nextValue) => {
+        const changed = record.Tags !== nextValue;
+        record.Tags = nextValue;
+        return changed;
+      }
+    });
+
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.updateItemTags(input);
+
+    assert.equal(record.Tags, 'beta gamma delta');
+    assert.deepEqual(appliedTags, [[item, 'beta gamma delta']]);
+    assert.deepEqual(cacheRefreshes, [item]);
+    assert.equal(scheduleCalls.length, 1);
+    assert.equal(filterCalls.length, 1);
   });
 
   test('toggleItemColor normalizes value and toggles selection', () => {
