@@ -232,7 +232,7 @@
 
             const emptyOption = createElement('option');
             emptyOption.value = '';
-            emptyOption.textContent = 'なし';
+            emptyOption.textContent = '未';
             select.appendChild(emptyOption);
 
             normalizedColorOptions.forEach((option) => {
