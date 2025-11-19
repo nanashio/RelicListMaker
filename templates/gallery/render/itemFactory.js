@@ -298,7 +298,7 @@
             const input = createElement('input', 'item-tags-input');
             input.type = 'text';
             input.id = inputId;
-            input.placeholder = 'タグ スペース区切りで入力';
+            input.placeholder = 'タグを入力 (Enter/カンマで確定)';
             input.autocomplete = 'off';
             input.dataset.recordIndex = String(context.recordIndex);
             input.dataset.action = 'update-tags';

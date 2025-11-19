@@ -176,6 +176,13 @@ class MockElement {
     }
   }
 
+  getAttribute(name) {
+    if (Object.prototype.hasOwnProperty.call(this.attributes, name)) {
+      return this.attributes[name];
+    }
+    return '';
+  }
+
   removeAttribute(name) {
     delete this.attributes[name];
     if (name === 'id') {
@@ -720,6 +727,68 @@ describe('gallery filter utils', () => {
   });
 });
 
+
+describe('tag input controller', () => {
+  let documentMock;
+
+  beforeEach(() => {
+    documentMock = createMockDocument();
+    global.window = {};
+    global.document = documentMock;
+  });
+
+  afterEach(() => {
+    delete global.window;
+    delete global.document;
+  });
+
+  test('falls back to native input when TomSelect is unavailable', () => {
+    runScript('templates/gallery/components/tagInput.js');
+    const factory = global.window.galleryComponents.createTagInputController;
+    const controller = factory({});
+    const input = new MockElement('input', 'item-tags-input');
+    controller.syncValue(input, ['alpha', 'beta']);
+    assert.equal(input.value, 'alpha beta');
+    assert.equal(controller.usesNativeInput, true);
+  });
+
+  test('syncValue delegates to TomSelect instance silently', () => {
+    runScript('templates/gallery/components/tagInput.js');
+    const factory = global.window.galleryComponents.createTagInputController;
+    const instances = [];
+    class FakeTomSelect {
+      constructor(input) {
+        this.input = input;
+        this.setValueCalls = [];
+        instances.push(this);
+      }
+
+      setValue(tokens, silent) {
+        this.setValueCalls.push({ tokens, silent });
+      }
+
+      on() {
+        return () => {};
+      }
+    }
+
+    const container = new MockElement('div', 'item-tags-control');
+    const input = new MockElement('input', 'item-tags-input');
+    container.appendChild(input);
+
+    const controller = factory({
+      TomSelect: FakeTomSelect,
+      parseTagTokens: (value) => (Array.isArray(value) ? value : String(value || '').split(/\s+/).filter(Boolean)),
+      formatTagTokens: (tokens) => tokens.join(' '),
+      documentRef: documentMock
+    });
+
+    controller.syncValue(input, ['alpha']);
+    assert.equal(controller.usesNativeInput, false);
+    assert.equal(instances.length, 1);
+    assert.deepEqual(instances[0].setValueCalls, [{ tokens: ['alpha'], silent: true }]);
+  });
+});
 
 describe('gallery view', () => {
   function createStubElement(tag) {

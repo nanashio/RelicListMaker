@@ -61,6 +61,22 @@
 
         const colorOptions = Array.isArray(itemColorOptions) ? itemColorOptions.slice() : [];
         const hasDocument = typeof document !== 'undefined' && document;
+        const componentsNamespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const createTagInputControllerFn =
+            typeof config.createTagInputController === 'function'
+                ? config.createTagInputController
+                : componentsNamespace && typeof componentsNamespace.createTagInputController === 'function'
+                  ? componentsNamespace.createTagInputController
+                  : null;
+        const tagInputController =
+            typeof createTagInputControllerFn === 'function'
+                ? createTagInputControllerFn({
+                      TomSelect: typeof window !== 'undefined' && window ? window.TomSelect : null,
+                      parseTagTokens,
+                      formatTagTokens,
+                      documentRef: hasDocument || null
+                  })
+                : null;
         const filterNamespace = typeof window !== 'undefined' && window ? window.galleryFilterUtils : null;
 
         const stateControls = {
@@ -634,14 +650,26 @@
             }
             const input = item.querySelector('.item-tags-input');
             if (input) {
-                const displayValue = tokens.join(' ');
-                const isEditing = Boolean(
-                    (input.dataset && input.dataset.editingTags === 'true') ||
-                        (typeof document !== 'undefined' && document &&
-                            document.activeElement === input)
+                const controllerHasSync = Boolean(
+                    tagInputController && typeof tagInputController.syncValue === 'function'
                 );
-                if (!isEditing && input.value !== displayValue) {
-                    input.value = displayValue;
+                const usesEnhancedController = controllerHasSync && tagInputController.usesNativeInput !== true;
+                if (usesEnhancedController) {
+                    tagInputController.syncValue(input, tokens);
+                } else {
+                    const displayValue = tokens.join(' ');
+                    const isEditing = Boolean(
+                        (input.dataset && input.dataset.editingTags === 'true') ||
+                            (typeof document !== 'undefined' && document &&
+                                document.activeElement === input)
+                    );
+                    if (!isEditing) {
+                        if (controllerHasSync) {
+                            tagInputController.syncValue(input, tokens);
+                        } else if (input.value !== displayValue) {
+                            input.value = displayValue;
+                        }
+                    }
                 }
             }
             const list = item.querySelector('.item-tags-list');
