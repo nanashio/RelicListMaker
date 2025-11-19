@@ -1,12 +1,15 @@
 # RelicListMaker
 
+
 ## はじめに
 RelicListMaker は、動画から遺物の文字を読み取って一覧化する Windows 向けアプリケーションです。
 
+
 ## 配布ファイル
-- `dist/RelicListMaker-win64.zip`
+- `dist/RelicListMaker-windows.zip`
   - Windows 10/11 (64bit) 向けにビルドされた実行ファイル一式です。
   - ZIP を展開すると、アプリ本体 (`RelicListMaker.exe`) と必要なリソースが同階層に展開されます。フォルダ構成を変更しないでください。
+
 
 ## 必要な動画
 - 処理対象の動画ファイル（`.mp4` / `.avi` など）
@@ -14,15 +17,19 @@ RelicListMaker は、動画から遺物の文字を読み取って一覧化す�
   - 1920×1080・60fps を想定
   - 赤・青・黄・緑の遺物ごとに個別の動画を用意してください。
 
+
 ## 使い方
 
+
 ### インストール
-1. `RelicListMaker-win64.zip` を任意の場所に展開します。
+1. `RelicListMaker-windows.zip` を任意の場所に展開します。
+
 
 ### 動画解析
 1. 展開先フォルダにある `RelicListMaker.exe` をダブルクリックして起動します。
 2. 解析したい動画ファイルを `RelicListMaker.exe` にドラッグ＆ドロップするか、画面の案内に従って選択してください。
 3. 解析完了すると、`results/<動画名>/` に解析結果一式(csv、遺物画像)が保存されます。
+
 
 ### 遺物一覧表示&確認
 1. アプリ画面の「ビューワを開く」ボタンを押すと、既定のブラウザで解析結果を表示できます。
@@ -32,10 +39,12 @@ RelicListMaker は、動画から遺物の文字を読み取って一覧化す�
    - 「合致」ボタンで `pass` を付与・解除でき、承認時には関連する手動入力がリセットされます。マニュアル修正を入力したまま保存するとステータスは自動的に `corrected` へ更新されます。
 3. レビュー完了後はブラウザ右上の保存ボタンから CSV を書き出すか、設定で自動保存を有効にしておくと都度 `results/<動画名>/*.csv` に反映されます。
 
+
 ### 遺物一覧のマージ
 1. 複数の動画で解析した結果を統合したい場合は、アプリ画面の「遺物一覧をマージ」ボタンを押します。
 2. 案内に従って各 `results/<動画名>/` の CSV を選択すると、遺物一覧がマージされた `merged_results.csv` が生成されます。
 3. ビューワを更新すると、統合済みの一覧を最新状態で確認できます。
+
 
 ## 出力されるファイル
 - `results/<動画名>/`
@@ -44,22 +53,33 @@ RelicListMaker は、動画から遺物の文字を読み取って一覧化す�
   - `<動画名>.csv`: 抽出した効果やレベル情報
   - `gallery/index.html`: ブラウザで閲覧できるギャラリー（`RelicListMaker.exe` の「ビューワを開く」から起動）
 
+
 ## 動作確認
 - Windows 11 でのみ動作確認済みです。
 - Steam ゲームレコーディングでエクスポートした動画でのみ動作確認済みです。
 
+
+## マスターデータについて
+- アプリで利用している `templates/master_relic_*.csv` のマスターデータは、神攻略wiki に掲載されているデータを元に作成しています。
+- 有用な情報を公開されている神攻略wiki の運営・編集者の皆さまに深く感謝申し上げます。
+
+
 ## 開発者向け情報
+
 
 ### 参考ドキュメント
 - CSV の列仕様や列表示フラグの挙動は `docs/reference-csv-columns.md` に詳細をまとめている。レビュー CSV のカラム構成を確認・更新する際は同ドキュメントを参照すること。
+
 
 ### 旧フォーマットの CSV について
 - 現行バージョンはビューアが `Effect{n}` / `Effect{n}Level` / `Demerit{n}` を直接更新する設計へ移行しており、`Effect{n}Correction` などの補助列は出力しません。
 - 過去の試験運用で補助列付き CSV を生成していた場合は、最新のパイプラインでもう一度書き出すか、表計算ソフト等で補助列の値を基列へコピーしてから補助列自体を削除してください。
 - `python -m relic_cli merge-results`（内部では `relic_cli.commands.merge_results`）は補助列が残存しているとエラーを発生させます。メッセージに列名と行番号が表示されるため、該当行の補助列を空にするか削除したうえで再実行してください。
 
+
 ### プロジェクト概要
 RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、レビュー可能なギャラリーとして出力するためのツールチェーンです。`python -m relic_cli run-pipeline` を起点にフレーム抽出、OCR、辞書照合、HTML ギャラリー生成までを一括で実行し、結果は `results/<動画名>/` 以下にまとめられます。
+
 
 ### 主な使用技術
 | 技術 | 用途 |
@@ -67,8 +87,9 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
 | Python 3.10+ | パイプライン全体と GUI ランチャー (`tkinter`) の実装 |
 | OpenCV / NumPy | フレーム抽出や画像前処理 (`python -m relic_cli extract-frames` / `python -m relic_cli preprocess`) を支える画像処理基盤 |
 | Tesseract OCR + pytesseract | 遺物名・効果文のテキスト認識を担う OCR エンジン |
-| RapidFuzz | OCR 結果と `templates/master_relics.csv` を照合して最適な遺物候補を推定 |
+| RapidFuzz | OCR 結果と `templates/master_relic_*.csv` を照合して最適な遺物候補を推定 |
 | PyInstaller | `RelicListMaker.exe` を含む Windows 向け配布物のパッケージングに使用 |
+
 
 ### ディレクトリ構成
 ```
@@ -84,7 +105,7 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
 │   │   ├── storage/     # CSV/OPFS 永続化の抽象化とユーティリティ
 │   │   ├── dataset/     # データセット解決と正規化ロジック
 │   │   └── utils/       # DOM・データ処理の共有ユーティリティ
-│   └── master_relics.csv  # 遺物名のマスターデータ
+│   └── master_relic_*.csv  # 遺物名のマスターデータ
 ├── tesseract/           # バンドル済み Tesseract (同梱環境向け)
 ├── docs/                # テスト手順やリファクタリング方針などのドキュメント
 ├── relic_cli/           # `python -m relic_cli` で呼び出す CLI サブコマンド群
@@ -92,6 +113,7 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
 ├── gui/                # GUI アプリ本体とサービス・アダプタ群（`python -m gui` で起動）
 └── viewer_server.py     # 結果フォルダをブラウザ閲覧する簡易サーバー
 ```
+
 
 ### セットアップ
 1. **Python 環境**: Python 3.10 以上を推奨します。仮想環境を作成し、依存関係を導入してください。
@@ -101,7 +123,8 @@ RelicListMaker は、動画内の遺物情報を自動で抽出・整理し、�
    pip install -r requirements.txt
    ```
 2. **Tesseract OCR**: システムに日本語データを含む Tesseract がインストールされていることを確認します。付属の `tesseract` ディレクトリを利用する場合は、`tesseract_bundle.py` が自動で `pytesseract` のパスを調整します。Windows 向け配布物には **Tesseract 5.4.0.20240606 (UB Mannheim 版 64bit)** の実行ファイルと DLL が含まれており、アプリは常に同梱版を使用します。GitHub Actions のリリースワークフローがインストーラから実行ファイルと DLL を取得して同梱するため、手動でバイナリをコミットする必要はありません。`tessdata/` には英語 (`eng`)、日本語 (`jpn`)、OSD (`osd`) の学習データのみを含め、縦書き用データはバンドルしていません。WSL などの Linux 開発環境では、ローカルにインストール済みの Tesseract が優先され、同梱版はフォールバックとして扱われます。バンドル済みの配置を検証したい場合は `python -m relic_cli bundle-tesseract --require` を実行してください。
-3. **テンプレート辞書**: `templates/master_relics.csv` が最新であることを確認し、必要に応じて CSV を更新します。
+3. **テンプレート辞書**: `templates/master_relic_*.csv` が最新であることを確認し、必要に応じて CSV を更新します。
+
 
 ### CLI サブコマンド (`python -m relic_cli`)
 リポジトリ直下に散在していたユーティリティスクリプトは `relic_cli/` パッケージに集約され、以下のようにサブコマンド形式で呼び出せます。
@@ -123,6 +146,8 @@ python -m relic_cli bundle-tesseract --activate --require
 ```
 
 ルート直下の旧スクリプトは削除済みのため、`python -m relic_cli <command>` を直接利用してください。
+
+
 ### 基本的なワークフロー
 1. `videos/` ディレクトリに処理対象の動画ファイル (`.mp4`, `.avi`, `.mov`, `.mkv` など) を配置します。
 2. 必要であれば `results/` をクリーンアップし、仮想環境を有効化します。
@@ -135,12 +160,15 @@ python -m relic_cli bundle-tesseract --activate --require
    python -m viewer_server.main --results-dir results
    ```
 
+
 ### OCR 前処理の調整
 OCR 精度を改善したい場合は、個別の画像に対して前処理パイプラインを試せる `relic_cli preprocess` サブコマンドを利用します。
 ```bash
 python -m relic_cli preprocess path/to/image.png --out preprocessed/
 ```
 生成された出力を確認し、しきい値やリサイズ係数などの調整に活用してください。
+
+
 ### クロップ済み画像の CLI 実行
 クロップ済みの画像を直接処理する場合は、`relic_pipeline.cli` のエントリポイントを利用してください。後方互換のラッパーだった `match_and_export.py` は削除済みのため、`process_images_command` を直接呼び出す経路に統一しています。
 
@@ -148,6 +176,7 @@ python -m relic_cli preprocess path/to/image.png --out preprocessed/
 python -m relic_pipeline.cli.main crops/ --output results.csv --ocr-engine vision --upsample 2.0
 ```
 CLI 引数の詳細は `--help` で確認できます。
+
 
 ### パイプライン API を直接呼び出す
 `pipeline` パッケージでは、CLI や GUI 以外のスクリプトからも解析処理を再利用できるように `run_pipeline` API を公開しています。
@@ -183,6 +212,7 @@ custom_tasks = create_tasks([Path("videos/sample.mp4")], result_dir=settings.res
 run_pipeline(settings=settings, reporter=None, tasks=custom_tasks)
 ```
 
+
 ### アイテム色の上書き設定を渡す
 
 OCR 推定色を明示的に指定したい場合は、`PipelineSettings.item_color_overrides` に動画パスと色名のマッピングを渡します。色名には `red` / `green` / `blue` / `yellow` など `pipeline.tasks.COLOR_KEYWORDS` で定義された値を使用してください。値を `"none"` にすると、色指定を無効化して HTML 側のフィルタ初期値を未設定にできます。
@@ -206,6 +236,7 @@ settings = PipelineSettings(
 
 run_pipeline(settings=settings)
 ```
+
 
 ## ライセンス
 - 配布物には Tesseract OCR (Apache License 2.0) が同梱されています。再配布時にはリポジトリ直下の `LICENSE` を同梱し、Tesseract OCR のライセンス要件に従ってください。詳細は `docs/reference-third-party-licenses.md` も参照してください。
