@@ -35,31 +35,21 @@ def _build_fixture_tree(base_dir: Path) -> None:
     shutil.copy2(templates_dir / "gallery" / "gallery.js", gallery_dir / "gallery.js")
     shutil.copy2(templates_dir / "gallery" / "index.js", gallery_dir / "index.js")
 
-    additional_scripts = [
-        Path('gallery/utils/dom.js'),
-        Path('gallery/utils/data.js'),
-        Path('gallery/utils/records.js'),
-        Path('gallery/dataset/utils.js'),
-        Path('gallery/utils/filter.js'),
-        Path('gallery/state/store.js'),
-        Path('gallery/app/stateApi.js'),
-        Path('gallery/dataset/manager.js'),
-        Path('gallery/storage/utils.js'),
-        Path('gallery/storage/manager.js'),
-        Path('gallery/app/controller.js'),
-        Path('gallery/render/effectViewModel.js'),
-        Path('gallery/render/effectFactory.js'),
-        Path('gallery/render/itemEnhancers.js'),
-        Path('gallery/render/itemFactory.js'),
-        Path('gallery/render/galleryView.js'),
-        Path('gallery/events/recordActionHandlers.js'),
-        Path('gallery/events/galleryEvents.js')
+    asset_directories = [
+        "app",
+        "components",
+        "dataset",
+        "events",
+        "render",
+        "state",
+        "storage",
+        "utils",
+        "vendor",
     ]
-    for relative in additional_scripts:
-        source = templates_dir / relative
-        destination = gallery_dir / relative.relative_to(Path("gallery"))
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
+    for directory in asset_directories:
+        source_dir = templates_dir / "gallery" / directory
+        destination_dir = gallery_dir / directory
+        shutil.copytree(source_dir, destination_dir, dirs_exist_ok=True)
 
     _write_png(crops_dir / "sample_red.png", (220, 38, 38))
     _write_png(crops_dir / "sample_blue.png", (37, 99, 235))
