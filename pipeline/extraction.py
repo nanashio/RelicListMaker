@@ -72,7 +72,7 @@ def extract_and_crop(
 
         if frame_count % interval == 0:
             if prev_frame is None or not is_similar(frame, prev_frame):
-                fname = f"{video_name}_frame_{saved_count+1:05d}.png"
+                fname = f"{video_name}_{saved_count+1:05d}.png"
                 if save_full_frames:
                     full_frame_path = frame_dir_path / fname
                     cv2.imwrite(str(full_frame_path), frame)
