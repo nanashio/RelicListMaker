@@ -27,12 +27,12 @@ Choices.js や Select2 も実績のあるライブラリだが、**既存ビュ�
    - `node_modules/tom-select/dist/js/tom-select.complete.js` をバンドルし、`requestAnimationFrame` や `Element` API による個別再実装は行わない。
 2. **Tom Select 設定**
    - `delimiter: ";"` としつつ、`createFilter`／`persist` で `parseTagTokens` の正規化ロジックに合わせたセミコロン連結へ統一。
-   - `plugins: ["remove_button", "restore_on_backspace"]` を有効化してタグ削除 UX を Tom Select 本来の操作系で提供し、アクセシビリティ用 `render.option_create` をカスタムしてライブリージョン通知を行う。
+   - `plugins: ["remove_button", "restore_on_backspace"]` を有効化してタグ削除 UX を Tom Select 本来の操作系で提供し、アクセシビリティ文言（`render.option_create` など）を日本語化して案内を統一する。
 3. **アクセシビリティ**
-   - ライブリージョンや `aria-label` を追加して「タグ X を追加」「タグ X を削除」のアナウンスを行う。
+   - Tom Select の `aria-label`／`inputAriaLabel` を適切に設定し、「タグ X を追加」「タグ X を削除」の操作が読み上げでも分かるようにする。
    - Tom Select の `onDelete` フックで `Backspace`／`Delete` 操作をハンドリングし、キーボードのみでもタグ削除が完結するようにする。
 4. **スタイル調整**
-   - 既存の `.item-tags-list`／`.item-tag-pill` スタイルを Tom Select の `.ts-wrapper`／`.ts-control` に適用できるよう調整し、ピル列の折り返しは Tom Select の `plugins.dropdown_input` ではなく CSS 側で `display: flex; flex-wrap: wrap;` を設定。
+   - 既存のタグピルの色味・余白は Tom Select の `.ts-wrapper`／`.ts-control` へ直接適用し、独自の `.item-tags-list`／`.item-tag-pill` DOM を廃止しても従来と同等の外観を維持する。ピル列の折り返しは Tom Select の `plugins.dropdown_input` ではなく CSS 側で `display: flex; flex-wrap: wrap;` を設定。
    - `Tom Select` 付属の `tom-select.css` をインポートしつつ、テーマ上書き用のユーティリティクラスを追加して `hover`／フォーカスリングを統一。
 5. **ステート同期**
    - Tom Select インスタンスの `onChange` イベントで `applyItemTags`／`setRecordTags` を呼び出し、CSV ストレージと UI を同期。
@@ -45,13 +45,13 @@ Choices.js や Select2 も実績のあるライブラリだが、**既存ビュ�
 7. **DOM/イベント整合性**
    - `.item-tags-control` 自体を `data-tag-input-root="true"` でマークし、Tom Select が生成する `.ts-wrapper` 内部からでも元の `.item-tags-input` を参照できるよう、`galleryEvents` に `resolveTagsInputTarget` ヘルパーを用意する。
    - `focusin` / `focusout` / `input` の各イベントではこのヘルパーでネイティブ input を逆引きし、既存の `updateItemTags` や表示同期ロジックをそのまま再利用する。
-   - TagInputController は各コンテナへライブリージョン (`.tag-input-announcer`) を挿入し、Tom Select の `item_add` / `item_remove` イベントから「タグ◯◯を追加/削除しました」を通知する。
+   - Tom Select 本体の ARIA 属性とプレースホルダーを活用して、追加のライブリージョンを設けなくてもタグ編集の文脈が伝わるようにする。
 
 ## 実装ステップ
 1. `templates/gallery/vendor/tom-select/` に `tom-select.complete.js` / `tom-select.css` を配置し、`scripts/copy-tom-select-assets.mjs` を用意して `npm run build:gallery-assets` で `node_modules` から同期できるようにする（CI ではコミット済み資産を利用）。
-2. `templates/gallery/components/tagInput.js` を追加し、`window.galleryComponents.createTagInputController` を公開。内部で `window.TomSelect` と `galleryDataUtils` のトークナイザを利用しつつ、`WeakMap` で input⇔インスタンスを管理し、ライブリージョンも注入する。
-3. `galleryView.applyItemTags` から `tagInputController.syncValue` を呼び出して Tom Select と `.item-tags-list` の表示を同時に更新し、`galleryEvents` の `input`/`focusin`/`focusout` は `resolveTagsInputTarget` を介してネイティブ input を取得するように書き換える。
-4. `gallery.css` 先頭で vendor CSS を `@import` し、`.ts-wrapper`・`.ts-control`・`.ts-chip`・`.tag-input-announcer` および `.item-tags-input[data-tag-input-enhanced]` の見た目を調整して既存テーマと一貫性を保つ。
+2. `templates/gallery/components/tagInput.js` を追加し、`window.galleryComponents.createTagInputController` を公開。内部で `window.TomSelect` と `galleryDataUtils` のトークナイザを利用しつつ、`WeakMap` で input⇔インスタンスを管理する。
+3. `galleryView.applyItemTags` から `tagInputController.syncValue` を呼び出して Tom Select の表示と内部値を同時に更新し、`galleryEvents` の `input`/`focusin`/`focusout` は `resolveTagsInputTarget` を介してネイティブ input を取得するように書き換える。
+4. `gallery.css` 先頭で vendor CSS を `@import` し、`.ts-wrapper`・`.ts-control`・`.ts-chip` および `.item-tags-input[data-tag-input-enhanced]` の見た目を調整して既存テーマと一貫性を保つ。
 5. Node テストに `tag input controller` のセクションを追加し、ダミー Tom Select を注入して `syncValue` が `setValue(..., true)` を呼ぶことや DOM 無し環境でのフォールバックを検証する。既存の `gallery view` テストも `.item-tags-input` が編集状態の際に上書きされないことを維持する。
 6. `templates/gallery/index.js` の依存配列と `gallery/assets.py` の `ADDITIONAL_GALLERY_SCRIPTS` に `components/tagInput.js` と vendor 資産を追加し、`templates/gallery/gallery.html` に vendor JS を読み込む `<script>` を追記したうえで `npm run test:node` / `pytest tests/test_gallery_js_modules.py` で回帰を確認する。
 
@@ -72,4 +72,4 @@ Choices.js や Select2 も実績のあるライブラリだが、**既存ビュ�
 
 ### フォローアップ
 - Tom Select の UI を含むブラウザテスト（Playwright）や実機でのアクセシビリティ確認は未実施のため、ブラウザバイナリを取得できる環境が整い次第 `npm run test:browser` を走らせる（2025-11-19 時点では Chromium ダウンロードが HTTP 403 で失敗）。
-- Tag Input Controller にはライブリージョン通知を実装済みだが、スクリーンリーダーでの読み上げ実地確認を別途行い、必要に応じて `render.option_create` の文言調整を計画する。
+- Tom Select 標準の読み上げを前提としているため、スクリーンリーダーでの実地確認を別途行い、必要に応じて `render.option_create` の文言調整を計画する。

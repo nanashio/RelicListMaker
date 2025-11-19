@@ -291,9 +291,6 @@
         function createItemTagsControl(context) {
             const container = createElement('div', 'item-tags-control');
             const inputId = `item-tags-${context.recordIndex}`;
-            const list = createElement('div', 'item-tags-list');
-            list.dataset.empty = 'true';
-            container.appendChild(list);
 
             const input = createElement('input', 'item-tags-input');
             input.type = 'text';
