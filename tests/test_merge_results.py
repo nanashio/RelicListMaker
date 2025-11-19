@@ -47,8 +47,8 @@ def sample_results(tmp_path: Path) -> Path:
     # dataset 1: 2 images, one marked duplicate
     dataset1 = results_dir / "video_a"
     (dataset1 / "crops").mkdir(parents=True)
-    (dataset1 / "crops" / "frame001.png").write_bytes(b"frame001")
-    (dataset1 / "crops" / "frame002.png").write_bytes(b"frame002")
+    (dataset1 / "crops" / "video_a_00001.png").write_bytes(b"frame001")
+    (dataset1 / "crops" / "video_a_00002.png").write_bytes(b"frame002")
     _write_csv(
         dataset1 / "video_a.csv",
         [
@@ -64,7 +64,7 @@ def sample_results(tmp_path: Path) -> Path:
         ],
         [
             [
-                "frame001.png",
+                "video_a_00001.png",
                 "False",
                 "red",
                 "text1",
@@ -75,7 +75,7 @@ def sample_results(tmp_path: Path) -> Path:
                 "",
             ],
             [
-                "frame002.png",
+                "video_a_00002.png",
                 "True",
                 "red",
                 "text2",
@@ -439,7 +439,7 @@ def test_merge_results_with_real_dataset(sample_results_dir: Path) -> None:
     first_row = merged_rows[0]
     assert first_row["Dataset"] == "1080p_red"
     assert first_row["DatasetFolder"] == "1080p_red"
-    assert first_row["BaseImage"].startswith("1080p_red_frame_")
+    assert first_row["BaseImage"].startswith("1080p_red_")
     assert first_row["Image"].startswith("1080p_red_")
 
     copied_image = merged_dir / "crops" / first_row["Image"]

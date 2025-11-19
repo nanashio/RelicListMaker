@@ -16,7 +16,7 @@ def test_collect_datasets_ignores_merged_and_invalid_dirs(tmp_path: Path) -> Non
     # 正常なデータセット
     dataset_a = results_dir / "video_a"
     (dataset_a / "crops").mkdir(parents=True)
-    (dataset_a / "video_a.csv").write_text("Image\nframe001.png\n", encoding="utf-8")
+    (dataset_a / "video_a.csv").write_text("Image\nvideo_a_00001.png\n", encoding="utf-8")
 
     # 既存の統合結果 (スキップ対象)
     merged_dir = results_dir / "merged"
@@ -27,7 +27,7 @@ def test_collect_datasets_ignores_merged_and_invalid_dirs(tmp_path: Path) -> Non
     # 画像ディレクトリの欠落 (スキップ)
     dataset_b = results_dir / "video_b"
     dataset_b.mkdir()
-    (dataset_b / "video_b.csv").write_text("Image\nframe.png\n", encoding="utf-8")
+    (dataset_b / "video_b.csv").write_text("Image\nvideo_b_00001.png\n", encoding="utf-8")
 
     datasets = collect_datasets(results_dir, "merged")
     assert [record.folder.name for record in datasets] == ["video_a"]
@@ -41,12 +41,12 @@ def test_copy_image_and_resolve_path_handles_variants(tmp_path: Path) -> None:
     csv_path.write_text("Image\n", encoding="utf-8")
     record = DatasetRecord(folder=dataset_dir, csv_path=csv_path, images_dir=crops_dir)
 
-    relative_file = dataset_dir / "frameA.PNG"
+    relative_file = dataset_dir / "shotA.PNG"
     relative_file.write_bytes(b"relative")
     fallback_file = crops_dir / "fallback.jpg"
     fallback_file.write_bytes(b"fallback")
 
-    row_relative = {"Image": "frameA.PNG"}
+    row_relative = {"Image": "shotA.PNG"}
     resolved_relative = _resolve_image_path(row_relative, record)
     assert resolved_relative == relative_file
 
