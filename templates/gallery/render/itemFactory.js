@@ -187,7 +187,7 @@
             img.src = context.imagePath;
             img.alt = context.displayName || context.imageName;
             img.dataset.full = context.imagePath;
-            img.tabIndex = 0;
+            img.tabIndex = -1;
             return img;
         }
 
@@ -208,6 +208,7 @@
             button.dataset.image = imageName;
             button.dataset.action = 'toggle-duplicate';
             button.setAttribute('aria-pressed', 'false');
+            button.tabIndex = -1;
             return button;
         }
 
@@ -217,6 +218,7 @@
             button.dataset.image = imageName;
             button.dataset.action = 'toggle-favorite';
             button.setAttribute('aria-pressed', 'false');
+            button.tabIndex = -1;
             return button;
         }
 
@@ -229,6 +231,7 @@
             select.dataset.action = 'set-item-color';
             select.dataset.recordIndex = String(recordIndex);
             select.setAttribute('aria-label', '色');
+            select.tabIndex = -1;
 
             const emptyOption = createElement('option');
             emptyOption.value = '';
@@ -255,6 +258,7 @@
             select.dataset.action = 'set-item-relic-type';
             select.dataset.recordIndex = String(recordIndex);
             select.setAttribute('aria-label', '種別');
+            select.tabIndex = -1;
 
             normalizedRelicTypeOptions.forEach((option) => {
                 const relicOption = createElement('option');
@@ -299,6 +303,7 @@
             input.autocomplete = 'off';
             input.dataset.recordIndex = String(context.recordIndex);
             input.dataset.action = 'update-tags';
+            input.tabIndex = -1;
             container.appendChild(input);
 
             return container;
