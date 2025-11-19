@@ -632,6 +632,31 @@
         stateApi.setMasterDemeritOptions(unique);
     }
 
+    function isMasterOptionValue(value, options) {
+        if (!options || !Array.isArray(options) || !options.length) {
+            return true;
+        }
+        const normalized = effectKey(value);
+        if (!normalized) {
+            return false;
+        }
+        for (let index = 0; index < options.length; index += 1) {
+            const candidate = options[index];
+            if (effectKey(candidate) === normalized) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function validateMasterEffectValue(value) {
+        return isMasterOptionValue(value, state.masterOptions);
+    }
+
+    function validateMasterDemeritValue(value) {
+        return isMasterOptionValue(value, state.masterDemeritOptions);
+    }
+
     function ensureMasterDatalist() {
         if (typeof document === 'undefined') {
             return;
@@ -2061,6 +2086,8 @@
                   updateInputValueAttribute,
                   updateLevelInputAvailability,
                   applyMasterLevelOptions,
+                  validateMasterEffectValue,
+                  validateMasterDemeritValue,
                   syncDemeritAvailability
               })
             : null;

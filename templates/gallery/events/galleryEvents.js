@@ -22,6 +22,8 @@
             updateInputValueAttribute,
             updateLevelInputAvailability,
             applyMasterLevelOptions,
+            validateMasterEffectValue = () => true,
+            validateMasterDemeritValue = () => true,
             syncDemeritAvailability = () => {},
             createRecordActionHandlers: createRecordActionHandlersConfig
         } = config;
@@ -70,6 +72,12 @@
         }
         if (typeof syncDemeritAvailability !== 'function') {
             throw new Error('createGalleryEvents: syncDemeritAvailability helper is required');
+        }
+        if (typeof validateMasterEffectValue !== 'function') {
+            throw new Error('createGalleryEvents: validateMasterEffectValue helper is required');
+        }
+        if (typeof validateMasterDemeritValue !== 'function') {
+            throw new Error('createGalleryEvents: validateMasterDemeritValue helper is required');
         }
 
         const handlersNamespace = typeof window !== 'undefined' && window ? window.galleryEventHandlersFactory : null;
@@ -247,7 +255,9 @@
                 updateInputValueAttribute,
                 updateLevelInputAvailability,
                 applyMasterLevelOptions,
-                syncDemeritAvailability
+                syncDemeritAvailability,
+                validateMasterEffectValue,
+                validateMasterDemeritValue
             });
 
             const {
