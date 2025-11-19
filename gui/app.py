@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import importlib
 import queue
 import sys
 import threading
@@ -22,6 +23,21 @@ from .layout import LayoutComponents, LayoutManager
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".wmv", ".m4v"}
 GITHUB_URL = "https://github.com/nanashio/RelicListMaker"
+
+
+def _detect_tesseract_version() -> str | None:
+    try:
+        pytesseract = importlib.import_module("pytesseract")
+    except ImportError:
+        return None
+    try:
+        version = pytesseract.get_tesseract_version()
+    except Exception:  # noqa: BLE001 - バージョン取得失敗時は無視
+        return None
+    if version is None:
+        return None
+    version_text = str(version).strip()
+    return version_text or None
 
 
 @contextlib.contextmanager
@@ -109,6 +125,8 @@ class RelicGuiApp:
         self.results_status_var = tk.StringVar(value="結果フォルダを読み込んでください")
         self.progress_var = tk.StringVar(value="ドラッグ&ドロップで動画を追加してください")
         self.queue_selection_var = tk.StringVar(value="ドラッグ＆ドロップで動画を追加してください")
+        self.ocr_engine_display_var = tk.StringVar()
+        self._tesseract_version_cache: str | None = None
 
         self.csv_column_vars: dict[str, tk.BooleanVar] = {
             "ItemColor": tk.BooleanVar(value=True),
@@ -125,6 +143,8 @@ class RelicGuiApp:
         }
 
         self._load_config_into_vars()
+        self._refresh_ocr_engine_display()
+        self.ocr_engine_var.trace_add("write", lambda *_: self._refresh_ocr_engine_display())
 
         self.log_queue: "queue.Queue[str]" = queue.Queue()
         self.executor = PipelineExecutor()
@@ -197,6 +217,23 @@ class RelicGuiApp:
         for key, value in config.csv_columns.items():
             if key in self.csv_column_vars:
                 self.csv_column_vars[key].set(bool(value))
+
+    def _refresh_ocr_engine_display(self) -> None:
+        engine = (self.ocr_engine_var.get() or "").strip().lower()
+        if engine == "vision":
+            text = "使用OCR: Google Cloud Vision"
+        else:
+            version = self._get_tesseract_version()
+            if version:
+                text = f"使用OCR: Tesseract {version}"
+            else:
+                text = "使用OCR: Tesseract (バージョン取得不可)"
+        self.ocr_engine_display_var.set(text)
+
+    def _get_tesseract_version(self) -> str | None:
+        if self._tesseract_version_cache is None:
+            self._tesseract_version_cache = _detect_tesseract_version()
+        return self._tesseract_version_cache
 
     def save_config(self) -> None:
         config = AppConfig(

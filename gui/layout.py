@@ -309,6 +309,9 @@ class LayoutManager:
         ttk.Label(progress_frame, textvariable=self.app.progress_var).grid(
             row=1, column=0, sticky="w", pady=(8, 0)
         )
+        ttk.Label(progress_frame, textvariable=self.app.ocr_engine_display_var).grid(
+            row=2, column=0, sticky="w", pady=(4, 0)
+        )
 
         return tree, progress_bar, run_button, remove_button
 
