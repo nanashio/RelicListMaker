@@ -78,6 +78,8 @@
                 delimiter: ';',
                 placeholder: input.getAttribute('placeholder') || 'タグを入力 (Enter で確定)',
                 inputAriaLabel: 'タグを入力',
+                create: true,
+                createOnBlur: true,
                 createFilter(value) {
                     const tokens = parseTagTokens(value);
                     return tokens.length === 1;
