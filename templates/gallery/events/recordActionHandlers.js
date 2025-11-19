@@ -37,7 +37,9 @@
             updateLevelInputAvailability,
             applyMasterLevelOptions,
             syncDemeritAvailability = () => {},
-            applyMasterDataForRelicType
+            applyMasterDataForRelicType,
+            validateMasterEffectValue = () => true,
+            validateMasterDemeritValue = () => true
         } = deps;
 
         if (!duplicates || typeof duplicates.set !== 'function') {
@@ -70,7 +72,9 @@
             syncDemeritAvailability,
             applyMasterDataForRelicType,
             applyItemTags,
-            normalizeItemTags
+            normalizeItemTags,
+            validateMasterEffectValue,
+            validateMasterDemeritValue
         };
 
         Object.entries(requiredFunctions).forEach(([name, fn]) => {
@@ -424,6 +428,9 @@
                 return;
             }
             updateInputValueAttribute(input);
+            if (typeof input.setCustomValidity === 'function') {
+                input.setCustomValidity('');
+            }
             const selected = input.value.trim();
             const indexes = getEffectIndexes(effect);
             if (!indexes) {
@@ -431,6 +438,7 @@
             }
 
             const isDemerit = indexes.kind === 'demerit';
+            const validateValue = isDemerit ? validateMasterDemeritValue : validateMasterEffectValue;
 
             const originalPrediction =
                 (effect.dataset && effect.dataset.predictionOriginalValue) || '';
@@ -438,6 +446,26 @@
             const fallbackPrediction = originalPrediction || currentPrediction;
             const fallbackNormalized = fallbackPrediction ? String(fallbackPrediction).trim() : '';
             const selectedValue = selected ? String(selected).trim() : '';
+
+            if (
+                selectedValue &&
+                typeof validateValue === 'function' &&
+                !validateValue(selectedValue)
+            ) {
+                const message = isDemerit
+                    ? 'マスター候補と一致するデメリット名を入力してください。'
+                    : 'マスター候補と一致するエフェクト名を入力してください。';
+                if (typeof input.setCustomValidity === 'function') {
+                    input.setCustomValidity(message);
+                }
+                if (typeof input.reportValidity === 'function') {
+                    input.reportValidity();
+                }
+                const restoreValue = fallbackNormalized || '';
+                input.value = restoreValue;
+                updateInputValueAttribute(input);
+                return;
+            }
             const hasManualEntry = Boolean(selectedValue) && selectedValue !== fallbackNormalized;
             const nextValue = hasManualEntry ? selectedValue : fallbackNormalized;
             const effectValueChanged = updateRecordEffectValue(
