@@ -431,7 +431,7 @@
             if (typeof input.setCustomValidity === 'function') {
                 input.setCustomValidity('');
             }
-            const selected = input.value.trim();
+            let selectedValue = (input.value || '').trim();
             const indexes = getEffectIndexes(effect);
             if (!indexes) {
                 return;
@@ -445,7 +445,7 @@
             const currentPrediction = (effect.dataset && effect.dataset.predictionValue) || '';
             const fallbackPrediction = originalPrediction || currentPrediction;
             const fallbackNormalized = fallbackPrediction ? String(fallbackPrediction).trim() : '';
-            const selectedValue = selected ? String(selected).trim() : '';
+            selectedValue = selectedValue ? String(selectedValue).trim() : '';
 
             if (
                 selectedValue &&
@@ -462,9 +462,12 @@
                     input.reportValidity();
                 }
                 const restoreValue = fallbackNormalized || '';
-                input.value = restoreValue;
+                selectedValue = restoreValue ? String(restoreValue).trim() : '';
+                input.value = selectedValue;
                 updateInputValueAttribute(input);
-                return;
+                if (typeof input.setCustomValidity === 'function') {
+                    input.setCustomValidity('');
+                }
             }
             const hasManualEntry = Boolean(selectedValue) && selectedValue !== fallbackNormalized;
             const nextValue = hasManualEntry ? selectedValue : fallbackNormalized;
@@ -524,7 +527,7 @@
                 };
 
                 setLevelOptions(effect, []);
-                const restoreOriginalLevel = !selected;
+                const restoreOriginalLevel = !selectedValue;
                 let levelValueCleared = false;
                 if (!restoreOriginalLevel) {
                     levelValueCleared = updateRecordLevelValue(
@@ -535,7 +538,7 @@
                     );
                 }
 
-                const levelCleared = resetLevelSelection(effect, indexes, selected, {
+                const levelCleared = resetLevelSelection(effect, indexes, selectedValue, {
                     skipRecordLevelValue: !restoreOriginalLevel,
                     onOptionsApplied: handleOptionsApplied
                 });
