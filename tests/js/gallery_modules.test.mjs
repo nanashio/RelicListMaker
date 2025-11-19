@@ -3048,6 +3048,36 @@ describe('record action handlers', () => {
     assert.deepEqual(levelOptionsUpdates, ['＋1|＋3']);
   });
 
+  test('changeEffectCorrection keeps manual entry when master match fails', () => {
+    const record = { Effect1: 'Original' };
+    const item = new MockElement('div', 'item');
+    const effect = new MockElement('section', 'effect');
+    effect.dataset.recordIndex = '0';
+    effect.dataset.slot = '1';
+    effect.dataset.kind = 'effect';
+    effect.dataset.predictionOriginalValue = 'Original';
+    effect.dataset.predictionValue = 'Original';
+    const input = new MockElement('input', 'correction-input');
+    input.value = '手動編集テスト';
+    const scheduleCalls = [];
+    const deps = buildBaseDeps(record, item, {
+      scheduleSave: () => scheduleCalls.push(null),
+      recordStatusChange: () => false,
+      updateRecordEffectValue: (_recordIndex, _slotIndex, value) => {
+        record.Effect1 = value;
+        return true;
+      },
+      getEffectIndexes: () => ({ recordIndex: 0, slotIndex: 1, kind: 'effect' }),
+      validateMasterEffectValue: () => false
+    });
+
+    const handlers = handlerFactory.createRecordActionHandlers(deps);
+    handlers.changeEffectCorrection(effect, input);
+
+    assert.equal(record.Effect1, '手動編集テスト');
+    assert.equal(scheduleCalls.length, 1);
+  });
+
   test('changeEffectCorrection keeps corrected status when value unchanged', () => {
     const record = { Effect1: 'Adjusted' };
     const item = new MockElement('div', 'item');
