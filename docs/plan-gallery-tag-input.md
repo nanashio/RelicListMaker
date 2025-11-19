@@ -68,7 +68,8 @@ Choices.js や Select2 も実績のあるライブラリだが、**既存ビュ�
 | 2025-11-18 | ✅ ステップ 2-3 完了 | `templates/gallery/components/tagInput.js` にコントローラを実装し、`render/galleryView.js` と `events/galleryEvents.js` から `syncValue` / `resolveTagsInputTarget` を経由してタグ表示・編集が Tom Select と従来入力の双方で同期するよう更新。`templates/gallery/index.js` の依存リストにも追加済み。 | `npm run test:node` |
 | 2025-11-18 | ✅ ステップ 4 完了 | `templates/gallery/gallery.css` へ Tom Select の `@import` とテーマ上書きを追加し、`.item-tags-input[data-tag-input-enhanced]` の外観を既存ピル UI に合わせた。 | `npm run test:node` |
 | 2025-11-18 | ✅ ステップ 5-6 完了 | Tag Input Controller 用の Node テストを `tests/js/gallery_modules.test.mjs` へ追加し、`galleryView` / `itemFactory` との統合パスがカバレッジされるようにした。PyInstaller 用の資産同期フロー（`npm run build:gallery-assets`）と `ADDITIONAL_GALLERY_SCRIPTS` の登録も完了。 | `npm run test:node` |
+| 2025-11-19 | 🔄 リグレッションテスト | `npm run test:all` を実行し、`pytest` と `npm run test:node` は完走したものの、Playwright ブラウザのダウンロードがネットワーク制限 (HTTP 403) で失敗し `npm run test:browser` が未完了。 | `npm run test:all` （`pytest` ✅ / `npm run test:node` ✅ / `npm run test:browser` ❌: Chromium 取得失敗） |
 
 ### フォローアップ
-- Tom Select の UI を含むブラウザテスト（Playwright）や実機でのアクセシビリティ確認は未実施のため、ブラウザバイナリを取得できる環境が整い次第 `npm run test:browser` を走らせる。
+- Tom Select の UI を含むブラウザテスト（Playwright）や実機でのアクセシビリティ確認は未実施のため、ブラウザバイナリを取得できる環境が整い次第 `npm run test:browser` を走らせる（2025-11-19 時点では Chromium ダウンロードが HTTP 403 で失敗）。
 - Tag Input Controller にはライブリージョン通知を実装済みだが、スクリーンリーダーでの読み上げ実地確認を別途行い、必要に応じて `render.option_create` の文言調整を計画する。
