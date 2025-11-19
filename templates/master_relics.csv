@@ -1,4 +1,5 @@
 EffectBase,Category,Levels,Overlap,Demerit,note
+-,-,none,✕,FALSE,
 最大HP上昇,能力値,none,✕,FALSE,
 最大FP上昇,能力値,none,✕,FALSE,
 最大スタミナ上昇,能力値,none,✕,FALSE,
@@ -271,4 +272,3 @@ HP低下時、周囲の味方を含めHPをゆっくりと回復,回復,none,✕
 大盾の武器種を3つ以上装備していると最大HP上昇,大盾,none,✕,FALSE,
 杖の武器種を3つ以上装備していると最大FP上昇,杖,none,✕,FALSE,
 聖印の武器種を3つ以上装備していると最大FP上昇,聖印,none,✕,FALSE,
--,-,none,✕,FALSE,
