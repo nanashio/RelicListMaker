@@ -672,19 +672,6 @@
                     }
                 }
             }
-            const list = item.querySelector('.item-tags-list');
-            if (list) {
-                list.textContent = '';
-                if (!tokens.length) {
-                    list.dataset.empty = 'true';
-                } else {
-                    list.dataset.empty = 'false';
-                    tokens.forEach((token) => {
-                        const pill = createElement('span', 'item-tag-pill', token);
-                        list.appendChild(pill);
-                    });
-                }
-            }
         }
 
         function syncItemTagsState(item) {

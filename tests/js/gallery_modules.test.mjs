@@ -1378,9 +1378,6 @@ describe('gallery view', () => {
     galleryView.applyItemTags(item, 'alpha beta');
     assert.equal(input.value, 'alpha ', '編集中は正規化で上書きされない');
     assert.equal(item.dataset.tags, 'alpha beta');
-    const list = item.querySelector('.item-tags-list');
-    assert.equal(list.children.length, 2, 'ピルは正しく更新される');
-
     delete input.dataset.editingTags;
     galleryView.applyItemTags(item, 'alpha beta');
     assert.equal(input.value, 'alpha beta', 'フォーカスが外れたら表示を同期');

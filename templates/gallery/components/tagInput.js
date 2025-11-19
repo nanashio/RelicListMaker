@@ -85,32 +85,8 @@
                     return tokens.length === 1;
                 }
             });
-            setupAnnouncements(instance, container);
             instances.set(input, instance);
             return instance;
-        }
-
-        function setupAnnouncements(instance, container) {
-            if (!instance || !container) {
-                return;
-            }
-            let liveRegion = container.querySelector('.tag-input-announcer');
-            if (!liveRegion) {
-                liveRegion = documentRef.createElement('div');
-                liveRegion.className = 'tag-input-announcer';
-                liveRegion.setAttribute('role', 'status');
-                liveRegion.setAttribute('aria-live', 'polite');
-                liveRegion.setAttribute('aria-atomic', 'true');
-                container.appendChild(liveRegion);
-            }
-            const announce = (message) => {
-                if (!message) {
-                    return;
-                }
-                liveRegion.textContent = message;
-            };
-            instance.on('item_add', (value) => announce(`タグ「${value}」を追加しました`));
-            instance.on('item_remove', (value) => announce(`タグ「${value}」を削除しました`));
         }
 
         return {
