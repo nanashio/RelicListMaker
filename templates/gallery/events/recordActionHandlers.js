@@ -452,22 +452,14 @@
                 typeof validateValue === 'function' &&
                 !validateValue(selectedValue)
             ) {
-                const message = isDemerit
-                    ? 'マスター候補と一致するデメリット名を入力してください。'
-                    : 'マスター候補と一致するエフェクト名を入力してください。';
-                if (typeof input.setCustomValidity === 'function') {
-                    input.setCustomValidity(message);
+                if (input && input.dataset) {
+                    input.dataset.masterMismatch = 'true';
                 }
-                if (typeof input.reportValidity === 'function') {
-                    input.reportValidity();
-                }
-                const restoreValue = fallbackNormalized || '';
-                selectedValue = restoreValue ? String(restoreValue).trim() : '';
-                input.value = selectedValue;
-                updateInputValueAttribute(input);
-                if (typeof input.setCustomValidity === 'function') {
-                    input.setCustomValidity('');
-                }
+            } else if (input && input.dataset && input.dataset.masterMismatch) {
+                delete input.dataset.masterMismatch;
+            }
+            if (typeof input.setCustomValidity === 'function') {
+                input.setCustomValidity('');
             }
             const hasManualEntry = Boolean(selectedValue) && selectedValue !== fallbackNormalized;
             const nextValue = hasManualEntry ? selectedValue : fallbackNormalized;

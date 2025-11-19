@@ -13,9 +13,9 @@
     ];
 
     const ITEM_RELIC_TYPE_OPTIONS = [
-        { key: '', label: '未設定' },
+        { key: '', label: '未' },
         { key: 'normal', label: '通常' },
-        { key: 'deep', label: '深層遺物' }
+        { key: 'deep', label: '深層' }
     ];
 
     const RELIC_TYPE_ALL = 'all';
@@ -23,7 +23,7 @@
     const RELIC_TYPE_LABELS = {
         [RELIC_TYPE_ALL]: 'すべて',
         normal: '通常',
-        deep: '深層遺物'
+        deep: '深層'
     };
 
     const VIEW_BOX_STORAGE_PREFIX = 'gallery.itemImageViewBox';
