@@ -90,6 +90,11 @@ def register_subcommand(
         action="store_true",
         help="フルフレーム画像も保存する",
     )
+    parser.add_argument(
+        "--templates-only",
+        action="store_true",
+        help="既存のCSVや画像を変更せず、ギャラリーのテンプレートだけ更新する",
+    )
     parser.set_defaults(handler=_handle)
 
 
@@ -113,6 +118,7 @@ def _handle(args: argparse.Namespace) -> int:
         save_full_frames=args.save_full_frames,
         csv_column_visibility=dict(args.csv_columns or []),
         item_image_view_box=args.item_image_view_box,
+        templates_only=args.templates_only,
     )
     reporter = CliProgressReporter()
     result = run_pipeline(settings=settings, reporter=reporter)

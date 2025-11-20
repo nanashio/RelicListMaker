@@ -121,6 +121,23 @@ def test_copy_static_asset_with_subdirectory_and_missing_override(tmp_path):
         )
 
 
+def test_copy_static_asset_applies_replacements(tmp_path):
+    source = tmp_path / "templates" / "base.css"
+    source.parent.mkdir()
+    source.write_text("/* __APP_VERSION__ */", encoding="utf-8")
+    output_dir = tmp_path / "dist"
+    output_dir.mkdir()
+
+    asset = gallery_assets.copy_static_asset(
+        str(source),
+        str(output_dir),
+        replacements={"__APP_VERSION__": "1.2.3"},
+    )
+
+    copied = Path(asset.absolute_path)
+    assert copied.read_text(encoding="utf-8") == "/* 1.2.3 */"
+
+
 def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp_path):
     results_csv = tmp_path / "results.csv"
     results_csv.write_text("id,label\n", encoding="utf-8")
@@ -216,6 +233,64 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
     assert datasets_json[0]["kind"] == "merged"
     assert datasets_json[0]["sources"][0]["label"] == "A"
     assert json.loads(parts[19]) == 1
+
+
+def test_generate_html_embeds_app_version(monkeypatch, tmp_path):
+    results_csv = tmp_path / "results.csv"
+    results_csv.write_text("id,label\n", encoding="utf-8")
+    img_dir = tmp_path / "images"
+    img_dir.mkdir()
+    output_html = tmp_path / "viewer" / "index.html"
+
+    monkeypatch.setattr(gallery_render.version_info, "get_version", lambda: "9.9.9")
+    monkeypatch.setattr(
+        gallery_render,
+        "load_text_asset",
+        lambda *args, **kwargs: "__APP_VERSION__\n__CSS_FILE__",
+    )
+
+    def fake_prepare_gallery_assets(*args, **kwargs):
+        base = tmp_path / "copied"
+        css_path = base / "gallery.css"
+        index_path = base / "index.js"
+        core_path = base / "gallery.js"
+        for file_path in (css_path, index_path, core_path):
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text("__APP_VERSION__", encoding="utf-8")
+
+        replacements = kwargs.get("replacements") or {}
+        for file_path in (css_path, index_path, core_path):
+            content = file_path.read_text(encoding="utf-8")
+            for placeholder, value in replacements.items():
+                content = content.replace(placeholder, value)
+            file_path.write_text(content, encoding="utf-8")
+
+        return GalleryAssets(
+            css=PreparedAsset("gallery.css", str(css_path)),
+            index_js=PreparedAsset("index.js", str(index_path)),
+            core_js=PreparedAsset("gallery.js", str(core_path)),
+        )
+
+    monkeypatch.setattr(gallery_render.gallery_assets, "prepare_gallery_assets", fake_prepare_gallery_assets)
+
+    api_generate_html(
+        str(results_csv),
+        str(img_dir),
+        str(output_html),
+        dependencies=GalleryDependencies(
+            load_master_csv=lambda *args, **kwargs: [],
+            load_master_json=lambda *args, **kwargs: [],
+            load_master_effects_and_levels=lambda *args, **kwargs: ([], {}),
+        ),
+    )
+
+    parts = output_html.read_text(encoding="utf-8").splitlines()
+    assert parts[0] == "9.9.9"
+
+    asset_dir = output_html.parent.parent / "copied"
+    assert (asset_dir / "gallery.css").read_text(encoding="utf-8") == "9.9.9"
+    assert (asset_dir / "index.js").read_text(encoding="utf-8") == "9.9.9"
+    assert (asset_dir / "gallery.js").read_text(encoding="utf-8") == "9.9.9"
 
 
 def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_path):

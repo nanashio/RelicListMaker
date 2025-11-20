@@ -33,6 +33,30 @@ DEFAULT_OCR_ENGINE = "tesseract"
 DEFAULT_GCP_CREDENTIALS_FILENAME = SETTINGS_DEFAULT_GCP_CREDENTIALS_FILENAME
 
 
+def _collect_master_options(
+    master_paths: dict[str, list[Path]],
+    used_types: Iterable[str],
+) -> list[str]:
+    options: list[str] = []
+    normalized_types = list(used_types) or [DEFAULT_RELIC_TYPE]
+    for relic_type in normalized_types:
+        path_entries = master_paths.get(relic_type, [])
+        for master_path in path_entries:
+            options.extend(load_master_csv(master_path))
+    return normalize_master_values(options)
+
+
+def _infer_used_types_from_datasets(datasets: list[dict[str, Any]]) -> set[str]:
+    types: set[str] = set()
+    for entry in datasets:
+        relic_type = entry.get("relic_type") or entry.get("relicType")
+        if isinstance(relic_type, str) and relic_type.strip():
+            types.add(relic_type.strip().lower())
+    if not types:
+        types.add(DEFAULT_RELIC_TYPE)
+    return types
+
+
 @dataclass
 class PipelineSettings:
     video_dir: Path | str = field(default_factory=lambda: Path(DEFAULT_VIDEO_DIR))
@@ -47,6 +71,7 @@ class PipelineSettings:
     save_full_frames: bool = False
     csv_column_visibility: Optional[dict[str, object]] = None
     item_image_view_box: Optional[str] = None
+    templates_only: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.video_dir, Path):
@@ -92,11 +117,46 @@ def run_pipeline(
             templates_path("master_relics_demerit.csv"),
         ],
     }
-    master_options: list[str] = []
     processed_results: list[ProcessedVideoResult] = []
 
     override_map = build_override_map(settings.item_color_overrides)
     type_override_map = build_path_value_map(settings.relic_type_overrides)
+
+    if settings.templates_only:
+        reporter.prepare(1)
+        reporter.step("HTML を生成中...")
+
+        dataset_build = build_dataset_entries(
+            result_dir,
+            [],
+            default_csv_name="results.csv",
+            active_index=0,
+        )
+        used_types = _infer_used_types_from_datasets(dataset_build.datasets)
+        master_options = _collect_master_options(master_paths, used_types)
+        viewer_path = result_dir / "gallery" / "index.html"
+
+        generate_html(
+            str(dataset_build.default_csv_path),
+            dataset_build.default_img_dir,
+            str(viewer_path),
+            master_options=master_options,
+            datasets=dataset_build.datasets,
+            active_dataset_index=dataset_build.active_index,
+            item_image_view_box=settings.item_image_view_box,
+            datasets_base_dir=str(result_dir),
+        )
+
+        reporter.advance("テンプレート更新完了")
+        elapsed = time.time() - start_time
+        print(f"[✓] HTML/CSS/JS テンプレートを更新しました: {viewer_path}")
+        return PipelineResult(
+            viewer_path=viewer_path,
+            datasets=dataset_build.datasets,
+            default_csv_path=dataset_build.default_csv_path,
+            default_img_dir=dataset_build.default_img_dir,
+            elapsed_seconds=elapsed,
+        )
 
     if tasks is None:
         video_dir_path = settings.video_dir
@@ -129,12 +189,7 @@ def run_pipeline(
     if not used_types:
         used_types.add(DEFAULT_RELIC_TYPE)
 
-    for relic_type in used_types:
-        path_entries = master_paths.get(relic_type, [])
-        for master_path in path_entries:
-            master_options.extend(load_master_csv(master_path))
-
-    master_options = normalize_master_values(master_options)
+    master_options = _collect_master_options(master_paths, used_types)
 
     total_steps = len(tasks_to_run) * 2 + 1 if tasks_to_run else 1
     reporter.prepare(total_steps)

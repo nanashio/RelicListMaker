@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import shutil
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, Sequence
 
@@ -63,12 +64,20 @@ def _normalize_relative_path(path: str) -> str:
     return path.replace(os.sep, "/")
 
 
+def _apply_replacements(content: str, replacements: dict[str, str]) -> str:
+    rendered = content
+    for placeholder, value in replacements.items():
+        rendered = rendered.replace(placeholder, value)
+    return rendered
+
+
 def copy_static_asset(
     default_path: str,
     output_dir: str,
     *,
     override_template: Optional[str] = None,
     target_relative_path: Optional[str] = None,
+    replacements: Optional[dict[str, str]] = None,
 ) -> PreparedAsset:
     """静的ファイルをコピーし、コピー先と相対パスを返す."""
 
@@ -77,7 +86,13 @@ def copy_static_asset(
     destination = os.path.join(output_dir, relative_path)
     os.makedirs(os.path.dirname(destination), exist_ok=True)
     try:
-        shutil.copyfile(source, destination)
+        if replacements:
+            content = _apply_replacements(
+                Path(source).read_text(encoding="utf-8"), replacements
+            )
+            Path(destination).write_text(content, encoding="utf-8")
+        else:
+            shutil.copyfile(source, destination)
     except FileNotFoundError as exc:
         raise FileNotFoundError(f"静的アセットが見つかりません: {source}") from exc
     return PreparedAsset(
@@ -142,6 +157,7 @@ def prepare_gallery_assets(
     core_output_name: Optional[str] = None,
     core_relative_override: Optional[str] = None,
     modules: Sequence[str] = ADDITIONAL_GALLERY_SCRIPTS,
+    replacements: Optional[dict[str, str]] = None,
 ) -> GalleryAssets:
     """ギャラリーHTMLで利用するアセット一式を準備して返す."""
 
@@ -153,23 +169,26 @@ def prepare_gallery_assets(
             output_dir,
             override_template=css_override_template,
             target_relative_path=css_output_name,
+            replacements=replacements,
         )
 
     index_asset = copy_static_asset(
         index_template_path,
         output_dir,
         target_relative_path=index_relative_path,
+        replacements=replacements,
     )
 
     if core_relative_override is not None:
         core_asset = _asset_from_override(output_dir, core_relative_override)
     else:
         core_asset = copy_static_asset(
-            core_template_path,
-            output_dir,
-            override_template=core_override_template,
-            target_relative_path=core_output_name,
-        )
+        core_template_path,
+        output_dir,
+        override_template=core_override_template,
+        target_relative_path=core_output_name,
+        replacements=replacements,
+    )
 
     copy_gallery_modules(output_dir, modules=modules)
 

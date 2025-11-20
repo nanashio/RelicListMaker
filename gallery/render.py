@@ -10,6 +10,7 @@ from . import assets as gallery_assets
 
 from .config import GalleryConfig, default_config
 from .models import GalleryDependencies, GalleryPayload, build_gallery_payload
+import version_info
 from resource_paths import project_root
 
 
@@ -108,6 +109,7 @@ def generate_html(
     """ギャラリーHTMLを生成し、作成したペイロードを返す."""
 
     config = config or default_config()
+    app_version = version_info.get_version()
     output_dir = os.path.dirname(os.path.abspath(output_html)) or "."
     os.makedirs(output_dir, exist_ok=True)
 
@@ -135,6 +137,8 @@ def generate_html(
 
     html_template = load_text_asset(config.template_html_path, template_path)
 
+    asset_replacements = {"__APP_VERSION__": app_version}
+
     assets = gallery_assets.prepare_gallery_assets(
         output_dir,
         css_template_path=config.template_css_path,
@@ -148,6 +152,7 @@ def generate_html(
         core_output_name=js_output_name or "gallery.js",
         core_relative_override=js_relative_override,
         modules=gallery_assets.ADDITIONAL_GALLERY_SCRIPTS,
+        replacements=asset_replacements,
     )
 
     css_reference = gallery_assets.cache_bust_reference(assets.css)
@@ -160,6 +165,7 @@ def generate_html(
             "__CSS_FILE__": _escape_attr(css_reference),
             "__JS_FILE__": _escape_attr(index_reference),
             "__CORE_JS__": _escape_attr(core_js_reference),
+            "__APP_VERSION__": _escape_attr(app_version),
         }
     )
 
