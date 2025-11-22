@@ -18,6 +18,21 @@ def _escape_attr(value: str) -> str:
     return html.escape(value or "", quote=True)
 
 
+def _json_text(value: object, *, allow_empty: bool = False) -> str:
+    if not allow_empty and (value == "" or value == [] or value == {}):
+        return ""
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _join_attrs(attrs: dict[str, str]) -> str:
+    parts = []
+    for key, value in attrs.items():
+        if value is None or value == "":
+            continue
+        parts.append(f'{key}="{_escape_attr(value)}"')
+    return " ".join(parts)
+
+
 def _resolve_asset_path(default_path: str, override: Optional[str]) -> str:
     if not override:
         return default_path
@@ -74,6 +89,50 @@ def _build_bootstrap_data(
         "appVersion": app_version,
         "coreScript": core_script,
     }
+
+
+def _build_body_attributes(
+    payload: GalleryPayload,
+    *,
+    bootstrap_reference: str,
+    core_script: str,
+    app_version: str,
+) -> str:
+    attrs: dict[str, str] = {
+        "data-bootstrap-json": bootstrap_reference,
+        "data-results-csv": payload.results_csv,
+        "data-img-dir": payload.image_dir,
+        "data-label-symbols": _json_text(payload.label_symbols),
+        "data-master-csv": payload.master_csv,
+        "data-master-json": payload.master_json,
+        "data-master-options": _json_text(payload.master_options),
+        "data-master-options-map": _json_text(payload.master_options_by_type),
+        "data-master-levels": _json_text(payload.master_levels),
+        "data-master-levels-map": _json_text(payload.master_levels_by_type),
+        "data-master-csv-map": _json_text(payload.master_csv_map),
+        "data-master-demerit-csv": payload.master_demerit_csv,
+        "data-master-demerit-json": payload.master_demerit_json,
+        "data-master-demerit-options": _json_text(payload.master_demerit_options),
+        "data-master-demerit-options-map": _json_text(
+            payload.master_demerit_options_by_type
+        ),
+        "data-master-demerit-csv-map": _json_text(payload.master_demerit_csv_map),
+        "data-master-demerit-rules-map": _json_text(
+            payload.master_demerit_rules_by_type
+        ),
+        "data-datasets": _json_text(payload.datasets, allow_empty=True),
+        "data-active-dataset": str(payload.active_dataset_index),
+        "data-core-script": core_script,
+    }
+
+    if payload.item_image_view_box:
+        attrs["style"] = f"--item-image-view-box: {payload.item_image_view_box};"
+        attrs["data-default-item-image-view-box"] = payload.item_image_view_box
+
+    if app_version:
+        attrs["data-app-version"] = app_version
+
+    return _join_attrs(attrs)
 
 
 def generate_html(
@@ -167,10 +226,18 @@ def generate_html(
     )
     bootstrap_reference = gallery_assets.cache_bust_reference(bootstrap_asset)
 
+    body_attributes = _build_body_attributes(
+        payload,
+        bootstrap_reference=bootstrap_reference,
+        core_script=core_js_reference,
+        app_version=app_version,
+    )
+
     replacements = {
         "__CSS_FILE__": _escape_attr(css_reference),
         "__JS_FILE__": _escape_attr(index_reference),
         "__BOOTSTRAP_JSON__": _escape_attr(bootstrap_reference),
+        "__BODY_ATTRIBUTES__": body_attributes,
     }
 
     html_output = render_gallery_template(html_template, replacements)
