@@ -21,6 +21,8 @@ const MODULE_DEPENDENCIES = [
     './events/galleryEvents.js'
 ];
 
+const DEFAULT_BOOTSTRAP_JSON = './gallery_data.json';
+
 function resolveModuleUrl(specifier, baseUrl) {
     try {
         return new URL(specifier, baseUrl).href;
@@ -28,6 +30,14 @@ function resolveModuleUrl(specifier, baseUrl) {
         console.error('モジュールの解決に失敗しました:', specifier, error);
         return null;
     }
+}
+
+function resolveBootstrapJsonUrl(rawSpecifier) {
+    const candidate = typeof rawSpecifier === 'string' ? rawSpecifier.trim() : '';
+    if (!candidate) {
+        return resolveModuleUrl(DEFAULT_BOOTSTRAP_JSON, document.baseURI || import.meta.url);
+    }
+    return resolveModuleUrl(candidate, document.baseURI || import.meta.url);
 }
 
 async function loadDependencies() {
@@ -38,6 +48,133 @@ async function loadDependencies() {
             continue;
         }
         await import(resolved);
+    }
+}
+
+function applyGeneratorMeta(appVersion) {
+    if (!appVersion) {
+        return;
+    }
+    const meta = document.querySelector('meta[name="generator"]');
+    if (!meta) {
+        return;
+    }
+    meta.setAttribute('content', `RelicListMaker ${appVersion}`);
+}
+
+function toDatasetString(value, fallback = '') {
+    if (value == null) {
+        return fallback;
+    }
+    if (typeof value === 'string') {
+        return value;
+    }
+    return String(value);
+}
+
+function toJsonText(value, fallback = '') {
+    if (value == null) {
+        return fallback;
+    }
+    if (typeof value === 'string') {
+        return value;
+    }
+    try {
+        return JSON.stringify(value);
+    } catch (error) {
+        console.error('JSON文字列への変換に失敗しました:', error);
+    }
+    return fallback;
+}
+
+function applyBootstrapData(bootstrapData) {
+    const body = document.body;
+    if (!body || !body.dataset || !bootstrapData || typeof bootstrapData !== 'object') {
+        return;
+    }
+
+    const dataset = body.dataset;
+
+    dataset.resultsCsv = toDatasetString(bootstrapData.resultsCsv, dataset.resultsCsv || '');
+    dataset.imgDir = toDatasetString(bootstrapData.imgDir, dataset.imgDir || '.');
+    dataset.labelSymbols = toJsonText(bootstrapData.labelSymbols, dataset.labelSymbols || '[]');
+    dataset.masterCsv = toDatasetString(bootstrapData.masterCsv, dataset.masterCsv || '');
+    dataset.masterJson = toDatasetString(bootstrapData.masterJson, dataset.masterJson || '');
+    dataset.masterOptions = toJsonText(bootstrapData.masterOptions, dataset.masterOptions || '[]');
+    dataset.masterOptionsMap = toJsonText(
+        bootstrapData.masterOptionsMap,
+        dataset.masterOptionsMap || '{}'
+    );
+    dataset.masterLevels = toJsonText(bootstrapData.masterLevels, dataset.masterLevels || '{}');
+    dataset.masterLevelsMap = toJsonText(
+        bootstrapData.masterLevelsMap,
+        dataset.masterLevelsMap || '{}'
+    );
+    dataset.masterCsvMap = toJsonText(bootstrapData.masterCsvMap, dataset.masterCsvMap || '{}');
+    dataset.masterDemeritCsv = toDatasetString(
+        bootstrapData.masterDemeritCsv,
+        dataset.masterDemeritCsv || ''
+    );
+    dataset.masterDemeritJson = toDatasetString(
+        bootstrapData.masterDemeritJson,
+        dataset.masterDemeritJson || ''
+    );
+    dataset.masterDemeritOptions = toJsonText(
+        bootstrapData.masterDemeritOptions,
+        dataset.masterDemeritOptions || '[]'
+    );
+    dataset.masterDemeritOptionsMap = toJsonText(
+        bootstrapData.masterDemeritOptionsMap,
+        dataset.masterDemeritOptionsMap || '{}'
+    );
+    dataset.masterDemeritCsvMap = toJsonText(
+        bootstrapData.masterDemeritCsvMap,
+        dataset.masterDemeritCsvMap || '{}'
+    );
+    dataset.masterDemeritRulesMap = toJsonText(
+        bootstrapData.masterDemeritRulesMap,
+        dataset.masterDemeritRulesMap || '{}'
+    );
+    dataset.datasets = toJsonText(bootstrapData.datasets, dataset.datasets || '[]');
+    dataset.activeDataset = toDatasetString(
+        bootstrapData.activeDataset,
+        dataset.activeDataset || ''
+    );
+    dataset.defaultItemImageViewBox = toDatasetString(
+        bootstrapData.itemImageViewBox,
+        dataset.defaultItemImageViewBox || ''
+    );
+    dataset.coreScript = toDatasetString(bootstrapData.coreScript, dataset.coreScript || '');
+
+    if (bootstrapData.appVersion) {
+        dataset.appVersion = toDatasetString(bootstrapData.appVersion, dataset.appVersion || '');
+        applyGeneratorMeta(dataset.appVersion);
+    }
+
+    if (bootstrapData.itemImageViewBox) {
+        body.style.setProperty('--item-image-view-box', bootstrapData.itemImageViewBox);
+    }
+}
+
+async function loadBootstrapData() {
+    const body = document.body;
+    const bootstrapSpec = body && body.dataset ? body.dataset.bootstrapJson : '';
+    const resolvedUrl = resolveBootstrapJsonUrl(bootstrapSpec);
+    if (!resolvedUrl) {
+        console.error('ブートストラップJSONのURLが解決できませんでした。');
+        return null;
+    }
+
+    try {
+        const response = await fetch(resolvedUrl, { cache: 'no-cache' });
+        if (!response.ok) {
+            console.error('ブートストラップJSONの読み込みに失敗しました:', response.status);
+            return null;
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('ブートストラップJSONの取得に失敗しました:', error);
+        return null;
     }
 }
 
@@ -59,9 +196,13 @@ function resolveCoreScriptUrl(rawSpecifier) {
 
 async function bootstrapGallery() {
     try {
+        const bootstrapData = await loadBootstrapData();
+        applyBootstrapData(bootstrapData);
         await loadDependencies();
         const body = document.body;
-        const coreScript = body && body.dataset ? body.dataset.coreScript : '';
+        const coreScript =
+            (bootstrapData && bootstrapData.coreScript) ||
+            (body && body.dataset ? body.dataset.coreScript : '');
         const coreScriptUrl = resolveCoreScriptUrl(coreScript);
         if (!coreScriptUrl) {
             console.error('コアスクリプトのURLが解決できませんでした。');

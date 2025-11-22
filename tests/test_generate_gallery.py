@@ -18,6 +18,11 @@ from gallery.models import GalleryDependencies
 from resource_paths import templates_path
 
 
+def load_bootstrap_data(output_html: Path) -> dict:
+    bootstrap_path = output_html.parent / "gallery_data.json"
+    return json.loads(bootstrap_path.read_text(encoding="utf-8"))
+
+
 def test_copy_gallery_modules_copies_required_viewer_scripts(tmp_path):
     """`generate_gallery` が効果ビューの必須モジュールをコピーすることを検証する."""
     output_dir = tmp_path / "viewer"
@@ -145,30 +150,7 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
     img_dir.mkdir()
     output_html = tmp_path / "viewer" / "index.html"
 
-    template = (
-        "__RESULTS_CSV__\n"
-        "__IMAGE_DIR__\n"
-        "__LABEL_SYMBOLS__\n"
-        "__MASTER_CSV__\n"
-        "__MASTER_JSON__\n"
-        "__MASTER_OPTIONS__\n"
-        "__MASTER_OPTIONS_MAP__\n"
-        "__MASTER_LEVELS__\n"
-        "__MASTER_LEVELS_BY_TYPE__\n"
-        "__MASTER_CSV_MAP__\n"
-        "__MASTER_DEMERIT_CSV__\n"
-        "__MASTER_DEMERIT_JSON__\n"
-        "__MASTER_DEMERIT_OPTIONS__\n"
-        "__MASTER_DEMERIT_OPTIONS_MAP__\n"
-        "__MASTER_DEMERIT_CSV_MAP__\n"
-        "__CSS_FILE__\n"
-        "__JS_FILE__\n"
-        "__CORE_JS__\n"
-        "__DATASETS__\n"
-        "__ACTIVE_DATASET__\n"
-        "__ITEM_IMAGE_VIEW_BOX__\n"
-        "__ITEM_IMAGE_VIEW_BOX__"
-    )
+    template = "__BOOTSTRAP_JSON__\n__CSS_FILE__\n__JS_FILE__"
 
     monkeypatch.setattr(gallery_render, "load_text_asset", lambda *args, **kwargs: template)
 
@@ -216,23 +198,37 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
 
     html_output = output_html.read_text(encoding="utf-8")
     parts = html_output.splitlines()
-    assert parts[0] == "a/results.csv"
-    assert parts[1] == "a/images"
-    assert "★" in html.unescape(parts[2])
-    assert "A" in html.unescape(parts[5])
-    assert json.loads(html.unescape(parts[6])) == {}
-    assert parts[10].endswith('master_relics_demerit.csv')
-    assert parts[11] == ''
-    assert isinstance(json.loads(html.unescape(parts[12])), list)
-    assert json.loads(html.unescape(parts[13])) == {}
-    demerit_csv_map = json.loads(html.unescape(parts[14]))
-    assert "deep" in demerit_csv_map
-    assert demerit_csv_map["deep"].endswith('master_relics_demerit.csv')
-    datasets_json = json.loads(html.unescape(parts[18]))
+    assert parts[0].startswith("gallery_data.json")
+    assert parts[1].startswith("styles/app.css")
+    assert parts[2].startswith("index.js")
+
+    bootstrap_data = load_bootstrap_data(output_html)
+    assert bootstrap_data["resultsCsv"] == "a/results.csv"
+    assert bootstrap_data["imgDir"] == "a/images"
+    assert bootstrap_data["labelSymbols"] == ["★"]
+    assert bootstrap_data["masterOptions"] == ["A", "B"]
+    assert bootstrap_data["masterOptionsMap"] == {}
+    assert bootstrap_data["masterLevels"] == {}
+    assert bootstrap_data["masterLevelsMap"] == {}
+    master_csv_map = bootstrap_data["masterCsvMap"]
+    assert set(master_csv_map.keys()) == {"normal", "deep"}
+    assert master_csv_map["normal"].endswith("master_relics.csv")
+    assert master_csv_map["deep"].endswith("master_relics_deep.csv")
+    assert bootstrap_data["masterDemeritCsv"].endswith("master_relics_demerit.csv")
+    assert bootstrap_data["masterDemeritJson"] == ""
+    assert isinstance(bootstrap_data["masterDemeritOptions"], list)
+    assert bootstrap_data["masterDemeritOptionsMap"] == {}
+    assert "deep" in bootstrap_data["masterDemeritCsvMap"]
+    assert bootstrap_data["masterDemeritCsvMap"]["deep"].endswith(
+        "master_relics_demerit.csv"
+    )
+    assert bootstrap_data["masterDemeritRulesMap"] == {}
+    datasets_json = bootstrap_data["datasets"]
     assert datasets_json[0]["label"] == "全データセット（統合）"
     assert datasets_json[0]["kind"] == "merged"
     assert datasets_json[0]["sources"][0]["label"] == "A"
-    assert json.loads(parts[19]) == 1
+    assert bootstrap_data["activeDataset"] == 1
+    assert bootstrap_data["itemImageViewBox"] == API_DEFAULT_VIEW_BOX
 
 
 def test_generate_html_embeds_app_version(monkeypatch, tmp_path):
@@ -246,7 +242,7 @@ def test_generate_html_embeds_app_version(monkeypatch, tmp_path):
     monkeypatch.setattr(
         gallery_render,
         "load_text_asset",
-        lambda *args, **kwargs: "__APP_VERSION__\n__CSS_FILE__",
+        lambda *args, **kwargs: "__BOOTSTRAP_JSON__\n__CSS_FILE__",
     )
 
     def fake_prepare_gallery_assets(*args, **kwargs):
@@ -285,7 +281,10 @@ def test_generate_html_embeds_app_version(monkeypatch, tmp_path):
     )
 
     parts = output_html.read_text(encoding="utf-8").splitlines()
-    assert parts[0] == "9.9.9"
+    assert parts[0].startswith("gallery_data.json")
+
+    bootstrap_data = load_bootstrap_data(output_html)
+    assert bootstrap_data["appVersion"] == "9.9.9"
 
     asset_dir = output_html.parent.parent / "copied"
     assert (asset_dir / "gallery.css").read_text(encoding="utf-8") == "9.9.9"
@@ -312,32 +311,7 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
         encoding="utf-8",
     )
 
-    template = "\n".join(
-        [
-            "__RESULTS_CSV__",
-            "__IMAGE_DIR__",
-            "__LABEL_SYMBOLS__",
-            "__MASTER_CSV__",
-            "__MASTER_JSON__",
-            "__MASTER_OPTIONS__",
-            "__MASTER_OPTIONS_MAP__",
-            "__MASTER_LEVELS__",
-            "__MASTER_LEVELS_BY_TYPE__",
-            "__MASTER_CSV_MAP__",
-            "__MASTER_DEMERIT_CSV__",
-            "__MASTER_DEMERIT_JSON__",
-                "__MASTER_DEMERIT_OPTIONS__",
-                "__MASTER_DEMERIT_OPTIONS_MAP__",
-                "__MASTER_DEMERIT_CSV_MAP__",
-                "__MASTER_DEMERIT_RULES_MAP__",
-                "__CSS_FILE__",
-                "__JS_FILE__",
-                "__CORE_JS__",
-                "__DATASETS__",
-            "__ACTIVE_DATASET__",
-            "__ITEM_IMAGE_VIEW_BOX__",
-        ]
-    )
+    template = "__BOOTSTRAP_JSON__\n__CSS_FILE__\n__JS_FILE__"
 
     monkeypatch.setattr(gallery_render, "load_text_asset", lambda *args, **kwargs: template)
 
@@ -395,43 +369,46 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
 
     html_output = output_html.read_text(encoding="utf-8")
     parts = html_output.splitlines()
+    assert parts[0].startswith("gallery_data.json")
 
-    assert json.loads(html.unescape(parts[2])) == ["◇", "<b>", "123"]
+    bootstrap_data = load_bootstrap_data(output_html)
+
+    assert bootstrap_data["labelSymbols"] == ["◇", "<b>", "123"]
     expected_master_csv_rel = os.path.relpath(master_csv, output_html.parent)
     expected_master_json_rel = os.path.relpath(master_json, output_html.parent)
-    assert parts[3] == html.escape(expected_master_csv_rel, quote=True)
-    assert parts[4] == html.escape(expected_master_json_rel, quote=True)
-    assert json.loads(html.unescape(parts[5])) == []
-    master_options_map = json.loads(html.unescape(parts[6]))
+    assert bootstrap_data["masterCsv"] == expected_master_csv_rel
+    assert bootstrap_data["masterJson"] == expected_master_json_rel
+    assert bootstrap_data["masterOptions"] == []
+    master_options_map = bootstrap_data["masterOptionsMap"]
     assert master_options_map == {
         "deep": ["Deep Effect"],
         "normal": ["Default Effect"],
     }
-    master_levels = json.loads(html.unescape(parts[7]))
+    master_levels = bootstrap_data["masterLevels"]
     assert master_levels.get("Mystic Strike") == ["Alpha", "Beta"]
     assert master_levels.get("Default Effect") == ["F1"]
     assert master_levels.get("Deep Effect") == ["D1"]
-    master_levels_by_type = json.loads(html.unescape(parts[8]))
+    master_levels_by_type = bootstrap_data["masterLevelsMap"]
     assert master_levels_by_type == {
         "deep": {"Deep Effect": ["D1"]},
         "normal": {"Default Effect": ["F1"]},
     }
-    assert parts[10].endswith('master_relics_demerit.csv')
-    assert parts[11] == ''
-    demerit_options = json.loads(html.unescape(parts[12]))
+    assert bootstrap_data["masterDemeritCsv"].endswith('master_relics_demerit.csv')
+    assert bootstrap_data["masterDemeritJson"] == ''
+    demerit_options = bootstrap_data["masterDemeritOptions"]
     assert isinstance(demerit_options, list)
     assert len(demerit_options) > 0
-    master_demerit_map = json.loads(html.unescape(parts[13]))
+    master_demerit_map = bootstrap_data["masterDemeritOptionsMap"]
     assert "deep" in master_demerit_map
     assert isinstance(master_demerit_map["deep"], list)
     assert len(master_demerit_map["deep"]) > 0
-    master_demerit_csv_map = json.loads(html.unescape(parts[14]))
+    master_demerit_csv_map = bootstrap_data["masterDemeritCsvMap"]
     assert "deep" in master_demerit_csv_map
     assert master_demerit_csv_map["deep"].endswith('master_relics_demerit.csv')
-    master_demerit_rules_map = json.loads(html.unescape(parts[15]))
+    master_demerit_rules_map = bootstrap_data["masterDemeritRulesMap"]
     assert "deep" in master_demerit_rules_map
     assert isinstance(master_demerit_rules_map["deep"], dict)
-    assert parts[21] == html.escape(API_DEFAULT_VIEW_BOX, quote=True)
+    assert bootstrap_data["itemImageViewBox"] == API_DEFAULT_VIEW_BOX
     assert copied_assets.count("gallery.css") == 1
 
 
@@ -440,19 +417,7 @@ def test_generate_html_embeds_known_master_types(monkeypatch, tmp_path):
     results_csv.write_text("id,label\n", encoding="utf-8")
     output_html = tmp_path / "viewer" / "index.html"
 
-    template = "\n".join(
-        [
-            "__MASTER_OPTIONS__",
-            "__MASTER_OPTIONS_MAP__",
-            "__MASTER_LEVELS__",
-            "__MASTER_LEVELS_BY_TYPE__",
-            "__MASTER_CSV_MAP__",
-            "__MASTER_DEMERIT_OPTIONS__",
-            "__MASTER_DEMERIT_OPTIONS_MAP__",
-            "__MASTER_DEMERIT_CSV_MAP__",
-            "__MASTER_DEMERIT_RULES_MAP__",
-        ]
-    )
+    template = "__BOOTSTRAP_JSON__\n__CSS_FILE__\n__JS_FILE__"
 
     monkeypatch.setattr(gallery_render, "load_text_asset", lambda *args, **kwargs: template)
     def fake_prepare_gallery_assets(*args, **kwargs):
@@ -498,40 +463,45 @@ def test_generate_html_embeds_known_master_types(monkeypatch, tmp_path):
 
     html_output = output_html.read_text(encoding="utf-8")
     parts = [html.unescape(part) for part in html_output.splitlines()]
+    assert parts[0].startswith("gallery_data.json")
 
-    assert json.loads(parts[0]) == ["Normal Effect", "Deep Effect"]
+    bootstrap_data = load_bootstrap_data(output_html)
 
-    options_map = json.loads(parts[1])
+    assert bootstrap_data["masterOptions"] == ["Normal Effect", "Deep Effect"]
+
+    options_map = bootstrap_data["masterOptionsMap"]
     assert set(options_map.keys()) == {"normal", "deep"}
     assert options_map["normal"] == ["Normal Effect"]
     assert options_map["deep"] == ["Deep Effect"]
 
-    levels_map = json.loads(parts[2])
+    levels_map = bootstrap_data["masterLevels"]
     assert levels_map == {
         "Normal Effect": ["N1"],
         "Deep Effect": ["D1"],
     }
 
-    levels_by_type = json.loads(parts[3])
+    levels_by_type = bootstrap_data["masterLevelsMap"]
     assert levels_by_type == {
         "deep": {"Deep Effect": ["D1"]},
         "normal": {"Normal Effect": ["N1"]},
     }
 
-    csv_map = json.loads(parts[4])
+    csv_map = bootstrap_data["masterCsvMap"]
     assert set(csv_map.keys()) == {"normal", "deep"}
     assert csv_map["normal"].endswith("master_relics.csv")
     assert csv_map["deep"].endswith("master_relics_deep.csv")
 
-    assert json.loads(parts[5]) == []
-    assert json.loads(parts[6]) == {}
-    demerit_csv_map = json.loads(parts[7])
-    assert demerit_csv_map == {
-        "deep": os.path.relpath(
-            templates_path("master_relics_demerit.csv"),
-            output_html.parent,
-        ).replace(os.sep, "/"),
-    }
+    assert bootstrap_data["masterDemeritOptions"] == []
+    assert bootstrap_data["masterDemeritOptionsMap"] == {}
+    demerit_csv_map = bootstrap_data["masterDemeritCsvMap"]
+    expected_demerit = os.path.relpath(
+        templates_path("master_relics_demerit.csv"),
+        output_html.parent,
+    ).replace(os.sep, "/")
+    assert demerit_csv_map == {"deep": expected_demerit}
+    rules_map = bootstrap_data["masterDemeritRulesMap"]
+    assert "deep" in rules_map
+    assert isinstance(rules_map["deep"], dict)
 
     assert "master_relics.csv" in loaded_paths
     assert "master_relics_deep.csv" in loaded_paths
@@ -548,7 +518,7 @@ def test_generate_html_resolves_dataset_base_dir(monkeypatch, tmp_path):
     results_csv = video_dir / "results.csv"
     results_csv.write_text("id,label\n", encoding="utf-8")
 
-    template = "__RESULTS_CSV__\n__IMAGE_DIR__\n__DATASETS__"
+    template = "__BOOTSTRAP_JSON__\n__CSS_FILE__\n__JS_FILE__"
     monkeypatch.setattr(gallery_render, "load_text_asset", lambda *args, **kwargs: template)
 
     def fake_prepare_gallery_assets(*args, **kwargs):
@@ -589,9 +559,12 @@ def test_generate_html_resolves_dataset_base_dir(monkeypatch, tmp_path):
     )
 
     parts = output_html.read_text(encoding="utf-8").splitlines()
-    assert parts[0] == "../video_a/results.csv"
-    assert parts[1] == "../video_a/crops"
-    datasets_payload = json.loads(html.unescape(parts[2]))
+    assert parts[0].startswith("gallery_data.json")
+
+    bootstrap_data = load_bootstrap_data(output_html)
+    assert bootstrap_data["resultsCsv"] == "../video_a/results.csv"
+    assert bootstrap_data["imgDir"] == "../video_a/crops"
+    datasets_payload = bootstrap_data["datasets"]
     assert datasets_payload[0]["csv"] == "../video_a/results.csv"
     assert datasets_payload[0]["imgDir"] == "../video_a/crops"
 
@@ -603,13 +576,7 @@ def test_generate_html_respects_asset_overrides(monkeypatch, tmp_path):
     img_dir.mkdir()
     output_html = tmp_path / "viewer" / "index.html"
 
-    template = "\n".join(
-        [
-            "__CSS_FILE__",
-            "__JS_FILE__",
-            "__CORE_JS__",
-        ]
-    )
+    template = "\n".join(["__CSS_FILE__", "__JS_FILE__", "__BOOTSTRAP_JSON__"])
 
     monkeypatch.setattr(gallery_render, "load_text_asset", lambda *args, **kwargs: template)
 
@@ -671,6 +638,7 @@ def test_generate_html_respects_asset_overrides(monkeypatch, tmp_path):
     index_reference = parts[1]
     assert index_reference.startswith("index.js?v=")
 
+    bootstrap_data = load_bootstrap_data(output_html)
     expected_core_rel = "custom/core.js"
     expected_version = str(int(os.path.getmtime(custom_core)))
-    assert parts[2] == f"{expected_core_rel}?v={expected_version}"
+    assert bootstrap_data["coreScript"] == f"{expected_core_rel}?v={expected_version}"
