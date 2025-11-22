@@ -926,7 +926,7 @@
         viewBoxWidthInput: document.getElementById('viewbox-width'),
         viewBoxApplyButton: document.getElementById('viewbox-apply'),
         viewBoxResetButton: document.getElementById('viewbox-reset'),
-        viewBoxStatus: document.getElementById('viewbox-status')
+        viewBoxStatus: document.querySelector('.viewbox-status')
     };
 
     const viewBoxStorageKey = createViewBoxStorageKey(initialCsvPath);
