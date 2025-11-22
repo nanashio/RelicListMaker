@@ -161,7 +161,7 @@
             if (text === 'deep' || text === '深層' || text === '深層遺物') {
                 return 'deep';
             }
-            if (text === 'normal' || text === '通常') {
+            if (text === 'normal' || text === '通常' || text === '通常遺物') {
                 return 'normal';
             }
             if (text === 'merged' || text === 'all' || text === '統合') {
@@ -321,7 +321,12 @@
         function evaluateDemeritAvailability(record, slot) {
             const relicType = resolveRecordRelicType(record);
             if (relicType === 'normal') {
-                return { disable: true, placeholder: '通常遺物ではデメリットなし', hide: true };
+                return {
+                    disable: true,
+                    placeholder: '通常遺物ではデメリットなし',
+                    hide: true,
+                    status: 'pass'
+                };
             }
             if (!relicType) {
                 return { disable: true, placeholder: 'デメリット対象外' };
@@ -494,6 +499,7 @@
             const shouldDisable = Boolean(evaluation && evaluation.disable);
             const shouldHide = Boolean(evaluation && evaluation.hide);
             const placeholder = evaluation && evaluation.placeholder ? evaluation.placeholder : 'デメリット対象外';
+            const nextStatus = evaluation && typeof evaluation.status === 'string' ? evaluation.status : 'pending';
             const shouldHighlightNoInput =
                 placeholder === 'デメリット対象外' || placeholder === '指定レベルのデメリットなし';
             if (shouldDisable) {
@@ -518,13 +524,13 @@
                 }
                 effect.dataset.correction = '';
                 const statusKey = `Demerit${slotIndex}Status`;
-                if (statusKey && record && record[statusKey] !== 'pending') {
-                    record[statusKey] = 'pending';
+                if (statusKey && record && record[statusKey] !== nextStatus) {
+                    record[statusKey] = nextStatus;
                 }
                 if (context) {
                     context.correctionValue = '';
                     context.correctionValueLower = '';
-                    context.statusValue = 'pending';
+                    context.statusValue = nextStatus;
                 }
                 if (shouldHide) {
                     effect.dataset.hiddenDemerit = 'true';
@@ -542,7 +548,7 @@
                     updatePrimaryLink(true);
                 }
                 if (options && options.refreshStatus) {
-                    updateEffectStatus(effect, 'pending');
+                    updateEffectStatus(effect, nextStatus);
                 }
                 return;
             }
