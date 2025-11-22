@@ -62,33 +62,14 @@ _ACTIVE_DATASET_RE = re.compile(r"data-active-dataset=\"([^\"]*)\"")
 _KNOWN_MERGED_KINDS = {"merged", "merged_csv"}
 
 
-def _load_existing_gallery_state(base_dir: Path) -> tuple[list[dict[str, Any]], int]:
-    """Extract dataset descriptors stored in an existing gallery output."""
-
-    viewer_path = base_dir / "gallery" / "index.html"
-    if not viewer_path.exists():
-        return [], -1
-
-    try:
-        html_text = viewer_path.read_text(encoding="utf-8")
-    except OSError:
-        return [], -1
-
-    datasets_match = _DATASETS_ATTR_RE.search(html_text)
-    if not datasets_match:
-        return [], -1
-
-    try:
-        datasets_json = json.loads(unescape(datasets_match.group(1)))
-    except json.JSONDecodeError:
-        return [], -1
-
-    if not isinstance(datasets_json, list):
-        return [], -1
-
-    viewer_dir = viewer_path.parent
+def _normalize_dataset_entries(
+    raw_entries: Any, viewer_dir: Path, base_dir: Path
+) -> list[dict[str, Any]]:
     normalized_entries: list[dict[str, Any]] = []
-    for raw_entry in datasets_json:
+    if not isinstance(raw_entries, list):
+        return normalized_entries
+
+    for raw_entry in raw_entries:
         if not isinstance(raw_entry, dict):
             continue
 
@@ -172,12 +153,70 @@ def _load_existing_gallery_state(base_dir: Path) -> tuple[list[dict[str, Any]], 
 
         normalized_entries.append(entry)
 
+    return normalized_entries
+
+
+def _load_datasets_from_bootstrap_json(
+    viewer_dir: Path, base_dir: Path
+) -> tuple[list[dict[str, Any]], int] | None:
+    bootstrap_path = viewer_dir / "gallery_data.json"
+    if not bootstrap_path.exists():
+        return None
+
+    try:
+        data = json.loads(bootstrap_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    entries = _normalize_dataset_entries(data.get("datasets"), viewer_dir, base_dir)
+    active_index = _parse_int(data.get("activeDataset"), -1)
+    return entries, active_index
+
+
+def _load_datasets_from_index_html(
+    viewer_dir: Path, base_dir: Path
+) -> tuple[list[dict[str, Any]], int]:
+    viewer_path = viewer_dir / "index.html"
+    if not viewer_path.exists():
+        return [], -1
+
+    try:
+        html_text = viewer_path.read_text(encoding="utf-8")
+    except OSError:
+        return [], -1
+
+    datasets_match = _DATASETS_ATTR_RE.search(html_text)
+    if not datasets_match:
+        return [], -1
+
+    try:
+        datasets_json = json.loads(unescape(datasets_match.group(1)))
+    except json.JSONDecodeError:
+        return [], -1
+
+    normalized_entries = _normalize_dataset_entries(datasets_json, viewer_dir, base_dir)
+
     active_match = _ACTIVE_DATASET_RE.search(html_text)
     active_index = -1
     if active_match:
         active_index = _parse_int(unescape(active_match.group(1)), -1)
 
     return normalized_entries, active_index
+
+
+def _load_existing_gallery_state(base_dir: Path) -> tuple[list[dict[str, Any]], int]:
+    """Extract dataset descriptors stored in an existing gallery output."""
+
+    viewer_dir = base_dir / "gallery"
+
+    bootstrap_state = _load_datasets_from_bootstrap_json(viewer_dir, base_dir)
+    if bootstrap_state is not None:
+        return bootstrap_state
+
+    return _load_datasets_from_index_html(viewer_dir, base_dir)
 
 
 @dataclass(frozen=True)
