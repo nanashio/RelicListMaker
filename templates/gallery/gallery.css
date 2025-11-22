@@ -422,7 +422,6 @@ h1 {
 .viewbox-actions {
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm);
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
@@ -435,20 +434,6 @@ h1 {
     gap: var(--space-sm);
     align-items: center;
     justify-content: center;
-}
-
-.viewbox-status {
-    font-size: 12px;
-    color: var(--color-text-secondary);
-    display: none;
-}
-
-.viewbox-status.viewbox-status--visible {
-    display: inline-flex;
-}
-
-.viewbox-status.viewbox-status--error {
-    color: var(--color-error-text);
 }
 
 /* -------------------------------------------------------------------------- */
