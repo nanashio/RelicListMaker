@@ -391,6 +391,7 @@ h1 {
 }
 
 .viewbox-fields {
+    --viewbox-input-width: 10ch;
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-md);
@@ -409,10 +410,12 @@ h1 {
 .viewbox-field-label {
     font-size: 12px;
     color: var(--color-text-secondary);
+    display: inline-block;
+    width: var(--viewbox-input-width);
 }
 
 .viewbox-number {
-    width: 10ch;
+    width: var(--viewbox-input-width);
     max-width: 140px;
     padding: var(--space-sm) var(--space-lg);
     font-size: 13px;
