@@ -228,10 +228,28 @@ h1 {
 
 .toolbar {
     display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    align-items: center;
+    margin-bottom: var(--space-xl);
+    width: 100%;
+}
+
+.toolbar-row {
+    display: flex;
     flex-wrap: wrap;
     gap: var(--space-lg);
     justify-content: center;
-    margin-bottom: var(--space-xl);
+    width: 100%;
+}
+
+.toolbar-row--primary,
+.toolbar-row--filters {
+    align-items: center;
+}
+
+.toolbar-row--search {
+    justify-content: center;
 }
 
 .dataset-selector {
@@ -295,6 +313,7 @@ h1 {
     display: inline-flex;
     align-items: center;
     gap: var(--space-xs);
+    padding: var(--space-sm) var(--space-lg);
     border: 1px solid var(--color-border-muted);
     border-radius: var(--radius-md);
     background: var(--color-surface);
@@ -312,6 +331,10 @@ h1 {
 .toolbar select {
     padding: var(--space-sm) var(--space-lg);
     font-size: 14px;
+}
+
+.toolbar-row--search #search-input {
+    width: min(720px, 100%);
 }
 
 .storage-controls {
@@ -407,7 +430,8 @@ h1 {
 }
 
 .viewbox-number {
-    width: 100%;
+    width: 8ch;
+    max-width: 110px;
     padding: var(--space-sm) var(--space-lg);
     font-size: 13px;
 }
@@ -550,7 +574,6 @@ h1 {
 
 .item-tags-control {
     flex: 1 1 100%;
-    border-top: 1px solid var(--color-border-extra-light);
     padding-top: var(--space-sm);
     margin-top: var(--space-sm);
     display: flex;
