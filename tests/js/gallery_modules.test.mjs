@@ -3336,6 +3336,74 @@ describe('record action handlers', () => {
     assert.equal(Object.prototype.hasOwnProperty.call(record, 'Effect1Correction'), false);
   });
 
+  test(
+    'changeEffectCorrection should keep deep relic level when only effect text changes',
+    { skip: true, todo: 'デメリット判定用のレベルが補正時にnoneへ初期化されてしまう' },
+    () => {
+      const record = {
+        RelicType: '深層遺物',
+        Effect1: 'Old Effect',
+        Effect1Level: '＋4',
+        Effect1LevelOptions: '＋3|＋4'
+      };
+
+      const item = new MockElement('div', 'item');
+      const effect = new MockElement('section', 'effect');
+      effect.dataset.recordIndex = '0';
+      effect.dataset.slot = '1';
+      effect.dataset.kind = 'effect';
+      effect.dataset.predictionOriginalValue = 'Old Effect';
+      effect.dataset.predictionValue = 'Old Effect';
+      effect.dataset.levelOriginalValue = '＋4';
+      effect.dataset.level = '＋4';
+
+      const levelInput = new MockElement('select', 'level-input');
+      levelInput.value = '＋4';
+      effect.appendChild(levelInput);
+
+      const input = new MockElement('input', 'correction-input');
+      input.value = 'New Effect';
+      effect.appendChild(input);
+
+      const storedLevels = [];
+      const deps = buildBaseDeps(record, item, {
+        recordStatusChange: () => false,
+        updateRecordEffectValue: (_recordIndex, slotIndex, value) => {
+          record[`Effect${slotIndex}`] = value;
+          return true;
+        },
+        updateRecordLevelValue: (_recordIndex, slotIndex, value) => {
+          storedLevels.push([slotIndex, value]);
+          record[`Effect${slotIndex}Level`] = value;
+          return true;
+        },
+        updateRecordLevelOptions: (_recordIndex, slotIndex, value) => {
+          record[`Effect${slotIndex}LevelOptions`] = value;
+          return true;
+        },
+        getEffectIndexes: () => ({ recordIndex: 0, slotIndex: 1, kind: 'effect' }),
+        sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean) : []),
+        sortLevelsAscending: (values) => (Array.isArray(values) ? [...values] : []),
+        applyMasterLevelOptions: (effectNode, selectNode, _name, helpers) => {
+          const candidates = ['＋3', '＋4'];
+          if (helpers && typeof helpers.rebuildLevelSelectOptions === 'function') {
+            helpers.rebuildLevelSelectOptions(effectNode, selectNode, candidates);
+          }
+          if (helpers && typeof helpers.setCorrectionLevelCandidates === 'function') {
+            helpers.setCorrectionLevelCandidates(effectNode, candidates);
+          }
+        }
+      });
+
+      const handlers = handlerFactory.createRecordActionHandlers(deps);
+      handlers.changeEffectCorrection(effect, input);
+
+      assert.equal(record.Effect1Level, '＋4');
+      assert.deepEqual(storedLevels.at(-1), [1, '＋4']);
+      assert.equal(effect.dataset.level, '＋4');
+    }
+  );
+
   test('changeEffectCorrection updates demerit record when correction provided', () => {
     const record = { Demerit1: 'Penalty' };
     const item = new MockElement('div', 'item');
