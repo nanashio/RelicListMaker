@@ -228,10 +228,29 @@ h1 {
 
 .toolbar {
     display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    align-items: center;
+    margin-bottom: var(--space-xl);
+    width: 100%;
+    --toolbar-control-height: 38px;
+}
+
+.toolbar-row {
+    display: flex;
     flex-wrap: wrap;
     gap: var(--space-lg);
     justify-content: center;
-    margin-bottom: var(--space-xl);
+    width: 100%;
+}
+
+.toolbar-row--primary,
+.toolbar-row--filters {
+    align-items: center;
+}
+
+.toolbar-row--search {
+    justify-content: center;
 }
 
 .dataset-selector {
@@ -241,53 +260,27 @@ h1 {
     background: var(--color-surface);
     border: 1px solid var(--color-border-muted);
     border-radius: var(--radius-md);
-    padding: var(--space-xs) var(--space-lg);
+    padding: var(--space-sm) var(--space-lg);
     font-size: 14px;
-}
-
-.dataset-selector label {
-    font-size: 13px;
-    color: var(--color-text-primary);
+    height: var(--toolbar-control-height);
+    box-sizing: border-box;
 }
 
 .dataset-selector select {
     min-width: 180px;
     border-color: transparent;
     font-size: 14px;
-    padding: var(--space-xs) var(--space-sm);
+    padding: 0 var(--space-sm);
     background: transparent;
+    height: 100%;
 }
 
 .dataset-selector.hidden {
     display: none;
 }
 
-.relic-type-selector {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border-muted);
-    border-radius: var(--radius-md);
-    padding: var(--space-xs) var(--space-lg);
-    font-size: 14px;
-}
-
-.relic-type-selector label {
-    font-size: 13px;
-    color: var(--color-text-primary);
-}
-
-.relic-type-selector select {
+.relic-type-select {
     min-width: 140px;
-    border-color: transparent;
-    font-size: 14px;
-    padding: var(--space-xs) var(--space-sm);
-    background: transparent;
-}
-
-.relic-type-selector.hidden {
-    display: none;
 }
 
 .toggle-duplicates,
@@ -295,12 +288,15 @@ h1 {
     display: inline-flex;
     align-items: center;
     gap: var(--space-xs);
+    padding: var(--space-sm) var(--space-lg);
     border: 1px solid var(--color-border-muted);
     border-radius: var(--radius-md);
     background: var(--color-surface);
     color: var(--color-text-primary);
     font-size: 14px;
     line-height: 1.3;
+    height: var(--toolbar-control-height);
+    box-sizing: border-box;
 }
 
 .toggle-duplicates input,
@@ -312,15 +308,15 @@ h1 {
 .toolbar select {
     padding: var(--space-sm) var(--space-lg);
     font-size: 14px;
+    height: var(--toolbar-control-height);
+}
+
+.toolbar-row--search #search-input {
+    width: min(720px, 100%);
 }
 
 .storage-controls {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-lg);
-    justify-content: center;
-    align-items: center;
-    margin-bottom: var(--space-lg);
+    display: none;
 }
 
 .storage-controls button:hover {
@@ -385,54 +381,59 @@ h1 {
     color: var(--color-text-muted);
 }
 
-.viewbox-fields {
+.viewbox-body {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-lg);
+    align-items: flex-start;
     justify-content: center;
+    gap: var(--space-lg);
     width: 100%;
+}
+
+.viewbox-fields {
+    --viewbox-input-width: 10ch;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    justify-content: center;
+    flex: 1 1 520px;
 }
 
 .viewbox-field {
     display: flex;
     flex-direction: column;
     gap: var(--space-xs);
-    min-width: 110px;
-    flex: 0 1 140px;
 }
 
 .viewbox-field-label {
     font-size: 12px;
     color: var(--color-text-secondary);
+    display: inline-block;
+    width: var(--viewbox-input-width);
 }
 
 .viewbox-number {
-    width: 100%;
+    width: var(--viewbox-input-width);
+    max-width: 140px;
     padding: var(--space-sm) var(--space-lg);
     font-size: 13px;
 }
 
 .viewbox-actions {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-width: 200px;
+}
+
+.viewbox-action-buttons {
+    display: flex;
+    flex-wrap: nowrap;
     gap: var(--space-sm);
     align-items: center;
     justify-content: center;
-    width: 100%;
-}
-
-.viewbox-status {
-    font-size: 12px;
-    color: var(--color-text-secondary);
-    display: none;
-}
-
-.viewbox-status.viewbox-status--visible {
-    display: inline-flex;
-}
-
-.viewbox-status.viewbox-status--error {
-    color: var(--color-error-text);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -440,12 +441,13 @@ h1 {
 /* -------------------------------------------------------------------------- */
 
 .gallery-summary {
-    text-align: center;
     color: var(--color-text-primary);
     font-size: 14px;
-    margin: 0 auto var(--space-lg);
+    margin: 0;
     display: none;
-    width: 100%;
+    align-items: center;
+    height: var(--toolbar-control-height);
+    box-sizing: border-box;
 }
 
 .gallery-status {
@@ -550,7 +552,6 @@ h1 {
 
 .item-tags-control {
     flex: 1 1 100%;
-    border-top: 1px solid var(--color-border-extra-light);
     padding-top: var(--space-sm);
     margin-top: var(--space-sm);
     display: flex;

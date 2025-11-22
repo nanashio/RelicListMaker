@@ -904,7 +904,6 @@
         gallery: document.getElementById('gallery'),
         datasetSelector: document.getElementById('dataset-selector'),
         datasetSelect: document.getElementById('dataset-select'),
-        relicTypeSelector: document.getElementById('relic-type-selector'),
         relicTypeSelect: document.getElementById('relic-type-select'),
         galleryStatus: document.getElementById('gallery-status'),
         searchInput: document.getElementById('search-input'),
@@ -926,8 +925,7 @@
         viewBoxHeightInput: document.getElementById('viewbox-height'),
         viewBoxWidthInput: document.getElementById('viewbox-width'),
         viewBoxApplyButton: document.getElementById('viewbox-apply'),
-        viewBoxResetButton: document.getElementById('viewbox-reset'),
-        viewBoxStatus: document.getElementById('viewbox-status')
+        viewBoxResetButton: document.getElementById('viewbox-reset')
     };
 
     const viewBoxStorageKey = createViewBoxStorageKey(initialCsvPath);
@@ -1073,7 +1071,7 @@
     }
 
     function updateRelicTypeSelector() {
-        if (!dom.relicTypeSelector || !dom.relicTypeSelect) {
+        if (!dom.relicTypeSelect) {
             return;
         }
         const availableTypes = Array.from(getAvailableRelicTypes());
@@ -1082,7 +1080,7 @@
             clearElementChildren(dom.relicTypeSelect);
             dom.relicTypeSelect.value = RELIC_TYPE_ALL;
             dom.relicTypeSelect.title = RELIC_TYPE_LABELS[RELIC_TYPE_ALL];
-            setElementHidden(dom.relicTypeSelector, true);
+            setElementHidden(dom.relicTypeSelect, true);
             return;
         }
 
@@ -1107,7 +1105,7 @@
 
         dom.relicTypeSelect.value = activeRelicType;
         dom.relicTypeSelect.title = RELIC_TYPE_LABELS[activeRelicType] || activeRelicType;
-        setElementHidden(dom.relicTypeSelector, false);
+        setElementHidden(dom.relicTypeSelect, false);
     }
 
     function rebuildDatasetOptions(selectedIndex) {
@@ -1607,7 +1605,6 @@
         const widthInput = dom.viewBoxWidthInput || null;
         const applyButton = dom.viewBoxApplyButton || null;
         const resetButton = dom.viewBoxResetButton || null;
-        const statusEl = dom.viewBoxStatus || null;
 
         const rawDefault =
             (body.dataset && body.dataset.defaultItemImageViewBox) ||
@@ -1624,16 +1621,6 @@
         let lastParsedLengths = null;
         let viewBoxUnit = '';
         let imageDimensions = null;
-
-        function updateStatus(message, type = 'info') {
-            if (!statusEl) {
-                return;
-            }
-            statusEl.textContent = message;
-            const isError = type === 'error';
-            statusEl.classList.toggle('viewbox-status--error', isError);
-            statusEl.classList.toggle('viewbox-status--visible', Boolean(message));
-        }
 
         function persistValue(value) {
             if (!value || value === defaultValue) {
@@ -1770,7 +1757,6 @@
         }
 
         function clearStatus() {
-            updateStatus('');
             [topInput, leftInput, heightInput, widthInput].forEach((input) => {
                 if (input) {
                     input.setCustomValidity('');
@@ -1857,7 +1843,6 @@
                 return;
             }
             input.addEventListener('input', () => {
-                updateStatus('');
                 input.setCustomValidity('');
             });
             input.addEventListener('keydown', (event) => {
@@ -1872,7 +1857,7 @@
             clearStatus();
             const dimensions = resolveImageDimensions();
             if (!dimensions) {
-                updateStatus('画像の読み込み完了後に設定してください。', 'error');
+                console.warn('画像の読み込み完了後に設定してください。');
                 return;
             }
 
@@ -1918,11 +1903,7 @@
                 unit
             );
 
-            if (!applyViewBoxString(viewBoxString)) {
-                updateStatus('object-view-boxの適用に失敗しました。', 'error');
-                return;
-            }
-            updateStatus('画像表示範囲を適用しました');
+            applyViewBoxString(viewBoxString);
         }
 
         function reportInputError(input, message) {
@@ -1930,7 +1911,7 @@
                 input.setCustomValidity(message);
                 input.reportValidity();
             }
-            updateStatus(message, 'error');
+            console.warn(message);
         }
 
         if (applyButton) {
@@ -1941,7 +1922,6 @@
             resetButton.addEventListener('click', () => {
                 clearStatus();
                 applyViewBoxString(defaultValue, { persist: true, syncInputs: true });
-                updateStatus('初期値に戻しました');
             });
         }
     }

@@ -334,11 +334,11 @@
         const { createItem } = itemFactory;
 
         const SUMMARY_INLINE_STYLE = {
-            textAlign: 'center',
+            textAlign: 'left',
             color: '#333',
             fontSize: '14px',
-            margin: '0 auto 12px',
-            width: '100%'
+            margin: '0',
+            width: 'auto'
         };
 
         function ensureSummaryElement() {
@@ -414,14 +414,12 @@
                 }
             });
 
-            const datasetName = datasetState.label || '';
-            const prefix = datasetName ? `[${datasetName}] ` : '';
-            const summaryText = `${prefix}全体 ${totalCount} 件 / 確認済み ${fullyConfirmedCount} 件 / 未レビュー ${pendingCount} 件`;
+            const summaryText = `全体 ${totalCount} 件 / 確認済み ${fullyConfirmedCount} 件 / 未レビュー ${pendingCount} 件`;
             summary.textContent = summaryText;
             if (summary.style) {
                 summary.style.display = 'flex';
-                summary.style.justifyContent = 'center';
-                summary.style.textAlign = 'center';
+                summary.style.justifyContent = 'flex-start';
+                summary.style.textAlign = 'left';
             }
         }
 

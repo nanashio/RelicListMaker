@@ -10,39 +10,43 @@
 <body __BODY_ATTRIBUTES__>
     <h1>遺物一覧</h1>
     <div class="toolbar">
-        <div class="dataset-selector" id="dataset-selector">
-            <label for="dataset-select">対象</label>
-            <select id="dataset-select"></select>
+        <div class="toolbar-row toolbar-row--primary">
+            <div class="dataset-selector" id="dataset-selector">
+                <label for="dataset-select">対象</label>
+                <select id="dataset-select"></select>
+            </div>
+            <p id="gallery-summary" class="gallery-summary" role="status" aria-live="polite"></p>
         </div>
-        <div class="relic-type-selector" id="relic-type-selector">
-            <label for="relic-type-select">種別</label>
-            <select id="relic-type-select"></select>
+        <div class="toolbar-row toolbar-row--filters">
+            <select id="relic-type-select" class="relic-type-select"></select>
+            <select id="filter-status">
+                <option value="all">すべて</option>
+                <option value="with-pending">未レビューを含む</option>
+                <option value="resolved">確認済み / 修正済みのみ</option>
+                <option value="favorite">お気に入りのみ</option>
+            </select>
+            <select id="filter-color">
+                <option value="all">色フィルタなし</option>
+                <option value="red">赤のみ</option>
+                <option value="yellow">黄のみ</option>
+                <option value="green">緑のみ</option>
+                <option value="blue">青のみ</option>
+                <option value="none">色なしのみ</option>
+            </select>
+            <label class="toggle-duplicates" title="重複項目の表示切替">
+                <input type="checkbox" id="show-duplicates">
+                重複も表示
+            </label>
+            <label class="toggle-ocr">
+                <input type="checkbox" id="show-ocr">
+                OCRを表示
+            </label>
         </div>
-        <input type="search" id="search-input" placeholder="ファイル名・推定テキスト">
-        <select id="filter-status">
-            <option value="all">すべて</option>
-            <option value="with-pending">未レビューを含む</option>
-            <option value="resolved">確認済み / 修正済みのみ</option>
-            <option value="favorite">お気に入りのみ</option>
-        </select>
-        <select id="filter-color">
-            <option value="all">色フィルタなし</option>
-            <option value="red">赤のみ</option>
-            <option value="yellow">黄のみ</option>
-            <option value="green">緑のみ</option>
-            <option value="blue">青のみ</option>
-            <option value="none">色なしのみ</option>
-        </select>
-        <label class="toggle-duplicates" title="重複項目の表示切替">
-            <input type="checkbox" id="show-duplicates">
-            重複
-        </label>
-        <label class="toggle-ocr">
-            <input type="checkbox" id="show-ocr">
-            OCRを表示
-        </label>
+        <div class="toolbar-row toolbar-row--search">
+            <input type="search" id="search-input" placeholder="ファイル名・推定テキスト">
+        </div>
     </div>
-    <div class="storage-controls">
+    <div class="storage-controls" hidden>
         <button id="download-csv" type="button">CSVをダウンロード</button>
         <button id="upload-csv" type="button">CSVを読み込む</button>
         <input id="upload-csv-input" type="file" accept=".csv" hidden>
@@ -53,31 +57,33 @@
             <span class="viewbox-title">画像表示範囲</span>
             <span class="viewbox-subtitle">(object-view-box)</span>
         </div>
-        <div class="viewbox-fields" role="group" aria-label="表示範囲の設定値">
-            <label class="viewbox-field" for="viewbox-top">
-                <span class="viewbox-field-label">上 (px)</span>
-                <input id="viewbox-top" class="viewbox-number" type="number" inputmode="decimal" step="0.1" min="0">
-            </label>
-            <label class="viewbox-field" for="viewbox-left">
-                <span class="viewbox-field-label">左 (px)</span>
-                <input id="viewbox-left" class="viewbox-number" type="number" inputmode="decimal" step="0.1" min="0">
-            </label>
-            <label class="viewbox-field" for="viewbox-height">
-                <span class="viewbox-field-label">縦幅 (px)</span>
-                <input id="viewbox-height" class="viewbox-number" type="number" inputmode="decimal" step="0.1" min="0">
-            </label>
-            <label class="viewbox-field" for="viewbox-width">
-                <span class="viewbox-field-label">横幅 (px)</span>
-                <input id="viewbox-width" class="viewbox-number" type="number" inputmode="decimal" step="0.1" min="0">
-            </label>
-        </div>
-        <div class="viewbox-actions">
-            <button id="viewbox-apply" class="viewbox-button" type="button">適用</button>
-            <button id="viewbox-reset" class="viewbox-button" type="button">初期値に戻す</button>
-            <span id="viewbox-status" class="viewbox-status" role="status" aria-live="polite"></span>
+        <div class="viewbox-body">
+            <div class="viewbox-fields" role="group" aria-label="表示範囲の設定値">
+                <label class="viewbox-field" for="viewbox-top">
+                    <span class="viewbox-field-label">上 (px)</span>
+                    <input id="viewbox-top" class="viewbox-number" type="number" inputmode="decimal" step="1" min="0">
+                </label>
+                <label class="viewbox-field" for="viewbox-left">
+                    <span class="viewbox-field-label">左 (px)</span>
+                    <input id="viewbox-left" class="viewbox-number" type="number" inputmode="decimal" step="1" min="0">
+                </label>
+                <label class="viewbox-field" for="viewbox-height">
+                    <span class="viewbox-field-label">縦幅 (px)</span>
+                    <input id="viewbox-height" class="viewbox-number" type="number" inputmode="decimal" step="1" min="0">
+                </label>
+                <label class="viewbox-field" for="viewbox-width">
+                    <span class="viewbox-field-label">横幅 (px)</span>
+                    <input id="viewbox-width" class="viewbox-number" type="number" inputmode="decimal" step="1" min="0">
+                </label>
+                <div class="viewbox-actions">
+                    <div class="viewbox-action-buttons">
+                        <button id="viewbox-apply" class="viewbox-button" type="button">適用</button>
+                        <button id="viewbox-reset" class="viewbox-button" type="button">初期値に戻す</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-    <p id="gallery-summary" class="gallery-summary" role="status" aria-live="polite"></p>
     <p id="gallery-status" class="gallery-status" role="status"></p>
     <div id="gallery" class="gallery"></div>
 
