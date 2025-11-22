@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import html
 import json
 import os
 import shutil
@@ -91,37 +90,43 @@ def _build_fixture_tree(base_dir: Path) -> None:
         },
     }
 
-    def _escape_attr(value: str) -> str:
-        return html.escape(value or "", quote=True)
+    bootstrap_data = {
+        "resultsCsv": "sample.csv",
+        "imgDir": "crops",
+        "labelSymbols": ["①", "②", "③"],
+        "masterCsv": "",
+        "masterJson": "",
+        "masterOptions": master_options,
+        "masterOptionsMap": {},
+        "masterLevels": master_levels,
+        "masterLevelsMap": master_levels_by_type,
+        "masterCsvMap": {},
+        "masterDemeritCsv": "",
+        "masterDemeritJson": "",
+        "masterDemeritOptions": [],
+        "masterDemeritOptionsMap": {},
+        "masterDemeritCsvMap": {},
+        "masterDemeritRulesMap": {},
+        "datasets": [],
+        "activeDataset": 0,
+        "itemImageViewBox": DEFAULT_ITEM_IMAGE_VIEW_BOX,
+        "appVersion": "",
+        "coreScript": "gallery.js",
+    }
+
+    (gallery_dir / "gallery_bootstrap.json").write_text(
+        json.dumps(bootstrap_data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
     replacements = {
         "__CSS_FILE__": "gallery.css",
         "__JS_FILE__": "index.js",
-        "__CORE_JS__": "gallery.js",
-        "__RESULTS_CSV__": "sample.csv",
-        "__IMAGE_DIR__": "crops",
-        "__LABEL_SYMBOLS__": json.dumps(["①", "②", "③"], ensure_ascii=False),
-        "__MASTER_CSV__": "",
-        "__MASTER_JSON__": "",
-        "__MASTER_OPTIONS__": json.dumps(master_options, ensure_ascii=False),
-        "__MASTER_OPTIONS_MAP__": json.dumps({}, ensure_ascii=False),
-        "__MASTER_LEVELS__": json.dumps(master_levels, ensure_ascii=False),
-        "__MASTER_LEVELS_BY_TYPE__": json.dumps(master_levels_by_type, ensure_ascii=False),
-        "__MASTER_CSV_MAP__": json.dumps({}, ensure_ascii=False),
-        "__MASTER_DEMERIT_CSV__": "",
-        "__MASTER_DEMERIT_JSON__": "",
-        "__MASTER_DEMERIT_OPTIONS__": json.dumps([], ensure_ascii=False),
-        "__MASTER_DEMERIT_OPTIONS_MAP__": json.dumps({}, ensure_ascii=False),
-        "__MASTER_DEMERIT_CSV_MAP__": json.dumps({}, ensure_ascii=False),
-        "__MASTER_DEMERIT_RULES_MAP__": json.dumps({}, ensure_ascii=False),
-        "__DATASETS__": json.dumps([], ensure_ascii=False),
-        "__ACTIVE_DATASET__": "0",
-        "__ITEM_IMAGE_VIEW_BOX__": DEFAULT_ITEM_IMAGE_VIEW_BOX,
+        "__BOOTSTRAP_JSON__": "gallery_bootstrap.json",
     }
 
     viewer_html = template
     for placeholder, raw_value in replacements.items():
-        viewer_html = viewer_html.replace(placeholder, _escape_attr(raw_value))
+        viewer_html = viewer_html.replace(placeholder, raw_value)
     (gallery_dir / "index.html").write_text(viewer_html, encoding="utf-8")
 
 

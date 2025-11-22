@@ -43,40 +43,36 @@ def render_gallery_template(template: str, replacements: dict[str, str]) -> str:
     return rendered
 
 
-def _serialize_payload(payload: GalleryPayload) -> dict[str, str]:
+def _build_bootstrap_data(
+    payload: GalleryPayload, *, app_version: str, core_script: str
+) -> dict[str, object]:
     embed_options = payload.master_options if not payload.master_json else []
     embed_demerit_options = (
         payload.master_demerit_options if not payload.master_demerit_json else []
     )
 
     return {
-        "__RESULTS_CSV__": _escape_attr(payload.results_csv),
-        "__IMAGE_DIR__": _escape_attr(payload.image_dir),
-        "__LABEL_SYMBOLS__": _escape_attr(json.dumps(payload.label_symbols, ensure_ascii=False)),
-        "__MASTER_CSV__": _escape_attr(payload.master_csv),
-        "__MASTER_JSON__": _escape_attr(payload.master_json),
-        "__MASTER_OPTIONS__": _escape_attr(json.dumps(embed_options, ensure_ascii=False)),
-        "__MASTER_OPTIONS_MAP__": _escape_attr(json.dumps(payload.master_options_by_type, ensure_ascii=False)),
-        "__MASTER_LEVELS__": _escape_attr(json.dumps(payload.master_levels, ensure_ascii=False)),
-        "__MASTER_LEVELS_BY_TYPE__": _escape_attr(json.dumps(payload.master_levels_by_type, ensure_ascii=False)),
-        "__MASTER_CSV_MAP__": _escape_attr(json.dumps(payload.master_csv_map, ensure_ascii=False)),
-        "__MASTER_DEMERIT_CSV__": _escape_attr(payload.master_demerit_csv),
-        "__MASTER_DEMERIT_JSON__": _escape_attr(payload.master_demerit_json),
-        "__MASTER_DEMERIT_OPTIONS__": _escape_attr(
-            json.dumps(embed_demerit_options, ensure_ascii=False)
-        ),
-        "__MASTER_DEMERIT_OPTIONS_MAP__": _escape_attr(
-            json.dumps(payload.master_demerit_options_by_type, ensure_ascii=False)
-        ),
-        "__MASTER_DEMERIT_CSV_MAP__": _escape_attr(
-            json.dumps(payload.master_demerit_csv_map, ensure_ascii=False)
-        ),
-        "__MASTER_DEMERIT_RULES_MAP__": _escape_attr(
-            json.dumps(payload.master_demerit_rules_by_type, ensure_ascii=False)
-        ),
-        "__DATASETS__": _escape_attr(json.dumps(payload.datasets, ensure_ascii=False)),
-        "__ACTIVE_DATASET__": _escape_attr(str(payload.active_dataset_index)),
-        "__ITEM_IMAGE_VIEW_BOX__": _escape_attr(payload.item_image_view_box),
+        "resultsCsv": payload.results_csv,
+        "imgDir": payload.image_dir,
+        "labelSymbols": payload.label_symbols,
+        "masterCsv": payload.master_csv,
+        "masterJson": payload.master_json,
+        "masterOptions": embed_options,
+        "masterOptionsMap": payload.master_options_by_type,
+        "masterLevels": payload.master_levels,
+        "masterLevelsMap": payload.master_levels_by_type,
+        "masterCsvMap": payload.master_csv_map,
+        "masterDemeritCsv": payload.master_demerit_csv,
+        "masterDemeritJson": payload.master_demerit_json,
+        "masterDemeritOptions": embed_demerit_options,
+        "masterDemeritOptionsMap": payload.master_demerit_options_by_type,
+        "masterDemeritCsvMap": payload.master_demerit_csv_map,
+        "masterDemeritRulesMap": payload.master_demerit_rules_by_type,
+        "datasets": payload.datasets,
+        "activeDataset": payload.active_dataset_index,
+        "itemImageViewBox": payload.item_image_view_box,
+        "appVersion": app_version,
+        "coreScript": core_script,
     }
 
 
@@ -159,15 +155,23 @@ def generate_html(
     index_reference = gallery_assets.cache_bust_reference(assets.index_js)
     core_js_reference = gallery_assets.cache_bust_reference(assets.core_js)
 
-    replacements = _serialize_payload(payload)
-    replacements.update(
-        {
-            "__CSS_FILE__": _escape_attr(css_reference),
-            "__JS_FILE__": _escape_attr(index_reference),
-            "__CORE_JS__": _escape_attr(core_js_reference),
-            "__APP_VERSION__": _escape_attr(app_version),
-        }
+    bootstrap_data = _build_bootstrap_data(
+        payload, app_version=app_version, core_script=core_js_reference
     )
+    bootstrap_json_path = os.path.join(output_dir, "gallery_bootstrap.json")
+    with open(bootstrap_json_path, "w", encoding="utf-8") as handle:
+        json.dump(bootstrap_data, handle, ensure_ascii=False, indent=2)
+
+    bootstrap_asset = gallery_assets.PreparedAsset(
+        "gallery_bootstrap.json", bootstrap_json_path
+    )
+    bootstrap_reference = gallery_assets.cache_bust_reference(bootstrap_asset)
+
+    replacements = {
+        "__CSS_FILE__": _escape_attr(css_reference),
+        "__JS_FILE__": _escape_attr(index_reference),
+        "__BOOTSTRAP_JSON__": _escape_attr(bootstrap_reference),
+    }
 
     html_output = render_gallery_template(html_template, replacements)
 
