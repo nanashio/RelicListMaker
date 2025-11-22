@@ -338,12 +338,7 @@ h1 {
 }
 
 .storage-controls {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-lg);
-    justify-content: center;
-    align-items: center;
-    margin-bottom: var(--space-lg);
+    display: none;
 }
 
 .storage-controls button:hover {
@@ -430,19 +425,27 @@ h1 {
 }
 
 .viewbox-number {
-    width: 8ch;
-    max-width: 110px;
+    width: 10ch;
+    max-width: 140px;
     padding: var(--space-sm) var(--space-lg);
     font-size: 13px;
 }
 
 .viewbox-actions {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: var(--space-sm);
     align-items: center;
     justify-content: center;
     width: 100%;
+}
+
+.viewbox-action-buttons {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: var(--space-sm);
+    align-items: center;
+    justify-content: center;
 }
 
 .viewbox-status {

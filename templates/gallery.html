@@ -48,7 +48,7 @@
             <input type="search" id="search-input" placeholder="ファイル名・推定テキスト">
         </div>
     </div>
-    <div class="storage-controls">
+    <div class="storage-controls" hidden>
         <button id="download-csv" type="button">CSVをダウンロード</button>
         <button id="upload-csv" type="button">CSVを読み込む</button>
         <input id="upload-csv-input" type="file" accept=".csv" hidden>
@@ -78,8 +78,10 @@
             </label>
         </div>
         <div class="viewbox-actions">
-            <button id="viewbox-apply" class="viewbox-button" type="button">適用</button>
-            <button id="viewbox-reset" class="viewbox-button" type="button">初期値に戻す</button>
+            <div class="viewbox-action-buttons">
+                <button id="viewbox-apply" class="viewbox-button" type="button">適用</button>
+                <button id="viewbox-reset" class="viewbox-button" type="button">初期値に戻す</button>
+            </div>
             <span id="viewbox-status" class="viewbox-status" role="status" aria-live="polite"></span>
         </div>
     </div>
