@@ -85,6 +85,7 @@
             this.textInput = document.createElement('input');
             this.textInput.type = 'text';
             this.textInput.className = 'ts-input';
+            this.textInput.tabIndex = -1;
             this.textInput.autocomplete = 'off';
             this.textInput.spellcheck = false;
             this.textInput.placeholder = this.settings.placeholder || this.input.placeholder || '';
