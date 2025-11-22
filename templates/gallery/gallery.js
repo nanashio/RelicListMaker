@@ -904,7 +904,6 @@
         gallery: document.getElementById('gallery'),
         datasetSelector: document.getElementById('dataset-selector'),
         datasetSelect: document.getElementById('dataset-select'),
-        relicTypeSelector: document.getElementById('relic-type-selector'),
         relicTypeSelect: document.getElementById('relic-type-select'),
         galleryStatus: document.getElementById('gallery-status'),
         searchInput: document.getElementById('search-input'),
@@ -1073,7 +1072,7 @@
     }
 
     function updateRelicTypeSelector() {
-        if (!dom.relicTypeSelector || !dom.relicTypeSelect) {
+        if (!dom.relicTypeSelect) {
             return;
         }
         const availableTypes = Array.from(getAvailableRelicTypes());
@@ -1082,7 +1081,7 @@
             clearElementChildren(dom.relicTypeSelect);
             dom.relicTypeSelect.value = RELIC_TYPE_ALL;
             dom.relicTypeSelect.title = RELIC_TYPE_LABELS[RELIC_TYPE_ALL];
-            setElementHidden(dom.relicTypeSelector, true);
+            setElementHidden(dom.relicTypeSelect, true);
             return;
         }
 
@@ -1107,7 +1106,7 @@
 
         dom.relicTypeSelect.value = activeRelicType;
         dom.relicTypeSelect.title = RELIC_TYPE_LABELS[activeRelicType] || activeRelicType;
-        setElementHidden(dom.relicTypeSelector, false);
+        setElementHidden(dom.relicTypeSelect, false);
     }
 
     function rebuildDatasetOptions(selectedIndex) {

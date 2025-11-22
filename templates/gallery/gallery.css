@@ -279,30 +279,8 @@ h1 {
     display: none;
 }
 
-.relic-type-selector {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border-muted);
-    border-radius: var(--radius-md);
-    padding: var(--space-sm) var(--space-lg);
-    font-size: 14px;
-    height: var(--toolbar-control-height);
-    box-sizing: border-box;
-}
-
-.relic-type-selector select {
+.relic-type-select {
     min-width: 140px;
-    border-color: transparent;
-    font-size: 14px;
-    padding: 0 var(--space-sm);
-    background: transparent;
-    height: 100%;
-}
-
-.relic-type-selector.hidden {
-    display: none;
 }
 
 .toggle-duplicates,
@@ -403,12 +381,21 @@ h1 {
     color: var(--color-text-muted);
 }
 
+.viewbox-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: center;
+    gap: var(--space-lg);
+    width: 100%;
+}
+
 .viewbox-fields {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-lg);
+    gap: var(--space-md);
     justify-content: center;
-    width: 100%;
+    flex: 1 1 520px;
 }
 
 .viewbox-field {
@@ -437,7 +424,8 @@ h1 {
     gap: var(--space-sm);
     align-items: center;
     justify-content: center;
-    width: 100%;
+    flex: 0 0 auto;
+    min-width: 200px;
 }
 
 .viewbox-action-buttons {
