@@ -14,7 +14,8 @@ _VERSION_FILE_NAME = "RELEASE_VERSION"
 def _normalize(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
-    text = value.strip()
+    # BOM (\ufeff) が混入していると出力に文字化けが発生するため除去する
+    text = value.replace("\ufeff", "").strip()
     return text or None
 
 
