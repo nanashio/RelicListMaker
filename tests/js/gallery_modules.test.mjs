@@ -3338,7 +3338,6 @@ describe('record action handlers', () => {
 
   test(
     'changeEffectCorrection should keep deep relic level when only effect text changes',
-    { skip: true, todo: 'デメリット判定用のレベルが補正時にnoneへ初期化されてしまう' },
     () => {
       const record = {
         RelicType: '深層遺物',
