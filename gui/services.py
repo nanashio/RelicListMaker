@@ -1,6 +1,7 @@
 """GUI向けのサービス層ヘルパー."""
 from __future__ import annotations
 
+import re
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -81,6 +82,7 @@ class PipelineExecutor:
         *,
         progress_callback: Callable[[int, int, str], None],
         save_frames: bool | None = None,
+        templates_only: bool = False,
     ) -> None:
         settings = PipelineSettings(
             video_dir=str(state.video_dir),
@@ -94,6 +96,7 @@ class PipelineExecutor:
             relic_type_overrides=state.type_overrides(),
             save_full_frames=state.save_full_frames if save_frames is None else save_frames,
             csv_column_visibility=dict(state.column_visibility),
+            templates_only=templates_only,
         )
         reporter = self._reporter_factory(callback=progress_callback)
         self._pipeline_runner(settings=settings, reporter=reporter)
@@ -143,3 +146,28 @@ class BackgroundTaskRunner:
             thread = self._threads.get(key)
         if thread:
             thread.join(timeout=timeout)
+
+
+_APP_VERSION_RE = re.compile(r'data-app-version="([^"]+)"', re.IGNORECASE)
+_GENERATOR_RE = re.compile(
+    r'<meta[^>]+name=["\']generator["\'][^>]+content=["\']([^"\']+)["\']',
+    re.IGNORECASE,
+)
+
+
+def detect_gallery_template_version(results_dir: Path) -> str | None:
+    viewer_path = Path(results_dir) / "gallery" / "index.html"
+    try:
+        html_text = viewer_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    for pattern in (_APP_VERSION_RE, _GENERATOR_RE):
+        match = pattern.search(html_text)
+        if not match:
+            continue
+        version = match.group(1).replace("\ufeff", "").strip()
+        if version:
+            return version
+
+    return None

@@ -16,10 +16,17 @@ class PipelineController:
         self._progress_token: int | None = None
         self._last_pipeline_error: str | None = None
         self._pipeline_error_messages: list[str] = []
+        self._last_run_templates_only = False
 
     def run(self) -> None:
+        self._start_pipeline(templates_only=False)
+
+    def run_templates_only(self) -> None:
+        self._start_pipeline(templates_only=True)
+
+    def _start_pipeline(self, *, templates_only: bool) -> None:
         if self.app.background_tasks.is_running("pipeline"):
-            messagebox.showinfo("処理中", "現在、動画処理が実行中です。完了をお待ちください。")
+            messagebox.showinfo("処理中", "現在、処理が実行中です。完了をお待ちください。")
             return
 
         try:
@@ -28,7 +35,7 @@ class PipelineController:
             self._handle_form_error(exc)
             return
 
-        if not self.app.state.queue_entries:
+        if not templates_only and not self.app.state.queue_entries:
             messagebox.showinfo("動画未選択", "先に動画をドラッグ＆ドロップしてください。")
             return
 
@@ -36,13 +43,21 @@ class PipelineController:
         video_dir = str(state_snapshot.video_dir)
         results_dir = str(state_snapshot.results_dir)
 
+        self._last_run_templates_only = templates_only
         self.app.ui.run_button.configure(state="disabled")
-        self.app.append_log(
-            f"[GUI] 動画処理を開始します: {video_dir} -> {results_dir} ({len(state_snapshot.queue_entries)} 件)"
-        )
+        if self.app.ui.templates_button:
+            self.app.ui.templates_button.configure(state="disabled")
+        if templates_only:
+            self.app.append_log(f"[GUI] 出力テンプレートを更新します: {results_dir}")
+            start_message = "出力テンプレートを準備中..."
+        else:
+            self.app.append_log(
+                f"[GUI] 動画処理を開始します: {video_dir} -> {results_dir} ({len(state_snapshot.queue_entries)} 件)"
+            )
+            start_message = "動画処理を準備中..."
         self._last_pipeline_error = None
         self._pipeline_error_messages.clear()
-        token = self.app.start_progress("動画処理を準備中...")
+        token = self.app.start_progress(start_message)
         self._progress_token = token
 
         def progress_callback(current: int, total: int, message: str) -> None:
@@ -60,14 +75,26 @@ class PipelineController:
             try:
                 with redirect_streams(self.app.log_queue):
                     self.app.executor.execute_pipeline(
-                        state_snapshot, progress_callback=progress_callback
+                        state_snapshot,
+                        progress_callback=progress_callback,
+                        templates_only=templates_only,
+                        save_frames=False if templates_only else None,
                     )
-                self.app.append_log("[GUI] 動画処理が完了しました")
+                if templates_only:
+                    self.app.append_log("[GUI] 出力テンプレートを更新しました")
+                else:
+                    self.app.append_log("[GUI] 動画処理が完了しました")
             except Exception as exc:  # noqa: BLE001 - GUIログに表示するため広く捕捉
                 error_detail = str(exc)
-                self._last_pipeline_error = self._format_error_message(error_detail)
-                error_message = f"OCR処理に失敗しました: {error_detail}"
-                self.app.append_log("[ERROR] 動画処理中にエラーが発生しました")
+                self._last_pipeline_error = self._format_error_message(
+                    error_detail, templates_only=templates_only
+                )
+                if templates_only:
+                    error_message = f"テンプレート更新に失敗しました: {error_detail}"
+                else:
+                    error_message = f"OCR処理に失敗しました: {error_detail}"
+                prefix = "テンプレート更新" if templates_only else "動画処理"
+                self.app.append_log(f"[ERROR] {prefix}中にエラーが発生しました")
                 self.app.append_log(traceback.format_exc())
                 self.app.root.after(
                     0,
@@ -81,16 +108,29 @@ class PipelineController:
             self.app.background_tasks.start("pipeline", worker)
         except RuntimeError:
             self.app.ui.run_button.configure(state="normal")
-            messagebox.showinfo("処理中", "現在、動画処理が実行中です。完了をお待ちください。")
+            if self.app.ui.templates_button:
+                self.app.ui.templates_button.configure(state="normal")
+            messagebox.showinfo("処理中", "現在、処理が実行中です。完了をお待ちください。")
 
     def on_finished(self) -> None:
         self.app.ui.run_button.configure(state="normal")
+        if self.app.ui.templates_button:
+            self.app.ui.templates_button.configure(state="normal")
         if self._progress_token is not None:
-            final_message = self._last_pipeline_error or "ドラッグ&ドロップで動画を追加してください"
+            default_message = (
+                "テンプレートの更新が完了しました"
+                if self._last_run_templates_only
+                else "ドラッグ&ドロップで動画を追加してください"
+            )
+            final_message = self._last_pipeline_error or default_message
             self.app.stop_progress(self._progress_token, final_message=final_message)
             self._progress_token = None
         self._last_pipeline_error = None
-        self.app.handlers.reset_queue_after_pipeline()
+        if self._last_run_templates_only:
+            self.app.handlers.schedule_results_refresh()
+        else:
+            self.app.handlers.reset_queue_after_pipeline()
+        self._last_run_templates_only = False
 
     def handle_log_message(self, message: str) -> None:
         stripped = message.strip()
@@ -110,13 +150,14 @@ class PipelineController:
         combined = " / ".join(self._pipeline_error_messages)
         self._last_pipeline_error = self._format_error_message(combined)
 
-    def _format_error_message(self, detail: str) -> str:
+    def _format_error_message(self, detail: str, *, templates_only: bool = False) -> str:
         normalized = " ".join(detail.split())
+        base = "テンプレート更新に失敗しました" if templates_only else "OCR処理に失敗しました"
         if not normalized:
-            return "OCR処理に失敗しました"
+            return base
         if len(normalized) > self.app.ERROR_DISPLAY_MAX_CHARS:
             normalized = normalized[: self.app.ERROR_DISPLAY_MAX_CHARS - 1] + "…"
-        return f"OCR処理に失敗しました: {normalized}"
+        return f"{base}: {normalized}"
 
 
 class MergeController:

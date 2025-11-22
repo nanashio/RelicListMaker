@@ -18,6 +18,7 @@ from .adapters import (
     get_windows_drop_support,
 )
 from pipeline import detect_item_color, detect_relic_type, normalize_relic_type
+from .services import detect_gallery_template_version
 
 from .widgets import InlineCombo
 
@@ -158,6 +159,11 @@ class AppEventHandlers:
         if self.pipeline_controller is None:
             return
         self.pipeline_controller.run()
+
+    def update_templates_only(self) -> None:
+        if self.pipeline_controller is None:
+            return
+        self.pipeline_controller.run_templates_only()
 
     def start_merge(self) -> None:
         if self.merge_controller is None:
@@ -683,14 +689,17 @@ class AppEventHandlers:
             return
         results_dir = self.resolve_input_path(self.app.results_dir_var.get())
         results_path_text = str(results_dir)
+        version_text: str | None = None
         if not results_dir.exists():
             tree.delete(*tree.get_children())
             self._results_entries = []
             message = f"結果フォルダが見つかりません: {results_path_text}"
             self.app.results_status_var.set(message)
+            self._update_template_version_display(None, exists=False)
             if log:
                 self.app.append_log(f"[WARN] {message}")
             return
+        version_text = detect_gallery_template_version(results_dir)
         try:
             entries = self._collect_results_entries(results_dir)
         except Exception as exc:  # noqa: BLE001 - GUIにエラー表示
@@ -699,6 +708,7 @@ class AppEventHandlers:
             message = f"結果フォルダの読み込みに失敗しました: {exc}"
             self.app.results_status_var.set("結果フォルダの読み込みに失敗しました")
             self.app.append_log(f"[ERROR] {message}")
+            self._update_template_version_display(version_text, exists=True, error=True)
             return
         self._results_entries = entries
         tree.delete(*tree.get_children())
@@ -721,6 +731,7 @@ class AppEventHandlers:
             )
             message = f"{len(entries)} 件 (全レビュー済 {reviewed_count} 件)"
         self.app.results_status_var.set(message)
+        self._update_template_version_display(version_text, exists=True)
         if log:
             self.app.append_log(
                 f"[GUI] 結果フォルダを読み込みました: {results_path_text} ({len(entries)} 件)"
@@ -769,6 +780,20 @@ class AppEventHandlers:
             log_frame.grid()
         else:
             log_frame.grid_remove()
+
+    def _update_template_version_display(
+        self, version_text: str | None, *, exists: bool, error: bool = False
+    ) -> None:
+        if error:
+            self.app.template_version_var.set("テンプレート: 読み込み失敗")
+            return
+        if not exists:
+            self.app.template_version_var.set("テンプレート: なし")
+            return
+        if version_text:
+            self.app.template_version_var.set(f"テンプレート: {version_text}")
+        else:
+            self.app.template_version_var.set("テンプレート: 未検出")
 
     # --- Helpers ----------------------------------------------------------
 
