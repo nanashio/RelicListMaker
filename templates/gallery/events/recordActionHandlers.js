@@ -461,6 +461,18 @@
             if (typeof input.setCustomValidity === 'function') {
                 input.setCustomValidity('');
             }
+            const actionContext = getItemActionContext(effect);
+            const record = actionContext && actionContext.record ? actionContext.record : null;
+            const relicTypeText = record && record.RelicType ? String(record.RelicType).trim() : '';
+            const isDeepRelic =
+                relicTypeText === '深層遺物' ||
+                relicTypeText === '深層' ||
+                relicTypeText.toLowerCase() === 'deep';
+            const originalLevel = effect.dataset.levelOriginalValue || '';
+            const hasOriginalLevel = toStoredLevelValue(originalLevel) !== 'none';
+            const allowLevelPreservation =
+                !isDemerit && hasOriginalLevel && isDeepRelic && effect.dataset.preserveOriginalLevel !== 'false';
+
             const hasManualEntry = Boolean(selectedValue) && selectedValue !== fallbackNormalized;
             const nextValue = hasManualEntry ? selectedValue : fallbackNormalized;
             const effectValueChanged = updateRecordEffectValue(
@@ -494,7 +506,8 @@
             const statusChanged = recordStatusChange(effect, nextStatus);
             effect.dataset.correction = hasManualEntry ? toDatasetValue(selectedValue) : '';
             if (!isDemerit) {
-                effect.dataset.preserveOriginalLevel = hasManualEntry ? 'false' : 'true';
+                const preserveValue = hasManualEntry && !allowLevelPreservation ? 'false' : 'true';
+                effect.dataset.preserveOriginalLevel = preserveValue;
             }
             updateEffectStatus(effect, nextStatus);
 
@@ -519,7 +532,7 @@
                 };
 
                 setLevelOptions(effect, []);
-                const restoreOriginalLevel = !selectedValue;
+                const restoreOriginalLevel = !selectedValue || allowLevelPreservation;
                 let levelValueCleared = false;
                 if (!restoreOriginalLevel) {
                     levelValueCleared = updateRecordLevelValue(
