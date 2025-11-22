@@ -2066,6 +2066,78 @@ describe('gallery effect factory', () => {
     assert.equal(input.attributes['aria-readonly'], undefined);
   });
 
+  test('syncDemeritAvailability marks demerit status as pass for normal relics', () => {
+    const record = { RelicType: '通常遺物', Demerit1Status: 'pending' };
+    const state = {
+      showOcr: true,
+      masterOptions: [],
+      masterDemeritOptions: ['Penalty'],
+      labelSymbols: ['Ⅰ'],
+      records: [record]
+    };
+    const localFactory = global.window.galleryRenderFactory.createEffectFactory({
+      state,
+      datasetState: { kind: 'normal', relicType: 'normal' },
+      masterDatalistId: 'master-id',
+      demeritDatalistId: 'master-demerit-id',
+      createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+      applyMasterLevelOptions: () => {},
+      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+    });
+    const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
+
+    localFactory.syncDemeritAvailability(effect, { refreshStatus: true });
+
+    assert.equal(record.Demerit1Status, 'pass');
+    assert.equal(effect.dataset.status, 'pass');
+    assert.equal(effect.dataset.hiddenDemerit, 'true');
+  });
+
+  test('syncDemeritAvailability clears pending demerit review after switching from deep to normal', () => {
+    const record = {
+      RelicType: '深層遺物',
+      Effect1: 'Test Effect',
+      Effect1Level: '＋1',
+      Demerit1: 'Heavy Burden',
+      Demerit1Status: 'pending'
+    };
+    const state = {
+      showOcr: true,
+      masterOptions: [],
+      masterDemeritOptions: ['Heavy Burden'],
+      masterDemeritRules: {
+        'test effect': { hasDemerit: true, levels: ['＋1'] }
+      },
+      labelSymbols: ['Ⅰ'],
+      records: [record]
+    };
+    const localFactory = global.window.galleryRenderFactory.createEffectFactory({
+      state,
+      datasetState: { kind: 'normal', relicType: 'deep' },
+      masterDatalistId: 'master-id',
+      demeritDatalistId: 'master-demerit-id',
+      createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+      sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+      sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+      applyMasterLevelOptions: () => {},
+      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+    });
+    const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
+
+    record.RelicType = '通常遺物';
+    localFactory.syncDemeritAvailability(effect, { refreshStatus: true });
+
+    assert.equal(record.Demerit1Status, 'pass');
+    assert.equal(effect.dataset.status, 'pass');
+    const input = effect.querySelector('.correction-input');
+    assert.equal(input.disabled, true);
+    assert.equal(input.placeholder, '通常遺物ではデメリットなし');
+  });
+
   test('syncDemeritAvailability toggles paired effect class when demerit visibility changes', () => {
     const record = {
       RelicType: '深層遺物',

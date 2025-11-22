@@ -349,7 +349,7 @@
         if (text === 'none') {
             return '';
         }
-        if (text === 'normal' || text === '通常') {
+        if (text === 'normal' || text === '通常' || text === '通常遺物') {
             return 'normal';
         }
         if (text === 'deep' || text === '深層' || text === '深層遺物') {
