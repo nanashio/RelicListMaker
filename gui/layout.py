@@ -19,6 +19,7 @@ class LayoutComponents:
     remove_button: ttk.Button
     merge_button: ttk.Button
     server_start_button: ttk.Button
+    templates_button: ttk.Button
     results_tree: ttk.Treeview
     log_frame: ttk.LabelFrame
     log_text: tk.Text
@@ -177,9 +178,12 @@ class LayoutManager:
         queue_tree, progress_bar, run_button, remove_button = self._build_queue_section(
             main_frame
         )
-        results_tree, merge_button, server_start_button = self._build_results_section(
-            main_frame
-        )
+        (
+            results_tree,
+            merge_button,
+            server_start_button,
+            templates_button,
+        ) = self._build_results_section(main_frame)
         log_frame, log_text = self._build_log_section(main_frame)
 
         components = LayoutComponents(
@@ -190,6 +194,7 @@ class LayoutManager:
             remove_button=remove_button,
             merge_button=merge_button,
             server_start_button=server_start_button,
+            templates_button=templates_button,
             results_tree=results_tree,
             log_frame=log_frame,
             log_text=log_text,
@@ -317,7 +322,7 @@ class LayoutManager:
 
     def _build_results_section(
         self, parent: ttk.Frame
-    ) -> tuple[ttk.Treeview, ttk.Button, ttk.Button]:
+    ) -> tuple[ttk.Treeview, ttk.Button, ttk.Button, ttk.Button]:
         actions_frame = ttk.LabelFrame(parent, text="処理結果の確認", padding=12)
         actions_frame.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
         parent.rowconfigure(1, weight=1)
@@ -327,8 +332,8 @@ class LayoutManager:
 
         buttons_frame = ttk.Frame(actions_frame)
         buttons_frame.grid(row=0, column=0, columnspan=2, sticky="ew")
-        buttons_frame.columnconfigure(0, weight=1)
-        buttons_frame.columnconfigure(1, weight=1)
+        for col_index in range(3):
+            buttons_frame.columnconfigure(col_index, weight=1)
 
         server_button = ttk.Button(
             buttons_frame,
@@ -343,6 +348,13 @@ class LayoutManager:
         )
         merge_button.grid(row=0, column=1, sticky="ew", padx=(2, 4), pady=4)
 
+        templates_button = ttk.Button(
+            buttons_frame,
+            text="テンプレートだけ更新",
+            command=self.handlers.update_templates_only,
+        )
+        templates_button.grid(row=0, column=2, sticky="ew", padx=(2, 4), pady=4)
+
         ttk.Checkbutton(
             buttons_frame,
             text="効果が全てレビュー済みの項目のみ統合",
@@ -356,6 +368,9 @@ class LayoutManager:
         )
         ttk.Label(toolbar, textvariable=self.app.results_status_var).pack(
             side="left", padx=8
+        )
+        ttk.Label(toolbar, textvariable=self.app.template_version_var).pack(
+            side="left", padx=(0, 8)
         )
         ttk.Checkbutton(
             toolbar,
@@ -380,7 +395,7 @@ class LayoutManager:
         tree.configure(yscrollcommand=tree_scroll.set)
         tree_scroll.grid(row=2, column=1, sticky="ns")
 
-        return tree, merge_button, server_button
+        return tree, merge_button, server_button, templates_button
 
     def _build_log_section(self, parent: ttk.Frame) -> tuple[ttk.LabelFrame, tk.Text]:
         log_frame = ttk.LabelFrame(parent, text="ログ", padding=12)

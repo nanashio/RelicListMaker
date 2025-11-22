@@ -123,6 +123,7 @@ class RelicGuiApp:
         self.merge_only_reviewed_var = tk.BooleanVar(value=True)
         self.log_visible_var = tk.BooleanVar(value=False)
         self.results_status_var = tk.StringVar(value="結果フォルダを読み込んでください")
+        self.template_version_var = tk.StringVar(value="テンプレート: 未検出")
         self.progress_var = tk.StringVar(value="ドラッグ&ドロップで動画を追加してください")
         self.queue_selection_var = tk.StringVar(value="ドラッグ＆ドロップで動画を追加してください")
         self.ocr_engine_display_var = tk.StringVar()
