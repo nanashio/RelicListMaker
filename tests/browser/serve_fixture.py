@@ -114,14 +114,14 @@ def _build_fixture_tree(base_dir: Path) -> None:
         "coreScript": "gallery.js",
     }
 
-    (gallery_dir / "gallery_bootstrap.json").write_text(
+    (gallery_dir / "gallery_data.json").write_text(
         json.dumps(bootstrap_data, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
     replacements = {
         "__CSS_FILE__": "gallery.css",
         "__JS_FILE__": "index.js",
-        "__BOOTSTRAP_JSON__": "gallery_bootstrap.json",
+        "__BOOTSTRAP_JSON__": "gallery_data.json",
     }
 
     viewer_html = template

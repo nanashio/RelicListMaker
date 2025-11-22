@@ -158,12 +158,12 @@ def generate_html(
     bootstrap_data = _build_bootstrap_data(
         payload, app_version=app_version, core_script=core_js_reference
     )
-    bootstrap_json_path = os.path.join(output_dir, "gallery_bootstrap.json")
+    bootstrap_json_path = os.path.join(output_dir, "gallery_data.json")
     with open(bootstrap_json_path, "w", encoding="utf-8") as handle:
         json.dump(bootstrap_data, handle, ensure_ascii=False, indent=2)
 
     bootstrap_asset = gallery_assets.PreparedAsset(
-        "gallery_bootstrap.json", bootstrap_json_path
+        "gallery_data.json", bootstrap_json_path
     )
     bootstrap_reference = gallery_assets.cache_bust_reference(bootstrap_asset)
 

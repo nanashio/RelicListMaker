@@ -21,7 +21,7 @@ const MODULE_DEPENDENCIES = [
     './events/galleryEvents.js'
 ];
 
-const DEFAULT_BOOTSTRAP_JSON = './gallery_bootstrap.json';
+const DEFAULT_BOOTSTRAP_JSON = './gallery_data.json';
 
 function resolveModuleUrl(specifier, baseUrl) {
     try {

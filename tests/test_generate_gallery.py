@@ -19,7 +19,7 @@ from resource_paths import templates_path
 
 
 def load_bootstrap_data(output_html: Path) -> dict:
-    bootstrap_path = output_html.parent / "gallery_bootstrap.json"
+    bootstrap_path = output_html.parent / "gallery_data.json"
     return json.loads(bootstrap_path.read_text(encoding="utf-8"))
 
 
@@ -198,7 +198,7 @@ def test_generate_html_injects_merged_dataset_and_cache_busters(monkeypatch, tmp
 
     html_output = output_html.read_text(encoding="utf-8")
     parts = html_output.splitlines()
-    assert parts[0].startswith("gallery_bootstrap.json")
+    assert parts[0].startswith("gallery_data.json")
     assert parts[1].startswith("styles/app.css")
     assert parts[2].startswith("index.js")
 
@@ -281,7 +281,7 @@ def test_generate_html_embeds_app_version(monkeypatch, tmp_path):
     )
 
     parts = output_html.read_text(encoding="utf-8").splitlines()
-    assert parts[0].startswith("gallery_bootstrap.json")
+    assert parts[0].startswith("gallery_data.json")
 
     bootstrap_data = load_bootstrap_data(output_html)
     assert bootstrap_data["appVersion"] == "9.9.9"
@@ -369,7 +369,7 @@ def test_generate_html_sanitizes_inputs_and_embeds_master_data(monkeypatch, tmp_
 
     html_output = output_html.read_text(encoding="utf-8")
     parts = html_output.splitlines()
-    assert parts[0].startswith("gallery_bootstrap.json")
+    assert parts[0].startswith("gallery_data.json")
 
     bootstrap_data = load_bootstrap_data(output_html)
 
@@ -463,7 +463,7 @@ def test_generate_html_embeds_known_master_types(monkeypatch, tmp_path):
 
     html_output = output_html.read_text(encoding="utf-8")
     parts = [html.unescape(part) for part in html_output.splitlines()]
-    assert parts[0].startswith("gallery_bootstrap.json")
+    assert parts[0].startswith("gallery_data.json")
 
     bootstrap_data = load_bootstrap_data(output_html)
 
@@ -559,7 +559,7 @@ def test_generate_html_resolves_dataset_base_dir(monkeypatch, tmp_path):
     )
 
     parts = output_html.read_text(encoding="utf-8").splitlines()
-    assert parts[0].startswith("gallery_bootstrap.json")
+    assert parts[0].startswith("gallery_data.json")
 
     bootstrap_data = load_bootstrap_data(output_html)
     assert bootstrap_data["resultsCsv"] == "../video_a/results.csv"
