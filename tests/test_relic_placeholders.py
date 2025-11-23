@@ -88,7 +88,7 @@ def test_ensure_effect_slots_adds_demerit_columns():
     assert "Demerit1" not in row
     assert row["Demerit2"] == ""
     assert row["Demerit2Level"] == "none"
-    assert row["Demerit2Status"] == "pending"
+    assert row["Demerit2Status"] == "none"
     assert row["Demerit2LevelOptions"] == "none"
     assert row["Demerit2RawText"] == ""
     assert row["Demerit2Score"] == 0.0
@@ -195,7 +195,7 @@ def test_write_csv_effect_columns_follow_new_order(tmp_path: Path):
             "Effect2Status": "pending",
             "Demerit1": "",
             "Demerit1Level": "none",
-            "Demerit1Status": "pending",
+            "Demerit1Status": "none",
         }
     ]
 

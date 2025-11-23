@@ -39,6 +39,22 @@ LEVEL_OPTIONS_SEPARATOR = " | "
 TAG_SEPARATOR_PATTERN = re.compile(r"[\s,;、，　；]+")
 
 
+def _normalize_relic_type(value: object) -> str:
+    text = str(value or "").strip().lower()
+    if text in {"deep", "深層", "深層遺物"}:
+        return "deep"
+    if text in {"normal", "通常", "通常遺物"}:
+        return "normal"
+    return ""
+
+
+def _initial_demerit_status(relic_type: object) -> str:
+    normalized = _normalize_relic_type(relic_type)
+    if normalized == "deep":
+        return "pending"
+    return "none"
+
+
 def normalize_column_visibility(
     overrides: Mapping[str, object] | None,
     *,
@@ -77,6 +93,9 @@ def _ensure_effect_slots(row: MutableMapping[str, object], options: ExportOption
     column_flags = options.column_visibility
     demerit_slots = set(options.demerit_slots or [])
 
+    relic_type = _normalize_relic_type(row.get("RelicType") or options.relic_type)
+    base_demerit_status = _initial_demerit_status(relic_type)
+
     for idx in options.slot_range:
         effect_key = f"Effect{idx}"
         level_key = f"Effect{idx}Level"
@@ -99,7 +118,7 @@ def _ensure_effect_slots(row: MutableMapping[str, object], options: ExportOption
         if idx in demerit_slots:
             row.setdefault(f"Demerit{idx}", "")
             row.setdefault(f"Demerit{idx}Level", "none")
-            row.setdefault(f"Demerit{idx}Status", "pending")
+            row.setdefault(f"Demerit{idx}Status", base_demerit_status)
             if column_flags.get("LevelOptions", True):
                 row.setdefault(f"Demerit{idx}LevelOptions", "none")
             if column_flags.get("RawText", True):
@@ -133,6 +152,7 @@ def build_row(
     level_map = options.level_map or {}
     demerit_slots = set(options.demerit_slots or [])
     demerit_map = dict(demerit_matches or {})
+    demerit_status_default = _initial_demerit_status(row.get("RelicType") or options.relic_type)
 
     for idx, match in zip(options.slot_range, matches):
         effect_key = f"Effect{idx}"
@@ -172,7 +192,7 @@ def build_row(
                 row.setdefault(f"Demerit{idx}LevelSource", "none")
         elif idx in demerit_slots:
             row.setdefault(f"Demerit{idx}", "")
-            row.setdefault(f"Demerit{idx}Status", "pending")
+            row.setdefault(f"Demerit{idx}Status", demerit_status_default)
             if column_flags.get("RawText", True):
                 row.setdefault(f"Demerit{idx}RawText", "")
             if column_flags.get("Score", True):

@@ -222,6 +222,9 @@
                 ? normalizeStatusConfig
                 : (value) => {
                       const text = (value || '').toString().trim().toLowerCase();
+                      if (text === 'none') {
+                          return 'none';
+                      }
                       if (text === 'pass') {
                           return 'pass';
                       }

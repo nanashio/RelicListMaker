@@ -1903,8 +1903,8 @@ describe('gallery effect factory', () => {
       sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
       sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
       applyMasterLevelOptions: (...args) => applyCalls.push(args),
-      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
-      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+      normalizeStatus: (value) => (value === 'none' ? 'none' : value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー', none: '対象外' }[status] || status)
     });
   });
 
@@ -1973,8 +1973,8 @@ describe('gallery effect factory', () => {
       sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
       sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
       applyMasterLevelOptions: () => {},
-      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
-      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+      normalizeStatus: (value) => (value === 'none' ? 'none' : value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー', none: '対象外' }[status] || status)
     });
     const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
     assert.ok(effect, 'demerit effect should be created');
@@ -2012,8 +2012,8 @@ describe('gallery effect factory', () => {
       sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
       sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
       applyMasterLevelOptions: () => {},
-      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
-      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+      normalizeStatus: (value) => (value === 'none' ? 'none' : value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー', none: '対象外' }[status] || status)
     });
     const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
     assert.ok(effect, 'empty demerit placeholder should be created');
@@ -2043,8 +2043,8 @@ describe('gallery effect factory', () => {
       sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
       sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
       applyMasterLevelOptions: () => {},
-      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
-      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+      normalizeStatus: (value) => (value === 'none' ? 'none' : value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー', none: '対象外' }[status] || status)
     });
     const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
     assert.ok(effect, 'placeholder should be created for later toggling');
@@ -2066,7 +2066,7 @@ describe('gallery effect factory', () => {
     assert.equal(input.attributes['aria-readonly'], undefined);
   });
 
-    test('syncDemeritAvailability marks demerit status as pass for normal relics', () => {
+    test('syncDemeritAvailability marks demerit status as none for normal relics', () => {
       const record = { RelicType: '通常遺物', Demerit1Status: 'pending' };
     const state = {
       showOcr: true,
@@ -2084,19 +2084,19 @@ describe('gallery effect factory', () => {
       sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
       sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
       applyMasterLevelOptions: () => {},
-      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
-      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+      normalizeStatus: (value) => (value === 'none' ? 'none' : value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー', none: '対象外' }[status] || status)
     });
     const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
 
     localFactory.syncDemeritAvailability(effect, { refreshStatus: true });
 
-    assert.equal(record.Demerit1Status, 'pass');
-      assert.equal(effect.dataset.status, 'pass');
+    assert.equal(record.Demerit1Status, 'none');
+      assert.equal(effect.dataset.status, 'none');
       assert.equal(effect.dataset.hiddenDemerit, 'true');
     });
 
-    test('syncDemeritAvailability auto-passes deep relic demerits without applicable rules', () => {
+    test('syncDemeritAvailability marks deep relic demerits as none when rules are inapplicable', () => {
       const record = {
         RelicType: '深層遺物',
         Effect1: 'Test Effect',
@@ -2123,15 +2123,15 @@ describe('gallery effect factory', () => {
         sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
         sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
         applyMasterLevelOptions: () => {},
-        normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
-        statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+        normalizeStatus: (value) => (value === 'none' ? 'none' : value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+        statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー', none: '対象外' }[status] || status)
       });
       const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
 
       localFactory.syncDemeritAvailability(effect, { refreshStatus: true });
 
-      assert.equal(record.Demerit1Status, 'pass');
-      assert.equal(effect.dataset.status, 'pass');
+      assert.equal(record.Demerit1Status, 'none');
+      assert.equal(effect.dataset.status, 'none');
       const input = effect.querySelector('.correction-input');
       assert.equal(input.disabled, true);
       assert.equal(input.placeholder, 'デメリット対象外');
@@ -2164,16 +2164,16 @@ describe('gallery effect factory', () => {
       sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
       sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
       applyMasterLevelOptions: () => {},
-      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
-      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+      normalizeStatus: (value) => (value === 'none' ? 'none' : value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー', none: '対象外' }[status] || status)
     });
     const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
 
     record.RelicType = '通常遺物';
     localFactory.syncDemeritAvailability(effect, { refreshStatus: true });
 
-    assert.equal(record.Demerit1Status, 'pass');
-    assert.equal(effect.dataset.status, 'pass');
+    assert.equal(record.Demerit1Status, 'none');
+    assert.equal(effect.dataset.status, 'none');
     const input = effect.querySelector('.correction-input');
     assert.equal(input.disabled, true);
     assert.equal(input.placeholder, '通常遺物ではデメリットなし');
@@ -2206,8 +2206,8 @@ describe('gallery effect factory', () => {
       sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
       sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
       applyMasterLevelOptions: () => {},
-      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
-      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+      normalizeStatus: (value) => (value === 'none' ? 'none' : value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー', none: '対象外' }[status] || status)
     });
 
     const primaryEffect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0);
@@ -2258,8 +2258,8 @@ describe('gallery effect factory', () => {
       sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
       sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
       applyMasterLevelOptions: () => {},
-      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
-      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+      normalizeStatus: (value) => (value === 'none' ? 'none' : value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー', none: '対象外' }[status] || status)
     });
     const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
     assert.ok(effect, 'demerit effect should be created');
@@ -2306,8 +2306,8 @@ describe('gallery effect factory', () => {
       sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
       sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
       applyMasterLevelOptions: () => {},
-      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
-      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+      normalizeStatus: (value) => (value === 'none' ? 'none' : value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー', none: '対象外' }[status] || status)
     });
     const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
     const correctionInput = effect.querySelector('.correction-input');
@@ -2350,8 +2350,8 @@ describe('gallery effect factory', () => {
       sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
       sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
       applyMasterLevelOptions: () => {},
-      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
-      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+      normalizeStatus: (value) => (value === 'none' ? 'none' : value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー', none: '対象外' }[status] || status)
     });
     const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
     assert.ok(effect, 'demerit effect should be created');
@@ -2403,8 +2403,8 @@ describe('gallery effect factory', () => {
       sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
       sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
       applyMasterLevelOptions: () => {},
-      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
-      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+      normalizeStatus: (value) => (value === 'none' ? 'none' : value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー', none: '対象外' }[status] || status)
     });
 
     const item = new MockElement('div', 'item');
@@ -2453,8 +2453,8 @@ describe('gallery effect factory', () => {
       sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
       sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
       applyMasterLevelOptions: () => {},
-      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
-      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+      normalizeStatus: (value) => (value === 'none' ? 'none' : value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー', none: '対象外' }[status] || status)
     });
     const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
     const correctionInput = effect.querySelector('.correction-input');
@@ -2573,8 +2573,8 @@ describe('gallery effect factory', () => {
       sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
       sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
       applyMasterLevelOptions: () => {},
-      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
-      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+      normalizeStatus: (value) => (value === 'none' ? 'none' : value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー', none: '対象外' }[status] || status)
     });
     const enabledInput = customFactory.createCorrectionInput({ isDemerit: false }, 'Chosen', 'Fallback');
     assert.equal(enabledInput.disabled, false);
@@ -2744,8 +2744,8 @@ describe('gallery item factory', () => {
       sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
       sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
       applyMasterLevelOptions: () => {},
-      normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
-      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+      normalizeStatus: (value) => (value === 'none' ? 'none' : value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+      statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー', none: '対象外' }[status] || status)
     });
 
     const localFactory = itemFactoryNamespace.createItemFactory({
@@ -3741,8 +3741,8 @@ describe('record action handlers', () => {
         sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean) : []),
         sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
         applyMasterLevelOptions: () => {},
-        normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
-        statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+        normalizeStatus: (value) => (value === 'none' ? 'none' : value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+        statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー', none: '対象外' }[status] || status)
       });
 
       const item = new MockElement('div', 'item');
@@ -3803,7 +3803,7 @@ describe('record action handlers', () => {
         assert.equal(record.Effect1Level, '＋1');
         assert.ok(!('Effect1LevelCorrection' in record));
         assert.ok(!('Demerit1Correction' in record));
-        assert.equal(record.Demerit1Status, 'pass');
+        assert.equal(record.Demerit1Status, 'none');
         assert.equal(demeritInput.disabled, true);
         assert.equal(demeritInput.readOnly, true);
         assert.equal(demeritInput.tabIndex, -1);
