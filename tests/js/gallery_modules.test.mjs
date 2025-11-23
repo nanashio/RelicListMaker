@@ -1223,6 +1223,91 @@ describe('gallery view', () => {
     assert.ok(statusCalls.includes('clear'), 'clearStatus should be invoked when items render');
   });
 
+  test('summary excludes pending effects even when paired demerits are none', () => {
+    const state = {
+      records: [
+        {
+          Image: 'alpha.png',
+          Effect1Status: 'pending',
+          Effect2Status: 'pending',
+          Effect3Status: 'pending',
+          Demerit1Status: 'none',
+          Demerit2Status: 'none',
+          Demerit3Status: 'none'
+        }
+      ],
+      items: [],
+      labelSymbols: ['I', 'II', 'III'],
+      imageDir: 'images',
+      showOcr: false
+    };
+    const datasetState = { kind: 'deep', list: [], activeIndex: 0 };
+    const galleryElement = createStubElement('div');
+    global.document.body.appendChild(galleryElement);
+    const statusElement = createStubElement('div');
+    global.document.body.appendChild(statusElement);
+    const dom = {
+      gallery: galleryElement,
+      galleryStatus: statusElement,
+      summary: null,
+      showDuplicatesToggle: { checked: false },
+      showOcrToggle: { checked: false },
+      searchInput: { value: '' },
+      filterSelect: { value: 'all' },
+      colorFilter: { value: 'all' }
+    };
+    const duplicates = { has: () => false, set: () => {} };
+
+    const createEffect = (record, slot, _symbol, _imageName, recordIndex, options = {}) => {
+      const element = createStubElement('div');
+      element.classList.add('effect');
+      element.dataset.recordIndex = String(recordIndex);
+      element.dataset.slot = String(slot);
+      const isDemerit = options && options.kind === 'demerit';
+      element.dataset.kind = isDemerit ? 'demerit' : 'effect';
+      const statusField = isDemerit ? `Demerit${slot}Status` : `Effect${slot}Status`;
+      element.dataset.status = record[statusField] || '';
+      return element;
+    };
+
+    const galleryView = galleryFactory.createGalleryView({
+      state,
+      datasetState,
+      dom,
+      duplicates,
+      itemColorOptions: [],
+      createEffect,
+      bindImage: () => {},
+      createElement: defaultCreateElement,
+      joinPath: (base, leaf) => {
+        if (!base) {
+          return leaf || '';
+        }
+        if (!leaf) {
+          return base;
+        }
+        return `${base}/${leaf}`;
+      },
+      getFileName: (path) => {
+        if (!path) {
+          return '';
+        }
+        const textValue = String(path);
+        const parts = textValue.split(/[\\/]/);
+        return parts[parts.length - 1] || '';
+      },
+      showStatus: () => {},
+      clearStatus: () => {},
+      getRecordByIndex: (index) => state.records[index] || null,
+      isRecordDuplicate: () => false,
+      isRecordFavorite: () => false
+    });
+
+    galleryView.buildGallery();
+    assert.ok(dom.summary, 'summary element should exist after initial build');
+    assert.equal(dom.summary.textContent, '全体 1 件 / 確認済み 0 件 / 未レビュー 1 件');
+  });
+
   test('gallery view allows injecting custom item enhancer factory', () => {
     const state = {
       records: [{ Image: 'alpha.png' }],

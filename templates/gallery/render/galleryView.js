@@ -398,7 +398,13 @@
                     }
                     const slot = effect && effect.dataset ? Number(effect.dataset.slot) : Number.NaN;
                     if (!Number.isNaN(slot)) {
-                        slotStatuses.set(slot, status);
+                        const slotStatus = slotStatuses.get(slot) || { hasPending: false, isReviewed: false };
+                        if (status === 'pending') {
+                            slotStatus.hasPending = true;
+                        } else {
+                            slotStatus.isReviewed = true;
+                        }
+                        slotStatuses.set(slot, slotStatus);
                     }
                 });
                 if (hasPending) {
@@ -409,9 +415,9 @@
                 if (allSlotsPresent) {
                     const allReviewed = targetSlots.every((slot) => {
                         const status = slotStatuses.get(slot);
-                        return status && status !== 'pending';
+                        return status && status.isReviewed && !status.hasPending;
                     });
-                    if (allReviewed) {
+                    if (allReviewed && !hasPending) {
                         fullyConfirmedCount += 1;
                     }
                 }
