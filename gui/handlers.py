@@ -688,7 +688,7 @@ class AppEventHandlers:
         if tree is None:
             return
         results_dir = self.resolve_input_path(self.app.results_dir_var.get())
-        results_path_text = str(results_dir)
+        results_path_text = self.to_user_value(results_dir)
         version_text: str | None = None
         if not results_dir.exists():
             tree.delete(*tree.get_children())
