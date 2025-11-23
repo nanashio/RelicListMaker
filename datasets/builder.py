@@ -69,6 +69,24 @@ def _normalize_dataset_entries(
     if not isinstance(raw_entries, list):
         return normalized_entries
 
+    def _resolve_dataset_path(raw_value: str) -> Path:
+        raw_path = Path(raw_value)
+        if raw_path.is_absolute():
+            return raw_path
+
+        if raw_path.parts and raw_path.parts[0] in {"..", "."}:
+            return (viewer_dir / raw_path).resolve()
+
+        base_candidate = (base_dir / raw_path).resolve()
+        viewer_candidate = (viewer_dir / raw_path).resolve()
+
+        if base_candidate.exists() and not viewer_candidate.exists():
+            return base_candidate
+        if viewer_candidate.exists() and not base_candidate.exists():
+            return viewer_candidate
+
+        return base_candidate
+
     for raw_entry in raw_entries:
         if not isinstance(raw_entry, dict):
             continue
@@ -88,7 +106,7 @@ def _normalize_dataset_entries(
         if not csv_str:
             continue
 
-        csv_abs = _ensure_path((viewer_dir / csv_str).resolve())
+        csv_abs = _ensure_path(_resolve_dataset_path(csv_str))
         csv_rel = _safe_relpath(csv_abs, base_dir)
 
         img_text = (
@@ -101,14 +119,14 @@ def _normalize_dataset_entries(
         img_str = str(img_text).strip()
         img_rel = ""
         if img_str:
-            img_abs = _ensure_path((viewer_dir / img_str).resolve())
+            img_abs = _ensure_path(_resolve_dataset_path(img_str))
             img_rel = _safe_relpath(img_abs, base_dir)
 
         folder_text = raw_entry.get("folder") or ""
         folder_str = str(folder_text).strip()
         folder_rel = ""
         if folder_str:
-            folder_abs = _ensure_path((viewer_dir / folder_str).resolve())
+            folder_abs = _ensure_path(_resolve_dataset_path(folder_str))
             folder_rel = _safe_relpath(folder_abs, base_dir)
 
         label_text = raw_entry.get("label") or raw_entry.get("name") or ""
