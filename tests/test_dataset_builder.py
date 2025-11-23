@@ -137,3 +137,100 @@ def test_build_dataset_entries_merges_existing_gallery(tmp_path):
     assert [entry["label"] for entry in build.datasets] == ["alpha", "beta"]
     assert build.datasets[0]["csv"] == "alpha/alpha.csv"
     assert build.datasets[1]["csv"] == "beta/beta.csv"
+
+
+def test_build_dataset_entries_prefers_bootstrap_json(tmp_path):
+    base_dir = tmp_path / "results"
+    gallery_dir = base_dir / "gallery"
+    gallery_dir.mkdir(parents=True)
+
+    alpha_dir = base_dir / "alpha"
+    alpha_csv = alpha_dir / "alpha.csv"
+    alpha_crops = alpha_dir / "crops"
+    alpha_crops.mkdir(parents=True)
+    alpha_csv.write_text("Image\n", encoding="utf-8")
+
+    beta_dir = base_dir / "beta"
+    beta_csv = beta_dir / "beta.csv"
+    beta_crops = beta_dir / "crops"
+    beta_crops.mkdir(parents=True)
+    beta_csv.write_text("Image\n", encoding="utf-8")
+
+    index_datasets = [
+        {
+            "label": "alpha",
+            "csv": "../alpha/alpha.csv",
+            "imgDir": "../alpha/crops",
+            "folder": "alpha",
+        },
+        {
+            "label": "beta",
+            "csv": "../beta/beta.csv",
+            "imgDir": "../beta/crops",
+            "folder": "beta",
+        },
+    ]
+    gallery_html = (
+        "<html><body data-datasets=\""
+        + html.escape(json.dumps(index_datasets, ensure_ascii=False))
+        + "\" data-active-dataset=\"1\"></body></html>"
+    )
+    (gallery_dir / "index.html").write_text(gallery_html, encoding="utf-8")
+
+    bootstrap_data = {
+        "datasets": [
+            {
+                "label": "beta",
+                "csv": "../beta/beta.csv",
+                "imgDir": "../beta/crops",
+                "folder": "beta",
+            }
+        ],
+        "activeDataset": 0,
+    }
+    (gallery_dir / "gallery_data.json").write_text(
+        json.dumps(bootstrap_data, ensure_ascii=False), encoding="utf-8"
+    )
+
+    build = build_dataset_entries(base_dir, [])
+
+    assert build.active_index == 0
+    assert build.default_csv_path == beta_csv.resolve()
+    assert build.default_img_dir == "beta/crops"
+    assert [entry["label"] for entry in build.datasets] == ["beta"]
+
+
+def test_build_dataset_entries_keep_base_relative_paths(tmp_path):
+    base_dir = tmp_path / "results"
+    gallery_dir = base_dir / "gallery"
+    gallery_dir.mkdir(parents=True)
+
+    alpha_dir = base_dir / "alpha"
+    alpha_csv = alpha_dir / "alpha.csv"
+    alpha_crops = alpha_dir / "crops"
+
+    alpha_crops.mkdir(parents=True)
+    alpha_csv.write_text("Image\n", encoding="utf-8")
+
+    bootstrap_data = {
+        "datasets": [
+            {
+                "label": "alpha",
+                "csv": "alpha/alpha.csv",
+                "imgDir": "alpha/crops",
+                "folder": "alpha",
+            }
+        ],
+        "activeDataset": 0,
+    }
+    (gallery_dir / "gallery_data.json").write_text(
+        json.dumps(bootstrap_data, ensure_ascii=False), encoding="utf-8"
+    )
+
+    build = build_dataset_entries(base_dir, [])
+
+    assert build.active_index == 0
+    assert build.default_csv_path == alpha_csv.resolve()
+    assert build.default_img_dir == "alpha/crops"
+    assert build.datasets[0]["csv"] == "alpha/alpha.csv"
+    assert build.datasets[0]["img_dir"] == "alpha/crops"
