@@ -2066,8 +2066,8 @@ describe('gallery effect factory', () => {
     assert.equal(input.attributes['aria-readonly'], undefined);
   });
 
-  test('syncDemeritAvailability marks demerit status as pass for normal relics', () => {
-    const record = { RelicType: '通常遺物', Demerit1Status: 'pending' };
+    test('syncDemeritAvailability marks demerit status as pass for normal relics', () => {
+      const record = { RelicType: '通常遺物', Demerit1Status: 'pending' };
     const state = {
       showOcr: true,
       masterOptions: [],
@@ -2092,13 +2092,54 @@ describe('gallery effect factory', () => {
     localFactory.syncDemeritAvailability(effect, { refreshStatus: true });
 
     assert.equal(record.Demerit1Status, 'pass');
-    assert.equal(effect.dataset.status, 'pass');
-    assert.equal(effect.dataset.hiddenDemerit, 'true');
-  });
+      assert.equal(effect.dataset.status, 'pass');
+      assert.equal(effect.dataset.hiddenDemerit, 'true');
+    });
 
-  test('syncDemeritAvailability clears pending demerit review after switching from deep to normal', () => {
-    const record = {
-      RelicType: '深層遺物',
+    test('syncDemeritAvailability auto-passes deep relic demerits without applicable rules', () => {
+      const record = {
+        RelicType: '深層遺物',
+        Effect1: 'Test Effect',
+        Effect1Level: '＋1',
+        Demerit1Status: 'pending'
+      };
+      const state = {
+        showOcr: true,
+        masterOptions: [],
+        masterDemeritOptions: ['Penalty'],
+        masterDemeritRules: {
+          'test effect': { hasDemerit: false },
+          'other effect': { hasDemerit: true, levels: ['＋2'] }
+        },
+        labelSymbols: ['Ⅰ'],
+        records: [record]
+      };
+      const localFactory = global.window.galleryRenderFactory.createEffectFactory({
+        state,
+        datasetState: { kind: 'normal', relicType: 'deep' },
+        masterDatalistId: 'master-id',
+        demeritDatalistId: 'master-demerit-id',
+        createElement: (tagName, className = '', text = '') => new MockElement(tagName, className, text),
+        sanitizeLevelList: (values) => (Array.isArray(values) ? values.filter(Boolean).map((value) => String(value).trim()) : []),
+        sortLevelsAscending: (values) => (Array.isArray(values) ? [...values].sort() : []),
+        applyMasterLevelOptions: () => {},
+        normalizeStatus: (value) => (value === 'pass' ? 'pass' : value === 'corrected' ? 'corrected' : 'pending'),
+        statusLabel: (status) => ({ pass: '確認済み', corrected: '修正済み', pending: '未レビュー' }[status] || status)
+      });
+      const effect = localFactory.createEffect(record, 1, 'Ⅰ', 'image.png', 0, { kind: 'demerit' });
+
+      localFactory.syncDemeritAvailability(effect, { refreshStatus: true });
+
+      assert.equal(record.Demerit1Status, 'pass');
+      assert.equal(effect.dataset.status, 'pass');
+      const input = effect.querySelector('.correction-input');
+      assert.equal(input.disabled, true);
+      assert.equal(input.placeholder, 'デメリット対象外');
+    });
+
+    test('syncDemeritAvailability clears pending demerit review after switching from deep to normal', () => {
+      const record = {
+        RelicType: '深層遺物',
       Effect1: 'Test Effect',
       Effect1Level: '＋1',
       Demerit1: 'Heavy Burden',
@@ -3756,17 +3797,17 @@ describe('record action handlers', () => {
       });
 
       const handlers = handlerFactory.createRecordActionHandlers(deps);
-      handlers.changeEffectLevel(effect, levelInput);
+        handlers.changeEffectLevel(effect, levelInput);
 
-      assert.deepEqual(levelValueCalls, [[1, '＋1']]);
-      assert.equal(record.Effect1Level, '＋1');
-      assert.ok(!('Effect1LevelCorrection' in record));
-      assert.ok(!('Demerit1Correction' in record));
-      assert.equal(record.Demerit1Status, 'pending');
-      assert.equal(demeritInput.disabled, true);
-      assert.equal(demeritInput.readOnly, true);
-      assert.equal(demeritInput.tabIndex, -1);
-      assert.equal(passButton.disabled, true);
+        assert.deepEqual(levelValueCalls, [[1, '＋1']]);
+        assert.equal(record.Effect1Level, '＋1');
+        assert.ok(!('Effect1LevelCorrection' in record));
+        assert.ok(!('Demerit1Correction' in record));
+        assert.equal(record.Demerit1Status, 'pass');
+        assert.equal(demeritInput.disabled, true);
+        assert.equal(demeritInput.readOnly, true);
+        assert.equal(demeritInput.tabIndex, -1);
+        assert.equal(passButton.disabled, true);
       assert.equal(demeritInput.placeholder, '指定レベルのデメリットなし');
     } finally {
       delete global.document;
