@@ -53,6 +53,14 @@ PS> powershell -ExecutionPolicy Bypass -File .\docs\build_windows.ps1
 - `-SkipVenv` : 既存の `.venv` を再作成せずに利用する。
 - `-SkipRequirements` : `pip install` をスキップしたい場合に指定。
 - `-Quiet` : 進捗ログを最小限に抑える。
+- `-Version <文字列>` : ビルドに埋め込むバージョン文字列を手動指定する。省略時は最新タグやコミットハッシュから `*-dev` を自動生成。
+
+バージョンを固定したい場合の例:
+
+```powershell
+# WSL 側の作業ツリーをコピーし、バージョン 1.2.3 を埋め込む
+PS> powershell -ExecutionPolicy Bypass -File .\docs\build_windows.ps1 -Version 1.2.3
+```
 
 ビルド完了後、配布フォルダのパスが `[RESULT]` 行で表示される。
 
