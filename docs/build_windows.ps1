@@ -17,6 +17,9 @@
 
 .PARAMETER WslPath
     コピー元となる WSL 側のプロジェクトディレクトリのパス (既定値: ~/RelicListMaker)。
+
+.PARAMETER Version
+    ビルドに埋め込むバージョン文字列。省略時は最新タグやコミットハッシュから dev 版を組み立てます。
 #>
 
 
@@ -24,7 +27,8 @@ Param(
     [switch]$SkipVenv,
     [switch]$SkipRequirements,
     [switch]$Quiet,
-    [string]$WslPath = '~/RelicListMaker'
+    [string]$WslPath = '~/RelicListMaker',
+    [string]$Version
 )
 
 if (-not $env:BUILD_WINDOWS_EXEC_POLICY_BYPASS) {
@@ -77,31 +81,37 @@ try {
     Write-Info "Working directory: $repoRoot"
 
     $releaseVersion = $null
-    $releaseTag = $null
-    try {
-        $releaseTag = (git describe --tags --abbrev=0).Trim()
-    }
-    catch {
-        $releaseTag = $null
-    }
 
-    if ($releaseTag) {
-        $releaseVersion = "{0}-dev" -f $releaseTag
+    if ($Version) {
+        $releaseVersion = $Version
     }
     else {
-        $commitHash = $null
+        $releaseTag = $null
         try {
-            $commitHash = (git rev-parse --short HEAD).Trim()
+            $releaseTag = (git describe --tags --abbrev=0).Trim()
         }
         catch {
-            $commitHash = $null
+            $releaseTag = $null
         }
 
-        if ($commitHash) {
-            $releaseVersion = "{0}-dev" -f $commitHash
+        if ($releaseTag) {
+            $releaseVersion = "{0}-dev" -f $releaseTag
         }
         else {
-            $releaseVersion = '0.0.0-dev'
+            $commitHash = $null
+            try {
+                $commitHash = (git rev-parse --short HEAD).Trim()
+            }
+            catch {
+                $commitHash = $null
+            }
+
+            if ($commitHash) {
+                $releaseVersion = "{0}-dev" -f $commitHash
+            }
+            else {
+                $releaseVersion = '0.0.0-dev'
+            }
         }
     }
 
