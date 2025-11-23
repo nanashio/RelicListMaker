@@ -325,14 +325,14 @@
                     disable: true,
                     placeholder: '通常遺物ではデメリットなし',
                     hide: true,
-                    status: 'pass'
+                    status: 'none'
                 };
             }
             if (!relicType) {
-                return { disable: true, placeholder: 'デメリット対象外' };
+                return { disable: true, placeholder: 'デメリット対象外', status: 'none' };
             }
             if (relicType !== 'deep') {
-                return { disable: true, placeholder: 'デメリット対象外' };
+                return { disable: true, placeholder: 'デメリット対象外', status: 'none' };
             }
             const rules = resolveActiveDemeritRules(record);
             if (!rules || typeof rules !== 'object') {
@@ -341,14 +341,14 @@
             const effectName = getSlotEffectName(record, slot);
             const effectKey = normalizeEffectKey(effectName);
             if (!effectKey) {
-                return { disable: true, placeholder: 'デメリット対象外' };
+                return { disable: true, placeholder: 'デメリット対象外', status: 'none' };
             }
             const entry = rules[effectKey];
             if (!entry || typeof entry !== 'object') {
-                return { disable: true, placeholder: 'デメリット対象外' };
+                return { disable: true, placeholder: 'デメリット対象外', status: 'none' };
             }
             if (!entry.hasDemerit) {
-                return { disable: true, placeholder: 'デメリット対象外' };
+                return { disable: true, placeholder: 'デメリット対象外', status: 'none' };
             }
             const levels = Array.isArray(entry.levels) ? entry.levels : [];
             if (!levels.length) {
@@ -356,11 +356,11 @@
             }
             const levelValue = getSlotEffectLevel(record, slot);
             if (!levelValue) {
-                return { disable: true, placeholder: '指定レベルのデメリットなし' };
+                return { disable: true, placeholder: '指定レベルのデメリットなし', status: 'none' };
             }
             const normalizedLevel = normalizeLevelToken(levelValue);
             if (!normalizedLevel) {
-                return { disable: true, placeholder: '指定レベルのデメリットなし' };
+                return { disable: true, placeholder: '指定レベルのデメリットなし', status: 'none' };
             }
             const matched = levels.some((candidate) => {
                 if (candidate == null) {
@@ -370,7 +370,7 @@
             });
             return matched
                 ? { disable: false }
-                : { disable: true, placeholder: '指定レベルのデメリットなし' };
+                : { disable: true, placeholder: '指定レベルのデメリットなし', status: 'none' };
         }
 
         function toElementList(collection) {
@@ -1038,7 +1038,7 @@
                 isDemerit: true,
                 correctionValue: '',
                 correctionValueLower: manualLower || '',
-                statusValue: record[`Demerit${slotIndex}Status`] || 'pending'
+                statusValue: normalizeStatus(record[`Demerit${slotIndex}Status`]) || 'pending'
             };
             applyDemeritAvailability(
                 effect,

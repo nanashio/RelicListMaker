@@ -550,6 +550,9 @@
 
     function normalizeStatus(value) {
         const text = (value || '').toString().trim().toLowerCase();
+        if (text === 'none') {
+            return 'none';
+        }
         if (text === 'pass') {
             return 'pass';
         }
@@ -560,6 +563,9 @@
     }
 
     function statusLabel(status) {
+        if (status === 'none') {
+            return '対象外';
+        }
         if (status === 'pass') {
             return '確認済み';
         }
