@@ -115,9 +115,6 @@ try {
         }
     }
 
-    Set-Content -Path $versionFile -Value $releaseVersion -Encoding UTF8
-    Write-Info ("Embedding release version: {0}" -f $releaseVersion)
-
     Write-Info ("Resolving WSL project path ({0})" -f $WslPath)
     $wslPathResult = & wsl.exe wslpath -w $WslPath
     $wslSource = $wslPathResult.Trim()
@@ -184,6 +181,9 @@ try {
     else {
         Write-Info 'Skipping copy step. Proceeding with build using current Windows files.'
     }
+
+    Set-Content -Path $versionFile -Value $releaseVersion -Encoding UTF8
+    Write-Info ("Embedding release version: {0}" -f $releaseVersion)
 
     $venvPath = Join-Path $repoRoot '.venv'
     $activateScript = Join-Path $venvPath 'Scripts/Activate.ps1'
