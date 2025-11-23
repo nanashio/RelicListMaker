@@ -143,14 +143,6 @@ jobs:
           $hash = Get-FileHash $archive -Algorithm SHA256
           "${hash.Hash}  $archive" | Out-File -FilePath 'RelicListMaker-windows.sha256' -Encoding ascii
 
-      - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: RelicListMaker-windows
-          path: |
-            RelicListMaker-windows.zip
-            RelicListMaker-windows.sha256
-
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
@@ -169,7 +161,7 @@ jobs:
           - PyInstaller で Windows 向け実行ファイルをビルド
           - dist/RelicListMaker 配下を ZIP に圧縮
           - ZIP の SHA256 チェックサムを生成
-          - 成果物 (ZIP/チェックサム) をワークフローのアーティファクトとして保存
+          - タグ実行時は成果物 (ZIP/チェックサム) を GitHub Release に直接アップロード
           "@
           if ($env:GITHUB_REF -like 'refs/tags/*') {
             $summary += "`n- タグ実行のため GitHub Release を作成し、成果物をアップロード"
