@@ -37,9 +37,9 @@ def register_subcommand(
     )
     parser.add_argument(
         "--ocr-engine",
-        choices=("tesseract", "vision"),
+        choices=("tesseract", "vision", "none"),
         default=DEFAULT_OCR_ENGINE,
-        help="OCR エンジンの選択",
+        help="OCR エンジンの選択 (none でOCRを無効化)",
     )
     parser.add_argument(
         "--gcp-credentials",

@@ -79,7 +79,7 @@ class PipelineSettings:
         if not isinstance(self.result_dir, Path):
             self.result_dir = Path(self.result_dir)
         engine = (self.ocr_engine or DEFAULT_OCR_ENGINE).strip().lower()
-        if engine not in {"tesseract", "vision"}:
+        if engine not in {"tesseract", "vision", "none"}:
             engine = DEFAULT_OCR_ENGINE
         self.ocr_engine = engine
         if self.gcp_credentials:

@@ -331,6 +331,44 @@ def ocr_and_match(
         return fallback_results, fallback_lines
 
 
+def _build_skipped_matches(slot_count: int) -> list[MatchResult]:
+    return [
+        MatchResult(raw_text="", matched_text="", score=0.0, source="skipped")
+        for _ in range(slot_count)
+    ]
+
+
+def _export_without_ocr(
+    image_dir: str,
+    output_path: str,
+    *,
+    export_options: ExportOptions,
+    slot_count: int,
+    column_flags: Mapping[str, bool],
+) -> None:
+    print("[INFO] OCRを実行せず、空の結果でCSVを書き出します")
+
+    matches = _build_skipped_matches(slot_count)
+    rows: list[dict[str, object]] = []
+    for fname in sorted(os.listdir(image_dir)):
+        if not fname.endswith(".png"):
+            continue
+        rows.append(build_row(fname, matches, options=export_options))
+
+    if not rows:
+        print("[WARN] OCR無しで出力する画像が見つかりませんでした")
+        return
+
+    output_file = Path(output_path)
+    try:
+        write_csv(rows, path=output_file, column_flags=column_flags)
+    except OSError as err:
+        print(f"[!] CSVの書き込みに失敗しました: {err}")
+        return
+
+    print(f"[✓] OCRなしでCSV出力完了: {output_path}")
+
+
 def process_images(
     image_dir="crops",
     output_path="results.csv",
@@ -345,6 +383,18 @@ def process_images(
 ):
     global _TESSERACT_NOTICE_SHOWN
     normalized_engine = (ocr_settings.engine or "tesseract").lower()
+    column_flags = export_options.column_visibility
+
+    if normalized_engine == "none":
+        _export_without_ocr(
+            image_dir,
+            output_path,
+            export_options=export_options,
+            slot_count=len(crop_boxes),
+            column_flags=column_flags,
+        )
+        return
+
     if normalized_engine == "tesseract":
         if not _TESSERACT_NOTICE_SHOWN:
             if is_system_tesseract_preferred():

@@ -55,7 +55,11 @@ def process_video(
 
     item_color = decide_item_color(task, override_colors)
 
-    reporter.step(f"{video_name} のOCR/マッチング中...")
+    reporter.step(
+        f"{video_name} のOCR/マッチング中..."
+        if ocr_engine != "none"
+        else f"{video_name} のOCRをスキップしてCSVを生成中..."
+    )
     task_relic_type = getattr(task, "relic_type", DEFAULT_RELIC_TYPE)
     master_csv_path, demerit_master_csv_path = _resolve_master_csv(task_relic_type)
 
@@ -85,7 +89,11 @@ def process_video(
         slot_sources=params.slot_sources,
         demerit_matching=params.demerit_matching,
     )
-    reporter.advance(f"{video_name} のOCR/マッチング完了")
+    reporter.advance(
+        f"{video_name} のOCR/マッチング完了"
+        if ocr_engine != "none"
+        else f"{video_name} のOCRをスキップしました"
+    )
     print(f"[✓] {task.crops_dir} の結果を {task.csv_path} に出力しました")
 
     return ProcessedVideoResult(

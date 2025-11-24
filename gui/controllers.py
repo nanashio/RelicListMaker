@@ -314,7 +314,7 @@ def update_app_state_from_form(app: "RelicGuiApp", *, include_port: bool = False
     app.state.merge_only_reviewed = app.merge_only_reviewed_var.get()
     app.state.server_host = app.server_host_var.get().strip() or "127.0.0.1"
     engine_value = (app.ocr_engine_var.get() or "").strip().lower() or app.state.ocr_engine
-    if engine_value not in {"tesseract", "vision"}:
+    if engine_value not in {"tesseract", "vision", "none"}:
         engine_value = app.state.ocr_engine
     app.state.ocr_engine = engine_value
     filename_value = app.gcp_credentials_filename_var.get().strip()

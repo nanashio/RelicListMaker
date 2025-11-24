@@ -223,6 +223,8 @@ class RelicGuiApp:
         engine = (self.ocr_engine_var.get() or "").strip().lower()
         if engine == "vision":
             text = "使用OCR: Google Cloud Vision"
+        elif engine == "none":
+            text = "使用OCR: 無効 (OCRなしで出力)"
         else:
             version = self._get_tesseract_version()
             if version:
