@@ -652,8 +652,10 @@
             const tokens = parseTagTokens(normalized);
             if (tokens.length) {
                 item.dataset.tags = tokens.join(' ');
+                item.dataset.tagTokens = tokens.map((token) => token.toLowerCase()).join(' ');
             } else {
                 delete item.dataset.tags;
+                delete item.dataset.tagTokens;
             }
             const input = item.querySelector('.item-tags-input');
             if (input) {
@@ -762,6 +764,85 @@
             applyItemRelicType(item, relicType);
         }
 
+        function normalizeSearchToken(value) {
+            if (value == null) {
+                return '';
+            }
+            return String(value).trim().toLowerCase();
+        }
+
+        function parseTagTokensValue(text) {
+            if (!text) {
+                return [];
+            }
+            return text
+                .split(/\s+/)
+                .map((token) => normalizeSearchToken(token))
+                .filter((token) => token !== '');
+        }
+
+        function parseEffectSlotsValue(jsonText) {
+            if (!jsonText) {
+                return [];
+            }
+            try {
+                const parsed = JSON.parse(jsonText);
+                if (Array.isArray(parsed)) {
+                    return parsed
+                        .map((entry) => normalizeSearchToken(entry))
+                        .filter((entry) => entry !== '');
+                }
+            } catch (error) {
+                console.warn('効果検索キャッシュの解析に失敗しました:', error);
+            }
+            return [];
+        }
+
+        function collectEffectSearchTerms() {
+            if (!Array.isArray(dom.effectSearchInputs)) {
+                return [];
+            }
+            return dom.effectSearchInputs
+                .map((input) => normalizeSearchToken(input && input.value))
+                .filter((value) => value !== '');
+        }
+
+        function resolveEffectSearchMode() {
+            const nodes = dom.effectSearchMode;
+            if (!nodes || typeof nodes.forEach !== 'function') {
+                return 'and';
+            }
+            let mode = 'and';
+            nodes.forEach((node) => {
+                if (node && node.checked) {
+                    mode = node.value === 'or' ? 'or' : 'and';
+                }
+            });
+            return mode;
+        }
+
+        function getTagSearchTerm() {
+            if (!dom.tagSearchInput) {
+                return '';
+            }
+            return normalizeSearchToken(dom.tagSearchInput.value);
+        }
+
+        function readEffectSlots(item) {
+            if (!item || !item.dataset) {
+                return [];
+            }
+            return parseEffectSlotsValue(item.dataset.effectSlots || '');
+        }
+
+        function readTagTokens(item) {
+            if (!item || !item.dataset) {
+                return [];
+            }
+            const tokens = item.dataset.tagTokens || item.dataset.tags || '';
+            return parseTagTokensValue(tokens);
+        }
+
         function refreshItemCaches(item) {
             if (!item) {
                 return;
@@ -781,16 +862,18 @@
                 baseTokens.push(datasetToken);
             }
             const tagsToken = item.dataset.tags;
-            if (tagsToken) {
-                tagsToken
-                    .split(/\s+/)
-                    .filter(Boolean)
-                    .forEach((token) => {
-                        baseTokens.push(token);
-                    });
+            const normalizedTagTokens = parseTagTokensValue(tagsToken);
+            if (normalizedTagTokens.length) {
+                normalizedTagTokens.forEach((token) => {
+                    baseTokens.push(token);
+                });
+                item.dataset.tagTokens = normalizedTagTokens.join(' ');
+            } else {
+                delete item.dataset.tagTokens;
             }
 
             const effectEntries = [];
+            const effectSlotValues = [];
 
             item.querySelectorAll('.effect').forEach((effect) => {
                 const {
@@ -811,6 +894,23 @@
                     levelOptions,
                     levelCorrection
                 });
+
+                if (effect.dataset && effect.dataset.kind === 'effect') {
+                    const slotIndex = Number.parseInt(effect.dataset.slot, 10);
+                    if (Number.isFinite(slotIndex) && slotIndex > 0) {
+                        const effectNames = [
+                            effect.dataset.correction,
+                            effect.dataset.predictionValue,
+                            pred,
+                            raw
+                        ]
+                            .map((value) => normalizeSearchToken(value))
+                            .filter((value) => value !== '');
+                        if (effectNames.length) {
+                            effectSlotValues[slotIndex - 1] = effectNames.join(' ');
+                        }
+                    }
+                }
             });
 
             const caches = buildItemSearchCaches({ baseTokens, effects: effectEntries }) || {};
@@ -826,6 +926,12 @@
             item.dataset.effectStates = effectStateList
                 .filter((value) => value != null && value !== '')
                 .join(',');
+            const normalizedEffectSlots = effectSlotValues.map((value) => normalizeSearchToken(value));
+            if (normalizedEffectSlots.some((value) => value !== '')) {
+                item.dataset.effectSlots = JSON.stringify(normalizedEffectSlots);
+            } else {
+                delete item.dataset.effectSlots;
+            }
         }
 
         function applyFilters() {
@@ -834,6 +940,9 @@
             const filter = dom.filterSelect ? dom.filterSelect.value : 'all';
             const colorFilter = dom.colorFilter ? dom.colorFilter.value : 'all';
             const showDuplicates = includeDuplicatesNow();
+            const effectTerms = collectEffectSearchTerms();
+            const effectMatchMode = resolveEffectSearchMode();
+            const tagTerm = getTagSearchTerm();
 
             const itemStates = state.items.map((item) => {
                 if (!item) {
@@ -844,7 +953,9 @@
                         effectStates: [],
                         favorite: false,
                         itemColor: '',
-                        relicType: ''
+                        relicType: '',
+                        effectValues: [],
+                        tagTokens: []
                     };
                 }
                 return {
@@ -854,7 +965,9 @@
                     effectStates: (item.dataset.effectStates || '').split(',').filter(Boolean),
                     favorite: item.dataset.favorite === 'true',
                     itemColor: normalizeItemColor(item.dataset.itemColor || ''),
-                    relicType: normalizeItemRelicType(item.dataset.relicType || '')
+                    relicType: normalizeItemRelicType(item.dataset.relicType || ''),
+                    effectValues: readEffectSlots(item),
+                    tagTokens: readTagTokens(item)
                 };
             });
 
@@ -862,7 +975,10 @@
                 term,
                 filter,
                 colorFilter,
-                includeDuplicates: showDuplicates
+                includeDuplicates: showDuplicates,
+                effectTerms,
+                effectMatchMode,
+                tagTerm
             };
 
             const visibility = typeof filterItemsFn === 'function' ? filterItemsFn(itemStates, options) : null;

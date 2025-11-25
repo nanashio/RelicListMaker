@@ -251,6 +251,67 @@ h1 {
 
 .toolbar-row--search {
     justify-content: center;
+    align-items: flex-start;
+    row-gap: var(--space-md);
+}
+
+.search-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-muted);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+}
+
+.search-field input[type=search] {
+    width: min(260px, 100%);
+}
+
+.search-field--primary input[type=search] {
+    width: min(320px, 100%);
+}
+
+.search-label {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+}
+
+.search-field--effects {
+    min-width: 340px;
+    gap: var(--space-sm);
+}
+
+.search-field-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+}
+
+.effect-search-inputs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+}
+
+.effect-search-inputs input[type=search] {
+    width: min(200px, 100%);
+}
+
+.effect-search-mode {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: 13px;
+    color: var(--color-text-secondary);
+}
+
+.effect-search-mode label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xxs);
 }
 
 .dataset-selector {
@@ -309,10 +370,6 @@ h1 {
     padding: var(--space-sm) var(--space-lg);
     font-size: 14px;
     height: var(--toolbar-control-height);
-}
-
-.toolbar-row--search #search-input {
-    width: min(720px, 100%);
 }
 
 .storage-controls {

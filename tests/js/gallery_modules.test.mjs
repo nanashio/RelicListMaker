@@ -725,6 +725,69 @@ describe('gallery filter utils', () => {
     });
     assert.deepEqual(favoritesOnly, [false, false, true]);
   });
+
+  test('filterItems supports effect and tag filters', () => {
+    const items = [
+      {
+        duplicate: false,
+        searchCache: '',
+        statusCache: '|pending|',
+        effectStates: ['pending'],
+        favorite: false,
+        itemColor: '',
+        effectValues: ['炎上ダメージアップ'],
+        tagTokens: ['tag-one']
+      },
+      {
+        duplicate: false,
+        searchCache: '',
+        statusCache: '|pending|',
+        effectStates: ['pending'],
+        favorite: false,
+        itemColor: '',
+        effectValues: ['炎耐性アップ', '雷耐性アップ'],
+        tagTokens: ['tag-two']
+      },
+      {
+        duplicate: false,
+        searchCache: '',
+        statusCache: '|pending|',
+        effectStates: ['pending'],
+        favorite: false,
+        itemColor: '',
+        effectValues: [],
+        tagTokens: []
+      }
+    ];
+
+    const effectAndFilters = {
+      term: '',
+      filter: 'all',
+      colorFilter: 'all',
+      includeDuplicates: true,
+      effectTerms: ['炎', '雷'],
+      effectMatchMode: 'and',
+      tagTerm: ''
+    };
+    assert.deepEqual(filterUtils.filterItems(items, effectAndFilters), [false, true, false]);
+
+    const effectOrFilters = {
+      ...effectAndFilters,
+      effectMatchMode: 'or'
+    };
+    assert.deepEqual(filterUtils.filterItems(items, effectOrFilters), [true, true, false]);
+
+    const tagFilters = {
+      term: '',
+      filter: 'all',
+      colorFilter: 'all',
+      includeDuplicates: true,
+      effectTerms: [],
+      effectMatchMode: 'and',
+      tagTerm: 'tag-two'
+    };
+    assert.deepEqual(filterUtils.filterItems(items, tagFilters), [false, true, false]);
+  });
 });
 
 

@@ -75,6 +75,43 @@
             .filter((entry) => entry && entry !== '');
     }
 
+    function toNormalizedTokenList(value) {
+        if (Array.isArray(value)) {
+            return value
+                .map((entry) => normalizeToken(entry))
+                .filter((entry) => entry && entry !== '');
+        }
+        const token = normalizeToken(value);
+        return token ? [token] : [];
+    }
+
+    function normalizeEffectMatchMode(value) {
+        return value === 'or' ? 'or' : 'and';
+    }
+
+    function matchesEffectTerms(effectValues, terms = [], mode = 'and') {
+        const normalizedEffects = toNormalizedTokenList(effectValues);
+        if (!terms.length) {
+            return true;
+        }
+        if (!normalizedEffects.length) {
+            return false;
+        }
+        const termMatches = terms.map((term) => normalizedEffects.some((value) => value.includes(term)));
+        return mode === 'or' ? termMatches.some(Boolean) : termMatches.every(Boolean);
+    }
+
+    function matchesTagTokens(tagTokens, term) {
+        if (!term) {
+            return true;
+        }
+        const normalizedTags = toNormalizedTokenList(tagTokens);
+        if (!normalizedTags.length) {
+            return false;
+        }
+        return normalizedTags.some((tag) => tag.includes(term));
+    }
+
     function evaluateItemVisibility(item = {}, filters = {}) {
         const {
             duplicate = false,
@@ -82,14 +119,19 @@
             statusCache = '',
             effectStates = [],
             favorite = false,
-            itemColor = ''
+            itemColor = '',
+            effectValues = [],
+            tagTokens = []
         } = item;
 
         const {
             term = '',
             filter = 'all',
             colorFilter = 'all',
-            includeDuplicates = false
+            includeDuplicates = false,
+            effectTerms = [],
+            effectMatchMode = 'and',
+            tagTerm = ''
         } = filters;
 
         if (duplicate && !includeDuplicates) {
@@ -100,6 +142,23 @@
         if (normalizedTerm) {
             const cache = typeof searchCache === 'string' ? searchCache : '';
             if (!cache || !cache.includes(normalizedTerm)) {
+                return false;
+            }
+        }
+
+        const normalizedEffectTerms = Array.isArray(effectTerms)
+            ? effectTerms.map((value) => normalizeToken(value)).filter((value) => value !== '')
+            : [];
+        if (normalizedEffectTerms.length) {
+            const matchMode = normalizeEffectMatchMode(effectMatchMode);
+            if (!matchesEffectTerms(effectValues, normalizedEffectTerms, matchMode)) {
+                return false;
+            }
+        }
+
+        const normalizedTagTerm = normalizeToken(tagTerm);
+        if (normalizedTagTerm) {
+            if (!matchesTagTokens(tagTokens, normalizedTagTerm)) {
                 return false;
             }
         }

@@ -913,6 +913,13 @@
         relicTypeSelect: document.getElementById('relic-type-select'),
         galleryStatus: document.getElementById('gallery-status'),
         searchInput: document.getElementById('search-input'),
+        effectSearchInputs: [
+            document.getElementById('effect-search-1'),
+            document.getElementById('effect-search-2'),
+            document.getElementById('effect-search-3')
+        ].filter(Boolean),
+        effectSearchMode: document.querySelectorAll('input[name="effect-search-mode"]'),
+        tagSearchInput: document.getElementById('tag-search-input'),
         filterSelect: document.getElementById('filter-status'),
         colorFilter: document.getElementById('filter-color'),
         showDuplicatesToggle: document.getElementById('show-duplicates'),
