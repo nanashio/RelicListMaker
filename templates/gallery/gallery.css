@@ -290,11 +290,6 @@ h1 {
     gap: var(--space-md);
 }
 
-.effect-search-note {
-    font-size: 12px;
-    color: var(--color-text-secondary);
-}
-
 .effect-search-inputs {
     display: flex;
     flex-direction: column;
