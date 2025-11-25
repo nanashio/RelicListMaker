@@ -491,6 +491,12 @@ class LayoutManager:
             value="vision",
             variable=self.app.ocr_engine_var,
         ).pack(side="left")
+        ttk.Radiobutton(
+            engine_frame,
+            text="OCRなし",
+            value="none",
+            variable=self.app.ocr_engine_var,
+        ).pack(side="left", padx=(8, 0))
         ttk.Label(parent, text="Vision認証ファイル名").grid(
             row=4, column=0, sticky="w", padx=(0, 8), pady=2
         )
