@@ -89,8 +89,49 @@
         return value === 'or' ? 'or' : 'and';
     }
 
+    function normalizeEffectValues(effectValues) {
+        if (Array.isArray(effectValues)) {
+            return effectValues
+                .map((value) => normalizeToken(value))
+                .filter((value) => value && value !== '')
+                .slice(0, 3);
+        }
+        return toNormalizedTokenList(effectValues).slice(0, 3);
+    }
+
+    function normalizeEffectSearchTerms(value) {
+        if (Array.isArray(value)) {
+            return value
+                .map((entry) => normalizeToken(entry))
+                .filter((entry) => entry && entry !== '');
+        }
+        const text = normalizeToken(value);
+        if (!text) {
+            return [];
+        }
+        return text
+            .split(/\s+/)
+            .map((entry) => normalizeToken(entry))
+            .filter((entry) => entry && entry !== '');
+    }
+
+    function normalizeEffectSearchEntry(entry) {
+        if (!entry || typeof entry !== 'object') {
+            return null;
+        }
+        const { terms = [], mode = 'and' } = entry;
+        const normalizedTerms = normalizeEffectSearchTerms(terms);
+        if (!normalizedTerms.length) {
+            return null;
+        }
+        return {
+            terms: normalizedTerms,
+            mode: normalizeEffectMatchMode(mode)
+        };
+    }
+
     function matchesEffectTerms(effectValues, terms = [], mode = 'and') {
-        const normalizedEffects = toNormalizedTokenList(effectValues);
+        const normalizedEffects = normalizeEffectValues(effectValues);
         if (!terms.length) {
             return true;
         }
@@ -131,6 +172,7 @@
             includeDuplicates = false,
             effectTerms = [],
             effectMatchMode = 'and',
+            effectSearches = [],
             tagTerm = ''
         } = filters;
 
@@ -146,12 +188,27 @@
             }
         }
 
+        const normalizedEffectSearches = Array.isArray(effectSearches)
+            ? effectSearches
+                  .map((entry) => normalizeEffectSearchEntry(entry))
+                  .filter((entry) => entry !== null)
+            : [];
+
         const normalizedEffectTerms = Array.isArray(effectTerms)
             ? effectTerms.map((value) => normalizeToken(value)).filter((value) => value !== '')
             : [];
-        if (normalizedEffectTerms.length) {
-            const matchMode = normalizeEffectMatchMode(effectMatchMode);
-            if (!matchesEffectTerms(effectValues, normalizedEffectTerms, matchMode)) {
+        if (!normalizedEffectSearches.length && normalizedEffectTerms.length) {
+            normalizedEffectSearches.push({
+                terms: normalizedEffectTerms,
+                mode: normalizeEffectMatchMode(effectMatchMode)
+            });
+        }
+        if (normalizedEffectSearches.length) {
+            if (
+                !normalizedEffectSearches.every((search) =>
+                    matchesEffectTerms(effectValues, search.terms, search.mode)
+                )
+            ) {
                 return false;
             }
         }

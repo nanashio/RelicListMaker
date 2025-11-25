@@ -918,7 +918,7 @@
             document.getElementById('effect-search-2'),
             document.getElementById('effect-search-3')
         ].filter(Boolean),
-        effectSearchMode: document.querySelectorAll('input[name="effect-search-mode"]'),
+        effectSearchModes: Array.from(document.querySelectorAll('.effect-search-mode-select')),
         tagSearchInput: document.getElementById('tag-search-input'),
         filterSelect: document.getElementById('filter-status'),
         colorFilter: document.getElementById('filter-color'),

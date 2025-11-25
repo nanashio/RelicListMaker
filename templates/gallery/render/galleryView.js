@@ -790,7 +790,8 @@
                 if (Array.isArray(parsed)) {
                     return parsed
                         .map((entry) => normalizeSearchToken(entry))
-                        .filter((entry) => entry !== '');
+                        .filter((entry) => entry !== '')
+                        .slice(0, 3);
                 }
             } catch (error) {
                 console.warn('効果検索キャッシュの解析に失敗しました:', error);
@@ -798,27 +799,33 @@
             return [];
         }
 
-        function collectEffectSearchTerms() {
+        function normalizeEffectSearchTerms(value) {
+            const text = normalizeSearchToken(value);
+            if (!text) {
+                return [];
+            }
+            return text
+                .split(/\s+/)
+                .map((term) => normalizeSearchToken(term))
+                .filter((term) => term !== '');
+        }
+
+        function collectEffectSearchEntries() {
             if (!Array.isArray(dom.effectSearchInputs)) {
                 return [];
             }
+            const modes = Array.isArray(dom.effectSearchModes) ? dom.effectSearchModes : [];
             return dom.effectSearchInputs
-                .map((input) => normalizeSearchToken(input && input.value))
-                .filter((value) => value !== '');
-        }
-
-        function resolveEffectSearchMode() {
-            const nodes = dom.effectSearchMode;
-            if (!nodes || typeof nodes.forEach !== 'function') {
-                return 'and';
-            }
-            let mode = 'and';
-            nodes.forEach((node) => {
-                if (node && node.checked) {
-                    mode = node.value === 'or' ? 'or' : 'and';
-                }
-            });
-            return mode;
+                .map((input, index) => {
+                    const terms = normalizeEffectSearchTerms(input && input.value);
+                    if (!terms.length) {
+                        return null;
+                    }
+                    const modeNode = modes[index] || null;
+                    const mode = modeNode && modeNode.value === 'or' ? 'or' : 'and';
+                    return { terms, mode };
+                })
+                .filter((entry) => entry !== null);
         }
 
         function getTagSearchTerm() {
@@ -897,7 +904,7 @@
 
                 if (effect.dataset && effect.dataset.kind === 'effect') {
                     const slotIndex = Number.parseInt(effect.dataset.slot, 10);
-                    if (Number.isFinite(slotIndex) && slotIndex > 0) {
+                    if (Number.isFinite(slotIndex) && slotIndex > 0 && slotIndex <= 3) {
                         const effectNames = [
                             effect.dataset.correction,
                             effect.dataset.predictionValue,
@@ -926,7 +933,9 @@
             item.dataset.effectStates = effectStateList
                 .filter((value) => value != null && value !== '')
                 .join(',');
-            const normalizedEffectSlots = effectSlotValues.map((value) => normalizeSearchToken(value));
+            const normalizedEffectSlots = effectSlotValues
+                .slice(0, 3)
+                .map((value) => normalizeSearchToken(value));
             if (normalizedEffectSlots.some((value) => value !== '')) {
                 item.dataset.effectSlots = JSON.stringify(normalizedEffectSlots);
             } else {
@@ -940,8 +949,7 @@
             const filter = dom.filterSelect ? dom.filterSelect.value : 'all';
             const colorFilter = dom.colorFilter ? dom.colorFilter.value : 'all';
             const showDuplicates = includeDuplicatesNow();
-            const effectTerms = collectEffectSearchTerms();
-            const effectMatchMode = resolveEffectSearchMode();
+            const effectSearches = collectEffectSearchEntries();
             const tagTerm = getTagSearchTerm();
 
             const itemStates = state.items.map((item) => {
@@ -976,8 +984,7 @@
                 filter,
                 colorFilter,
                 includeDuplicates: showDuplicates,
-                effectTerms,
-                effectMatchMode,
+                effectSearches,
                 tagTerm
             };
 

@@ -765,25 +765,32 @@ describe('gallery filter utils', () => {
       filter: 'all',
       colorFilter: 'all',
       includeDuplicates: true,
-      effectTerms: ['炎', '雷'],
-      effectMatchMode: 'and',
+      effectSearches: [{ terms: ['炎', '雷'], mode: 'and' }],
       tagTerm: ''
     };
     assert.deepEqual(filterUtils.filterItems(items, effectAndFilters), [false, true, false]);
 
     const effectOrFilters = {
       ...effectAndFilters,
-      effectMatchMode: 'or'
+      effectSearches: [{ terms: ['炎', '雷'], mode: 'or' }]
     };
     assert.deepEqual(filterUtils.filterItems(items, effectOrFilters), [true, true, false]);
+
+    const effectMultipleInputs = {
+      ...effectAndFilters,
+      effectSearches: [
+        { terms: ['炎'], mode: 'or' },
+        { terms: ['雷'], mode: 'or' }
+      ]
+    };
+    assert.deepEqual(filterUtils.filterItems(items, effectMultipleInputs), [false, true, false]);
 
     const tagFilters = {
       term: '',
       filter: 'all',
       colorFilter: 'all',
       includeDuplicates: true,
-      effectTerms: [],
-      effectMatchMode: 'and',
+      effectSearches: [],
       tagTerm: 'tag-two'
     };
     assert.deepEqual(filterUtils.filterItems(items, tagFilters), [false, true, false]);

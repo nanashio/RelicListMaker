@@ -383,9 +383,11 @@
                     input.addEventListener('input', applyFilters);
                 });
             }
-            if (dom.effectSearchMode && typeof dom.effectSearchMode.forEach === 'function') {
-                dom.effectSearchMode.forEach((radio) => {
-                    radio.addEventListener('change', applyFilters);
+            if (Array.isArray(dom.effectSearchModes)) {
+                dom.effectSearchModes.forEach((select) => {
+                    if (select) {
+                        select.addEventListener('change', applyFilters);
+                    }
                 });
             }
             if (dom.tagSearchInput) {
