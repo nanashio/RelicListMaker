@@ -204,11 +204,16 @@
             });
         }
         if (normalizedEffectSearches.length) {
-            if (
-                !normalizedEffectSearches.every((search) =>
-                    matchesEffectTerms(effectValues, search.terms, search.mode)
-                )
-            ) {
+            let effectMatched = null;
+            normalizedEffectSearches.forEach((search, index) => {
+                const matches = matchesEffectTerms(effectValues, search.terms, search.mode);
+                if (index === 0 || effectMatched === null) {
+                    effectMatched = matches;
+                    return;
+                }
+                effectMatched = search.mode === 'or' ? effectMatched || matches : effectMatched && matches;
+            });
+            if (!effectMatched) {
                 return false;
             }
         }

@@ -783,7 +783,31 @@ describe('gallery filter utils', () => {
         { terms: ['雷'], mode: 'or' }
       ]
     };
-    assert.deepEqual(filterUtils.filterItems(items, effectMultipleInputs), [false, true, false]);
+    assert.deepEqual(filterUtils.filterItems(items, effectMultipleInputs), [true, true, false]);
+
+    const mixedItems = [
+      { effectValues: ['炎攻撃力アップ'], tagTokens: [] },
+      { effectValues: ['雷耐性アップ'], tagTokens: [] },
+      { effectValues: ['炎攻撃力アップ', '雷耐性アップ'], tagTokens: [] }
+    ];
+
+    const orThenAndFilters = {
+      ...effectAndFilters,
+      effectSearches: [
+        { terms: ['炎'], mode: 'or' },
+        { terms: ['雷'], mode: 'and' }
+      ]
+    };
+    assert.deepEqual(filterUtils.filterItems(mixedItems, orThenAndFilters), [false, false, true]);
+
+    const andThenOrFilters = {
+      ...effectAndFilters,
+      effectSearches: [
+        { terms: ['炎', '雷'], mode: 'and' },
+        { terms: ['毒'], mode: 'or' }
+      ]
+    };
+    assert.deepEqual(filterUtils.filterItems(mixedItems, andThenOrFilters), [false, false, true]);
 
     const tagFilters = {
       term: '',
