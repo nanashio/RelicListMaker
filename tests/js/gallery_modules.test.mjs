@@ -1524,10 +1524,8 @@ describe('gallery view', () => {
       showOcr: false
     };
     const datasetState = { kind: 'normal', list: [], activeIndex: 0 };
-    const tagSearchInput = defaultCreateElement('input');
+    const tagSearchInput = defaultCreateElement('select');
     tagSearchInput.id = 'tag-search-input';
-    const tagSearchDatalist = defaultCreateElement('datalist');
-    tagSearchDatalist.id = 'tag-search-options';
     const dom = {
       gallery: defaultCreateElement('div'),
       galleryStatus: defaultCreateElement('div'),
@@ -1538,12 +1536,10 @@ describe('gallery view', () => {
       effectSearchInputs: [],
       effectSearchModes: [],
       tagSearchInput,
-      tagSearchDatalist,
       filterSelect: { value: 'all' },
       colorFilter: { value: 'all' }
     };
     dom.gallery.appendChild(tagSearchInput);
-    dom.gallery.appendChild(tagSearchDatalist);
 
     const duplicates = {
       has: () => false,
@@ -1624,7 +1620,7 @@ describe('gallery view', () => {
     tomSelectInstances[0].items = ['Beta', 'Gamma'];
     galleryView.applyFilters();
     assert.deepEqual(filterOptions[0].tagTerms, ['beta', 'gamma']);
-    assert.equal(tagSearchDatalist.children.length, 3);
+    assert.equal(typeof tomSelectInstances[0].handlers.change, 'function');
   });
 
   test('applyItemTags keeps focused input text until editing ends', () => {

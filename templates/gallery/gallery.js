@@ -922,7 +922,6 @@
         ].filter(Boolean),
         effectSearchModes: Array.from(document.querySelectorAll('.effect-search-mode-select')),
         tagSearchInput: document.getElementById('tag-search-input'),
-        tagSearchDatalist: document.getElementById('tag-search-options'),
         filterSelect: document.getElementById('filter-status'),
         colorFilter: document.getElementById('filter-color'),
         showDuplicatesToggle: document.getElementById('show-duplicates'),

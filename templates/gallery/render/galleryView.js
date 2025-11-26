@@ -54,7 +54,6 @@
             dataUtils && typeof dataUtils.formatTagTokens === 'function'
                 ? dataUtils.formatTagTokens
                 : null;
-        const TAG_SEARCH_DATALIST_ID = 'tag-search-options';
 
         if (typeof parseTagTokens !== 'function' || typeof formatTagTokens !== 'function') {
             throw new Error('createGalleryView: tag utilities are required');
@@ -86,57 +85,15 @@
             const changeHandlers = [];
             let instance = null;
 
-            function ensureDatalist() {
-                if (!hasDocument || !dom.tagSearchInput) {
-                    return null;
-                }
-                let list = dom.tagSearchDatalist || null;
-                if (!list && typeof document.getElementById === 'function') {
-                    list = document.getElementById(TAG_SEARCH_DATALIST_ID);
-                    if (list) {
-                        dom.tagSearchDatalist = list;
-                    }
-                }
-                if (!list && typeof document.createElement === 'function') {
-                    list = document.createElement('datalist');
-                    list.id = TAG_SEARCH_DATALIST_ID;
-                    dom.tagSearchDatalist = list;
-                    if (dom.tagSearchInput && typeof dom.tagSearchInput.setAttribute === 'function') {
-                        dom.tagSearchInput.setAttribute('list', TAG_SEARCH_DATALIST_ID);
-                    }
-                    const parent = dom.tagSearchInput.parentNode || document.body;
-                    if (parent && typeof parent.appendChild === 'function') {
-                        parent.appendChild(list);
-                    }
-                }
-                return list || null;
-            }
-
-            function updateDatalist(options = []) {
-                const list = ensureDatalist();
-                if (!list) {
-                    return;
-                }
-                while (list.firstChild) {
-                    list.removeChild(list.firstChild);
-                }
-                options.forEach((option) => {
-                    const value = option && option.value ? String(option.value).trim() : '';
-                    if (!value) {
-                        return;
-                    }
-                    const node = document.createElement('option');
-                    node.value = value;
-                    list.appendChild(node);
-                });
-            }
-
             function ensureInstance() {
                 if (!tomSelectClass || !dom.tagSearchInput) {
                     return null;
                 }
                 if (instance) {
                     return instance;
+                }
+                if (dom.tagSearchInput && typeof dom.tagSearchInput.setAttribute === 'function') {
+                    dom.tagSearchInput.setAttribute('multiple', 'multiple');
                 }
                 instance = new tomSelectClass(dom.tagSearchInput, {
                     maxItems: null,
@@ -145,7 +102,6 @@
                     valueField: 'value',
                     labelField: 'text',
                     searchField: ['text'],
-                    delimiter: ' ',
                     closeAfterSelect: false,
                     plugins: ['remove_button']
                 });
@@ -159,9 +115,26 @@
 
             function setOptions(options = [], { clearSelection = false } = {}) {
                 const normalizedOptions = Array.isArray(options) ? options : [];
-                updateDatalist(normalizedOptions);
                 const inst = ensureInstance();
                 if (!inst) {
+                    if (hasDocument && dom.tagSearchInput) {
+                        while (dom.tagSearchInput.firstChild) {
+                            dom.tagSearchInput.removeChild(dom.tagSearchInput.firstChild);
+                        }
+                        normalizedOptions.forEach((option) => {
+                            const value = option && option.value ? String(option.value).trim() : '';
+                            if (!value) {
+                                return;
+                            }
+                            const node = document.createElement('option');
+                            node.value = value;
+                            node.textContent = option.text || value;
+                            dom.tagSearchInput.appendChild(node);
+                        });
+                        if (clearSelection) {
+                            dom.tagSearchInput.selectedIndex = -1;
+                        }
+                    }
                     return;
                 }
                 if (clearSelection && typeof inst.clear === 'function') {
@@ -184,9 +157,13 @@
                         return value.slice();
                     }
                     if (typeof value === 'string') {
-                        const delimiter = (inst.settings && inst.settings.delimiter) || ' ';
-                        return value.split(delimiter);
+                        return value ? [value] : [];
                     }
+                }
+                if (dom.tagSearchInput && dom.tagSearchInput.selectedOptions) {
+                    return Array.from(dom.tagSearchInput.selectedOptions)
+                        .map((option) => option.value)
+                        .filter((value) => value);
                 }
                 const text = dom.tagSearchInput && dom.tagSearchInput.value ? dom.tagSearchInput.value : '';
                 return parseTagTokens(text);
@@ -203,7 +180,7 @@
                     return;
                 }
                 if (dom.tagSearchInput && typeof dom.tagSearchInput.addEventListener === 'function') {
-                    dom.tagSearchInput.addEventListener('input', handler);
+                    dom.tagSearchInput.addEventListener('change', handler);
                 }
             }
 
@@ -212,6 +189,9 @@
                 if (inst && typeof inst.clear === 'function') {
                     inst.clear(true);
                 } else if (dom.tagSearchInput) {
+                    if (typeof dom.tagSearchInput.selectedIndex === 'number') {
+                        dom.tagSearchInput.selectedIndex = -1;
+                    }
                     dom.tagSearchInput.value = '';
                 }
             }
