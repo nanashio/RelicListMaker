@@ -77,6 +77,127 @@
                       documentRef: hasDocument || null
                   })
                 : null;
+        const tagSearchController = (() => {
+            const tomSelectClass =
+                hasDocument && typeof window !== 'undefined' && window
+                    ? window.TomSelect
+                    : null;
+            const changeHandlers = [];
+            let instance = null;
+
+            function ensureInstance() {
+                if (!tomSelectClass || !dom.tagSearchInput) {
+                    return null;
+                }
+                if (instance) {
+                    return instance;
+                }
+                if (dom.tagSearchInput && typeof dom.tagSearchInput.setAttribute === 'function') {
+                    dom.tagSearchInput.setAttribute('multiple', 'multiple');
+                }
+                instance = new tomSelectClass(dom.tagSearchInput, {
+                    maxItems: null,
+                    create: false,
+                    persist: false,
+                    valueField: 'value',
+                    labelField: 'text',
+                    searchField: ['text'],
+                    closeAfterSelect: false,
+                    plugins: ['remove_button']
+                });
+                changeHandlers.forEach((handler) => {
+                    if (typeof handler === 'function' && typeof instance.on === 'function') {
+                        instance.on('change', handler);
+                    }
+                });
+                return instance;
+            }
+
+            function setOptions(options = [], { clearSelection = false } = {}) {
+                const normalizedOptions = Array.isArray(options) ? options : [];
+                const inst = ensureInstance();
+                if (!inst) {
+                    if (hasDocument && dom.tagSearchInput) {
+                        while (dom.tagSearchInput.firstChild) {
+                            dom.tagSearchInput.removeChild(dom.tagSearchInput.firstChild);
+                        }
+                        normalizedOptions.forEach((option) => {
+                            const value = option && option.value ? String(option.value).trim() : '';
+                            if (!value) {
+                                return;
+                            }
+                            const node = document.createElement('option');
+                            node.value = value;
+                            node.textContent = option.text || value;
+                            dom.tagSearchInput.appendChild(node);
+                        });
+                        if (clearSelection) {
+                            dom.tagSearchInput.selectedIndex = -1;
+                        }
+                    }
+                    return;
+                }
+                if (clearSelection && typeof inst.clear === 'function') {
+                    inst.clear(true);
+                }
+                if (typeof inst.clearOptions === 'function') {
+                    inst.clearOptions();
+                }
+                normalizedOptions.forEach((option) => inst.addOption(option));
+                if (typeof inst.refreshOptions === 'function') {
+                    inst.refreshOptions(false);
+                }
+            }
+
+            function getValues() {
+                const inst = ensureInstance();
+                if (inst && typeof inst.getValue === 'function') {
+                    const value = inst.getValue();
+                    if (Array.isArray(value)) {
+                        return value.slice();
+                    }
+                    if (typeof value === 'string') {
+                        return value ? [value] : [];
+                    }
+                }
+                if (dom.tagSearchInput && dom.tagSearchInput.selectedOptions) {
+                    return Array.from(dom.tagSearchInput.selectedOptions)
+                        .map((option) => option.value)
+                        .filter((value) => value);
+                }
+                const text = dom.tagSearchInput && dom.tagSearchInput.value ? dom.tagSearchInput.value : '';
+                return parseTagTokens(text);
+            }
+
+            function onChange(handler) {
+                if (typeof handler !== 'function') {
+                    return;
+                }
+                changeHandlers.push(handler);
+                const inst = ensureInstance();
+                if (inst && typeof inst.on === 'function') {
+                    inst.on('change', handler);
+                    return;
+                }
+                if (dom.tagSearchInput && typeof dom.tagSearchInput.addEventListener === 'function') {
+                    dom.tagSearchInput.addEventListener('change', handler);
+                }
+            }
+
+            function clearSelection() {
+                const inst = ensureInstance();
+                if (inst && typeof inst.clear === 'function') {
+                    inst.clear(true);
+                } else if (dom.tagSearchInput) {
+                    if (typeof dom.tagSearchInput.selectedIndex === 'number') {
+                        dom.tagSearchInput.selectedIndex = -1;
+                    }
+                    dom.tagSearchInput.value = '';
+                }
+            }
+
+            return { setOptions, getValues, onChange, clearSelection };
+        })();
         const filterNamespace = typeof window !== 'undefined' && window ? window.galleryFilterUtils : null;
 
         const stateControls = {
@@ -652,8 +773,10 @@
             const tokens = parseTagTokens(normalized);
             if (tokens.length) {
                 item.dataset.tags = tokens.join(' ');
+                item.dataset.tagTokens = tokens.map((token) => token.toLowerCase()).join(' ');
             } else {
                 delete item.dataset.tags;
+                delete item.dataset.tagTokens;
             }
             const input = item.querySelector('.item-tags-input');
             if (input) {
@@ -762,6 +885,125 @@
             applyItemRelicType(item, relicType);
         }
 
+        function normalizeSearchToken(value) {
+            if (value == null) {
+                return '';
+            }
+            return String(value).trim().toLowerCase();
+        }
+
+        function parseTagTokensValue(text) {
+            if (!text) {
+                return [];
+            }
+            return text
+                .split(/\s+/)
+                .map((token) => normalizeSearchToken(token))
+                .filter((token) => token !== '');
+        }
+
+        function collectTagSearchOptions(records) {
+            if (!Array.isArray(records) || !records.length || !parseTagTokens) {
+                return [];
+            }
+            const seen = new Set();
+            const options = [];
+            records.forEach((record) => {
+                const tokens = parseTagTokens(record && record.Tags);
+                tokens.forEach((token) => {
+                    const text = token == null ? '' : String(token).trim();
+                    if (!text) {
+                        return;
+                    }
+                    const key = text.toLowerCase();
+                    if (seen.has(key)) {
+                        return;
+                    }
+                    seen.add(key);
+                    options.push({ value: text, text });
+                });
+            });
+            return options;
+        }
+
+        function parseEffectSlotsValue(jsonText) {
+            if (!jsonText) {
+                return [];
+            }
+            try {
+                const parsed = JSON.parse(jsonText);
+                if (Array.isArray(parsed)) {
+                    return parsed
+                        .map((entry) => normalizeSearchToken(entry))
+                        .filter((entry) => entry !== '')
+                        .slice(0, 3);
+                }
+            } catch (error) {
+                console.warn('効果検索キャッシュの解析に失敗しました:', error);
+            }
+            return [];
+        }
+
+        function normalizeEffectSearchTerms(value) {
+            const text = normalizeSearchToken(value);
+            if (!text) {
+                return [];
+            }
+            return text
+                .split(/\s+/)
+                .map((term) => normalizeSearchToken(term))
+                .filter((term) => term !== '');
+        }
+
+        function collectEffectSearchEntries() {
+            if (!Array.isArray(dom.effectSearchInputs)) {
+                return [];
+            }
+            const modes = Array.isArray(dom.effectSearchModes) ? dom.effectSearchModes : [];
+            return dom.effectSearchInputs
+                .map((input, index) => {
+                    const terms = normalizeEffectSearchTerms(input && input.value);
+                    if (!terms.length) {
+                        return null;
+                    }
+                    const modeNode = modes[index] || null;
+                    const mode = modeNode && modeNode.value === 'or' ? 'or' : 'and';
+                    return { terms, mode };
+                })
+                .filter((entry) => entry !== null);
+        }
+
+        function getTagSearchTerms() {
+            if (tagSearchController && typeof tagSearchController.getValues === 'function') {
+                const selectedValues = tagSearchController.getValues();
+                const normalizedSelected = parseTagTokensValue(
+                    Array.isArray(selectedValues) ? selectedValues.join(' ') : selectedValues
+                );
+                if (normalizedSelected.length) {
+                    return normalizedSelected;
+                }
+            }
+            if (!dom.tagSearchInput) {
+                return [];
+            }
+            return parseTagTokensValue(dom.tagSearchInput.value || '');
+        }
+
+        function readEffectSlots(item) {
+            if (!item || !item.dataset) {
+                return [];
+            }
+            return parseEffectSlotsValue(item.dataset.effectSlots || '');
+        }
+
+        function readTagTokens(item) {
+            if (!item || !item.dataset) {
+                return [];
+            }
+            const tokens = item.dataset.tagTokens || item.dataset.tags || '';
+            return parseTagTokensValue(tokens);
+        }
+
         function refreshItemCaches(item) {
             if (!item) {
                 return;
@@ -781,16 +1023,18 @@
                 baseTokens.push(datasetToken);
             }
             const tagsToken = item.dataset.tags;
-            if (tagsToken) {
-                tagsToken
-                    .split(/\s+/)
-                    .filter(Boolean)
-                    .forEach((token) => {
-                        baseTokens.push(token);
-                    });
+            const normalizedTagTokens = parseTagTokensValue(tagsToken);
+            if (normalizedTagTokens.length) {
+                normalizedTagTokens.forEach((token) => {
+                    baseTokens.push(token);
+                });
+                item.dataset.tagTokens = normalizedTagTokens.join(' ');
+            } else {
+                delete item.dataset.tagTokens;
             }
 
             const effectEntries = [];
+            const effectSlotValues = [];
 
             item.querySelectorAll('.effect').forEach((effect) => {
                 const {
@@ -811,6 +1055,23 @@
                     levelOptions,
                     levelCorrection
                 });
+
+                if (effect.dataset && effect.dataset.kind === 'effect') {
+                    const slotIndex = Number.parseInt(effect.dataset.slot, 10);
+                    if (Number.isFinite(slotIndex) && slotIndex > 0 && slotIndex <= 3) {
+                        const effectNames = [
+                            effect.dataset.correction,
+                            effect.dataset.predictionValue,
+                            pred,
+                            raw
+                        ]
+                            .map((value) => normalizeSearchToken(value))
+                            .filter((value) => value !== '');
+                        if (effectNames.length) {
+                            effectSlotValues[slotIndex - 1] = effectNames.join(' ');
+                        }
+                    }
+                }
             });
 
             const caches = buildItemSearchCaches({ baseTokens, effects: effectEntries }) || {};
@@ -826,6 +1087,22 @@
             item.dataset.effectStates = effectStateList
                 .filter((value) => value != null && value !== '')
                 .join(',');
+            const normalizedEffectSlots = effectSlotValues
+                .slice(0, 3)
+                .map((value) => normalizeSearchToken(value));
+            if (normalizedEffectSlots.some((value) => value !== '')) {
+                item.dataset.effectSlots = JSON.stringify(normalizedEffectSlots);
+            } else {
+                delete item.dataset.effectSlots;
+            }
+        }
+
+        function syncTagSearchOptions(records, { clearSelection = false } = {}) {
+            if (!tagSearchController || !dom.tagSearchInput) {
+                return;
+            }
+            const options = collectTagSearchOptions(records || state.records || []);
+            tagSearchController.setOptions(options, { clearSelection });
         }
 
         function applyFilters() {
@@ -834,6 +1111,8 @@
             const filter = dom.filterSelect ? dom.filterSelect.value : 'all';
             const colorFilter = dom.colorFilter ? dom.colorFilter.value : 'all';
             const showDuplicates = includeDuplicatesNow();
+            const effectSearches = collectEffectSearchEntries();
+            const tagTerms = getTagSearchTerms();
 
             const itemStates = state.items.map((item) => {
                 if (!item) {
@@ -844,7 +1123,9 @@
                         effectStates: [],
                         favorite: false,
                         itemColor: '',
-                        relicType: ''
+                        relicType: '',
+                        effectValues: [],
+                        tagTokens: []
                     };
                 }
                 return {
@@ -854,7 +1135,9 @@
                     effectStates: (item.dataset.effectStates || '').split(',').filter(Boolean),
                     favorite: item.dataset.favorite === 'true',
                     itemColor: normalizeItemColor(item.dataset.itemColor || ''),
-                    relicType: normalizeItemRelicType(item.dataset.relicType || '')
+                    relicType: normalizeItemRelicType(item.dataset.relicType || ''),
+                    effectValues: readEffectSlots(item),
+                    tagTokens: readTagTokens(item)
                 };
             });
 
@@ -862,7 +1145,9 @@
                 term,
                 filter,
                 colorFilter,
-                includeDuplicates: showDuplicates
+                includeDuplicates: showDuplicates,
+                effectSearches,
+                tagTerms
             };
 
             const visibility = typeof filterItemsFn === 'function' ? filterItemsFn(itemStates, options) : null;
@@ -882,6 +1167,10 @@
             updateSummary();
         }
 
+        if (tagSearchController && typeof tagSearchController.onChange === 'function') {
+            tagSearchController.onChange(() => applyFilters());
+        }
+
         return {
             buildGallery,
             applyFilters,
@@ -897,7 +1186,8 @@
             normalizeItemRelicType,
             applyItemTags,
             normalizeItemTags,
-            refreshItemCaches
+            refreshItemCaches,
+            syncTagSearchOptions
         };
     }
 

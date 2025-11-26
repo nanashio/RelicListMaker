@@ -725,6 +725,115 @@ describe('gallery filter utils', () => {
     });
     assert.deepEqual(favoritesOnly, [false, false, true]);
   });
+
+  test('filterItems supports effect and tag filters', () => {
+    const items = [
+      {
+        duplicate: false,
+        searchCache: '',
+        statusCache: '|pending|',
+        effectStates: ['pending'],
+        favorite: false,
+        itemColor: '',
+        effectValues: ['炎上ダメージアップ'],
+        tagTokens: ['tag-one']
+      },
+      {
+        duplicate: false,
+        searchCache: '',
+        statusCache: '|pending|',
+        effectStates: ['pending'],
+        favorite: false,
+        itemColor: '',
+        effectValues: ['炎耐性アップ', '雷耐性アップ'],
+        tagTokens: ['tag-two']
+      },
+      {
+        duplicate: false,
+        searchCache: '',
+        statusCache: '|pending|',
+        effectStates: ['pending'],
+        favorite: false,
+        itemColor: '',
+        effectValues: [],
+        tagTokens: []
+      }
+    ];
+
+    const effectAndFilters = {
+      term: '',
+      filter: 'all',
+      colorFilter: 'all',
+      includeDuplicates: true,
+      effectSearches: [{ terms: ['炎', '雷'], mode: 'and' }],
+      tagTerm: ''
+    };
+    assert.deepEqual(filterUtils.filterItems(items, effectAndFilters), [false, true, false]);
+
+    const effectOrFilters = {
+      ...effectAndFilters,
+      effectSearches: [{ terms: ['炎', '雷'], mode: 'or' }]
+    };
+    assert.deepEqual(filterUtils.filterItems(items, effectOrFilters), [true, true, false]);
+
+    const effectMultipleInputs = {
+      ...effectAndFilters,
+      effectSearches: [
+        { terms: ['炎'], mode: 'or' },
+        { terms: ['雷'], mode: 'or' }
+      ]
+    };
+    assert.deepEqual(filterUtils.filterItems(items, effectMultipleInputs), [true, true, false]);
+
+    const mixedItems = [
+      { effectValues: ['炎攻撃力アップ'], tagTokens: [] },
+      { effectValues: ['雷耐性アップ'], tagTokens: [] },
+      { effectValues: ['炎攻撃力アップ', '雷耐性アップ'], tagTokens: [] }
+    ];
+
+    const orThenAndFilters = {
+      ...effectAndFilters,
+      effectSearches: [
+        { terms: ['炎'], mode: 'or' },
+        { terms: ['雷'], mode: 'and' }
+      ]
+    };
+    assert.deepEqual(filterUtils.filterItems(mixedItems, orThenAndFilters), [false, false, true]);
+
+    const andThenOrFilters = {
+      ...effectAndFilters,
+      effectSearches: [
+        { terms: ['炎', '雷'], mode: 'and' },
+        { terms: ['毒'], mode: 'or' }
+      ]
+    };
+    assert.deepEqual(filterUtils.filterItems(mixedItems, andThenOrFilters), [false, false, true]);
+
+    const tagFilters = {
+      term: '',
+      filter: 'all',
+      colorFilter: 'all',
+      includeDuplicates: true,
+      effectSearches: [],
+      tagTerms: ['tag-two']
+    };
+    assert.deepEqual(filterUtils.filterItems(items, tagFilters), [false, true, false]);
+
+    const multiTagItems = [
+      { tagTokens: ['alpha', 'beta'] },
+      { tagTokens: ['alpha'] },
+      { tagTokens: ['beta', 'gamma'] }
+    ];
+    const tagAndFilters = {
+      term: '',
+      filter: 'all',
+      colorFilter: 'all',
+      includeDuplicates: true,
+      effectSearches: [],
+      tagTerms: ['alpha', 'beta']
+    };
+    assert.deepEqual(filterUtils.filterItems(multiTagItems, tagAndFilters), [true, false, false]);
+  });
 });
 
 
@@ -1404,6 +1513,114 @@ describe('gallery view', () => {
     assert.equal(item.dataset.fromFactory, '0');
     assert.equal(item.dataset.extra, 'true');
     assert.equal(extraCalls.length, 1);
+  });
+
+  test('tag search options use Tags column with TomSelect selections', () => {
+    const state = {
+      records: [{ Tags: 'Alpha Beta' }, { Tags: 'beta Gamma' }],
+      items: [],
+      labelSymbols: [],
+      imageDir: '',
+      showOcr: false
+    };
+    const datasetState = { kind: 'normal', list: [], activeIndex: 0 };
+    const tagSearchInput = defaultCreateElement('select');
+    tagSearchInput.id = 'tag-search-input';
+    const dom = {
+      gallery: defaultCreateElement('div'),
+      galleryStatus: defaultCreateElement('div'),
+      summary: null,
+      showDuplicatesToggle: { checked: false },
+      showOcrToggle: { checked: false },
+      searchInput: { value: '' },
+      effectSearchInputs: [],
+      effectSearchModes: [],
+      tagSearchInput,
+      filterSelect: { value: 'all' },
+      colorFilter: { value: 'all' }
+    };
+    dom.gallery.appendChild(tagSearchInput);
+
+    const duplicates = {
+      has: () => false,
+      set: () => {},
+      prepare: () => {}
+    };
+    const statusCalls = [];
+    const tomSelectInstances = [];
+    class TomSelectStub {
+      constructor(input, settings) {
+        this.input = input;
+        this.settings = settings;
+        this.items = [];
+        this.options = [];
+        this.handlers = {};
+        tomSelectInstances.push(this);
+      }
+      on(event, handler) {
+        this.handlers[event] = handler;
+      }
+      addOption(option) {
+        this.options.push(option);
+      }
+      clearOptions() {
+        this.options = [];
+      }
+      refreshOptions() {}
+      clear() {
+        this.items = [];
+      }
+      getValue() {
+        return this.items.slice();
+      }
+    }
+    global.window.TomSelect = TomSelectStub;
+
+    const filterOptions = [];
+    const galleryView = galleryFactory.createGalleryView({
+      state,
+      datasetState,
+      dom,
+      duplicates,
+      itemColorOptions: [],
+      createEffect: () => null,
+      bindImage: () => {},
+      createElement: defaultCreateElement,
+      filterItems: (items, options) => {
+        filterOptions.push(options);
+        return items.map(() => true);
+      },
+      getRecordByIndex: () => null,
+      isRecordDuplicate: () => false,
+      isRecordFavorite: () => false,
+      joinPath: (base, leaf) => leaf || base || '',
+      getFileName: (value) => value || '',
+      showStatus: (message) => statusCalls.push(message),
+      clearStatus: () => statusCalls.push('clear')
+    });
+
+    const item = defaultCreateElement('div');
+    item.dataset.duplicate = 'false';
+    item.dataset.searchCache = '';
+    item.dataset.statusCache = '';
+    item.dataset.effectStates = '';
+    item.dataset.favorite = 'false';
+    item.dataset.itemColor = '';
+    item.dataset.relicType = '';
+    item.dataset.effectSlots = '[]';
+    item.dataset.tags = '';
+    state.items = [item];
+
+    galleryView.syncTagSearchOptions(state.records, { clearSelection: true });
+    assert.deepEqual(
+      tomSelectInstances[0].options.map((option) => option.value),
+      ['Alpha', 'Beta', 'Gamma']
+    );
+
+    tomSelectInstances[0].items = ['Beta', 'Gamma'];
+    galleryView.applyFilters();
+    assert.deepEqual(filterOptions[0].tagTerms, ['beta', 'gamma']);
+    assert.equal(typeof tomSelectInstances[0].handlers.change, 'function');
   });
 
   test('applyItemTags keeps focused input text until editing ends', () => {

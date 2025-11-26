@@ -43,7 +43,47 @@
             </label>
         </div>
         <div class="toolbar-row toolbar-row--search">
-            <input type="search" id="search-input" placeholder="ファイル名・推定テキスト">
+            <div class="search-field search-field--effects">
+                <div class="search-field-header">
+                    <span class="search-label">効果検索</span>
+                </div>
+                <div class="effect-search-inputs">
+                    <div class="effect-search-row">
+                        <label class="effect-search-mode-label" for="effect-search-mode-1">条件</label>
+                        <select id="effect-search-mode-1" class="effect-search-mode-select">
+                            <option value="and">AND</option>
+                            <option value="or">OR</option>
+                        </select>
+                        <input type="search" id="effect-search-1" placeholder="効果">
+                    </div>
+                    <div class="effect-search-row">
+                        <label class="effect-search-mode-label" for="effect-search-mode-2">条件</label>
+                        <select id="effect-search-mode-2" class="effect-search-mode-select">
+                            <option value="and">AND</option>
+                            <option value="or">OR</option>
+                        </select>
+                        <input type="search" id="effect-search-2" placeholder="効果">
+                    </div>
+                    <div class="effect-search-row">
+                        <label class="effect-search-mode-label" for="effect-search-mode-3">条件</label>
+                        <select id="effect-search-mode-3" class="effect-search-mode-select">
+                            <option value="and">AND</option>
+                            <option value="or">OR</option>
+                        </select>
+                        <input type="search" id="effect-search-3" placeholder="効果">
+                    </div>
+                </div>
+            </div>
+            <div class="search-field-column">
+                <div class="search-field search-field--tags">
+                    <label class="search-label" for="tag-search-input">タグ検索</label>
+                    <select id="tag-search-input" multiple placeholder="タグを選択"></select>
+                </div>
+                <div class="search-field search-field--primary">
+                    <label class="search-label" for="search-input">テキスト検索</label>
+                    <input type="search" id="search-input" placeholder="ファイル名・推定テキスト">
+                </div>
+            </div>
         </div>
     </div>
     <div class="storage-controls" hidden>

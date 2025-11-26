@@ -19,6 +19,8 @@
         { key: 'deep', label: '深層' }
     ];
 
+    let syncTagSearchOptions = null;
+
     const RELIC_TYPE_ALL = 'all';
     const RELIC_TYPE_MERGED = 'merged';
     const RELIC_TYPE_LABELS = {
@@ -913,6 +915,13 @@
         relicTypeSelect: document.getElementById('relic-type-select'),
         galleryStatus: document.getElementById('gallery-status'),
         searchInput: document.getElementById('search-input'),
+        effectSearchInputs: [
+            document.getElementById('effect-search-1'),
+            document.getElementById('effect-search-2'),
+            document.getElementById('effect-search-3')
+        ].filter(Boolean),
+        effectSearchModes: Array.from(document.querySelectorAll('.effect-search-mode-select')),
+        tagSearchInput: document.getElementById('tag-search-input'),
         filterSelect: document.getElementById('filter-status'),
         colorFilter: document.getElementById('filter-color'),
         showDuplicatesToggle: document.getElementById('show-duplicates'),
@@ -1561,18 +1570,21 @@
             return false;
         }
         const normalized = normalizeRecordTags(tagsValue);
+        let changed = false;
         if (normalized) {
             if (record.Tags === normalized) {
                 return false;
             }
             record.Tags = normalized;
-            return true;
-        }
-        if (Object.prototype.hasOwnProperty.call(record, 'Tags')) {
+            changed = true;
+        } else if (Object.prototype.hasOwnProperty.call(record, 'Tags')) {
             delete record.Tags;
-            return true;
+            changed = true;
         }
-        return false;
+        if (changed && typeof syncTagSearchOptions === 'function') {
+            syncTagSearchOptions(state.records);
+        }
+        return changed;
     }
 
     function updateRecordField(recordIndex, key, value) {
@@ -2129,8 +2141,11 @@
         normalizeItemRelicType,
         applyItemTags,
         normalizeItemTags,
-        refreshItemCaches
+        refreshItemCaches,
+        syncTagSearchOptions: syncTagSearchOptionsFromView
     } = galleryView;
+
+    syncTagSearchOptions = typeof syncTagSearchOptionsFromView === 'function' ? syncTagSearchOptionsFromView : null;
 
     attachEventHandlers({
         switchDataset,
@@ -2388,6 +2403,9 @@
         ensureLabelCoverage(records);
         stateApi.setRecords(records);
         duplicates.prepare();
+        if (typeof syncTagSearchOptions === 'function') {
+            syncTagSearchOptions(records, { clearSelection: true });
+        }
         buildGallery();
     }
 

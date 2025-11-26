@@ -378,6 +378,21 @@
             if (dom.searchInput) {
                 dom.searchInput.addEventListener('input', applyFilters);
             }
+            if (Array.isArray(dom.effectSearchInputs)) {
+                dom.effectSearchInputs.forEach((input) => {
+                    input.addEventListener('input', applyFilters);
+                });
+            }
+            if (Array.isArray(dom.effectSearchModes)) {
+                dom.effectSearchModes.forEach((select) => {
+                    if (select) {
+                        select.addEventListener('change', applyFilters);
+                    }
+                });
+            }
+            if (dom.tagSearchInput) {
+                dom.tagSearchInput.addEventListener('input', applyFilters);
+            }
             if (dom.filterSelect) {
                 dom.filterSelect.addEventListener('change', applyFilters);
             }
