@@ -347,6 +347,11 @@
                 });
 
                 dom.gallery.addEventListener('change', (event) => {
+                    const tagsInput = resolveTagsInputTarget(event.target);
+                    if (tagsInput) {
+                        updateItemTags(tagsInput);
+                        return;
+                    }
                     const relicTypeSelect = event.target.closest('.item-relic-type-select');
                     if (relicTypeSelect) {
                         toggleItemRelicType(relicTypeSelect);

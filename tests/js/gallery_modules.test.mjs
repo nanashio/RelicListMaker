@@ -4596,6 +4596,73 @@ describe('gallery events', () => {
     assert.equal(tagsInput.value, 'alpha beta');
   });
 
+  test('tag change events resolve enhanced inputs and schedule save', () => {
+    const record = { Tags: 'alpha' };
+    const item = new MockElement('div', 'item');
+    item.dataset.recordIndex = '0';
+
+    const control = new MockElement('div', 'item-tags-control');
+    control.dataset.tagInputRoot = 'true';
+    const tagsInput = new MockElement('input', 'item-tags-input');
+    tagsInput.dataset.recordIndex = '0';
+    tagsInput.value = 'alpha beta';
+    control.appendChild(tagsInput);
+    item.appendChild(control);
+    dom.gallery.appendChild(item);
+
+    const scheduleSaveCalls = [];
+    const setRecordTagsCalls = [];
+    const applyItemTagsCalls = [];
+
+    galleryEvents.attachEventHandlers({
+      switchDataset: () => {},
+      buildGallery: () => {},
+      applyFilters: () => {},
+      setRelicTypeFilter: () => {},
+      setOcrVisibility: () => {},
+      getOcrToggleState: () => false,
+      getItemContext: () => ({ item, record, recordIndex: 0 }),
+      updateFavoriteVisuals: () => {},
+      updateDuplicateVisuals: () => {},
+      applyItemColor: () => {},
+      normalizeItemColor: (value) => value || '',
+      applyItemRelicType: () => {},
+      normalizeItemRelicType: (value) => value || '',
+      applyItemTags: (...args) => applyItemTagsCalls.push(args),
+      normalizeItemTags: (value) => (value || '').trim(),
+      refreshItemCaches: () => {},
+      getRecordByIndex: () => record,
+      isRecordDuplicate: () => false,
+      isRecordFavorite: () => false,
+      setRecordDuplicate: () => false,
+      setRecordFavorite: () => false,
+      setRecordItemColor: () => false,
+      setRecordItemRelicType: () => false,
+      setRecordTags: (index, value) => {
+        setRecordTagsCalls.push([index, value]);
+        record.Tags = value;
+        return true;
+      },
+      applyMasterDataForRelicType: () => {},
+      recordStatusChange: () => false,
+      updateRecordEffectValue: () => false,
+      updateRecordLevelValue: () => false,
+      updateRecordLevelOptions: () => false,
+      scheduleSave: () => scheduleSaveCalls.push('save')
+    });
+
+    const changeHandlers = dom.gallery.eventListeners.change || [];
+    assert.equal(changeHandlers.length > 0, true);
+
+    tagsInput.value = 'beta gamma';
+    changeHandlers[0]({ target: control });
+
+    assert.equal(record.Tags, 'beta gamma');
+    assert.deepEqual(setRecordTagsCalls, [[0, 'beta gamma']]);
+    assert.deepEqual(applyItemTagsCalls, [[item, 'beta gamma']]);
+    assert.deepEqual(scheduleSaveCalls, ['save']);
+  });
+
   test('correction input change updates record state', () => {
     const record = {};
     const item = new MockElement('div', 'item');
