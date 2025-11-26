@@ -43,10 +43,6 @@
             </label>
         </div>
         <div class="toolbar-row toolbar-row--search">
-            <div class="search-field search-field--primary">
-                <label class="search-label" for="search-input">テキスト検索</label>
-                <input type="search" id="search-input" placeholder="ファイル名・推定テキスト">
-            </div>
             <div class="search-field search-field--effects">
                 <div class="search-field-header">
                     <span class="search-label">効果検索</span>
@@ -78,9 +74,15 @@
                     </div>
                 </div>
             </div>
-            <div class="search-field search-field--tags">
-                <label class="search-label" for="tag-search-input">タグ検索</label>
-                <input type="search" id="tag-search-input" placeholder="タグを入力">
+            <div class="search-field-column">
+                <div class="search-field search-field--tags">
+                    <label class="search-label" for="tag-search-input">タグ検索</label>
+                    <input type="search" id="tag-search-input" placeholder="タグを入力">
+                </div>
+                <div class="search-field search-field--primary">
+                    <label class="search-label" for="search-input">テキスト検索</label>
+                    <input type="search" id="search-input" placeholder="ファイル名・推定テキスト">
+                </div>
             </div>
         </div>
     </div>

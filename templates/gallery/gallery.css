@@ -250,8 +250,9 @@ h1 {
 }
 
 .toolbar-row--search {
-    justify-content: center;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: minmax(340px, 3fr) minmax(280px, 2fr);
+    align-items: stretch;
     row-gap: var(--space-md);
 }
 
@@ -263,6 +264,7 @@ h1 {
     border: 1px solid var(--color-border-muted);
     border-radius: var(--radius-md);
     padding: var(--space-md);
+    width: 100%;
 }
 
 .search-field input[type=search] {
@@ -276,6 +278,13 @@ h1 {
 .search-label {
     font-size: 12px;
     color: var(--color-text-secondary);
+}
+
+.search-field-column {
+    display: grid;
+    grid-template-rows: auto auto;
+    gap: var(--space-md);
+    align-self: stretch;
 }
 
 .search-field--effects {
@@ -317,6 +326,16 @@ h1 {
     height: var(--toolbar-control-height);
     min-width: 72px;
     font-size: 13px;
+}
+
+@media (max-width: 960px) {
+    .toolbar-row--search {
+        grid-template-columns: 1fr;
+    }
+
+    .search-field-column {
+        grid-template-rows: auto;
+    }
 }
 
 .dataset-selector {
