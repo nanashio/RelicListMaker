@@ -142,15 +142,32 @@
         return mode === 'or' ? termMatches.some(Boolean) : termMatches.every(Boolean);
     }
 
-    function matchesTagTokens(tagTokens, term) {
-        if (!term) {
+    function normalizeTagSearchTerms(value) {
+        if (Array.isArray(value)) {
+            return value
+                .map((entry) => normalizeToken(entry))
+                .filter((entry) => entry && entry !== '');
+        }
+        const text = normalizeToken(value);
+        if (!text) {
+            return [];
+        }
+        return text
+            .split(/\s+/)
+            .map((entry) => normalizeToken(entry))
+            .filter((entry) => entry && entry !== '');
+    }
+
+    function matchesTagTokens(tagTokens, terms = []) {
+        const normalizedTerms = normalizeTagSearchTerms(terms);
+        if (!normalizedTerms.length) {
             return true;
         }
         const normalizedTags = toNormalizedTokenList(tagTokens);
         if (!normalizedTags.length) {
             return false;
         }
-        return normalizedTags.some((tag) => tag.includes(term));
+        return normalizedTerms.every((term) => normalizedTags.some((tag) => tag.includes(term)));
     }
 
     function evaluateItemVisibility(item = {}, filters = {}) {
@@ -173,7 +190,8 @@
             effectTerms = [],
             effectMatchMode = 'and',
             effectSearches = [],
-            tagTerm = ''
+            tagTerm = '',
+            tagTerms = []
         } = filters;
 
         if (duplicate && !includeDuplicates) {
@@ -218,9 +236,12 @@
             }
         }
 
-        const normalizedTagTerm = normalizeToken(tagTerm);
-        if (normalizedTagTerm) {
-            if (!matchesTagTokens(tagTokens, normalizedTagTerm)) {
+        const normalizedTagTerms = normalizeTagSearchTerms(tagTerms);
+        const normalizedTagFallbackTerms = normalizedTagTerms.length
+            ? normalizedTagTerms
+            : normalizeTagSearchTerms(tagTerm);
+        if (normalizedTagFallbackTerms.length) {
+            if (!matchesTagTokens(tagTokens, normalizedTagFallbackTerms)) {
                 return false;
             }
         }

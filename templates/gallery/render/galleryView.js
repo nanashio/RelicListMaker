@@ -828,11 +828,11 @@
                 .filter((entry) => entry !== null);
         }
 
-        function getTagSearchTerm() {
+        function getTagSearchTerms() {
             if (!dom.tagSearchInput) {
-                return '';
+                return [];
             }
-            return normalizeSearchToken(dom.tagSearchInput.value);
+            return parseTagTokensValue(dom.tagSearchInput.value || '');
         }
 
         function readEffectSlots(item) {
@@ -950,7 +950,7 @@
             const colorFilter = dom.colorFilter ? dom.colorFilter.value : 'all';
             const showDuplicates = includeDuplicatesNow();
             const effectSearches = collectEffectSearchEntries();
-            const tagTerm = getTagSearchTerm();
+            const tagTerms = getTagSearchTerms();
 
             const itemStates = state.items.map((item) => {
                 if (!item) {
@@ -985,7 +985,7 @@
                 colorFilter,
                 includeDuplicates: showDuplicates,
                 effectSearches,
-                tagTerm
+                tagTerms
             };
 
             const visibility = typeof filterItemsFn === 'function' ? filterItemsFn(itemStates, options) : null;

@@ -815,9 +815,24 @@ describe('gallery filter utils', () => {
       colorFilter: 'all',
       includeDuplicates: true,
       effectSearches: [],
-      tagTerm: 'tag-two'
+      tagTerms: ['tag-two']
     };
     assert.deepEqual(filterUtils.filterItems(items, tagFilters), [false, true, false]);
+
+    const multiTagItems = [
+      { tagTokens: ['alpha', 'beta'] },
+      { tagTokens: ['alpha'] },
+      { tagTokens: ['beta', 'gamma'] }
+    ];
+    const tagAndFilters = {
+      term: '',
+      filter: 'all',
+      colorFilter: 'all',
+      includeDuplicates: true,
+      effectSearches: [],
+      tagTerms: ['alpha', 'beta']
+    };
+    assert.deepEqual(filterUtils.filterItems(multiTagItems, tagAndFilters), [true, false, false]);
   });
 });
 
