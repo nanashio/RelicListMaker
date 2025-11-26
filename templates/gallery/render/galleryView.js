@@ -85,7 +85,7 @@
             const changeHandlers = [];
             let instance = null;
 
-            function ensureInstance() {
+            function ensureInstance(initialOptions = []) {
                 if (!tomSelectClass || !dom.tagSearchInput) {
                     return null;
                 }
@@ -95,6 +95,21 @@
                 if (dom.tagSearchInput && typeof dom.tagSearchInput.setAttribute === 'function') {
                     dom.tagSearchInput.setAttribute('multiple', 'multiple');
                 }
+                const initialTomSelectOptions = Array.isArray(initialOptions)
+                    ? initialOptions
+                          .map((option) => {
+                              const value = option && option.value ? String(option.value).trim() : '';
+                              if (!value) {
+                                  return null;
+                              }
+                              return {
+                                  value,
+                                  text: option.text || value
+                              };
+                          })
+                          .filter((option) => option !== null)
+                    : [];
+
                 instance = new tomSelectClass(dom.tagSearchInput, {
                     maxItems: null,
                     create: false,
@@ -103,7 +118,8 @@
                     labelField: 'text',
                     searchField: ['text'],
                     closeAfterSelect: false,
-                    plugins: ['remove_button']
+                    plugins: ['remove_button'],
+                    options: initialTomSelectOptions
                 });
                 changeHandlers.forEach((handler) => {
                     if (typeof handler === 'function' && typeof instance.on === 'function') {
@@ -114,21 +130,30 @@
             }
 
             function setOptions(options = [], { clearSelection = false } = {}) {
-                const normalizedOptions = Array.isArray(options) ? options : [];
-                const inst = ensureInstance();
+                const normalizedOptions = Array.isArray(options)
+                    ? options
+                          .map((option) => {
+                              const value = option && option.value ? String(option.value).trim() : '';
+                              if (!value) {
+                                  return null;
+                              }
+                              return {
+                                  value,
+                                  text: option.text || value
+                              };
+                          })
+                          .filter((option) => option !== null)
+                    : [];
+                const inst = ensureInstance(normalizedOptions);
                 if (!inst) {
                     if (hasDocument && dom.tagSearchInput) {
                         while (dom.tagSearchInput.firstChild) {
                             dom.tagSearchInput.removeChild(dom.tagSearchInput.firstChild);
                         }
                         normalizedOptions.forEach((option) => {
-                            const value = option && option.value ? String(option.value).trim() : '';
-                            if (!value) {
-                                return;
-                            }
                             const node = document.createElement('option');
-                            node.value = value;
-                            node.textContent = option.text || value;
+                            node.value = option.value;
+                            node.textContent = option.text;
                             dom.tagSearchInput.appendChild(node);
                         });
                         if (clearSelection) {
@@ -143,7 +168,11 @@
                 if (typeof inst.clearOptions === 'function') {
                     inst.clearOptions();
                 }
-                normalizedOptions.forEach((option) => inst.addOption(option));
+                if (typeof inst.addOptions === 'function') {
+                    inst.addOptions(normalizedOptions);
+                } else if (typeof inst.addOption === 'function') {
+                    normalizedOptions.forEach((option) => inst.addOption(option));
+                }
                 if (typeof inst.refreshOptions === 'function') {
                     inst.refreshOptions(false);
                 }
