@@ -279,7 +279,7 @@ h1 {
 }
 
 .search-field--primary input[type=search] {
-    width: min(320px, 100%);
+    width: 100%;
 }
 
 .search-label {
