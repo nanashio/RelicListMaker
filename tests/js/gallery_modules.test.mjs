@@ -1515,6 +1515,118 @@ describe('gallery view', () => {
     assert.equal(extraCalls.length, 1);
   });
 
+  test('tag search options use Tags column with TomSelect selections', () => {
+    const state = {
+      records: [{ Tags: 'Alpha Beta' }, { Tags: 'beta Gamma' }],
+      items: [],
+      labelSymbols: [],
+      imageDir: '',
+      showOcr: false
+    };
+    const datasetState = { kind: 'normal', list: [], activeIndex: 0 };
+    const tagSearchInput = defaultCreateElement('input');
+    tagSearchInput.id = 'tag-search-input';
+    const tagSearchDatalist = defaultCreateElement('datalist');
+    tagSearchDatalist.id = 'tag-search-options';
+    const dom = {
+      gallery: defaultCreateElement('div'),
+      galleryStatus: defaultCreateElement('div'),
+      summary: null,
+      showDuplicatesToggle: { checked: false },
+      showOcrToggle: { checked: false },
+      searchInput: { value: '' },
+      effectSearchInputs: [],
+      effectSearchModes: [],
+      tagSearchInput,
+      tagSearchDatalist,
+      filterSelect: { value: 'all' },
+      colorFilter: { value: 'all' }
+    };
+    dom.gallery.appendChild(tagSearchInput);
+    dom.gallery.appendChild(tagSearchDatalist);
+
+    const duplicates = {
+      has: () => false,
+      set: () => {},
+      prepare: () => {}
+    };
+    const statusCalls = [];
+    const tomSelectInstances = [];
+    class TomSelectStub {
+      constructor(input, settings) {
+        this.input = input;
+        this.settings = settings;
+        this.items = [];
+        this.options = [];
+        this.handlers = {};
+        tomSelectInstances.push(this);
+      }
+      on(event, handler) {
+        this.handlers[event] = handler;
+      }
+      addOption(option) {
+        this.options.push(option);
+      }
+      clearOptions() {
+        this.options = [];
+      }
+      refreshOptions() {}
+      clear() {
+        this.items = [];
+      }
+      getValue() {
+        return this.items.slice();
+      }
+    }
+    global.window.TomSelect = TomSelectStub;
+
+    const filterOptions = [];
+    const galleryView = galleryFactory.createGalleryView({
+      state,
+      datasetState,
+      dom,
+      duplicates,
+      itemColorOptions: [],
+      createEffect: () => null,
+      bindImage: () => {},
+      createElement: defaultCreateElement,
+      filterItems: (items, options) => {
+        filterOptions.push(options);
+        return items.map(() => true);
+      },
+      getRecordByIndex: () => null,
+      isRecordDuplicate: () => false,
+      isRecordFavorite: () => false,
+      joinPath: (base, leaf) => leaf || base || '',
+      getFileName: (value) => value || '',
+      showStatus: (message) => statusCalls.push(message),
+      clearStatus: () => statusCalls.push('clear')
+    });
+
+    const item = defaultCreateElement('div');
+    item.dataset.duplicate = 'false';
+    item.dataset.searchCache = '';
+    item.dataset.statusCache = '';
+    item.dataset.effectStates = '';
+    item.dataset.favorite = 'false';
+    item.dataset.itemColor = '';
+    item.dataset.relicType = '';
+    item.dataset.effectSlots = '[]';
+    item.dataset.tags = '';
+    state.items = [item];
+
+    galleryView.syncTagSearchOptions(state.records, { clearSelection: true });
+    assert.deepEqual(
+      tomSelectInstances[0].options.map((option) => option.value),
+      ['Alpha', 'Beta', 'Gamma']
+    );
+
+    tomSelectInstances[0].items = ['Beta', 'Gamma'];
+    galleryView.applyFilters();
+    assert.deepEqual(filterOptions[0].tagTerms, ['beta', 'gamma']);
+    assert.equal(tagSearchDatalist.children.length, 3);
+  });
+
   test('applyItemTags keeps focused input text until editing ends', () => {
     const state = {
       records: [{ Image: 'alpha.png', Tags: 'alpha' }],

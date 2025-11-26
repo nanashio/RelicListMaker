@@ -54,6 +54,7 @@
             dataUtils && typeof dataUtils.formatTagTokens === 'function'
                 ? dataUtils.formatTagTokens
                 : null;
+        const TAG_SEARCH_DATALIST_ID = 'tag-search-options';
 
         if (typeof parseTagTokens !== 'function' || typeof formatTagTokens !== 'function') {
             throw new Error('createGalleryView: tag utilities are required');
@@ -77,6 +78,146 @@
                       documentRef: hasDocument || null
                   })
                 : null;
+        const tagSearchController = (() => {
+            const tomSelectClass =
+                hasDocument && typeof window !== 'undefined' && window
+                    ? window.TomSelect
+                    : null;
+            const changeHandlers = [];
+            let instance = null;
+
+            function ensureDatalist() {
+                if (!hasDocument || !dom.tagSearchInput) {
+                    return null;
+                }
+                let list = dom.tagSearchDatalist || null;
+                if (!list && typeof document.getElementById === 'function') {
+                    list = document.getElementById(TAG_SEARCH_DATALIST_ID);
+                    if (list) {
+                        dom.tagSearchDatalist = list;
+                    }
+                }
+                if (!list && typeof document.createElement === 'function') {
+                    list = document.createElement('datalist');
+                    list.id = TAG_SEARCH_DATALIST_ID;
+                    dom.tagSearchDatalist = list;
+                    if (dom.tagSearchInput && typeof dom.tagSearchInput.setAttribute === 'function') {
+                        dom.tagSearchInput.setAttribute('list', TAG_SEARCH_DATALIST_ID);
+                    }
+                    const parent = dom.tagSearchInput.parentNode || document.body;
+                    if (parent && typeof parent.appendChild === 'function') {
+                        parent.appendChild(list);
+                    }
+                }
+                return list || null;
+            }
+
+            function updateDatalist(options = []) {
+                const list = ensureDatalist();
+                if (!list) {
+                    return;
+                }
+                while (list.firstChild) {
+                    list.removeChild(list.firstChild);
+                }
+                options.forEach((option) => {
+                    const value = option && option.value ? String(option.value).trim() : '';
+                    if (!value) {
+                        return;
+                    }
+                    const node = document.createElement('option');
+                    node.value = value;
+                    list.appendChild(node);
+                });
+            }
+
+            function ensureInstance() {
+                if (!tomSelectClass || !dom.tagSearchInput) {
+                    return null;
+                }
+                if (instance) {
+                    return instance;
+                }
+                instance = new tomSelectClass(dom.tagSearchInput, {
+                    maxItems: null,
+                    create: false,
+                    persist: false,
+                    valueField: 'value',
+                    labelField: 'text',
+                    searchField: ['text'],
+                    delimiter: ' ',
+                    closeAfterSelect: false,
+                    plugins: ['remove_button']
+                });
+                changeHandlers.forEach((handler) => {
+                    if (typeof handler === 'function' && typeof instance.on === 'function') {
+                        instance.on('change', handler);
+                    }
+                });
+                return instance;
+            }
+
+            function setOptions(options = [], { clearSelection = false } = {}) {
+                const normalizedOptions = Array.isArray(options) ? options : [];
+                updateDatalist(normalizedOptions);
+                const inst = ensureInstance();
+                if (!inst) {
+                    return;
+                }
+                if (clearSelection && typeof inst.clear === 'function') {
+                    inst.clear(true);
+                }
+                if (typeof inst.clearOptions === 'function') {
+                    inst.clearOptions();
+                }
+                normalizedOptions.forEach((option) => inst.addOption(option));
+                if (typeof inst.refreshOptions === 'function') {
+                    inst.refreshOptions(false);
+                }
+            }
+
+            function getValues() {
+                const inst = ensureInstance();
+                if (inst && typeof inst.getValue === 'function') {
+                    const value = inst.getValue();
+                    if (Array.isArray(value)) {
+                        return value.slice();
+                    }
+                    if (typeof value === 'string') {
+                        const delimiter = (inst.settings && inst.settings.delimiter) || ' ';
+                        return value.split(delimiter);
+                    }
+                }
+                const text = dom.tagSearchInput && dom.tagSearchInput.value ? dom.tagSearchInput.value : '';
+                return parseTagTokens(text);
+            }
+
+            function onChange(handler) {
+                if (typeof handler !== 'function') {
+                    return;
+                }
+                changeHandlers.push(handler);
+                const inst = ensureInstance();
+                if (inst && typeof inst.on === 'function') {
+                    inst.on('change', handler);
+                    return;
+                }
+                if (dom.tagSearchInput && typeof dom.tagSearchInput.addEventListener === 'function') {
+                    dom.tagSearchInput.addEventListener('input', handler);
+                }
+            }
+
+            function clearSelection() {
+                const inst = ensureInstance();
+                if (inst && typeof inst.clear === 'function') {
+                    inst.clear(true);
+                } else if (dom.tagSearchInput) {
+                    dom.tagSearchInput.value = '';
+                }
+            }
+
+            return { setOptions, getValues, onChange, clearSelection };
+        })();
         const filterNamespace = typeof window !== 'undefined' && window ? window.galleryFilterUtils : null;
 
         const stateControls = {
@@ -781,6 +922,30 @@
                 .filter((token) => token !== '');
         }
 
+        function collectTagSearchOptions(records) {
+            if (!Array.isArray(records) || !records.length || !parseTagTokens) {
+                return [];
+            }
+            const seen = new Set();
+            const options = [];
+            records.forEach((record) => {
+                const tokens = parseTagTokens(record && record.Tags);
+                tokens.forEach((token) => {
+                    const text = token == null ? '' : String(token).trim();
+                    if (!text) {
+                        return;
+                    }
+                    const key = text.toLowerCase();
+                    if (seen.has(key)) {
+                        return;
+                    }
+                    seen.add(key);
+                    options.push({ value: text, text });
+                });
+            });
+            return options;
+        }
+
         function parseEffectSlotsValue(jsonText) {
             if (!jsonText) {
                 return [];
@@ -829,6 +994,15 @@
         }
 
         function getTagSearchTerms() {
+            if (tagSearchController && typeof tagSearchController.getValues === 'function') {
+                const selectedValues = tagSearchController.getValues();
+                const normalizedSelected = parseTagTokensValue(
+                    Array.isArray(selectedValues) ? selectedValues.join(' ') : selectedValues
+                );
+                if (normalizedSelected.length) {
+                    return normalizedSelected;
+                }
+            }
             if (!dom.tagSearchInput) {
                 return [];
             }
@@ -943,6 +1117,14 @@
             }
         }
 
+        function syncTagSearchOptions(records, { clearSelection = false } = {}) {
+            if (!tagSearchController || !dom.tagSearchInput) {
+                return;
+            }
+            const options = collectTagSearchOptions(records || state.records || []);
+            tagSearchController.setOptions(options, { clearSelection });
+        }
+
         function applyFilters() {
             const searchInputValue = dom.searchInput && dom.searchInput.value ? dom.searchInput.value : '';
             const term = searchInputValue.trim().toLowerCase();
@@ -1005,6 +1187,10 @@
             updateSummary();
         }
 
+        if (tagSearchController && typeof tagSearchController.onChange === 'function') {
+            tagSearchController.onChange(() => applyFilters());
+        }
+
         return {
             buildGallery,
             applyFilters,
@@ -1020,7 +1206,8 @@
             normalizeItemRelicType,
             applyItemTags,
             normalizeItemTags,
-            refreshItemCaches
+            refreshItemCaches,
+            syncTagSearchOptions
         };
     }
 

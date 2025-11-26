@@ -278,6 +278,16 @@ h1 {
     min-width: 0;
 }
 
+.search-field .ts-wrapper {
+    width: 100%;
+    min-width: 0;
+}
+
+.search-field .ts-control {
+    border-radius: var(--radius-md);
+    min-height: var(--toolbar-control-height);
+}
+
 .search-field--primary input[type=search] {
     width: 100%;
 }
