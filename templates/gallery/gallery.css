@@ -231,8 +231,9 @@ h1 {
     flex-direction: column;
     gap: var(--space-sm);
     align-items: center;
-    margin-bottom: var(--space-xl);
+    margin: 0 auto var(--space-xl);
     width: 100%;
+    max-width: 1100px;
     --toolbar-control-height: 38px;
 }
 
