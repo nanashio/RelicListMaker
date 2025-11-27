@@ -336,6 +336,11 @@
                         return;
                     }
                     delete tagsInput.dataset.editingTags;
+                    updateItemTags(tagsInput);
+                    const isEnhanced = tagsInput.dataset && tagsInput.dataset.tagInputEnhanced === 'true';
+                    if (isEnhanced) {
+                        return;
+                    }
                     const item = typeof tagsInput.closest === 'function' ? tagsInput.closest('.item') : null;
                     if (!item) {
                         return;

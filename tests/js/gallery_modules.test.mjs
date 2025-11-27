@@ -4596,6 +4596,71 @@ describe('gallery events', () => {
     assert.equal(tagsInput.value, 'alpha beta');
   });
 
+  test('tag blur commits pending edits even without change event', () => {
+    const record = { Tags: '' };
+    const item = new MockElement('div', 'item');
+    item.dataset.recordIndex = '0';
+    item.dataset.tags = '';
+    const tagsInput = new MockElement('input', 'item-tags-input');
+    tagsInput.value = 'alpha beta';
+    item.appendChild(tagsInput);
+    dom.gallery.appendChild(item);
+
+    const scheduleSaveCalls = [];
+    const setRecordTagsCalls = [];
+    const applyItemTagsCalls = [];
+
+    galleryEvents.attachEventHandlers({
+      switchDataset: () => {},
+      buildGallery: () => {},
+      applyFilters: () => {},
+      setRelicTypeFilter: () => {},
+      setOcrVisibility: () => {},
+      getOcrToggleState: () => false,
+      getItemContext: () => ({ item, record, recordIndex: 0 }),
+      updateFavoriteVisuals: () => {},
+      updateDuplicateVisuals: () => {},
+      applyItemColor: () => {},
+      normalizeItemColor: (value) => value || '',
+      applyItemRelicType: () => {},
+      normalizeItemRelicType: (value) => value || '',
+      applyItemTags: (target, value) => {
+        applyItemTagsCalls.push([target, value]);
+        target.dataset.tags = value;
+      },
+      normalizeItemTags: (value) => (value || '').trim(),
+      refreshItemCaches: () => {},
+      getRecordByIndex: () => record,
+      isRecordDuplicate: () => false,
+      isRecordFavorite: () => false,
+      setRecordDuplicate: () => false,
+      setRecordFavorite: () => false,
+      setRecordItemColor: () => false,
+      setRecordItemRelicType: () => false,
+      setRecordTags: (index, value) => {
+        setRecordTagsCalls.push([index, value]);
+        record.Tags = value;
+        return true;
+      },
+      applyMasterDataForRelicType: () => {},
+      recordStatusChange: () => false,
+      updateRecordEffectValue: () => false,
+      updateRecordLevelValue: () => false,
+      updateRecordLevelOptions: () => false,
+      scheduleSave: () => scheduleSaveCalls.push('save')
+    });
+
+    const focusOutHandlers = dom.gallery.eventListeners.focusout || [];
+    assert.equal(focusOutHandlers.length > 0, true);
+
+    focusOutHandlers[0]({ target: tagsInput });
+
+    assert.deepEqual(setRecordTagsCalls, [[0, 'alpha beta']]);
+    assert.deepEqual(applyItemTagsCalls, [[item, 'alpha beta']]);
+    assert.deepEqual(scheduleSaveCalls, ['save']);
+    assert.equal(tagsInput.value, 'alpha beta');
+  });
+
   test('tag change events resolve enhanced inputs and schedule save', () => {
     const record = { Tags: 'alpha' };
     const item = new MockElement('div', 'item');
