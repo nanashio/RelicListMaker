@@ -8,6 +8,20 @@
         };
     }
 
+    function isTagDebugEnabled() {
+        if (typeof window === 'undefined' || !window) {
+            return false;
+        }
+        if (typeof window.galleryDebugTags !== 'undefined') {
+            return Boolean(window.galleryDebugTags);
+        }
+        try {
+            return window.localStorage && window.localStorage.getItem('galleryDebugTags') === 'true';
+        } catch (error) {
+            return false;
+        }
+    }
+
     function createTagInputController(config = {}) {
         const {
             TomSelect: TomSelectClass = (typeof window !== 'undefined' && window ? window.TomSelect : null),
@@ -86,6 +100,57 @@
                 }
             });
             instances.set(input, instance);
+
+            const debugLabel = input.dataset && input.dataset.recordIndex
+                ? `record-${input.dataset.recordIndex}`
+                : input.id || input.name || 'tags';
+            const logInfo = (eventName, payload) => {
+                if (!isTagDebugEnabled()) {
+                    return;
+                }
+                if (typeof console !== 'undefined' && console.info) {
+                    console.info(`[gallery][tags][${debugLabel}] ${eventName}`, payload);
+                }
+            };
+            const logDebug = (eventName, payload) => {
+                if (!isTagDebugEnabled()) {
+                    return;
+                }
+                if (typeof console !== 'undefined' && console.debug) {
+                    console.debug(`[gallery][tags][${debugLabel}] ${eventName}`, payload);
+                }
+            };
+
+            instance.on('change', (value) => {
+                logInfo('tom-select change', {
+                    value,
+                    items: instance.items ? instance.items.slice() : [],
+                    inputValue: input.value,
+                    textInputValue: instance.textInput ? instance.textInput.value : ''
+                });
+            });
+
+            instance.on('item_add', (token) => {
+                logDebug('tom-select item_add', {
+                    token,
+                    items: instance.items ? instance.items.slice() : []
+                });
+            });
+
+            instance.on('item_remove', (token) => {
+                logDebug('tom-select item_remove', {
+                    token,
+                    items: instance.items ? instance.items.slice() : []
+                });
+            });
+
+            input.addEventListener('input', (event) => {
+                logDebug('native input', { value: event.target.value, type: event.type });
+            });
+
+            input.addEventListener('change', (event) => {
+                logInfo('native change', { value: event.target.value, type: event.type });
+            });
             return instance;
         }
 

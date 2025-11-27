@@ -407,6 +407,20 @@
             safeApplyFilters();
         }
 
+        const tagDebugEnabled = (() => {
+            if (typeof window === 'undefined' || !window) {
+                return false;
+            }
+            if (typeof window.galleryDebugTags !== 'undefined') {
+                return Boolean(window.galleryDebugTags);
+            }
+            try {
+                return window.localStorage && window.localStorage.getItem('galleryDebugTags') === 'true';
+            } catch (error) {
+                return false;
+            }
+        })();
+
         function updateItemTags(input) {
             const context = getItemActionContext(input);
             if (!context) {
@@ -421,6 +435,15 @@
                 safeScheduleSave();
             }
             safeApplyFilters();
+            if (tagDebugEnabled && typeof console !== 'undefined' && console.info) {
+                console.info('[gallery][tags] updateItemTags', {
+                    recordIndex,
+                    nextValue,
+                    recordChanged,
+                    inputId: input && input.id ? input.id : undefined,
+                    itemTagsDisplay: item && item.dataset ? item.dataset.tags : undefined
+                });
+            }
         }
 
         function changeEffectCorrection(effect, input) {

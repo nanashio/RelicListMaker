@@ -336,6 +336,11 @@
                         return;
                     }
                     delete tagsInput.dataset.editingTags;
+                    updateItemTags(tagsInput);
+                    const isEnhanced = tagsInput.dataset && tagsInput.dataset.tagInputEnhanced === 'true';
+                    if (isEnhanced) {
+                        return;
+                    }
                     const item = typeof tagsInput.closest === 'function' ? tagsInput.closest('.item') : null;
                     if (!item) {
                         return;
@@ -347,6 +352,11 @@
                 });
 
                 dom.gallery.addEventListener('change', (event) => {
+                    const tagsInput = resolveTagsInputTarget(event.target);
+                    if (tagsInput) {
+                        updateItemTags(tagsInput);
+                        return;
+                    }
                     const relicTypeSelect = event.target.closest('.item-relic-type-select');
                     if (relicTypeSelect) {
                         toggleItemRelicType(relicTypeSelect);
