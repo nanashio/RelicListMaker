@@ -11,6 +11,7 @@ const MODULE_DEPENDENCIES = [
     './storage/utils.js',
     './storage/manager.js',
     './app/controller.js',
+    './components/tomSelectAdapter.js',
     './components/tagInput.js',
     './render/effectViewModel.js',
     './render/effectFactory.js',
