@@ -14,3 +14,6 @@
 ## 現時点の見立て
 - TomSelect は `triggerChange()` 実行時のみ `input`/`change` を元の input に対して発火するため、チップ追加・削除・Enter/Blur でコミットされない限り `input.value` は更新されない。このため「文字を入力しただけで確定操作をしていない」ケースでは `updateItemTags` が実行されず、保存も走らない可能性がある。
 - コード上は TomSelect 側のイベント伝搬と `updateItemTags` の呼び出し経路が一致しており、保存 API も `record.Tags` をそのまま CSV に書き出す。実際に `triggerChange()` が呼ばれているか（例えばタグの追加・削除操作で発火しているか）をブラウザ側のデバッグログなどで確認するのが次のステップ。
+
+## デバッグログの有効化
+- タグ入力系のデバッグログは既定で無効。`localStorage.setItem('galleryDebugTags', 'true')` または `window.galleryDebugTags = true` を設定してリロードすると、TomSelect の `change`/`item` イベント、ネイティブ `input`/`change`、`updateItemTags` のログが出力される。無効化するには `localStorage.removeItem('galleryDebugTags')` でリロード。
