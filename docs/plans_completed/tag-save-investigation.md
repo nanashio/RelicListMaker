@@ -17,3 +17,7 @@
 
 ## デバッグログの有効化
 - タグ入力系のデバッグログは既定で無効。`localStorage.setItem('galleryDebugTags', 'true')` または `window.galleryDebugTags = true` を設定してリロードすると、TomSelect の `change`/`item` イベント、ネイティブ `input`/`change`、`updateItemTags` のログが出力される。無効化するには `localStorage.removeItem('galleryDebugTags')` でリロード。
+
+## 確認結果 (2025-XX-XX)
+- `galleryDebugTags` を有効化した状態でタグ入力を行い、コンソールに `updateItemTags { recordIndex: 0, nextValue: 'aaa bbb ccc', ... }` が 2 回（フォーカスアウト時の再実行を含む）出力されることを確認した。
+- 同操作後に CSV を保存して再読込しても `Tags` 列に `aaa;bbb;ccc` が保持されており、TomSelect 経由のタグ追加が正常に永続化されていることを確認した。
