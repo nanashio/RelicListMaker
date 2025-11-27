@@ -140,13 +140,30 @@
                 if (clearSelection && typeof inst.clear === 'function') {
                     inst.clear(true);
                 }
+                const supportsOptionApi = typeof inst.addOption === 'function' && typeof inst.refreshOptions === 'function';
+                if (!supportsOptionApi) {
+                    if (hasDocument && dom.tagSearchInput) {
+                        while (dom.tagSearchInput.firstChild) {
+                            dom.tagSearchInput.removeChild(dom.tagSearchInput.firstChild);
+                        }
+                        normalizedOptions.forEach((option) => {
+                            const value = option && option.value ? String(option.value).trim() : '';
+                            if (!value) {
+                                return;
+                            }
+                            const node = document.createElement('option');
+                            node.value = value;
+                            node.textContent = option.text || value;
+                            dom.tagSearchInput.appendChild(node);
+                        });
+                    }
+                    return;
+                }
                 if (typeof inst.clearOptions === 'function') {
                     inst.clearOptions();
                 }
                 normalizedOptions.forEach((option) => inst.addOption(option));
-                if (typeof inst.refreshOptions === 'function') {
-                    inst.refreshOptions(false);
-                }
+                inst.refreshOptions(false);
             }
 
             function getValues() {
