@@ -421,6 +421,15 @@
                 safeScheduleSave();
             }
             safeApplyFilters();
+            if (typeof console !== 'undefined' && console.info) {
+                console.info('[gallery][tags] updateItemTags', {
+                    recordIndex,
+                    nextValue,
+                    recordChanged,
+                    inputId: input && input.id ? input.id : undefined,
+                    itemTagsDisplay: item && item.dataset ? item.dataset.tags : undefined
+                });
+            }
         }
 
         function changeEffectCorrection(effect, input) {
