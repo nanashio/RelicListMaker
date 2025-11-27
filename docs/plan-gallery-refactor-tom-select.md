@@ -83,3 +83,9 @@
   - TomSelect アダプタが未注入でも `tagInputController` とタグ検索が TomSelect インスタンスを生成・同期できるよう、デフォルトアダプタを同梱。
   - `syncTagSearchOptions` が Tags カラムから候補を抽出し、TomSelect 選択値のフィルターに反映されることを確認。
 - テスト: `pytest`（内包の `node --test tests/js/gallery_modules.test.mjs` を含む）を実行。Playwright はブラウザ取得依存のため未実行。
+
+## 進捗メモ（2025-03-21）
+- スプリント 1 の不具合修正。
+  - `components/tomSelectAdapter.js` を `gallery/assets.py` のコピー対象に含めておらず、生成後のギャラリーで 404 により動的 import が失敗していた問題を修正。
+  - コピー対象を監視する `test_copy_gallery_modules_copies_required_viewer_scripts` にアダプタを追加し、今後の漏れを検出できるようにした。
+- テスト: `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行（Playwright は環境依存のため対象外）。既存テストが通っていた理由は、コピー対象のリスト検証が一部のモジュールのみで TomSelect アダプタをカバーしていなかったため。
