@@ -1,4 +1,123 @@
 (() => {
+    function createDefaultTomSelectAdapter(TomSelectClass, documentRef) {
+        const hasDom = Boolean(documentRef && typeof documentRef.createElement === 'function');
+        const hasTomSelect = typeof TomSelectClass === 'function';
+
+        if (!hasDom || !hasTomSelect) {
+            return null;
+        }
+
+        function createInstance(input, options = {}) {
+            if (!input) {
+                return null;
+            }
+            return new TomSelectClass(input, options);
+        }
+
+        function syncOptions(instance, input, options = [], { clearSelection = false } = {}) {
+            const normalizedOptions = Array.isArray(options) ? options : [];
+            if (instance && typeof instance.clearOptions === 'function') {
+                if (clearSelection && typeof instance.clear === 'function') {
+                    instance.clear(true);
+                }
+                instance.clearOptions();
+                normalizedOptions.forEach((option) => instance.addOption(option));
+                if (typeof instance.refreshOptions === 'function') {
+                    instance.refreshOptions(false);
+                }
+                return;
+            }
+
+            if (!hasDom || !input) {
+                return;
+            }
+            while (input.firstChild) {
+                input.removeChild(input.firstChild);
+            }
+            normalizedOptions.forEach((option) => {
+                const value = option && option.value ? String(option.value).trim() : '';
+                if (!value) {
+                    return;
+                }
+                const node = documentRef.createElement('option');
+                node.value = value;
+                node.textContent = option.text || value;
+                input.appendChild(node);
+            });
+            if (clearSelection) {
+                input.selectedIndex = -1;
+            }
+        }
+
+        function clearSelection(instance, input) {
+            if (instance && typeof instance.clear === 'function') {
+                instance.clear(true);
+                return;
+            }
+            if (input) {
+                if (typeof input.selectedIndex === 'number') {
+                    input.selectedIndex = -1;
+                }
+                input.value = '';
+            }
+        }
+
+        function getValues(instance, input, parseTokens) {
+            if (instance && typeof instance.getValue === 'function') {
+                const value = instance.getValue();
+                if (Array.isArray(value)) {
+                    return value.slice();
+                }
+                if (typeof value === 'string') {
+                    return value ? [value] : [];
+                }
+            }
+
+            if (input && input.selectedOptions) {
+                return Array.from(input.selectedOptions)
+                    .map((option) => option.value)
+                    .filter((value) => value);
+            }
+            const text = input && input.value ? input.value : '';
+            if (typeof parseTokens === 'function') {
+                return parseTokens(text);
+            }
+            return text ? [text] : [];
+        }
+
+        function onChange(instance, input, handler) {
+            if (typeof handler !== 'function') {
+                return;
+            }
+            if (instance && typeof instance.on === 'function') {
+                instance.on('change', handler);
+                return;
+            }
+            if (input && typeof input.addEventListener === 'function') {
+                input.addEventListener('change', handler);
+            }
+        }
+
+        function setValue(instance, tokens) {
+            if (instance && typeof instance.setValue === 'function') {
+                instance.setValue(tokens, true);
+                return true;
+            }
+            return false;
+        }
+
+        return {
+            hasSupport: true,
+            createInstance,
+            syncOptions,
+            clearSelection,
+            getValues,
+            onChange,
+            setValue,
+            registerNativeLogging() {}
+        };
+    }
+
     function createGalleryView(config = {}) {
         const {
             state,
@@ -62,6 +181,32 @@
         const colorOptions = Array.isArray(itemColorOptions) ? itemColorOptions.slice() : [];
         const hasDocument = typeof document !== 'undefined' && document;
         const componentsNamespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const createTomSelectAdapterFn =
+            typeof config.createTomSelectAdapter === 'function'
+                ? config.createTomSelectAdapter
+                : componentsNamespace && typeof componentsNamespace.createTomSelectAdapter === 'function'
+                  ? componentsNamespace.createTomSelectAdapter
+                  : null;
+        const tomSelectAdapter =
+            typeof createTomSelectAdapterFn === 'function'
+                ? createTomSelectAdapterFn({
+                      TomSelect: typeof window !== 'undefined' && window ? window.TomSelect : null,
+                      documentRef: hasDocument || null,
+                      isDebugEnabled: () => {
+                          if (typeof window === 'undefined' || !window) {
+                              return false;
+                          }
+                          if (typeof window.galleryDebugTags !== 'undefined') {
+                              return Boolean(window.galleryDebugTags);
+                          }
+                          try {
+                              return window.localStorage && window.localStorage.getItem('galleryDebugTags') === 'true';
+                          } catch (error) {
+                              return false;
+                          }
+                      }
+                  })
+                : createDefaultTomSelectAdapter(typeof window !== 'undefined' && window ? window.TomSelect : null, hasDocument || null);
         const createTagInputControllerFn =
             typeof config.createTagInputController === 'function'
                 ? config.createTagInputController
@@ -74,19 +219,16 @@
                       TomSelect: typeof window !== 'undefined' && window ? window.TomSelect : null,
                       parseTagTokens,
                       formatTagTokens,
-                      documentRef: hasDocument || null
+                      documentRef: hasDocument || null,
+                      createTomSelectAdapter: createTomSelectAdapterFn
                   })
                 : null;
         const tagSearchController = (() => {
-            const tomSelectClass =
-                hasDocument && typeof window !== 'undefined' && window
-                    ? window.TomSelect
-                    : null;
             const changeHandlers = [];
             let instance = null;
 
             function ensureInstance() {
-                if (!tomSelectClass || !dom.tagSearchInput) {
+                if (!tomSelectAdapter || !tomSelectAdapter.hasSupport || !dom.tagSearchInput) {
                     return null;
                 }
                 if (instance) {
@@ -95,87 +237,55 @@
                 if (dom.tagSearchInput && typeof dom.tagSearchInput.setAttribute === 'function') {
                     dom.tagSearchInput.setAttribute('multiple', 'multiple');
                 }
-                instance = new tomSelectClass(dom.tagSearchInput, {
-                    maxItems: null,
-                    create: false,
-                    persist: false,
-                    valueField: 'value',
-                    labelField: 'text',
-                    searchField: ['text'],
-                    closeAfterSelect: false,
-                    plugins: ['remove_button']
-                });
-                changeHandlers.forEach((handler) => {
-                    if (typeof handler === 'function' && typeof instance.on === 'function') {
-                        instance.on('change', handler);
-                    }
-                });
+                instance = tomSelectAdapter.createInstance(
+                    dom.tagSearchInput,
+                    {
+                        maxItems: null,
+                        create: false,
+                        persist: false,
+                        valueField: 'value',
+                        labelField: 'text',
+                        searchField: ['text'],
+                        closeAfterSelect: false,
+                        plugins: ['remove_button']
+                    },
+                    { debugLabel: 'tag-search', logEvents: ['change'] }
+                );
+                changeHandlers.forEach((handler) => tomSelectAdapter.onChange(instance, dom.tagSearchInput, handler));
                 return instance;
             }
 
             function setOptions(options = [], { clearSelection = false } = {}) {
                 const normalizedOptions = Array.isArray(options) ? options : [];
                 const inst = ensureInstance();
-                if (!inst) {
-                    if (hasDocument && dom.tagSearchInput) {
-                        while (dom.tagSearchInput.firstChild) {
-                            dom.tagSearchInput.removeChild(dom.tagSearchInput.firstChild);
-                        }
-                        normalizedOptions.forEach((option) => {
-                            const value = option && option.value ? String(option.value).trim() : '';
-                            if (!value) {
-                                return;
-                            }
-                            const node = document.createElement('option');
-                            node.value = value;
-                            node.textContent = option.text || value;
-                            dom.tagSearchInput.appendChild(node);
-                        });
-                        if (clearSelection) {
-                            dom.tagSearchInput.selectedIndex = -1;
-                        }
-                    }
+                if (tomSelectAdapter) {
+                    tomSelectAdapter.syncOptions(inst, dom.tagSearchInput, normalizedOptions, { clearSelection });
                     return;
                 }
-                if (clearSelection && typeof inst.clear === 'function') {
-                    inst.clear(true);
-                }
-                const supportsOptionApi = typeof inst.addOption === 'function' && typeof inst.refreshOptions === 'function';
-                if (!supportsOptionApi) {
-                    if (hasDocument && dom.tagSearchInput) {
-                        while (dom.tagSearchInput.firstChild) {
-                            dom.tagSearchInput.removeChild(dom.tagSearchInput.firstChild);
-                        }
-                        normalizedOptions.forEach((option) => {
-                            const value = option && option.value ? String(option.value).trim() : '';
-                            if (!value) {
-                                return;
-                            }
-                            const node = document.createElement('option');
-                            node.value = value;
-                            node.textContent = option.text || value;
-                            dom.tagSearchInput.appendChild(node);
-                        });
+                if (hasDocument && dom.tagSearchInput) {
+                    while (dom.tagSearchInput.firstChild) {
+                        dom.tagSearchInput.removeChild(dom.tagSearchInput.firstChild);
                     }
-                    return;
+                    normalizedOptions.forEach((option) => {
+                        const value = option && option.value ? String(option.value).trim() : '';
+                        if (!value) {
+                            return;
+                        }
+                        const node = document.createElement('option');
+                        node.value = value;
+                        node.textContent = option.text || value;
+                        dom.tagSearchInput.appendChild(node);
+                    });
+                    if (clearSelection) {
+                        dom.tagSearchInput.selectedIndex = -1;
+                    }
                 }
-                if (typeof inst.clearOptions === 'function') {
-                    inst.clearOptions();
-                }
-                normalizedOptions.forEach((option) => inst.addOption(option));
-                inst.refreshOptions(false);
             }
 
             function getValues() {
                 const inst = ensureInstance();
-                if (inst && typeof inst.getValue === 'function') {
-                    const value = inst.getValue();
-                    if (Array.isArray(value)) {
-                        return value.slice();
-                    }
-                    if (typeof value === 'string') {
-                        return value ? [value] : [];
-                    }
+                if (tomSelectAdapter) {
+                    return tomSelectAdapter.getValues(inst, dom.tagSearchInput, parseTagTokens);
                 }
                 if (dom.tagSearchInput && dom.tagSearchInput.selectedOptions) {
                     return Array.from(dom.tagSearchInput.selectedOptions)
@@ -192,8 +302,8 @@
                 }
                 changeHandlers.push(handler);
                 const inst = ensureInstance();
-                if (inst && typeof inst.on === 'function') {
-                    inst.on('change', handler);
+                if (tomSelectAdapter) {
+                    tomSelectAdapter.onChange(inst, dom.tagSearchInput, handler);
                     return;
                 }
                 if (dom.tagSearchInput && typeof dom.tagSearchInput.addEventListener === 'function') {
@@ -203,9 +313,11 @@
 
             function clearSelection() {
                 const inst = ensureInstance();
-                if (inst && typeof inst.clear === 'function') {
-                    inst.clear(true);
-                } else if (dom.tagSearchInput) {
+                if (tomSelectAdapter) {
+                    tomSelectAdapter.clearSelection(inst, dom.tagSearchInput);
+                    return;
+                }
+                if (dom.tagSearchInput) {
                     if (typeof dom.tagSearchInput.selectedIndex === 'number') {
                         dom.tagSearchInput.selectedIndex = -1;
                     }

@@ -56,10 +56,20 @@
   - タスク: JS ロジックを `templates/gallery/js/modules/` へ順次抽出し、IIFE からも参照できるようラッパを配置。`tests/test_gallery_js_modules.py` に単体テストを追加し、タグ正規化・フィルター条件適用の純粋関数を検証。
   - 成果物: 主要ロジックがモジュール化され、CI でテスト可能な形になっていること。
 
+## 進捗メモ（2025-03-19）
+- スプリント 1 の着手済み。
+  - `templates/gallery/components/tomSelectAdapter.js` を追加し、TomSelect 生成・ロギング・ネイティブフォールバックを一元化。
+  - `createTagInputController` と `tagSearchController` から TomSelect 依存を注入するよう変更し、両者がアダプタ経由で共通設定を利用する形に整理。
+- 次ステップ: アダプタを用いたタグストア移行とイベント束ね（スプリント 2）に着手する。
+
 ## リスクと緩和策
 - 依存順序の変更で既存バンドルと競合するリスク → IIFE での後方互換エクスポートを残し、段階的に import パスを差し替える。
 - スタイルの名前空間化でクラス名が変わるリスク → 既存クラスを一定期間 alias として残し、差分を CSS 変数とコメントで明示する。
 - テスト対象の純粋関数切り出しに伴うイベント漏れ → `galleryEvents` から移動する関数に対し一時的にラッパを設置し、警告ログで確認する。
+
+## テスト運用ルール
+- 変更を加えたら毎回 `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行し、Playwright など環境依存テストが走らない場合でも回帰確認の代替として必ず記録する。
+- テスト結果は本計画書の進捗メモに追記し、失敗時は原因と暫定対応（例: ブラウザ未取得で Playwright スキップ）を明示する。
 
 ## 成果確認チェックリスト
 - TomSelect の生成・破棄・設定が 1 ファイルに集約され、`tagInputController` と `tagSearchController` は依存注入で動く。
@@ -67,3 +77,9 @@
 - フィルター/ソート条件が単一ストアに集約され、UI は購読/通知のみで同期する。
 - HTML/CSS/JS の役割が分離され、名前空間付きクラスとパーシャルで構造が明示されている。
 - テストが `tests/test_gallery_js_modules.py` で追加され、タグ正規化とフィルター適用のケースが網羅されている。
+
+## 進捗メモ（2025-03-20）
+- スプリント 1 のフォールバック強化。
+  - TomSelect アダプタが未注入でも `tagInputController` とタグ検索が TomSelect インスタンスを生成・同期できるよう、デフォルトアダプタを同梱。
+  - `syncTagSearchOptions` が Tags カラムから候補を抽出し、TomSelect 選択値のフィルターに反映されることを確認。
+- テスト: `pytest`（内包の `node --test tests/js/gallery_modules.test.mjs` を含む）を実行。Playwright はブラウザ取得依存のため未実行。
