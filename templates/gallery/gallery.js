@@ -2060,6 +2060,22 @@
         return `${baseName.replace(/\.csv$/i, '')}_review.csv`;
     }
 
+    const storesNamespace = typeof window !== 'undefined' && window ? window.galleryStores : null;
+    const createTagStoreFn =
+        storesNamespace && typeof storesNamespace.createTagStore === 'function'
+            ? storesNamespace.createTagStore
+            : null;
+
+    const tagStore =
+        typeof createTagStoreFn === 'function'
+            ? createTagStoreFn({
+                  parseTagTokens,
+                  formatTagTokens,
+                  getRecordByIndex,
+                  setRecordTags
+              })
+            : null;
+
     const eventsFactory = window.galleryEventsFactory || null;
     const galleryEvents =
         eventsFactory && typeof eventsFactory.createGalleryEvents === 'function'
@@ -2087,7 +2103,9 @@
                   applyMasterLevelOptions,
                   validateMasterEffectValue,
                   validateMasterDemeritValue,
-                  syncDemeritAvailability
+                  syncDemeritAvailability,
+                  createTagInputEvents: eventsFactory ? eventsFactory.createTagInputEvents : null,
+                  tagStore
               })
             : null;
 
@@ -2119,7 +2137,8 @@
                   normalizeStatus,
                   getRecordByIndex,
                   isRecordDuplicate,
-                  isRecordFavorite
+                  isRecordFavorite,
+                  tagStore
               })
             : null;
 
@@ -2164,6 +2183,7 @@
         applyItemTags,
         normalizeItemTags,
         refreshItemCaches,
+        tagStore,
         getRecordByIndex,
         isRecordDuplicate,
         isRecordFavorite,
