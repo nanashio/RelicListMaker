@@ -837,6 +837,68 @@ describe('gallery filter utils', () => {
   });
 
 
+describe('gallery filter state bridge', () => {
+  let dom;
+
+  beforeEach(() => {
+    dom = {
+      searchInput: { value: '' },
+      filterSelect: { value: 'all' },
+      colorFilter: { value: 'all' },
+      showDuplicatesToggle: { checked: false }
+    };
+    global.window = {};
+  });
+
+  afterEach(() => {
+    delete global.window;
+  });
+
+  test('getState prefers store values when provided', () => {
+    const state = {
+      searchTerm: 'from-store',
+      statusFilter: 'resolved',
+      colorFilter: 'blue',
+      includeDuplicates: true
+    };
+    const filterStore = {
+      getState: () => state,
+      setState: () => {}
+    };
+
+    runScript('templates/gallery/utils/filterState.js');
+    const bridge = global.window.galleryFilterState.createFilterStateBridge({ filterStore, dom });
+
+    assert.deepEqual(bridge.getState(), state);
+    assert.equal(bridge.includeDuplicates(), true);
+  });
+
+  test('syncDomFromState and setState update DOM controls', () => {
+    runScript('templates/gallery/utils/filterState.js');
+    const bridge = global.window.galleryFilterState.createFilterStateBridge({ dom });
+
+    bridge.syncDomFromState({
+      searchTerm: 'keyword',
+      statusFilter: 'with-pending',
+      colorFilter: 'red',
+      includeDuplicates: true
+    });
+
+    assert.equal(dom.searchInput.value, 'keyword');
+    assert.equal(dom.filterSelect.value, 'with-pending');
+    assert.equal(dom.colorFilter.value, 'red');
+    assert.equal(dom.showDuplicatesToggle.checked, true);
+
+    bridge.setState({ searchTerm: 'next', colorFilter: 'blue', includeDuplicates: false });
+
+    assert.equal(dom.searchInput.value, 'next');
+    assert.equal(dom.colorFilter.value, 'blue');
+    assert.equal(dom.showDuplicatesToggle.checked, false);
+    assert.equal(bridge.getState().searchTerm, 'next');
+  });
+});
+
+
 describe('gallery render data utils', () => {
   let renderUtils;
 

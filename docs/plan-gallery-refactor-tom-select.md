@@ -121,3 +121,9 @@
   - アイテム状態のスナップショットを管理する `createItemStateResolver` を `renderData` に追加し、フィルター評価前に DOM からの再収集を一元化。
   - `galleryView` がタグ・色・重複・お気に入り更新時に状態キャッシュを汚染し、`applyFilters` はキャッシュ経由でプレーンデータを受け取る形に整理。ビルド時にキャッシュを初期化することでデータ→UI の一方向依存を明示。
 - テスト: `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行。
+
+## 進捗メモ（2025-03-27）
+- スプリント 3 のフィルター状態ストア化を強化。
+  - `templates/gallery/utils/filterState.js` にフィルター状態ブリッジを追加し、`filterStore` の値を優先しつつ DOM のフォールバックを 1 箇所で解決できるようにした。`gallery.js` のコントロール同期と `galleryView` のフィルター評価が共通ブリッジ経由になり、依存方向と初期化順が明示された。
+  - ブリッジをビルド対象に含めるため `gallery/assets.py` と `templates/gallery/index.js` のコピー対象を更新し、`tests/js/gallery_modules.test.mjs` にブリッジの動作検証を追加して漏れを検出できるようにした。
+- テスト: `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行。

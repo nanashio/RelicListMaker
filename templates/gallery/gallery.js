@@ -2069,8 +2069,17 @@
         storesNamespace && typeof storesNamespace.createTagStore === 'function'
             ? storesNamespace.createTagStore
             : null;
+    const filterStateNamespace = typeof window !== 'undefined' && window ? window.galleryFilterState : null;
+    const createFilterStateBridgeFn =
+        filterStateNamespace && typeof filterStateNamespace.createFilterStateBridge === 'function'
+            ? filterStateNamespace.createFilterStateBridge
+            : null;
 
     function syncFilterControls(filterState = {}) {
+        if (typeof syncFilterControlsFromBridge === 'function') {
+            syncFilterControlsFromBridge(filterState);
+            return;
+        }
         if (!filterState || typeof filterState !== 'object') {
             return;
         }
@@ -2108,6 +2117,15 @@
                   colorFilter: dom.colorFilter && dom.colorFilter.value ? dom.colorFilter.value : 'all',
                   includeDuplicates: Boolean(dom.showDuplicatesToggle && dom.showDuplicatesToggle.checked)
               })
+            : null;
+
+    const filterStateBridge =
+        typeof createFilterStateBridgeFn === 'function'
+            ? createFilterStateBridgeFn({ filterStore, dom })
+            : null;
+    const syncFilterControlsFromBridge =
+        filterStateBridge && typeof filterStateBridge.syncDomFromState === 'function'
+            ? (state) => filterStateBridge.syncDomFromState(state)
             : null;
 
     if (filterStore && typeof filterStore.getState === 'function') {
@@ -2188,7 +2206,8 @@
                   isRecordDuplicate,
                   isRecordFavorite,
                   tagStore,
-                  filterStore
+                  filterStore,
+                  filterStateBridge
               })
             : null;
 
