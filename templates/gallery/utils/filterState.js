@@ -42,19 +42,22 @@
         }
     }
 
+    function normalizeFilterState(state = {}) {
+        return {
+            searchTerm: state.searchTerm || '',
+            statusFilter: state.statusFilter || 'all',
+            colorFilter: state.colorFilter || 'all',
+            includeDuplicates: Boolean(state.includeDuplicates)
+        };
+    }
+
     function createFilterStateBridge(options = {}) {
         const { filterStore = null, dom = {} } = options;
         const storeApi = filterStore && typeof filterStore.getState === 'function' ? filterStore : null;
 
         function getState() {
             if (storeApi) {
-                const state = storeApi.getState() || {};
-                return {
-                    searchTerm: state.searchTerm || '',
-                    statusFilter: state.statusFilter || 'all',
-                    colorFilter: state.colorFilter || 'all',
-                    includeDuplicates: Boolean(state.includeDuplicates)
-                };
+                return normalizeFilterState(storeApi.getState() || {});
             }
             return normalizeDomState(dom);
         }
@@ -89,8 +92,63 @@
         };
     }
 
+    function createFilterOptionsResolver(options = {}) {
+        const {
+            filterStateBridge = null,
+            filterStore = null,
+            resolveDomState = () => normalizeFilterState(),
+            collectEffectSearchEntries = () => [],
+            getTagSearchTerms = () => []
+        } = options;
+
+        const bridgeApi =
+            filterStateBridge && typeof filterStateBridge.getState === 'function' ? filterStateBridge : null;
+        const storeApi = filterStore && typeof filterStore.getState === 'function' ? filterStore : null;
+
+        function resolveBaseState() {
+            if (bridgeApi) {
+                return normalizeFilterState(bridgeApi.getState() || {});
+            }
+            if (storeApi) {
+                return normalizeFilterState(storeApi.getState() || {});
+            }
+            const domState = typeof resolveDomState === 'function' ? resolveDomState() : {};
+            return normalizeFilterState(domState || {});
+        }
+
+        function resolveOptions() {
+            const baseState = resolveBaseState();
+            const effectSearches =
+                typeof collectEffectSearchEntries === 'function'
+                    ? collectEffectSearchEntries()
+                    : [];
+            const tagTerms = typeof getTagSearchTerms === 'function' ? getTagSearchTerms() : [];
+
+            return {
+                ...baseState,
+                term: (baseState.searchTerm || '').trim().toLowerCase(),
+                filter: baseState.statusFilter || 'all',
+                colorFilter: baseState.colorFilter || 'all',
+                effectSearches: Array.isArray(effectSearches) ? effectSearches : [],
+                tagTerms: Array.isArray(tagTerms) ? tagTerms : []
+            };
+        }
+
+        function includeDuplicates() {
+            const state = resolveBaseState();
+            return Boolean(state.includeDuplicates);
+        }
+
+        return {
+            resolveState: resolveBaseState,
+            resolveOptions,
+            includeDuplicates
+        };
+    }
+
     if (!window.galleryFilterState) {
         window.galleryFilterState = {};
     }
     window.galleryFilterState.createFilterStateBridge = createFilterStateBridge;
+    window.galleryFilterState.createFilterOptionsResolver = createFilterOptionsResolver;
 })();
