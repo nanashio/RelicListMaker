@@ -99,6 +99,7 @@ def _build_body_attributes(
     app_version: str,
 ) -> str:
     attrs: dict[str, str] = {
+        "class": "gallery-page",
         "data-bootstrap-json": bootstrap_reference,
         "data-results-csv": payload.results_csv,
         "data-img-dir": payload.image_dir,
