@@ -6,6 +6,7 @@
         searchCache: '',
         statusCache: '',
         effectStates: [],
+        effectSlotStatuses: [],
         favorite: false,
         itemColor: '',
         relicType: '',
@@ -38,6 +39,33 @@
         const readEffectSlots =
             typeof helpers.readEffectSlots === 'function' ? helpers.readEffectSlots : () => [];
         const readTagTokens = typeof helpers.readTagTokens === 'function' ? helpers.readTagTokens : () => [];
+        const parseEffectSlotStatuses =
+            typeof helpers.parseEffectSlotStatuses === 'function'
+                ? helpers.parseEffectSlotStatuses
+                : (value) => {
+                      if (Array.isArray(value)) {
+                          return value.map((entry) => (entry == null ? '' : String(entry).trim()));
+                      }
+                      if (typeof value !== 'string') {
+                          return [];
+                      }
+                      const trimmed = value.trim();
+                      if (!trimmed) {
+                          return [];
+                      }
+                      try {
+                          const parsed = JSON.parse(trimmed);
+                          if (Array.isArray(parsed)) {
+                              return parsed.map((entry) => (entry == null ? '' : String(entry).trim()));
+                          }
+                      } catch (error) {
+                          // JSON ではない場合はカンマ区切りを許容
+                      }
+                      return trimmed
+                          .split(',')
+                          .map((entry) => entry.trim())
+                          .filter((entry) => entry !== '');
+                  };
 
         return toItemArray(items).map((item) => {
             if (!item || !item.dataset) {
@@ -48,12 +76,14 @@
                 .split(',')
                 .map((value) => (value == null ? '' : String(value).trim()))
                 .filter((value) => value !== '');
+            const effectSlotStatuses = parseEffectSlotStatuses(item.dataset.effectSlotStatuses || '');
 
             return {
                 duplicate: item.dataset.duplicate === 'true',
                 searchCache: item.dataset.searchCache || '',
                 statusCache: item.dataset.statusCache || '',
                 effectStates,
+                effectSlotStatuses,
                 favorite: item.dataset.favorite === 'true',
                 itemColor: normalizeItemColor(item.dataset.itemColor || ''),
                 relicType: normalizeItemRelicType(item.dataset.relicType || ''),

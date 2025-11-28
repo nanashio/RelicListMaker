@@ -171,6 +171,7 @@
         const tagStoreApi = tagStore && typeof tagStore.normalizeTags === 'function' ? tagStore : null;
         const filterStoreApi = filterStore && typeof filterStore.getState === 'function' ? filterStore : null;
         const filterStateNamespace = typeof window !== 'undefined' && window ? window.galleryFilterState : null;
+        const summaryUtilsNamespace = typeof window !== 'undefined' && window ? window.gallerySummaryUtils : null;
         const filterStateResolver =
             filterStateBridge && typeof filterStateBridge.getState === 'function' ? filterStateBridge : null;
         const createFilterOptionsResolverFn =
@@ -178,6 +179,12 @@
                 ? config.createFilterOptionsResolver
                 : filterStateNamespace && typeof filterStateNamespace.createFilterOptionsResolver === 'function'
                   ? filterStateNamespace.createFilterOptionsResolver
+                  : null;
+        const createSummaryCalculatorFn =
+            typeof config.createSummaryCalculator === 'function'
+                ? config.createSummaryCalculator
+                : summaryUtilsNamespace && typeof summaryUtilsNamespace.createSummaryCalculator === 'function'
+                  ? summaryUtilsNamespace.createSummaryCalculator
                   : null;
         const parseTagTokens =
             tagStoreApi && typeof tagStoreApi.normalizeTokens === 'function'
@@ -695,6 +702,11 @@
             width: 'auto'
         };
 
+        const summaryCalculator =
+            typeof createSummaryCalculatorFn === 'function'
+                ? createSummaryCalculatorFn({ normalizeStatus })
+                : null;
+
         function ensureSummaryElement() {
             if (!dom) {
                 return null;
@@ -721,13 +733,13 @@
             return summary;
         }
 
-        function updateSummary() {
-            const summary = ensureSummaryElement();
-            if (!summary) {
-                return;
+        function calculateSummaryCounts() {
+            if (summaryCalculator && typeof summaryCalculator.summarize === 'function') {
+                const itemStates = getItemStates();
+                return summaryCalculator.summarize(Array.isArray(itemStates) ? itemStates : []);
             }
+
             const items = Array.isArray(state.items) ? state.items : [];
-            const totalCount = items.length;
             let fullyConfirmedCount = 0;
             let pendingCount = 0;
 
@@ -774,6 +786,20 @@
                 }
             });
 
+            return {
+                totalCount: items.length,
+                fullyConfirmedCount,
+                pendingCount
+            };
+        }
+
+        function updateSummary() {
+            const summary = ensureSummaryElement();
+            if (!summary) {
+                return;
+            }
+
+            const { totalCount, fullyConfirmedCount, pendingCount } = calculateSummaryCounts();
             const summaryText = `全体 ${totalCount} 件 / 確認済み ${fullyConfirmedCount} 件 / 未レビュー ${pendingCount} 件`;
             summary.textContent = summaryText;
             if (summary.style) {
@@ -1393,6 +1419,7 @@
 
             const effectEntries = [];
             const effectSlotValues = [];
+            const effectSlotStatuses = [];
 
             item.querySelectorAll('.effect').forEach((effect) => {
                 const {
@@ -1425,6 +1452,10 @@
                         ]
                             .map((value) => normalizeSearchToken(value))
                             .filter((value) => value !== '');
+                        const normalizedStatus = normalizeStatus(status);
+                        if (normalizedStatus) {
+                            effectSlotStatuses[slotIndex - 1] = normalizedStatus;
+                        }
                         if (effectNames.length) {
                             effectSlotValues[slotIndex - 1] = effectNames.join(' ');
                         }
@@ -1452,6 +1483,14 @@
                 item.dataset.effectSlots = JSON.stringify(normalizedEffectSlots);
             } else {
                 delete item.dataset.effectSlots;
+            }
+            const normalizedSlotStatuses = effectSlotStatuses
+                .slice(0, 3)
+                .map((value) => normalizeStatus(value));
+            if (normalizedSlotStatuses.some((value) => value && value !== '')) {
+                item.dataset.effectSlotStatuses = JSON.stringify(normalizedSlotStatuses);
+            } else {
+                delete item.dataset.effectSlotStatuses;
             }
         }
 
