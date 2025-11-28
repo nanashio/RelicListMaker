@@ -896,6 +896,75 @@ describe('gallery filter state bridge', () => {
     assert.equal(dom.showDuplicatesToggle.checked, false);
     assert.equal(bridge.getState().searchTerm, 'next');
   });
+
+  test('createFilterOptionsResolver merges bridge state with effect and tag terms', () => {
+    runScript('templates/gallery/utils/filterState.js');
+
+    const bridge = {
+      getState: () => ({
+        searchTerm: ' Bridge Term ',
+        statusFilter: 'with-pending',
+        colorFilter: '',
+        includeDuplicates: false
+      })
+    };
+
+    const resolver = global.window.galleryFilterState.createFilterOptionsResolver({
+      filterStateBridge: bridge,
+      filterStore: null,
+      resolveDomState: () => ({
+        searchTerm: 'dom-term',
+        statusFilter: 'dom',
+        colorFilter: 'green',
+        includeDuplicates: true
+      }),
+      collectEffectSearchEntries: () => [{ terms: ['Alpha'], mode: 'or' }],
+      getTagSearchTerms: () => ['TagOne', 'TagTwo']
+    });
+
+    const options = resolver.resolveOptions();
+
+    assert.equal(options.term, 'bridge term');
+    assert.equal(options.filter, 'with-pending');
+    assert.equal(options.colorFilter, 'all');
+    assert.equal(options.includeDuplicates, false);
+    assert.deepEqual(options.effectSearches, [{ terms: ['Alpha'], mode: 'or' }]);
+    assert.deepEqual(options.tagTerms, ['TagOne', 'TagTwo']);
+  });
+
+  test('createFilterOptionsResolver falls back to store and dom state', () => {
+    runScript('templates/gallery/utils/filterState.js');
+
+    const filterStore = {
+      getState: () => ({
+        searchTerm: ' store-term ',
+        statusFilter: 'resolved',
+        colorFilter: 'blue',
+        includeDuplicates: true
+      })
+    };
+
+    const resolver = global.window.galleryFilterState.createFilterOptionsResolver({
+      filterStore,
+      resolveDomState: () => ({
+        searchTerm: 'dom-term',
+        statusFilter: 'dom',
+        colorFilter: 'red',
+        includeDuplicates: false
+      }),
+      collectEffectSearchEntries: () => null,
+      getTagSearchTerms: () => 'tag'
+    });
+
+    const options = resolver.resolveOptions();
+
+    assert.equal(options.term, 'store-term');
+    assert.equal(options.filter, 'resolved');
+    assert.equal(options.colorFilter, 'blue');
+    assert.equal(options.includeDuplicates, true);
+    assert.deepEqual(options.effectSearches, []);
+    assert.deepEqual(options.tagTerms, []);
+  });
 });
 
 

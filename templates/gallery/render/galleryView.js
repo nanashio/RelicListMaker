@@ -170,8 +170,15 @@
         const dataUtils = typeof window !== 'undefined' && window ? window.galleryDataUtils : null;
         const tagStoreApi = tagStore && typeof tagStore.normalizeTags === 'function' ? tagStore : null;
         const filterStoreApi = filterStore && typeof filterStore.getState === 'function' ? filterStore : null;
+        const filterStateNamespace = typeof window !== 'undefined' && window ? window.galleryFilterState : null;
         const filterStateResolver =
             filterStateBridge && typeof filterStateBridge.getState === 'function' ? filterStateBridge : null;
+        const createFilterOptionsResolverFn =
+            typeof config.createFilterOptionsResolver === 'function'
+                ? config.createFilterOptionsResolver
+                : filterStateNamespace && typeof filterStateNamespace.createFilterOptionsResolver === 'function'
+                  ? filterStateNamespace.createFilterOptionsResolver
+                  : null;
         const parseTagTokens =
             tagStoreApi && typeof tagStoreApi.normalizeTokens === 'function'
                 ? (value) => tagStoreApi.normalizeTokens(value)
@@ -467,6 +474,7 @@
         let itemStateResolver = null;
         let itemStateCache = [];
         let itemStateCacheDirty = true;
+        let filterOptionsResolver = null;
 
         if (!hasDocument && typeof createElementConfig !== 'function') {
             throw new Error('createGalleryView: createElement helper is required when document is unavailable');
@@ -786,6 +794,9 @@
         }
 
         function resolveFilterState() {
+            if (filterOptionsResolver && typeof filterOptionsResolver.resolveState === 'function') {
+                return filterOptionsResolver.resolveState();
+            }
             if (filterStateResolver && typeof filterStateResolver.getState === 'function') {
                 const current = filterStateResolver.getState() || {};
                 return {
@@ -808,6 +819,10 @@
         }
 
         function includeDuplicatesNow() {
+            const resolver = ensureFilterOptionsResolver();
+            if (resolver && typeof resolver.includeDuplicates === 'function') {
+                return Boolean(resolver.includeDuplicates());
+            }
             if (filterStateResolver && typeof filterStateResolver.includeDuplicates === 'function') {
                 return Boolean(filterStateResolver.includeDuplicates());
             }
@@ -1256,6 +1271,36 @@
             return parseTagTokensValue(dom.tagSearchInput.value || '');
         }
 
+        function ensureFilterOptionsResolver() {
+            if (!filterOptionsResolver && typeof createFilterOptionsResolverFn === 'function') {
+                filterOptionsResolver = createFilterOptionsResolverFn({
+                    filterStateBridge: filterStateResolver,
+                    filterStore: filterStoreApi,
+                    resolveDomState: resolveFilterStateFromDom,
+                    collectEffectSearchEntries,
+                    getTagSearchTerms
+                });
+            }
+            return filterOptionsResolver;
+        }
+
+        function resolveFilterOptions() {
+            const resolver = ensureFilterOptionsResolver();
+            if (resolver && typeof resolver.resolveOptions === 'function') {
+                return resolver.resolveOptions();
+            }
+
+            const filterState = resolveFilterState();
+            return {
+                term: (filterState.searchTerm || '').trim().toLowerCase(),
+                filter: filterState.statusFilter || 'all',
+                colorFilter: filterState.colorFilter || 'all',
+                includeDuplicates: Boolean(filterState.includeDuplicates),
+                effectSearches: collectEffectSearchEntries(),
+                tagTerms: getTagSearchTerms()
+            };
+        }
+
         function readEffectSlots(item) {
             if (!item || !item.dataset) {
                 return [];
@@ -1419,26 +1464,29 @@
         }
 
         function applyFilters() {
-            const filterState = resolveFilterState();
-            const term = (filterState.searchTerm || '').trim().toLowerCase();
-            const filter = filterState.statusFilter || 'all';
-            const colorFilter = filterState.colorFilter || 'all';
-            const showDuplicates = Boolean(filterState.includeDuplicates);
-            const effectSearches = collectEffectSearchEntries();
-            const tagTerms = getTagSearchTerms();
+            const resolvedOptions = resolveFilterOptions() || {};
+            const {
+                term = '',
+                filter = 'all',
+                colorFilter = 'all',
+                includeDuplicates: includeDuplicatesOption = false,
+                effectSearches = [],
+                tagTerms = []
+            } = resolvedOptions;
 
-            const itemStates = getItemStates();
-
-            const options = {
+            const normalizedOptions = {
                 term,
                 filter,
                 colorFilter,
-                includeDuplicates: showDuplicates,
-                effectSearches,
-                tagTerms
+                includeDuplicates: Boolean(includeDuplicatesOption),
+                effectSearches: Array.isArray(effectSearches) ? effectSearches : [],
+                tagTerms: Array.isArray(tagTerms) ? tagTerms : []
             };
 
-            const visibility = typeof filterItemsFn === 'function' ? filterItemsFn(itemStates, options) : null;
+            const itemStates = getItemStates();
+
+            const visibility =
+                typeof filterItemsFn === 'function' ? filterItemsFn(itemStates, normalizedOptions) : null;
 
             state.items.forEach((item, index) => {
                 if (!item) {
@@ -1448,7 +1496,7 @@
                 if (Array.isArray(visibility) && index < visibility.length) {
                     visible = Boolean(visibility[index]);
                 } else if (typeof evaluateItemVisibilityFn === 'function') {
-                    visible = Boolean(evaluateItemVisibilityFn(itemStates[index], options));
+                    visible = Boolean(evaluateItemVisibilityFn(itemStates[index], normalizedOptions));
                 }
                 item.style.display = visible ? '' : 'none';
             });
