@@ -102,3 +102,9 @@
   - `templates/gallery/stores/filterStore.js` を新設し、検索語・状態フィルター・色フィルター・重複表示の状態を購読/更新できるように整理。`gallery/assets.py` と `tests/test_generate_gallery.py` にコピー対象を追加し、ビルド時の漏れを防止。
   - `gallery.js` からストアを初期化して `galleryEvents` と `galleryView` に注入し、`attachEventHandlers` で入力イベントがストアを更新するように変更。`galleryView` の `applyFilters` と `includeDuplicatesNow` がストア経由で値を取得し、DOM と状態の分離を開始。
 - テスト: `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行。
+
+## 進捗メモ（2025-03-24）
+- スプリント 3 のフィルター状態ストア化を継続。
+  - `gallery.js` にフィルター値を DOM と同期する `syncFilterControls` を追加し、`filterStore` の購読で UI 反映と `applyFilters` の再実行を統一してストアを単一ソース化。
+  - `galleryView` 側の `includeDuplicatesNow` と `applyFilters` が共通のフィルター状態解決関数を経由するように整理し、DOM フォールバックの扱いを明示。
+- テスト: `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行。
