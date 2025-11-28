@@ -30,6 +30,7 @@ def test_copy_gallery_modules_copies_required_viewer_scripts(tmp_path):
     gallery_assets.copy_gallery_modules(str(output_dir))
 
     expected_files = [
+        Path("stores/filterStore.js"),
         Path("stores/tagStore.js"),
         Path("components/tomSelectAdapter.js"),
         Path("events/tagInputEvents.js"),

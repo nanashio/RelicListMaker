@@ -27,7 +27,8 @@
             syncDemeritAvailability = () => {},
             createRecordActionHandlers: createRecordActionHandlersConfig,
             createTagInputEvents: createTagInputEventsConfig,
-            tagStore
+            tagStore,
+            filterStore
         } = config;
 
         if (!dom || typeof dom !== 'object') {
@@ -198,6 +199,7 @@
                 normalizeItemTags = (value) => value,
                 refreshItemCaches = () => {},
                 tagStore = null,
+                filterStore = null,
                 applyMasterDataForRelicType = () => {},
                 isRecordDuplicate = () => false,
                 isRecordFavorite = () => false,
@@ -212,6 +214,24 @@
                 updateRecordLevelOptions = () => false,
                 scheduleSave = () => {}
             } = handlers;
+
+            const filterStoreApi = filterStore && typeof filterStore.setState === 'function' ? filterStore : null;
+            const setSearchTerm =
+                filterStoreApi && typeof filterStoreApi.setSearchTerm === 'function'
+                    ? (value) => filterStoreApi.setSearchTerm(value)
+                    : () => {};
+            const setStatusFilter =
+                filterStoreApi && typeof filterStoreApi.setStatusFilter === 'function'
+                    ? (value) => filterStoreApi.setStatusFilter(value)
+                    : () => {};
+            const setColorFilter =
+                filterStoreApi && typeof filterStoreApi.setColorFilter === 'function'
+                    ? (value) => filterStoreApi.setColorFilter(value)
+                    : () => {};
+            const setIncludeDuplicates =
+                filterStoreApi && typeof filterStoreApi.setIncludeDuplicates === 'function'
+                    ? (value) => filterStoreApi.setIncludeDuplicates(value)
+                    : () => {};
 
             function resolveTagsInputTarget(target) {
                 if (!target || typeof target.closest !== 'function') {
@@ -447,7 +467,10 @@
             }
 
             if (dom.searchInput) {
-                dom.searchInput.addEventListener('input', applyFilters);
+                dom.searchInput.addEventListener('input', (event) => {
+                    setSearchTerm(event && event.target ? event.target.value : '');
+                    applyFilters();
+                });
             }
             if (Array.isArray(dom.effectSearchInputs)) {
                 dom.effectSearchInputs.forEach((input) => {
@@ -465,13 +488,20 @@
                 dom.tagSearchInput.addEventListener('input', applyFilters);
             }
             if (dom.filterSelect) {
-                dom.filterSelect.addEventListener('change', applyFilters);
+                dom.filterSelect.addEventListener('change', (event) => {
+                    setStatusFilter(event && event.target ? event.target.value : 'all');
+                    applyFilters();
+                });
             }
             if (dom.colorFilter) {
-                dom.colorFilter.addEventListener('change', applyFilters);
+                dom.colorFilter.addEventListener('change', (event) => {
+                    setColorFilter(event && event.target ? event.target.value : 'all');
+                    applyFilters();
+                });
             }
             if (dom.showDuplicatesToggle) {
-                dom.showDuplicatesToggle.addEventListener('change', () => {
+                dom.showDuplicatesToggle.addEventListener('change', (event) => {
+                    setIncludeDuplicates(event && event.target ? event.target.checked : false);
                     buildGallery();
                 });
             }
