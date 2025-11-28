@@ -15,6 +15,7 @@
             normalizeItemColor,
             normalizeItemRelicType,
             normalizeItemTags,
+            tagStore,
             isRecordDuplicate,
             isRecordFavorite,
             setRecordDuplicate,
@@ -96,11 +97,17 @@
         const safeUpdateDuplicateVisuals =
             typeof updateDuplicateVisuals === 'function' ? updateDuplicateVisuals : () => {};
         const safeRefreshItemCaches = typeof refreshItemCaches === 'function' ? refreshItemCaches : () => {};
+        const tagStoreApi = tagStore && typeof tagStore.updateRecordTags === 'function' ? tagStore : null;
         const normalizeColor =
             typeof normalizeItemColor === 'function' ? normalizeItemColor : (value) => value;
         const normalizeRelicType =
             typeof normalizeItemRelicType === 'function' ? normalizeItemRelicType : (value) => value;
-        const normalizeTags = typeof normalizeItemTags === 'function' ? normalizeItemTags : (value) => value;
+        const normalizeTags =
+            tagStoreApi && typeof tagStoreApi.normalizeTags === 'function'
+                ? (value) => tagStoreApi.normalizeTags(value)
+                : typeof normalizeItemTags === 'function'
+                  ? normalizeItemTags
+                  : (value) => value;
         const safeApplyItemTags = typeof applyItemTags === 'function' ? applyItemTags : () => {};
 
         function getItemActionContext(control) {
@@ -427,9 +434,19 @@
                 return;
             }
             const { item, recordIndex } = context;
-            const nextValue = normalizeTags(input.value || '');
-            const recordChanged = setRecordTags(recordIndex, nextValue);
-            safeApplyItemTags(item, nextValue);
+            const rawValue = input && typeof input.value === 'string' ? input.value : '';
+            const tagUpdateResult =
+                tagStoreApi && typeof tagStoreApi.updateRecordTags === 'function'
+                    ? tagStoreApi.updateRecordTags(recordIndex, rawValue)
+                    : (() => {
+                          const normalizedValue = normalizeTags(rawValue);
+                          const changed = setRecordTags(recordIndex, normalizedValue);
+                          const tokens = normalizedValue ? normalizedValue.split(/\s+/).filter(Boolean) : [];
+                          return { normalized: normalizedValue, tokens, changed };
+                      })();
+            const { normalized = '', tokens = [], changed: recordChanged = false } = tagUpdateResult || {};
+            const valueForView = Array.isArray(tokens) && tokens.length ? tokens : normalized;
+            safeApplyItemTags(item, valueForView);
             safeRefreshItemCaches(item);
             if (recordChanged) {
                 safeScheduleSave();
@@ -438,8 +455,9 @@
             if (tagDebugEnabled && typeof console !== 'undefined' && console.info) {
                 console.info('[gallery][tags] updateItemTags', {
                     recordIndex,
-                    nextValue,
+                    nextValue: normalized,
                     recordChanged,
+                    tokens,
                     inputId: input && input.id ? input.id : undefined,
                     itemTagsDisplay: item && item.dataset ? item.dataset.tags : undefined
                 });

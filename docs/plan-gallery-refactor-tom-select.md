@@ -89,3 +89,10 @@
   - `components/tomSelectAdapter.js` を `gallery/assets.py` のコピー対象に含めておらず、生成後のギャラリーで 404 により動的 import が失敗していた問題を修正。
   - コピー対象を監視する `test_copy_gallery_modules_copies_required_viewer_scripts` にアダプタを追加し、今後の漏れを検出できるようにした。
 - テスト: `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行（Playwright は環境依存のため対象外）。既存テストが通っていた理由は、コピー対象のリスト検証が一部のモジュールのみで TomSelect アダプタをカバーしていなかったため。
+
+## 進捗メモ（2025-03-22）
+- スプリント 2 のタグ同期・イベント束ねを実施。
+  - `templates/gallery/stores/tagStore.js` を追加し、タグの正規化とレコード更新をストア経由に統一。`galleryView` と `recordActionHandlers` がストアを参照して DOM 反映と CSV 書き戻しを分離。
+  - `templates/gallery/events/tagInputEvents.js` を追加してタグ入力の input/focus/change を一元管理し、編集状態の判定と TomSelect 未使用時の表示同期を集約。
+  - `gallery/assets.py` と `tests/test_generate_gallery.py` を更新し、新規モジュールのコピー漏れを防止。
+- テスト: `pytest` および `node --test tests/js/gallery_modules.test.mjs` を実行。

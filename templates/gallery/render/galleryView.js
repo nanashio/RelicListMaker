@@ -139,7 +139,8 @@
             normalizeStatus: normalizeStatusConfig,
             getRecordByIndex,
             isRecordDuplicate,
-            isRecordFavorite
+            isRecordFavorite,
+            tagStore
         } = config;
 
         if (!state || !datasetState || !dom) {
@@ -165,18 +166,32 @@
         }
 
         const dataUtils = typeof window !== 'undefined' && window ? window.galleryDataUtils : null;
+        const tagStoreApi = tagStore && typeof tagStore.normalizeTags === 'function' ? tagStore : null;
         const parseTagTokens =
-            dataUtils && typeof dataUtils.parseTagTokens === 'function'
-                ? dataUtils.parseTagTokens
-                : null;
+            tagStoreApi && typeof tagStoreApi.normalizeTokens === 'function'
+                ? (value) => tagStoreApi.normalizeTokens(value)
+                : dataUtils && typeof dataUtils.parseTagTokens === 'function'
+                  ? dataUtils.parseTagTokens
+                  : null;
         const formatTagTokens =
-            dataUtils && typeof dataUtils.formatTagTokens === 'function'
-                ? dataUtils.formatTagTokens
-                : null;
+            tagStoreApi && typeof tagStoreApi.formatTokens === 'function'
+                ? (value) => tagStoreApi.formatTokens(value)
+                : dataUtils && typeof dataUtils.formatTagTokens === 'function'
+                  ? dataUtils.formatTagTokens
+                  : null;
 
         if (typeof parseTagTokens !== 'function' || typeof formatTagTokens !== 'function') {
             throw new Error('createGalleryView: tag utilities are required');
         }
+
+        const buildTagEntry =
+            tagStoreApi && typeof tagStoreApi.buildEntry === 'function'
+                ? (value) => tagStoreApi.buildEntry(value)
+                : (value) => {
+                      const normalized = formatTagTokens(value);
+                      const tokens = parseTagTokens(normalized);
+                      return { normalized, tokens };
+                  };
 
         const colorOptions = Array.isArray(itemColorOptions) ? itemColorOptions.slice() : [];
         const hasDocument = typeof document !== 'undefined' && document;
@@ -890,16 +905,18 @@
             }
         }
 
-        function normalizeItemTags(value) {
-            return formatTagTokens(value);
-        }
+        const normalizeItemTags =
+            tagStoreApi && typeof tagStoreApi.normalizeTags === 'function'
+                ? (value) => tagStoreApi.normalizeTags(value)
+                : (value) => formatTagTokens(value);
 
         function applyItemTags(item, tagsValue) {
             if (!item) {
                 return;
             }
-            const normalized = normalizeItemTags(tagsValue);
-            const tokens = parseTagTokens(normalized);
+            const entry = buildTagEntry(tagsValue);
+            const normalized = entry.normalized;
+            const tokens = Array.isArray(entry.tokens) ? entry.tokens : [];
             if (tokens.length) {
                 item.dataset.tags = tokens.join(' ');
                 item.dataset.tagTokens = tokens.map((token) => token.toLowerCase()).join(' ');

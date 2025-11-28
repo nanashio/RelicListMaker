@@ -6,6 +6,7 @@ const MODULE_DEPENDENCIES = [
     './dataset/utils.js',
     './utils/filter.js',
     './state/store.js',
+    './stores/tagStore.js',
     './app/stateApi.js',
     './dataset/manager.js',
     './storage/utils.js',
@@ -19,6 +20,7 @@ const MODULE_DEPENDENCIES = [
     './render/itemFactory.js',
     './render/galleryView.js',
     './events/recordActionHandlers.js',
+    './events/tagInputEvents.js',
     './events/galleryEvents.js'
 ];
 

@@ -25,7 +25,9 @@
             validateMasterEffectValue = () => true,
             validateMasterDemeritValue = () => true,
             syncDemeritAvailability = () => {},
-            createRecordActionHandlers: createRecordActionHandlersConfig
+            createRecordActionHandlers: createRecordActionHandlersConfig,
+            createTagInputEvents: createTagInputEventsConfig,
+            tagStore
         } = config;
 
         if (!dom || typeof dom !== 'object') {
@@ -86,6 +88,14 @@
                 ? createRecordActionHandlersConfig
                 : handlersNamespace && typeof handlersNamespace.createRecordActionHandlers === 'function'
                   ? handlersNamespace.createRecordActionHandlers
+                  : null;
+
+        const eventsNamespace = typeof window !== 'undefined' && window ? window.galleryEventsFactory : null;
+        const createTagInputEventsFn =
+            typeof createTagInputEventsConfig === 'function'
+                ? createTagInputEventsConfig
+                : eventsNamespace && typeof eventsNamespace.createTagInputEvents === 'function'
+                  ? eventsNamespace.createTagInputEvents
                   : null;
 
         if (typeof createRecordActionHandlersFn !== 'function') {
@@ -187,6 +197,7 @@
                 applyItemTags = () => {},
                 normalizeItemTags = (value) => value,
                 refreshItemCaches = () => {},
+                tagStore = null,
                 applyMasterDataForRelicType = () => {},
                 isRecordDuplicate = () => false,
                 isRecordFavorite = () => false,
@@ -233,6 +244,7 @@
                 normalizeItemColor,
                 normalizeItemRelicType,
                 normalizeItemTags,
+                tagStore,
                 isRecordDuplicate,
                 isRecordFavorite,
                 setRecordDuplicate,
@@ -270,6 +282,91 @@
                 changeEffectLevel,
                 toggleReviewStatus
             } = recordActions;
+
+            const tagInputEventsFactory =
+                typeof createTagInputEventsFn === 'function'
+                    ? createTagInputEventsFn
+                    : ({ galleryElement, resolveTagsInputTarget: resolveTarget, updateItemTags: updateTags, getItemContext: getContext, tagStore: store }) => {
+                          if (!galleryElement || typeof galleryElement.addEventListener !== 'function') {
+                              return null;
+                          }
+                          const storeApi = store && typeof store.readRecordTags === 'function' ? store : null;
+
+                          const syncFromStore = (input) => {
+                              if (!storeApi || !input || typeof getContext !== 'function') {
+                                  return;
+                              }
+                              const context = getContext(input);
+                              if (!context || !context.item) {
+                                  return;
+                              }
+                              const entry = storeApi.readRecordTags(context.recordIndex);
+                              const tokens = Array.isArray(entry.tokens) ? entry.tokens : [];
+                              const normalized = entry.normalized || '';
+                              if (input.dataset && input.dataset.tagInputEnhanced === 'true') {
+                                  return;
+                              }
+                              const display = tokens.length ? tokens.join(' ') : normalized;
+                              if (typeof input.value === 'string' && input.value !== display) {
+                                  input.value = display;
+                              }
+                          };
+
+                          return {
+                              bind() {
+                                  galleryElement.addEventListener('input', (event) => {
+                                      const target = resolveTarget(event.target);
+                                      if (!target) {
+                                          return;
+                                      }
+                                      if (target.dataset) {
+                                          target.dataset.editingTags = 'true';
+                                      }
+                                      updateTags(target);
+                                  });
+                                  galleryElement.addEventListener('focusin', (event) => {
+                                      const target = resolveTarget(event.target);
+                                      if (target && target.dataset) {
+                                          target.dataset.editingTags = 'true';
+                                      }
+                                  });
+                                  galleryElement.addEventListener('focusout', (event) => {
+                                      const target = resolveTarget(event.target);
+                                      if (!target) {
+                                          return;
+                                      }
+                                      if (target.dataset) {
+                                          delete target.dataset.editingTags;
+                                      }
+                                      updateTags(target);
+                                      syncFromStore(target);
+                                  });
+                              },
+                              handleChange(event) {
+                                  const target = resolveTarget(event.target);
+                                  if (!target) {
+                                      return false;
+                                  }
+                                  updateTags(target);
+                                  return true;
+                              }
+                          };
+                      };
+
+            const tagInputEvents =
+                typeof tagInputEventsFactory === 'function'
+                    ? tagInputEventsFactory({
+                          galleryElement: dom.gallery,
+                          resolveTagsInputTarget,
+                          updateItemTags,
+                          getItemContext,
+                          tagStore
+                      })
+                    : null;
+
+            if (tagInputEvents && typeof tagInputEvents.bind === 'function') {
+                tagInputEvents.bind();
+            }
 
             if (dom.relicTypeSelect) {
                 dom.relicTypeSelect.addEventListener('change', (event) => {
@@ -314,48 +411,12 @@
                     toggleReviewStatus(effect, button);
                 });
 
-                dom.gallery.addEventListener('input', (event) => {
-                    const tagsInput = resolveTagsInputTarget(event.target);
-                    if (tagsInput) {
-                        updateItemTags(tagsInput);
-                    }
-                });
-
-                dom.gallery.addEventListener('focusin', (event) => {
-                    const target = event.target;
-                    const tagsInput = resolveTagsInputTarget(target);
-                    if (tagsInput) {
-                        tagsInput.dataset.editingTags = 'true';
-                    }
-                });
-
-                dom.gallery.addEventListener('focusout', (event) => {
-                    const target = event.target;
-                    const tagsInput = resolveTagsInputTarget(target);
-                    if (!tagsInput) {
-                        return;
-                    }
-                    delete tagsInput.dataset.editingTags;
-                    updateItemTags(tagsInput);
-                    const isEnhanced = tagsInput.dataset && tagsInput.dataset.tagInputEnhanced === 'true';
-                    if (isEnhanced) {
-                        return;
-                    }
-                    const item = typeof tagsInput.closest === 'function' ? tagsInput.closest('.item') : null;
-                    if (!item) {
-                        return;
-                    }
-                    const nextDisplayValue = (item.dataset && item.dataset.tags) || '';
-                    if (tagsInput.value !== nextDisplayValue) {
-                        tagsInput.value = nextDisplayValue;
-                    }
-                });
-
                 dom.gallery.addEventListener('change', (event) => {
-                    const tagsInput = resolveTagsInputTarget(event.target);
-                    if (tagsInput) {
-                        updateItemTags(tagsInput);
-                        return;
+                    if (tagInputEvents && typeof tagInputEvents.handleChange === 'function') {
+                        const handled = tagInputEvents.handleChange(event);
+                        if (handled) {
+                            return;
+                        }
                     }
                     const relicTypeSelect = event.target.closest('.item-relic-type-select');
                     if (relicTypeSelect) {

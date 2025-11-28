@@ -3320,15 +3320,15 @@ describe('record action handlers', () => {
       }
     });
 
-    const handlers = handlerFactory.createRecordActionHandlers(deps);
-    handlers.updateItemTags(input);
+      const handlers = handlerFactory.createRecordActionHandlers(deps);
+      handlers.updateItemTags(input);
 
-    assert.equal(record.Tags, 'beta gamma delta');
-    assert.deepEqual(appliedTags, [[item, 'beta gamma delta']]);
-    assert.deepEqual(cacheRefreshes, [item]);
-    assert.equal(scheduleCalls.length, 1);
-    assert.equal(filterCalls.length, 1);
-  });
+      assert.equal(record.Tags, 'beta gamma delta');
+      assert.deepEqual(appliedTags, [[item, ['beta', 'gamma', 'delta']]]);
+      assert.deepEqual(cacheRefreshes, [item]);
+      assert.equal(scheduleCalls.length, 1);
+      assert.equal(filterCalls.length, 1);
+    });
 
   test('toggleItemColor normalizes value and toggles selection', () => {
     const record = { ItemColor: 'red' };
@@ -4551,6 +4551,17 @@ describe('gallery events', () => {
     item.appendChild(tagsInput);
     dom.gallery.appendChild(item);
 
+    const tagStore = {
+      normalizeTags: (value) => (value || '').trim(),
+      normalizeTokens: (value) => (value || '').trim().split(/\s+/).filter(Boolean),
+      readRecordTags: () => ({ normalized: record.Tags, tokens: (record.Tags || '').split(/\s+/).filter(Boolean) }),
+      updateRecordTags: (_index, value) => ({
+        normalized: (value || '').trim(),
+        tokens: (value || '').trim().split(/\s+/).filter(Boolean),
+        changed: false
+      })
+    };
+
     galleryEvents.attachEventHandlers({
       switchDataset: () => {},
       buildGallery: () => {},
@@ -4568,6 +4579,7 @@ describe('gallery events', () => {
       applyItemTags: () => {},
       normalizeItemTags: (value) => value || '',
       refreshItemCaches: () => {},
+      tagStore,
       getRecordByIndex: () => record,
       isRecordDuplicate: () => false,
       isRecordFavorite: () => false,
@@ -4608,7 +4620,24 @@ describe('gallery events', () => {
 
     const scheduleSaveCalls = [];
     const setRecordTagsCalls = [];
+    const setRecordTags = (index, value) => {
+      setRecordTagsCalls.push([index, value]);
+      record.Tags = value;
+      return true;
+    };
     const applyItemTagsCalls = [];
+
+    const tagStore = {
+      normalizeTags: (value) => (value || '').trim(),
+      normalizeTokens: (value) => (value || '').trim().split(/\s+/).filter(Boolean),
+      readRecordTags: () => ({ normalized: record.Tags || '', tokens: (record.Tags || '').split(/\s+/).filter(Boolean) }),
+      updateRecordTags: (index, value) => {
+        const normalized = (value || '').trim();
+        const changed = setRecordTags(index, normalized);
+        const tokens = normalized.split(/\s+/).filter(Boolean);
+        return { normalized, tokens, changed };
+      }
+    };
 
     galleryEvents.attachEventHandlers({
       switchDataset: () => {},
@@ -4626,10 +4655,12 @@ describe('gallery events', () => {
       normalizeItemRelicType: (value) => value || '',
       applyItemTags: (target, value) => {
         applyItemTagsCalls.push([target, value]);
-        target.dataset.tags = value;
+        const display = Array.isArray(value) ? value.join(' ') : value;
+        target.dataset.tags = display;
       },
       normalizeItemTags: (value) => (value || '').trim(),
       refreshItemCaches: () => {},
+      tagStore,
       getRecordByIndex: () => record,
       isRecordDuplicate: () => false,
       isRecordFavorite: () => false,
@@ -4637,11 +4668,7 @@ describe('gallery events', () => {
       setRecordFavorite: () => false,
       setRecordItemColor: () => false,
       setRecordItemRelicType: () => false,
-      setRecordTags: (index, value) => {
-        setRecordTagsCalls.push([index, value]);
-        record.Tags = value;
-        return true;
-      },
+      setRecordTags,
       applyMasterDataForRelicType: () => {},
       recordStatusChange: () => false,
       updateRecordEffectValue: () => false,
@@ -4656,7 +4683,7 @@ describe('gallery events', () => {
     focusOutHandlers[0]({ target: tagsInput });
 
     assert.deepEqual(setRecordTagsCalls, [[0, 'alpha beta']]);
-    assert.deepEqual(applyItemTagsCalls, [[item, 'alpha beta']]);
+    assert.deepEqual(applyItemTagsCalls, [[item, ['alpha', 'beta']]]);
     assert.deepEqual(scheduleSaveCalls, ['save']);
     assert.equal(tagsInput.value, 'alpha beta');
   });
@@ -4678,6 +4705,23 @@ describe('gallery events', () => {
     const scheduleSaveCalls = [];
     const setRecordTagsCalls = [];
     const applyItemTagsCalls = [];
+    const setRecordTags = (index, value) => {
+      setRecordTagsCalls.push([index, value]);
+      record.Tags = value;
+      return true;
+    };
+
+    const tagStore = {
+      normalizeTags: (value) => (value || '').trim(),
+      normalizeTokens: (value) => (value || '').trim().split(/\s+/).filter(Boolean),
+      readRecordTags: () => ({ normalized: record.Tags || '', tokens: (record.Tags || '').split(/\s+/).filter(Boolean) }),
+      updateRecordTags: (index, value) => {
+        const normalized = (value || '').trim();
+        const changed = setRecordTags(index, normalized);
+        const tokens = normalized.split(/\s+/).filter(Boolean);
+        return { normalized, tokens, changed };
+      }
+    };
 
     galleryEvents.attachEventHandlers({
       switchDataset: () => {},
@@ -4696,6 +4740,7 @@ describe('gallery events', () => {
       applyItemTags: (...args) => applyItemTagsCalls.push(args),
       normalizeItemTags: (value) => (value || '').trim(),
       refreshItemCaches: () => {},
+      tagStore,
       getRecordByIndex: () => record,
       isRecordDuplicate: () => false,
       isRecordFavorite: () => false,
@@ -4703,11 +4748,7 @@ describe('gallery events', () => {
       setRecordFavorite: () => false,
       setRecordItemColor: () => false,
       setRecordItemRelicType: () => false,
-      setRecordTags: (index, value) => {
-        setRecordTagsCalls.push([index, value]);
-        record.Tags = value;
-        return true;
-      },
+      setRecordTags,
       applyMasterDataForRelicType: () => {},
       recordStatusChange: () => false,
       updateRecordEffectValue: () => false,
@@ -4724,7 +4765,7 @@ describe('gallery events', () => {
 
     assert.equal(record.Tags, 'beta gamma');
     assert.deepEqual(setRecordTagsCalls, [[0, 'beta gamma']]);
-    assert.deepEqual(applyItemTagsCalls, [[item, 'beta gamma']]);
+    assert.deepEqual(applyItemTagsCalls, [[item, ['beta', 'gamma']]]);
     assert.deepEqual(scheduleSaveCalls, ['save']);
   });
 
