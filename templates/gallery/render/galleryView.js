@@ -140,7 +140,8 @@
             getRecordByIndex,
             isRecordDuplicate,
             isRecordFavorite,
-            tagStore
+            tagStore,
+            filterStore
         } = config;
 
         if (!state || !datasetState || !dom) {
@@ -167,6 +168,7 @@
 
         const dataUtils = typeof window !== 'undefined' && window ? window.galleryDataUtils : null;
         const tagStoreApi = tagStore && typeof tagStore.normalizeTags === 'function' ? tagStore : null;
+        const filterStoreApi = filterStore && typeof filterStore.getState === 'function' ? filterStore : null;
         const parseTagTokens =
             tagStoreApi && typeof tagStoreApi.normalizeTokens === 'function'
                 ? (value) => tagStoreApi.normalizeTokens(value)
@@ -698,6 +700,12 @@
         }
 
         function includeDuplicatesNow() {
+            if (filterStoreApi && typeof filterStoreApi.getState === 'function') {
+                const current = filterStoreApi.getState();
+                if (current && Object.prototype.hasOwnProperty.call(current, 'includeDuplicates')) {
+                    return Boolean(current.includeDuplicates);
+                }
+            }
             return Boolean(dom.showDuplicatesToggle && dom.showDuplicatesToggle.checked);
         }
 
@@ -1252,11 +1260,30 @@
         }
 
         function applyFilters() {
-            const searchInputValue = dom.searchInput && dom.searchInput.value ? dom.searchInput.value : '';
-            const term = searchInputValue.trim().toLowerCase();
-            const filter = dom.filterSelect ? dom.filterSelect.value : 'all';
-            const colorFilter = dom.colorFilter ? dom.colorFilter.value : 'all';
-            const showDuplicates = includeDuplicatesNow();
+            const filterState = filterStoreApi && typeof filterStoreApi.getState === 'function' ? filterStoreApi.getState() : null;
+            const searchInputValue =
+                filterState && Object.prototype.hasOwnProperty.call(filterState, 'searchTerm')
+                    ? filterState.searchTerm || ''
+                    : dom.searchInput && dom.searchInput.value
+                      ? dom.searchInput.value
+                      : '';
+            const term = (searchInputValue || '').trim().toLowerCase();
+            const filter =
+                filterState && Object.prototype.hasOwnProperty.call(filterState, 'statusFilter')
+                    ? filterState.statusFilter || 'all'
+                    : dom.filterSelect
+                      ? dom.filterSelect.value
+                      : 'all';
+            const colorFilter =
+                filterState && Object.prototype.hasOwnProperty.call(filterState, 'colorFilter')
+                    ? filterState.colorFilter || 'all'
+                    : dom.colorFilter
+                      ? dom.colorFilter.value
+                      : 'all';
+            const showDuplicates =
+                filterState && Object.prototype.hasOwnProperty.call(filterState, 'includeDuplicates')
+                    ? Boolean(filterState.includeDuplicates)
+                    : includeDuplicatesNow();
             const effectSearches = collectEffectSearchEntries();
             const tagTerms = getTagSearchTerms();
 

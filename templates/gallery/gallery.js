@@ -2061,9 +2061,23 @@
     }
 
     const storesNamespace = typeof window !== 'undefined' && window ? window.galleryStores : null;
+    const createFilterStoreFn =
+        storesNamespace && typeof storesNamespace.createFilterStore === 'function'
+            ? storesNamespace.createFilterStore
+            : null;
     const createTagStoreFn =
         storesNamespace && typeof storesNamespace.createTagStore === 'function'
             ? storesNamespace.createTagStore
+            : null;
+
+    const filterStore =
+        typeof createFilterStoreFn === 'function'
+            ? createFilterStoreFn({
+                  searchTerm: dom.searchInput && typeof dom.searchInput.value === 'string' ? dom.searchInput.value : '',
+                  statusFilter: dom.filterSelect && dom.filterSelect.value ? dom.filterSelect.value : 'all',
+                  colorFilter: dom.colorFilter && dom.colorFilter.value ? dom.colorFilter.value : 'all',
+                  includeDuplicates: Boolean(dom.showDuplicatesToggle && dom.showDuplicatesToggle.checked)
+              })
             : null;
 
     const tagStore =
@@ -2105,7 +2119,8 @@
                   validateMasterDemeritValue,
                   syncDemeritAvailability,
                   createTagInputEvents: eventsFactory ? eventsFactory.createTagInputEvents : null,
-                  tagStore
+                  tagStore,
+                  filterStore
               })
             : null;
 
@@ -2138,7 +2153,8 @@
                   getRecordByIndex,
                   isRecordDuplicate,
                   isRecordFavorite,
-                  tagStore
+                  tagStore,
+                  filterStore
               })
             : null;
 
@@ -2184,6 +2200,7 @@
         normalizeItemTags,
         refreshItemCaches,
         tagStore,
+        filterStore,
         getRecordByIndex,
         isRecordDuplicate,
         isRecordFavorite,
