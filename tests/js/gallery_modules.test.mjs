@@ -834,10 +834,78 @@ describe('gallery filter utils', () => {
     };
     assert.deepEqual(filterUtils.filterItems(multiTagItems, tagAndFilters), [true, false, false]);
   });
+  });
+
+
+describe('gallery render data utils', () => {
+  let renderUtils;
+
+  beforeEach(() => {
+    global.window = {};
+    runScript('templates/gallery/utils/renderData.js');
+    renderUtils = global.window.galleryRenderUtils;
+  });
+
+  afterEach(() => {
+    delete global.window;
+  });
+
+  test('mapItemElementsToState returns defaults for missing entries', () => {
+    const states = renderUtils.mapItemElementsToState([null, undefined, new MockElement('div')]);
+
+    assert.equal(states.length, 3);
+    states.forEach((entry) => {
+      assert.deepEqual(entry, {
+        duplicate: false,
+        searchCache: '',
+        statusCache: '',
+        effectStates: [],
+        favorite: false,
+        itemColor: '',
+        relicType: '',
+        effectValues: [],
+        tagTokens: []
+      });
+    });
+  });
+
+  test('mapItemElementsToState normalizes dataset values through helpers', () => {
+    const item = new MockElement('div');
+    item.dataset.duplicate = 'true';
+    item.dataset.searchCache = ' cache ';
+    item.dataset.statusCache = '|status|';
+    item.dataset.effectStates = 'pass, pending,';
+    item.dataset.favorite = 'true';
+    item.dataset.itemColor = ' Blue ';
+    item.dataset.relicType = 'Deep';
+    item.dataset.effectSlots = JSON.stringify(['atk', 'spd']);
+    item.dataset.tagTokens = 'Alpha  beta ';
+
+    const helpers = {
+      normalizeItemColor: (value) => (value || '').trim().toLowerCase(),
+      normalizeItemRelicType: (value) => (value ? `normalized-${value.toLowerCase()}` : ''),
+      readEffectSlots: (node) => JSON.parse(node.dataset.effectSlots || '[]'),
+      readTagTokens: (node) => (node.dataset.tagTokens || '').split(/\s+/).filter(Boolean)
+    };
+
+    const [state] = renderUtils.mapItemElementsToState([item], helpers);
+
+    assert.deepEqual(state, {
+      duplicate: true,
+      searchCache: ' cache ',
+      statusCache: '|status|',
+      effectStates: ['pass', 'pending'],
+      favorite: true,
+      itemColor: 'blue',
+      relicType: 'normalized-deep',
+      effectValues: ['atk', 'spd'],
+      tagTokens: ['Alpha', 'beta']
+    });
+  });
 });
 
 
-describe('tag input controller', () => {
+  describe('tag input controller', () => {
   let documentMock;
 
   beforeEach(() => {
