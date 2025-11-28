@@ -242,7 +242,10 @@ function createMockDocument() {
     createElement: (tagName) => new MockElement(tagName),
     createDocumentFragment: () => new MockElement('#fragment'),
     body,
-    addEventListener: () => {}
+    addEventListener: () => {},
+    getElementById: (id) => body.querySelector(`#${id}`),
+    querySelectorAll: (selector) => body.querySelectorAll(selector),
+    querySelector: (selector) => body.querySelector(selector)
   };
 }
 
@@ -354,6 +357,105 @@ describe('gallery app state api', () => {
 
     api.setShowOcr(true);
     assert.equal(api.state.showOcr, true);
+  });
+});
+
+describe('gallery app layout', () => {
+  let documentMock;
+
+  beforeEach(() => {
+    global.window = {};
+    documentMock = createMockDocument();
+    global.document = documentMock;
+  });
+
+  afterEach(() => {
+    delete global.window;
+    delete global.document;
+  });
+
+  test('collects layout handles and resolves effect inputs', () => {
+    const ids = [
+      'gallery',
+      'dataset-selector',
+      'dataset-select',
+      'relic-type-select',
+      'gallery-status',
+      'search-input',
+      'effect-search-1',
+      'effect-search-2',
+      'filter-status',
+      'filter-color',
+      'show-duplicates',
+      'show-ocr',
+      'tag-search-input',
+      'lightbox',
+      'lightbox-close',
+      'download-csv',
+      'upload-csv',
+      'upload-csv-input',
+      'storage-status',
+      'gallery-summary',
+      'viewbox-controls',
+      'viewbox-top',
+      'viewbox-left',
+      'viewbox-height',
+      'viewbox-width',
+      'viewbox-apply',
+      'viewbox-reset'
+    ];
+
+    ids.forEach((id) => {
+      const element = new MockElement('div');
+      element.id = id;
+      if (id === 'lightbox') {
+        const img = new MockElement('img');
+        element.appendChild(img);
+      }
+      documentMock.body.appendChild(element);
+    });
+
+    const effectMode = new MockElement('select');
+    effectMode.id = 'effect-mode-1';
+    effectMode.classList.add('effect-search-mode-select');
+    documentMock.body.appendChild(effectMode);
+
+    runScript('templates/gallery/app/layout.js');
+
+    const layout = global.window.galleryAppLayout.createLayoutHandles({
+      documentRef: documentMock
+    });
+
+    const { elements, missingRequired } = layout;
+
+    assert.deepEqual(missingRequired, []);
+    assert.equal(elements.gallery.id, 'gallery');
+    assert.equal(elements.datasetSelect.id, 'dataset-select');
+    assert.equal(elements.searchInput.id, 'search-input');
+    assert.deepEqual(
+      elements.effectSearchInputs.map((node) => node.id),
+      ['effect-search-1', 'effect-search-2']
+    );
+    assert.deepEqual(elements.effectSearchModes.map((node) => node.id), ['effect-mode-1']);
+    assert.equal(elements.lightboxImg.tagName, 'IMG');
+  });
+
+  test('reports missing required handles when layout is incomplete', () => {
+    runScript('templates/gallery/app/layout.js');
+
+    const layout = global.window.galleryAppLayout.createLayoutHandles({
+      documentRef: documentMock
+    });
+
+    assert.deepEqual(layout.missingRequired, [
+      'gallery',
+      'datasetSelect',
+      'searchInput',
+      'filterSelect',
+      'colorFilter',
+      'showDuplicatesToggle',
+      'showOcrToggle'
+    ]);
   });
 });
 
