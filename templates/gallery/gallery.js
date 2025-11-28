@@ -2070,6 +2070,36 @@
             ? storesNamespace.createTagStore
             : null;
 
+    function syncFilterControls(filterState = {}) {
+        if (!filterState || typeof filterState !== 'object') {
+            return;
+        }
+        if (dom.searchInput && typeof filterState.searchTerm === 'string') {
+            const normalized = filterState.searchTerm;
+            if (dom.searchInput.value !== normalized) {
+                dom.searchInput.value = normalized;
+            }
+        }
+        if (dom.filterSelect && typeof filterState.statusFilter === 'string') {
+            const normalized = filterState.statusFilter || 'all';
+            if (dom.filterSelect.value !== normalized) {
+                dom.filterSelect.value = normalized;
+            }
+        }
+        if (dom.colorFilter && typeof filterState.colorFilter === 'string') {
+            const normalized = filterState.colorFilter || 'all';
+            if (dom.colorFilter.value !== normalized) {
+                dom.colorFilter.value = normalized;
+            }
+        }
+        if (dom.showDuplicatesToggle && typeof filterState.includeDuplicates !== 'undefined') {
+            const normalized = Boolean(filterState.includeDuplicates);
+            if (dom.showDuplicatesToggle.checked !== normalized) {
+                dom.showDuplicatesToggle.checked = normalized;
+            }
+        }
+    }
+
     const filterStore =
         typeof createFilterStoreFn === 'function'
             ? createFilterStoreFn({
@@ -2079,6 +2109,10 @@
                   includeDuplicates: Boolean(dom.showDuplicatesToggle && dom.showDuplicatesToggle.checked)
               })
             : null;
+
+    if (filterStore && typeof filterStore.getState === 'function') {
+        syncFilterControls(filterStore.getState());
+    }
 
     const tagStore =
         typeof createTagStoreFn === 'function'
@@ -2179,6 +2213,15 @@
         refreshItemCaches,
         syncTagSearchOptions: syncTagSearchOptionsFromView
     } = galleryView;
+
+    if (filterStore && typeof filterStore.subscribe === 'function') {
+        filterStore.subscribe((nextState) => {
+            syncFilterControls(nextState);
+            if (typeof applyFilters === 'function') {
+                applyFilters();
+            }
+        });
+    }
 
     syncTagSearchOptions = typeof syncTagSearchOptionsFromView === 'function' ? syncTagSearchOptionsFromView : null;
 
