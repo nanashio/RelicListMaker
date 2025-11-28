@@ -908,40 +908,29 @@
     const masterDemeritCsvByType = parseMasterCsvByTypeJson(masterDemeritCsvMapJson);
     const masterDemeritRulesByType = parseMasterDemeritRulesByTypeJson(masterDemeritRulesMapJson);
 
-    const dom = {
-        gallery: document.getElementById('gallery'),
-        datasetSelector: document.getElementById('dataset-selector'),
-        datasetSelect: document.getElementById('dataset-select'),
-        relicTypeSelect: document.getElementById('relic-type-select'),
-        galleryStatus: document.getElementById('gallery-status'),
-        searchInput: document.getElementById('search-input'),
-        effectSearchInputs: [
-            document.getElementById('effect-search-1'),
-            document.getElementById('effect-search-2'),
-            document.getElementById('effect-search-3')
-        ].filter(Boolean),
-        effectSearchModes: Array.from(document.querySelectorAll('.effect-search-mode-select')),
-        tagSearchInput: document.getElementById('tag-search-input'),
-        filterSelect: document.getElementById('filter-status'),
-        colorFilter: document.getElementById('filter-color'),
-        showDuplicatesToggle: document.getElementById('show-duplicates'),
-        showOcrToggle: document.getElementById('show-ocr'),
-        lightbox: document.getElementById('lightbox'),
-        lightboxImg: document.querySelector('#lightbox img'),
-        lightboxClose: document.getElementById('lightbox-close'),
-        downloadCsvButton: document.getElementById('download-csv'),
-        uploadCsvButton: document.getElementById('upload-csv'),
-        uploadCsvInput: document.getElementById('upload-csv-input'),
-        storageStatus: document.getElementById('storage-status'),
-        summary: document.getElementById('gallery-summary'),
-        viewBoxContainer: document.getElementById('viewbox-controls'),
-        viewBoxTopInput: document.getElementById('viewbox-top'),
-        viewBoxLeftInput: document.getElementById('viewbox-left'),
-        viewBoxHeightInput: document.getElementById('viewbox-height'),
-        viewBoxWidthInput: document.getElementById('viewbox-width'),
-        viewBoxApplyButton: document.getElementById('viewbox-apply'),
-        viewBoxResetButton: document.getElementById('viewbox-reset')
-    };
+    const layoutNamespace =
+        typeof window !== 'undefined' && window && window.galleryAppLayout
+            ? window.galleryAppLayout
+            : null;
+    const createLayoutHandles =
+        layoutNamespace && typeof layoutNamespace.createLayoutHandles === 'function'
+            ? layoutNamespace.createLayoutHandles
+            : null;
+
+    const layoutHandles = createLayoutHandles
+        ? createLayoutHandles({ document })
+        : { elements: {}, missingRequired: [] };
+
+    const dom = layoutHandles.elements || {};
+    dom.effectSearchInputs = Array.isArray(dom.effectSearchInputs) ? dom.effectSearchInputs : [];
+    dom.effectSearchModes = Array.isArray(dom.effectSearchModes) ? dom.effectSearchModes : [];
+
+    const missingLayout = Array.isArray(layoutHandles.missingRequired)
+        ? layoutHandles.missingRequired
+        : [];
+    if (missingLayout.length) {
+        console.warn('必須のギャラリー要素が見つかりません:', missingLayout.join(', '));
+    }
 
     const viewBoxStorageKey = createViewBoxStorageKey(initialCsvPath);
 

@@ -9,6 +9,7 @@ const MODULE_DEPENDENCIES = [
     './utils/renderData.js',
     './state/store.js',
     './stores/tagStore.js',
+    './app/layout.js',
     './app/stateApi.js',
     './dataset/manager.js',
     './storage/utils.js',

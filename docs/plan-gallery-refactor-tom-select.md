@@ -145,3 +145,9 @@
 - スプリント 3 のスタイル名前空間化フォロー。
   - Playwright 用フィクスチャ構築スクリプト（`tests/browser/serve_fixture.py`）で `templates/gallery/styles/` ディレクトリをコピー対象に追加し、TomSelect オーバーライド CSS が配信されない 404 を防止。
 - テスト: `npm run test:browser -- tests/browser/viewer.spec.ts` を試行。`npx playwright install --with-deps chromium` がネットワーク制限で失敗（apt 403）したためブラウザ取得不可。
+
+## 進捗メモ（2025-03-31）
+- スプリント 3 のテンプレート分離と依存順序の明示を継続。
+  - レイアウト要素の取得を `templates/gallery/app/layout.js` に切り出し、`gallery.js` はレイアウトハンドル経由で DOM 依存を解決する形に変更。必須要素の欠落は警告ログで可視化するようにして、IIFE 公開のコンポーネント境界を明示した。
+  - ギャラリー生成時のコピー対象（`gallery/assets.py` と `tests/test_generate_gallery.py`）にレイアウトモジュールを追加し、ビルド済みビューアでの読み込み漏れを防止。JS モジュールテストにレイアウトハンドルの検証ケースを追加して、依存順序の変化を自動検知できるようにした。
+- テスト: `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行。
