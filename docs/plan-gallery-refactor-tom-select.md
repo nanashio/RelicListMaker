@@ -115,3 +115,9 @@
   - ギャラリー依存モジュールのコピーリスト（`gallery/assets.py` と `templates/gallery/index.js`）に新ユーティリティを組み込み、生成物での読込漏れを防止。
   - `tests/js/gallery_modules.test.mjs` にレンダーデータユーティリティの検証を追加し、`tests/test_generate_gallery.py` でコピー対象を監視するように更新。
 - テスト: `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行。
+
+## 進捗メモ（2025-03-26）
+- スプリント 3 のデータ整形とフィルター適用の分離を継続。
+  - アイテム状態のスナップショットを管理する `createItemStateResolver` を `renderData` に追加し、フィルター評価前に DOM からの再収集を一元化。
+  - `galleryView` がタグ・色・重複・お気に入り更新時に状態キャッシュを汚染し、`applyFilters` はキャッシュ経由でプレーンデータを受け取る形に整理。ビルド時にキャッシュを初期化することでデータ→UI の一方向依存を明示。
+- テスト: `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行。

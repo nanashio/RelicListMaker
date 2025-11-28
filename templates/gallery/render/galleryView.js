@@ -454,6 +454,17 @@
                   ? renderUtilsNamespace.mapItemElementsToState
                   : fallbackMapItemElementsToState;
 
+        const createItemStateResolverFn =
+            typeof config.createItemStateResolver === 'function'
+                ? config.createItemStateResolver
+                : renderUtilsNamespace && typeof renderUtilsNamespace.createItemStateResolver === 'function'
+                  ? renderUtilsNamespace.createItemStateResolver
+                  : null;
+
+        let itemStateResolver = null;
+        let itemStateCache = [];
+        let itemStateCacheDirty = true;
+
         if (!hasDocument && typeof createElementConfig !== 'function') {
             throw new Error('createGalleryView: createElement helper is required when document is unavailable');
         }
@@ -880,6 +891,8 @@
             const { fragment, items } = renderEntriesToFragment(entries);
 
             stateControls.setItems(items);
+            markItemStateCacheDirty();
+            refreshItemStateCache({ force: true });
 
             if (fragmentHasContent(fragment) && dom.gallery) {
                 dom.gallery.appendChild(fragment);
@@ -950,6 +963,7 @@
             if (!item) {
                 return;
             }
+            markItemStateCacheDirty();
             const normalized = normalizeItemColor(colorKey);
             colorOptions.forEach((entry) => {
                 if (entry.className) {
@@ -978,6 +992,7 @@
             if (!item) {
                 return;
             }
+            markItemStateCacheDirty();
             const normalized = normalizeItemRelicType(relicType);
             if (normalized) {
                 item.dataset.relicType = normalized;
@@ -1002,6 +1017,7 @@
             if (!item) {
                 return;
             }
+            markItemStateCacheDirty();
             const entry = buildTagEntry(tagsValue);
             const normalized = entry.normalized;
             const tokens = Array.isArray(entry.tokens) ? entry.tokens : [];
@@ -1051,6 +1067,7 @@
             if (!item) {
                 return;
             }
+            markItemStateCacheDirty();
             const button = item.querySelector('.favorite-toggle');
             const active = Boolean(isFavorite);
             item.dataset.favorite = active ? 'true' : 'false';
@@ -1075,6 +1092,7 @@
             if (!item) {
                 return;
             }
+            markItemStateCacheDirty();
             const value = Boolean(isDuplicate);
             item.dataset.duplicate = value ? 'true' : 'false';
             item.classList.toggle('is-duplicate', value);
@@ -1238,10 +1256,56 @@
             return parseTagTokensValue(tokens);
         }
 
+        const itemStateHelpers = {
+            normalizeItemColor,
+            normalizeItemRelicType,
+            readEffectSlots,
+            readTagTokens
+        };
+
+        function getItemStateResolver() {
+            if (itemStateResolver || typeof createItemStateResolverFn !== 'function') {
+                return itemStateResolver;
+            }
+            itemStateResolver = createItemStateResolverFn({
+                mapItemElementsToState: mapItemElementsToStateFn,
+                helpers: itemStateHelpers
+            });
+            return itemStateResolver;
+        }
+
+        function markItemStateCacheDirty() {
+            itemStateCacheDirty = true;
+        }
+
+        function refreshItemStateCache({ force = false } = {}) {
+            const resolver = getItemStateResolver();
+            if (!force && !itemStateCacheDirty) {
+                if (resolver && typeof resolver.getAll === 'function') {
+                    return resolver.getAll();
+                }
+                return itemStateCache;
+            }
+
+            const items = Array.isArray(state.items) ? state.items : [];
+            if (resolver && typeof resolver.refresh === 'function') {
+                itemStateCache = resolver.refresh(items, itemStateHelpers);
+            } else {
+                itemStateCache = mapItemElementsToStateFn(items, itemStateHelpers);
+            }
+            itemStateCacheDirty = false;
+            return itemStateCache;
+        }
+
+        function getItemStates() {
+            return refreshItemStateCache({ force: false });
+        }
+
         function refreshItemCaches(item) {
             if (!item) {
                 return;
             }
+            markItemStateCacheDirty();
             const baseTokens = [];
 
             const imageToken = item.dataset.image;
@@ -1348,12 +1412,7 @@
             const effectSearches = collectEffectSearchEntries();
             const tagTerms = getTagSearchTerms();
 
-            const itemStates = mapItemElementsToStateFn(state.items, {
-                normalizeItemColor,
-                normalizeItemRelicType,
-                readEffectSlots,
-                readTagTokens
-            });
+            const itemStates = getItemStates();
 
             const options = {
                 term,
