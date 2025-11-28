@@ -141,7 +141,8 @@
             isRecordDuplicate,
             isRecordFavorite,
             tagStore,
-            filterStore
+            filterStore,
+            filterStateBridge
         } = config;
 
         if (!state || !datasetState || !dom) {
@@ -169,6 +170,8 @@
         const dataUtils = typeof window !== 'undefined' && window ? window.galleryDataUtils : null;
         const tagStoreApi = tagStore && typeof tagStore.normalizeTags === 'function' ? tagStore : null;
         const filterStoreApi = filterStore && typeof filterStore.getState === 'function' ? filterStore : null;
+        const filterStateResolver =
+            filterStateBridge && typeof filterStateBridge.getState === 'function' ? filterStateBridge : null;
         const parseTagTokens =
             tagStoreApi && typeof tagStoreApi.normalizeTokens === 'function'
                 ? (value) => tagStoreApi.normalizeTokens(value)
@@ -783,6 +786,15 @@
         }
 
         function resolveFilterState() {
+            if (filterStateResolver && typeof filterStateResolver.getState === 'function') {
+                const current = filterStateResolver.getState() || {};
+                return {
+                    searchTerm: current.searchTerm || '',
+                    statusFilter: current.statusFilter || 'all',
+                    colorFilter: current.colorFilter || 'all',
+                    includeDuplicates: Boolean(current.includeDuplicates)
+                };
+            }
             if (filterStoreApi && typeof filterStoreApi.getState === 'function') {
                 const current = filterStoreApi.getState() || {};
                 return {
@@ -796,6 +808,9 @@
         }
 
         function includeDuplicatesNow() {
+            if (filterStateResolver && typeof filterStateResolver.includeDuplicates === 'function') {
+                return Boolean(filterStateResolver.includeDuplicates());
+            }
             const filterState = resolveFilterState();
             return Boolean(filterState.includeDuplicates);
         }
