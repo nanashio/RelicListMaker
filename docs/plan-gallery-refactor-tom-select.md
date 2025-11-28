@@ -151,3 +151,9 @@
   - レイアウト要素の取得を `templates/gallery/app/layout.js` に切り出し、`gallery.js` はレイアウトハンドル経由で DOM 依存を解決する形に変更。必須要素の欠落は警告ログで可視化するようにして、IIFE 公開のコンポーネント境界を明示した。
   - ギャラリー生成時のコピー対象（`gallery/assets.py` と `tests/test_generate_gallery.py`）にレイアウトモジュールを追加し、ビルド済みビューアでの読み込み漏れを防止。JS モジュールテストにレイアウトハンドルの検証ケースを追加して、依存順序の変化を自動検知できるようにした。
 - テスト: `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行。
+
+## 進捗メモ（2025-04-01）
+- スプリント 3 のビュー生成・データ整形分離をフォロー。
+  - アイテムサマリー計算を DOM 走査から `galleryRenderUtils` の状態キャッシュ経由に切り替え、`templates/gallery/utils/summary.js` を追加して正規化・集計ロジックを共通化。`galleryView` はタグ/効果状態のキャッシュを利用して件数を算出するようになり、描画直後の状態崩れを防止。
+  - 効果スロットのステータスをデータセット属性として保存し、`renderData` のマッピングとコピー対象リスト（`gallery/assets.py` と `tests/test_generate_gallery.py`）に反映してビルド成果物でも欠落しないようにした。
+- テスト: `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行。

@@ -39,6 +39,7 @@ def test_copy_gallery_modules_copies_required_viewer_scripts(tmp_path):
         Path("utils/filter.js"),
         Path("utils/filterState.js"),
         Path("utils/renderData.js"),
+        Path("utils/summary.js"),
         Path("styles/tom-select.css"),
     ]
 

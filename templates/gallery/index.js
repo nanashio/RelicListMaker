@@ -7,6 +7,7 @@ const MODULE_DEPENDENCIES = [
     './utils/filter.js',
     './utils/filterState.js',
     './utils/renderData.js',
+    './utils/summary.js',
     './state/store.js',
     './stores/tagStore.js',
     './app/layout.js',

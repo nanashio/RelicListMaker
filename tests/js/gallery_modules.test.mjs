@@ -1093,6 +1093,7 @@ describe('gallery render data utils', () => {
         searchCache: '',
         statusCache: '',
         effectStates: [],
+        effectSlotStatuses: [],
         favorite: false,
         itemColor: '',
         relicType: '',
@@ -1108,6 +1109,7 @@ describe('gallery render data utils', () => {
     item.dataset.searchCache = ' cache ';
     item.dataset.statusCache = '|status|';
     item.dataset.effectStates = 'pass, pending,';
+    item.dataset.effectSlotStatuses = JSON.stringify(['pass', 'corrected']);
     item.dataset.favorite = 'true';
     item.dataset.itemColor = ' Blue ';
     item.dataset.relicType = 'Deep';
@@ -1128,12 +1130,57 @@ describe('gallery render data utils', () => {
       searchCache: ' cache ',
       statusCache: '|status|',
       effectStates: ['pass', 'pending'],
+      effectSlotStatuses: ['pass', 'corrected'],
       favorite: true,
       itemColor: 'blue',
       relicType: 'normalized-deep',
       effectValues: ['atk', 'spd'],
       tagTokens: ['Alpha', 'beta']
     });
+  });
+});
+
+
+describe('gallery summary utils', () => {
+  let summaryUtils;
+
+  beforeEach(() => {
+    global.window = {};
+    runScript('templates/gallery/utils/summary.js');
+    summaryUtils = global.window.gallerySummaryUtils;
+  });
+
+  afterEach(() => {
+    delete global.window;
+  });
+
+  test('summarize counts pending and fully confirmed items', () => {
+    const calculator = summaryUtils.createSummaryCalculator({
+      normalizeStatus: (value) => (value || '').toString().trim().toLowerCase()
+    });
+
+    const result = calculator.summarize([
+      { effectSlotStatuses: ['pass', 'corrected', 'pass'] },
+      { effectSlotStatuses: ['pending', 'pass', 'pass'] },
+      { effectStates: ['pending'] },
+      { effectSlotStatuses: [] }
+    ]);
+
+    assert.equal(result.totalCount, 4);
+    assert.equal(result.fullyConfirmedCount, 1);
+    assert.equal(result.pendingCount, 3);
+  });
+
+  test('summarize normalizes string representations of statuses', () => {
+    const calculator = summaryUtils.createSummaryCalculator();
+    const result = calculator.summarize([
+      { effectSlotStatuses: '["PASS", "Corrected", "pending"]' },
+      { effectStates: 'pass, pending' }
+    ]);
+
+    assert.equal(result.totalCount, 2);
+    assert.equal(result.fullyConfirmedCount, 0);
+    assert.equal(result.pendingCount, 2);
   });
 });
 
