@@ -134,3 +134,14 @@
   - `galleryView` が新リゾルバ経由でフィルターオプションを取得するように変更し、`applyFilters` のオプション組み立てを単純化して UI 層から状態解決を切り離した。
   - `tests/js/gallery_modules.test.mjs` にフィルターオプションリゾルバの挙動を検証するテストを追加。
 - テスト: `pytest` および `node --test tests/js/gallery_modules.test.mjs` を実行。
+
+## 進捗メモ（2025-03-29）
+- スプリント 3 のスタイル名前空間化を着手。
+  - `gallery/render.py` で body に `gallery-page` クラスを付与し、TomSelect 関連のオーバーライドを `templates/gallery/styles/tom-select.css` に分離してギャラリー画面内だけに作用するよう整理。
+  - ギャラリーアセットのコピー対象と `test_copy_gallery_modules_copies_required_viewer_scripts` に TomSelect オーバーライド CSS を追加し、ビルド生成物での読み込み漏れを検出できるようにした。
+- テスト: `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行。
+
+## 進捗メモ（2025-03-30）
+- スプリント 3 のスタイル名前空間化フォロー。
+  - Playwright 用フィクスチャ構築スクリプト（`tests/browser/serve_fixture.py`）で `templates/gallery/styles/` ディレクトリをコピー対象に追加し、TomSelect オーバーライド CSS が配信されない 404 を防止。
+- テスト: `npm run test:browser -- tests/browser/viewer.spec.ts` を試行。`npx playwright install --with-deps chromium` がネットワーク制限で失敗（apt 403）したためブラウザ取得不可。

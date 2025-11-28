@@ -37,6 +37,7 @@ ADDITIONAL_GALLERY_SCRIPTS: tuple[str, ...] = (
     "gallery/events/galleryEvents.js",
     "gallery/vendor/tom-select/tom-select.complete.js",
     "gallery/vendor/tom-select/tom-select.css",
+    "gallery/styles/tom-select.css",
 )
 
 

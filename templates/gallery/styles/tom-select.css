@@ -1,0 +1,15 @@
+/* TomSelect オーバーライドをギャラリー画面専用にまとめたスタイル */
+
+.gallery-page .search-field .ts-wrapper {
+    width: 100%;
+    min-width: 0;
+}
+
+.gallery-page .search-field .ts-control {
+    border-radius: var(--radius-md);
+    min-height: var(--toolbar-control-height);
+}
+
+.gallery-page .item-tags-control[data-tag-input-root='true'] .ts-wrapper {
+    width: 100%;
+}
