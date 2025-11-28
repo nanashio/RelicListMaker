@@ -108,3 +108,10 @@
   - `gallery.js` にフィルター値を DOM と同期する `syncFilterControls` を追加し、`filterStore` の購読で UI 反映と `applyFilters` の再実行を統一してストアを単一ソース化。
   - `galleryView` 側の `includeDuplicatesNow` と `applyFilters` が共通のフィルター状態解決関数を経由するように整理し、DOM フォールバックの扱いを明示。
 - テスト: `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行。
+
+## 進捗メモ（2025-03-25）
+- スプリント 3 のビュー生成とデータ整形の分離を開始。
+  - アイテム DOM からフィルター用プレーンデータを生成する `gallery/utils/renderData.js` を追加し、`applyFilters` がユーティリティ経由でデータ整形された配列を扱うように変更。
+  - ギャラリー依存モジュールのコピーリスト（`gallery/assets.py` と `templates/gallery/index.js`）に新ユーティリティを組み込み、生成物での読込漏れを防止。
+  - `tests/js/gallery_modules.test.mjs` にレンダーデータユーティリティの検証を追加し、`tests/test_generate_gallery.py` でコピー対象を監視するように更新。
+- テスト: `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行。

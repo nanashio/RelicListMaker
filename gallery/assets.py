@@ -15,6 +15,7 @@ ADDITIONAL_GALLERY_SCRIPTS: tuple[str, ...] = (
     "gallery/utils/records.js",
     "gallery/dataset/utils.js",
     "gallery/utils/filter.js",
+    "gallery/utils/renderData.js",
     "gallery/state/store.js",
     "gallery/stores/filterStore.js",
     "gallery/stores/tagStore.js",

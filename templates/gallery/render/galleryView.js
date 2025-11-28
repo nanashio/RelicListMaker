@@ -345,6 +345,8 @@
             return { setOptions, getValues, onChange, clearSelection };
         })();
         const filterNamespace = typeof window !== 'undefined' && window ? window.galleryFilterUtils : null;
+        const renderUtilsNamespace =
+            typeof window !== 'undefined' && window ? window.galleryRenderUtils : null;
 
         const stateControls = {
             setShowOcr(value) {
@@ -391,6 +393,66 @@
         if (typeof filterItemsFn !== 'function' && typeof evaluateItemVisibilityFn !== 'function') {
             throw new Error('createGalleryView: filter helpers are not available');
         }
+
+        const fallbackMapItemElementsToState = (items, helpers = {}) => {
+            const normalizeItemColorHelper =
+                typeof helpers.normalizeItemColor === 'function'
+                    ? helpers.normalizeItemColor
+                    : (value) => value;
+            const normalizeItemRelicTypeHelper =
+                typeof helpers.normalizeItemRelicType === 'function'
+                    ? helpers.normalizeItemRelicType
+                    : (value) => value;
+            const readEffectSlotsHelper =
+                typeof helpers.readEffectSlots === 'function' ? helpers.readEffectSlots : () => [];
+            const readTagTokensHelper =
+                typeof helpers.readTagTokens === 'function' ? helpers.readTagTokens : () => [];
+
+            const list =
+                Array.isArray(items) || (items && typeof items.length === 'number')
+                    ? Array.from(items)
+                    : [];
+
+            return list.map((item) => {
+                if (!item || !item.dataset) {
+                    return {
+                        duplicate: false,
+                        searchCache: '',
+                        statusCache: '',
+                        effectStates: [],
+                        favorite: false,
+                        itemColor: '',
+                        relicType: '',
+                        effectValues: [],
+                        tagTokens: []
+                    };
+                }
+
+                const effectStates = (item.dataset.effectStates || '')
+                    .split(',')
+                    .map((value) => (value == null ? '' : String(value).trim()))
+                    .filter((value) => value !== '');
+
+                return {
+                    duplicate: item.dataset.duplicate === 'true',
+                    searchCache: item.dataset.searchCache || '',
+                    statusCache: item.dataset.statusCache || '',
+                    effectStates,
+                    favorite: item.dataset.favorite === 'true',
+                    itemColor: normalizeItemColorHelper(item.dataset.itemColor || ''),
+                    relicType: normalizeItemRelicTypeHelper(item.dataset.relicType || ''),
+                    effectValues: readEffectSlotsHelper(item),
+                    tagTokens: readTagTokensHelper(item)
+                };
+            });
+        };
+
+        const mapItemElementsToStateFn =
+            typeof config.mapItemElementsToState === 'function'
+                ? config.mapItemElementsToState
+                : renderUtilsNamespace && typeof renderUtilsNamespace.mapItemElementsToState === 'function'
+                  ? renderUtilsNamespace.mapItemElementsToState
+                  : fallbackMapItemElementsToState;
 
         if (!hasDocument && typeof createElementConfig !== 'function') {
             throw new Error('createGalleryView: createElement helper is required when document is unavailable');
@@ -1286,31 +1348,11 @@
             const effectSearches = collectEffectSearchEntries();
             const tagTerms = getTagSearchTerms();
 
-            const itemStates = state.items.map((item) => {
-                if (!item) {
-                    return {
-                        duplicate: false,
-                        searchCache: '',
-                        statusCache: '',
-                        effectStates: [],
-                        favorite: false,
-                        itemColor: '',
-                        relicType: '',
-                        effectValues: [],
-                        tagTokens: []
-                    };
-                }
-                return {
-                    duplicate: item.dataset.duplicate === 'true',
-                    searchCache: item.dataset.searchCache || '',
-                    statusCache: item.dataset.statusCache || '',
-                    effectStates: (item.dataset.effectStates || '').split(',').filter(Boolean),
-                    favorite: item.dataset.favorite === 'true',
-                    itemColor: normalizeItemColor(item.dataset.itemColor || ''),
-                    relicType: normalizeItemRelicType(item.dataset.relicType || ''),
-                    effectValues: readEffectSlots(item),
-                    tagTokens: readTagTokens(item)
-                };
+            const itemStates = mapItemElementsToStateFn(state.items, {
+                normalizeItemColor,
+                normalizeItemRelicType,
+                readEffectSlots,
+                readTagTokens
             });
 
             const options = {

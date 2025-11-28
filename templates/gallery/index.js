@@ -5,6 +5,7 @@ const MODULE_DEPENDENCIES = [
     './utils/records.js',
     './dataset/utils.js',
     './utils/filter.js',
+    './utils/renderData.js',
     './state/store.js',
     './stores/tagStore.js',
     './app/stateApi.js',
