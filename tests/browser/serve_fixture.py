@@ -45,6 +45,7 @@ def _build_fixture_tree(base_dir: Path) -> None:
         "components",
         "dataset",
         "events",
+        "js",
         "styles",
         "render",
         "state",

@@ -740,6 +740,54 @@ describe('gallery record utils', () => {
   });
 });
 
+describe('filter predicate modules', () => {
+  test('registerFilterPredicatesModule attaches exports to a target', async () => {
+    const target = {};
+    const module = await import('../../templates/gallery/js/modules/filterPredicates.js');
+
+    const registered = module.registerFilterPredicatesModule(target);
+
+    assert.ok(registered);
+    assert.ok(target.galleryModules.filterPredicates);
+    assert.equal(typeof registered.buildItemSearchCaches, 'function');
+    assert.equal(typeof registered.evaluateItemVisibility, 'function');
+    assert.equal(typeof registered.filterItems, 'function');
+  });
+
+  test('evaluateItemVisibility mirrors duplicate and status handling', async () => {
+    const { buildItemSearchCaches, evaluateItemVisibility, filterItems } = await import(
+      '../../templates/gallery/js/modules/filterPredicates.js'
+    );
+
+    const caches = buildItemSearchCaches({
+      baseTokens: ['Alpha'],
+      effects: [{ prediction: '炎', status: 'pass', raw: '', correction: '' }]
+    });
+
+    const duplicateHidden = evaluateItemVisibility(
+      { ...caches, duplicate: true, favorite: false, itemColor: '', effectValues: [], tagTokens: [] },
+      { term: 'alpha', includeDuplicates: false }
+    );
+    assert.equal(duplicateHidden, false);
+
+    const results = filterItems(
+      [
+        {
+          ...caches,
+          duplicate: false,
+          favorite: true,
+          itemColor: 'red',
+          effectValues: ['炎'],
+          tagTokens: ['tag']
+        }
+      ],
+      { term: 'alpha', filter: 'favorite', colorFilter: 'red', includeDuplicates: true }
+    );
+
+    assert.deepEqual(results, [true]);
+  });
+});
+
 describe('gallery filter utils', () => {
   let filterUtils;
 
