@@ -10,11 +10,17 @@ import sys
 import zlib
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from gallery.template_parts import render_template_with_partials
+
 DEFAULT_ITEM_IMAGE_VIEW_BOX = "inset(0px 180px 0px 0px)"  # gallery.DEFAULT_ITEM_IMAGE_VIEW_BOX と同期すること
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    return REPO_ROOT
 
 
 def _build_fixture_tree(base_dir: Path) -> None:
@@ -66,6 +72,9 @@ def _build_fixture_tree(base_dir: Path) -> None:
     )
 
     template = (templates_dir / "gallery.html").read_text(encoding="utf-8")
+    template = render_template_with_partials(
+        template, partials_dir=templates_dir / "gallery" / "partials"
+    )
     master_options = [
         "神秘",
         "最大HP上昇",
