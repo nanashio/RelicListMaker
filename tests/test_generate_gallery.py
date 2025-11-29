@@ -33,6 +33,7 @@ def test_copy_gallery_modules_copies_required_viewer_scripts(tmp_path):
         Path("stores/filterStore.js"),
         Path("stores/tagStore.js"),
         Path("app/layout.js"),
+        Path("components/tomSelectAdapterFactory.js"),
         Path("components/tomSelectAdapter.js"),
         Path("events/tagInputEvents.js"),
         Path("render/effectViewModel.js"),

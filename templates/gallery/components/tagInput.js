@@ -1,5 +1,27 @@
 (() => {
-    function createDefaultTomSelectAdapter(TomSelectClass, documentRef) {
+    function resolveAdapterResolver(resolverConfig) {
+        if (typeof resolverConfig === 'function') {
+            return resolverConfig;
+        }
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        if (namespace && typeof namespace.resolveTomSelectAdapter === 'function') {
+            return namespace.resolveTomSelectAdapter;
+        }
+        return null;
+    }
+
+    function resolveAdapterFactory(factoryConfig) {
+        if (typeof factoryConfig === 'function') {
+            return factoryConfig;
+        }
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        if (namespace && typeof namespace.createTomSelectAdapter === 'function') {
+            return namespace.createTomSelectAdapter;
+        }
+        return null;
+    }
+
+    function createDefaultTomSelectAdapterFallback(TomSelectClass, documentRef) {
         const hasDom = Boolean(documentRef && typeof documentRef.createElement === 'function');
         const hasTomSelect = typeof TomSelectClass === 'function';
 
@@ -118,6 +140,20 @@
         };
     }
 
+    function resolveDefaultFactory(defaultFactoryConfig, fallbackFactory = null) {
+        if (typeof defaultFactoryConfig === 'function') {
+            return defaultFactoryConfig;
+        }
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        if (namespace && typeof namespace.createDefaultTomSelectAdapter === 'function') {
+            return namespace.createDefaultTomSelectAdapter;
+        }
+        if (typeof fallbackFactory === 'function') {
+            return fallbackFactory;
+        }
+        return null;
+    }
+
     function createFallbackFormatter(formatTagTokens, parseTagTokens) {
         return (value) => {
             if (Array.isArray(value)) {
@@ -176,28 +212,37 @@
         const fallbackFormatter = createFallbackFormatter(formatTagTokens, parseTagTokens);
 
         const hasDom = Boolean(documentRef && typeof documentRef.createElement === 'function');
-        const createTomSelectAdapterFn =
-            typeof createTomSelectAdapterConfig === 'function'
-                ? createTomSelectAdapterConfig
-                : (() => {
-                      const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-                      return namespace && typeof namespace.createTomSelectAdapter === 'function'
-                          ? namespace.createTomSelectAdapter
-                          : null;
-                  })();
-        const tomSelectAdapter = (() => {
-            if (typeof createTomSelectAdapterFn === 'function') {
-                const adapter = createTomSelectAdapterFn({
-                    TomSelect: TomSelectClass,
-                    documentRef,
-                    isDebugEnabled: isTagDebugEnabled
-                });
-                if (adapter) {
-                    return adapter;
-                }
-            }
-            return createDefaultTomSelectAdapter(TomSelectClass, documentRef);
-        })();
+        const resolveTomSelectAdapterFn = resolveAdapterResolver(config.resolveTomSelectAdapter);
+        const createTomSelectAdapterFn = resolveAdapterFactory(createTomSelectAdapterConfig);
+        const defaultTomSelectAdapterFactory = resolveDefaultFactory(
+            config.createDefaultTomSelectAdapter,
+            createDefaultTomSelectAdapterFallback
+        );
+        const tomSelectAdapter = resolveTomSelectAdapterFn
+            ? resolveTomSelectAdapterFn({
+                  createTomSelectAdapter: createTomSelectAdapterFn,
+                  createDefaultTomSelectAdapter: defaultTomSelectAdapterFactory,
+                  TomSelect: TomSelectClass,
+                  documentRef,
+                  isDebugEnabled: isTagDebugEnabled
+              })
+            : (() => {
+                  const factory = createTomSelectAdapterFn;
+                  if (typeof factory === 'function') {
+                      const adapter = factory({
+                          TomSelect: TomSelectClass,
+                          documentRef,
+                          isDebugEnabled: isTagDebugEnabled
+                      });
+                      if (adapter) {
+                          return adapter;
+                      }
+                  }
+                  if (typeof defaultTomSelectAdapterFactory === 'function') {
+                      return defaultTomSelectAdapterFactory(TomSelectClass, documentRef);
+                  }
+                  return null;
+              })();
 
         if (!hasDom || !tomSelectAdapter || !tomSelectAdapter.hasSupport) {
             return {
