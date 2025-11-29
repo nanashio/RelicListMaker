@@ -1,0 +1,77 @@
+<div class="toolbar">
+    <div class="toolbar-row toolbar-row--primary">
+        <div class="dataset-selector" id="dataset-selector">
+            <label for="dataset-select">対象</label>
+            <select id="dataset-select"></select>
+        </div>
+        <p id="gallery-summary" class="gallery-summary" role="status" aria-live="polite"></p>
+    </div>
+    <div class="toolbar-row toolbar-row--filters">
+        <select id="relic-type-select" class="relic-type-select"></select>
+        <select id="filter-status">
+            <option value="all">すべて</option>
+            <option value="with-pending">未レビューを含む</option>
+            <option value="resolved">確認済み / 修正済みのみ</option>
+            <option value="favorite">お気に入りのみ</option>
+        </select>
+        <select id="filter-color">
+            <option value="all">色フィルタなし</option>
+            <option value="red">赤のみ</option>
+            <option value="yellow">黄のみ</option>
+            <option value="green">緑のみ</option>
+            <option value="blue">青のみ</option>
+            <option value="none">色なしのみ</option>
+        </select>
+        <label class="toggle-duplicates" title="重複項目の表示切替">
+            <input type="checkbox" id="show-duplicates">
+            重複も表示
+        </label>
+        <label class="toggle-ocr">
+            <input type="checkbox" id="show-ocr">
+            OCRを表示
+        </label>
+    </div>
+    <div class="toolbar-row toolbar-row--search">
+        <div class="search-field search-field--effects">
+            <div class="search-field-header">
+                <span class="search-label">効果検索</span>
+            </div>
+            <div class="effect-search-inputs">
+                <div class="effect-search-row">
+                    <label class="effect-search-mode-label" for="effect-search-mode-1">条件</label>
+                    <select id="effect-search-mode-1" class="effect-search-mode-select">
+                        <option value="and">AND</option>
+                        <option value="or">OR</option>
+                    </select>
+                    <input type="search" id="effect-search-1" placeholder="効果">
+                </div>
+                <div class="effect-search-row">
+                    <label class="effect-search-mode-label" for="effect-search-mode-2">条件</label>
+                    <select id="effect-search-mode-2" class="effect-search-mode-select">
+                        <option value="and">AND</option>
+                        <option value="or">OR</option>
+                    </select>
+                    <input type="search" id="effect-search-2" placeholder="効果">
+                </div>
+                <div class="effect-search-row">
+                    <label class="effect-search-mode-label" for="effect-search-mode-3">条件</label>
+                    <select id="effect-search-mode-3" class="effect-search-mode-select">
+                        <option value="and">AND</option>
+                        <option value="or">OR</option>
+                    </select>
+                    <input type="search" id="effect-search-3" placeholder="効果">
+                </div>
+            </div>
+        </div>
+        <div class="search-field-column">
+            <div class="search-field search-field--tags">
+                <label class="search-label" for="tag-search-input">タグ検索</label>
+                <select id="tag-search-input" multiple placeholder="タグを選択"></select>
+            </div>
+            <div class="search-field search-field--primary">
+                <label class="search-label" for="search-input">テキスト検索</label>
+                <input type="search" id="search-input" placeholder="ファイル名・推定テキスト">
+            </div>
+        </div>
+    </div>
+</div>

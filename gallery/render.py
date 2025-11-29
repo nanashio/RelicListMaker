@@ -4,12 +4,14 @@ from __future__ import annotations
 import html
 import json
 import os
+from pathlib import Path
 from typing import Optional, Sequence
 
 from . import assets as gallery_assets
 
 from .config import GalleryConfig, default_config
 from .models import GalleryDependencies, GalleryPayload, build_gallery_payload
+from .template_parts import render_template_with_partials
 import version_info
 from resource_paths import project_root
 
@@ -192,6 +194,9 @@ def generate_html(
         print(message)
 
     html_template = load_text_asset(config.template_html_path, template_path)
+
+    partials_dir = Path(template_path or config.template_html_path).parent / "gallery" / "partials"
+    html_template = render_template_with_partials(html_template, partials_dir=partials_dir)
 
     asset_replacements = {"__APP_VERSION__": app_version}
 
