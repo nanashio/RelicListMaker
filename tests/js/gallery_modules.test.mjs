@@ -1182,10 +1182,75 @@ describe('gallery summary utils', () => {
     assert.equal(result.fullyConfirmedCount, 0);
     assert.equal(result.pendingCount, 2);
   });
+  });
+
+
+describe('tomSelect adapter factory', () => {
+  let documentMock;
+
+  beforeEach(() => {
+    documentMock = createMockDocument();
+    global.window = {};
+    global.document = documentMock;
+  });
+
+  afterEach(() => {
+    delete global.window;
+    delete global.document;
+  });
+
+  test('exports resolver and default factory', () => {
+    runScript('templates/gallery/components/tomSelectAdapterFactory.js');
+    assert.equal(typeof window.galleryComponents.createDefaultTomSelectAdapter, 'function');
+    assert.equal(typeof window.galleryComponents.resolveTomSelectAdapter, 'function');
+  });
+
+  test('resolver passes through debug flag and preferred factory', () => {
+    runScript('templates/gallery/components/tomSelectAdapterFactory.js');
+    const { resolveTomSelectAdapter } = window.galleryComponents;
+    const flags = [];
+    const adapter = resolveTomSelectAdapter({
+      createTomSelectAdapter: (config) => {
+        flags.push(config.isDebugEnabled());
+        return { hasSupport: true };
+      },
+      TomSelect: function FakeTomSelect() {},
+      documentRef: documentMock,
+      isDebugEnabled: () => true
+    });
+
+    assert.equal(adapter.hasSupport, true);
+    assert.deepEqual(flags, [true]);
+  });
+
+  test('resolver falls back to default factory when adapter factory yields null', () => {
+    runScript('templates/gallery/components/tomSelectAdapterFactory.js');
+    const { resolveTomSelectAdapter } = window.galleryComponents;
+    const createdConfigs = [];
+    const defaultCalls = [];
+    const adapter = resolveTomSelectAdapter({
+      createTomSelectAdapter: (config) => {
+        createdConfigs.push(config);
+        return null;
+      },
+      createDefaultTomSelectAdapter: (TomSelectClass, docRef) => {
+        defaultCalls.push({ TomSelectClass, docRef });
+        return { hasSupport: true, marker: 'default' };
+      },
+      TomSelect: function PreferredTomSelect() {},
+      documentRef: documentMock
+    });
+
+    assert.equal(adapter.marker, 'default');
+    assert.equal(createdConfigs.length, 1);
+    assert.equal(defaultCalls.length, 1);
+    assert.equal(typeof defaultCalls[0].TomSelectClass, 'function');
+    assert.strictEqual(defaultCalls[0].docRef, documentMock);
+  });
 });
 
 
-  describe('tag input controller', () => {
+    describe('tag input controller', () => {
   let documentMock;
 
   beforeEach(() => {
