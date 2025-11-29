@@ -186,9 +186,12 @@
             documentRef = typeof document !== 'undefined' ? document : null
         } = config;
 
-        const parseTagTokens =
-            typeof parseTokensConfig === 'function'
-                ? parseTokensConfig
+        const tagTokenModule =
+            (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
+            null;
+        const fallbackParseTagTokens =
+            tagTokenModule && typeof tagTokenModule.parseTagTokens === 'function'
+                ? tagTokenModule.parseTagTokens
                 : (value) => {
                       if (Array.isArray(value)) {
                           return value.slice();
@@ -201,14 +204,18 @@
                           return [];
                       }
                       return text
-                          .split(/[\s,;、，；]+/)
+                          .split(/[\s,;、，　；]+/)
                           .map((token) => token.trim())
                           .filter((token) => token.length > 0);
                   };
+        const parseTagTokens = typeof parseTokensConfig === 'function' ? parseTokensConfig : fallbackParseTagTokens;
         const formatTagTokens =
             typeof formatTokensConfig === 'function'
                 ? formatTokensConfig
-                : (value) => (Array.isArray(value) ? value.join(' ') : parseTagTokens(value).join(' '));
+                : tagTokenModule && typeof tagTokenModule.formatTagTokens === 'function'
+                  ? tagTokenModule.formatTagTokens
+                  : (value) =>
+                        Array.isArray(value) ? value.join(' ') : fallbackParseTagTokens(value).join(' ');
         const fallbackFormatter = createFallbackFormatter(formatTagTokens, parseTagTokens);
 
         const hasDom = Boolean(documentRef && typeof documentRef.createElement === 'function');

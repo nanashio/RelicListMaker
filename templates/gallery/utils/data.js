@@ -318,7 +318,16 @@
         return records.map((record) => normalizeRecordRelicTypeField(record));
     }
 
+    const tagTokenModule =
+        (typeof globalThis !== 'undefined' &&
+            globalThis.galleryModules &&
+            globalThis.galleryModules.tagTokens) ||
+        null;
+
     function normalizeTagToken(value) {
+        if (tagTokenModule && typeof tagTokenModule.normalizeTagToken === 'function') {
+            return tagTokenModule.normalizeTagToken(value);
+        }
         if (value == null) {
             return '';
         }
@@ -329,6 +338,10 @@
     const TAG_SEPARATOR_PATTERN = /[\s,;、，　；]+/;
 
     function parseTagTokens(source) {
+        if (tagTokenModule && typeof tagTokenModule.parseTagTokens === 'function') {
+            return tagTokenModule.parseTagTokens(source);
+        }
+
         const rawList = Array.isArray(source)
             ? source
             : (function collectRawTokens() {
@@ -356,6 +369,10 @@
     }
 
     function formatTagTokens(source) {
+        if (tagTokenModule && typeof tagTokenModule.formatTagTokens === 'function') {
+            return tagTokenModule.formatTagTokens(source);
+        }
+
         const tokens = parseTagTokens(source);
         if (!tokens.length) {
             return '';
@@ -364,6 +381,10 @@
     }
 
     function serializeTagTokens(source) {
+        if (tagTokenModule && typeof tagTokenModule.serializeTagTokens === 'function') {
+            return tagTokenModule.serializeTagTokens(source);
+        }
+
         const tokens = parseTagTokens(source);
         if (!tokens.length) {
             return '';

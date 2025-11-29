@@ -5508,3 +5508,26 @@ describe('gallery events', () => {
     assert.deepEqual(recordStatusCalls, ['pass']);
   });
 });
+
+describe('tag token module', () => {
+  test('exports helpers and registers to global namespace', async () => {
+    const modulePath = path.join(
+      projectRoot,
+      'templates',
+      'gallery',
+      'js',
+      'modules',
+      'tagTokens.js'
+    );
+    const { parseTagTokens, formatTagTokens, serializeTagTokens } = await import(modulePath);
+
+    const tokens = parseTagTokens('  Aqua ; aqua, blaze  ,ミント ');
+    assert.deepEqual(tokens, ['Aqua', 'blaze', 'ミント']);
+    assert.equal(formatTagTokens(tokens), 'Aqua blaze ミント');
+    assert.equal(serializeTagTokens(['Red', 'red', ' Blue ']), 'Red;Blue');
+
+    const namespace = globalThis.galleryModules && globalThis.galleryModules.tagTokens;
+    assert.ok(namespace, 'tagTokens module should register to global namespace');
+    assert.equal(namespace.parseTagTokens, parseTagTokens);
+  });
+});
