@@ -68,7 +68,7 @@
   - スプリント 3: 計画 4 項目中 4 完了（100%）。
   - スプリント 4: 計画 3 項目中 3 完了（100%）。
   - 残作業: なし（TomSelect リゾルバの共通化まで完了）。
-  - フォローアップ: デバッグフラグ解決を `tagDebug` モジュールに集約し、タグ入力/検索/ビューで共有済み。
+  - フォローアップ: デバッグフラグ解決を `tagDebug` モジュールに集約し、タグ入力/検索/ビューで共有済み。TomSelect 共有リゾルバのフォールバックを強化し、ロード順に依存せずデフォルトアダプタへ接続できるようにした。
 
 ## 進捗メモ（2025-04-13）
 - TomSelect アダプタのデバッグ判定経路を共有モジュール化。
@@ -269,3 +269,10 @@
   - `components/sharedResolvers.js` を追加し、`resolveTagDebugResolverWithFallback` と `resolveSharedTomSelectAdapterWithDebug` を `window.galleryComponents` に公開。タグ入力・タグ検索・ギャラリービュー・TomSelect アダプタが同一のリゾルバ経路を使うよう整理し、フォールバック処理の重複を解消した。
   - ギャラリー生成時のコピー対象と ES Module 依存リスト、Node テストに新モジュールを追加し、配信漏れやリゾルバ未注入を検出できるようにした。
 - テスト: `pytest`、`npm run test:node` を実行。
+
+## 進捗メモ（2025-04-14）
+- 共有リゾルバのフォールバック強化。
+  - `sharedResolvers` で `resolveSharedTomSelectAdapterWithDebug` が TomSelect リゾルバ不在時にデフォルトアダプタへフォールバックするようにし、ロード順の揺らぎで TomSelect が無効化されるリスクを解消。
+  - 同モジュールに `resolveSharedTagDebugResolver` を公開し、タグ入力・タグ検索・ギャラリービュー・TomSelect アダプタのデバッグ判定を共通経路に統一。
+  - Node テストにフォールバック確認のケースを追加し、デフォルトアダプタ・デバッグ判定の両面で漏れを自動検知可能にした。
+- テスト: `pytest` と `npm run test:node` を実行。

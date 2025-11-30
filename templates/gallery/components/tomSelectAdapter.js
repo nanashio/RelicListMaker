@@ -16,8 +16,8 @@
     function resolveTagDebugResolver(config = {}) {
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
         const resolverWithFallback =
-            namespace && typeof namespace.resolveTagDebugResolverWithFallback === 'function'
-                ? namespace.resolveTagDebugResolverWithFallback
+            namespace && typeof namespace.resolveSharedTagDebugResolver === 'function'
+                ? namespace.resolveSharedTagDebugResolver
                 : null;
         const defaultResolver =
             namespace && typeof namespace.defaultIsTagDebugEnabled === 'function'

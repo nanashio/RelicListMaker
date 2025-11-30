@@ -1398,6 +1398,14 @@ describe('shared resolvers', () => {
     assert.deepEqual(calls, ['custom']);
   });
 
+  test('exposes shared debug resolver with default fallbacks', () => {
+    const resolver = global.window.galleryComponents.resolveSharedTagDebugResolver();
+
+    assert.equal(resolver(), false);
+    global.window.localStorage.setItem('galleryDebugTags', 'true');
+    assert.equal(resolver(), true);
+  });
+
   test('injects debug resolver when resolving shared TomSelect adapter', () => {
     const calls = [];
     global.window.galleryComponents.resolveSharedTomSelectAdapter = (config) => {
@@ -1411,6 +1419,22 @@ describe('shared resolvers', () => {
 
     assert.equal(adapter.marker, 'adapter');
     assert.deepEqual(calls, [true]);
+  });
+
+  test('falls back to default TomSelect adapter when shared resolver is absent', () => {
+    const adapter = global.window.galleryComponents.resolveSharedTomSelectAdapterWithDebug({
+      createDefaultTomSelectAdapter: (TomSelect, documentRef) => ({
+        TomSelect,
+        documentRef,
+        marker: 'default'
+      }),
+      TomSelect: function FakeTomSelect() {},
+      documentRef: { marker: 'doc' }
+    });
+
+    assert.equal(adapter.marker, 'default');
+    assert.equal(typeof adapter.TomSelect, 'function');
+    assert.equal(adapter.documentRef.marker, 'doc');
   });
 });
 
