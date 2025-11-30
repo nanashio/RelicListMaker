@@ -16,56 +16,12 @@
             .filter((token) => token.length > 0);
     }
 
-    function resolveTomSelectAdapterWithSharedFactory(config = {}) {
+    function resolveTomSelectAdapterShared(config = {}) {
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        const createTomSelectAdapterFn =
-            typeof config.createTomSelectAdapter === 'function'
-                ? config.createTomSelectAdapter
-                : namespace && typeof namespace.createTomSelectAdapter === 'function'
-                  ? namespace.createTomSelectAdapter
-                  : null;
-        const defaultAdapterFactory =
-            typeof config.createDefaultTomSelectAdapter === 'function'
-                ? config.createDefaultTomSelectAdapter
-                : namespace && typeof namespace.createDefaultTomSelectAdapter === 'function'
-                  ? namespace.createDefaultTomSelectAdapter
-                  : null;
-        const resolver =
-            namespace && typeof namespace.resolveTomSelectAdapterWithResolver === 'function'
-                ? namespace.resolveTomSelectAdapterWithResolver
-                : null;
-
-        if (resolver) {
-            const adapter = resolver({
-                resolveTomSelectAdapter: config.resolveTomSelectAdapter,
-                createTomSelectAdapter: createTomSelectAdapterFn,
-                createDefaultTomSelectAdapter: defaultAdapterFactory,
-                TomSelect: config.TomSelect,
-                documentRef: config.documentRef,
-                isDebugEnabled: config.isDebugEnabled
-            });
-            if (adapter) {
-                return adapter;
-            }
+        if (!namespace || typeof namespace.resolveSharedTomSelectAdapter !== 'function') {
+            return null;
         }
-
-        if (typeof config.resolveTomSelectAdapter === 'function') {
-            const adapter = config.resolveTomSelectAdapter({
-                createTomSelectAdapter: createTomSelectAdapterFn,
-                createDefaultTomSelectAdapter: defaultAdapterFactory,
-                TomSelect: config.TomSelect,
-                documentRef: config.documentRef,
-                isDebugEnabled: config.isDebugEnabled
-            });
-            if (adapter) {
-                return adapter;
-            }
-        }
-
-        if (typeof defaultAdapterFactory === 'function') {
-            return defaultAdapterFactory(config.TomSelect, config.documentRef);
-        }
-        return null;
+        return namespace.resolveSharedTomSelectAdapter(config);
     }
 
     function createTagSearchController(config = {}) {
@@ -80,7 +36,7 @@
             isDebugEnabled
         } = config;
 
-        const adapter = resolveTomSelectAdapterWithSharedFactory({
+        const adapter = resolveTomSelectAdapterShared({
             resolveTomSelectAdapter,
             createTomSelectAdapter,
             createDefaultTomSelectAdapter,

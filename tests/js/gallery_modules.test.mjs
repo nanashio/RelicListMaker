@@ -1322,6 +1322,7 @@ describe('tomSelect adapter factory', () => {
     documentMock = createMockDocument();
     global.window = {};
     global.document = documentMock;
+    runScript('templates/gallery/components/tomSelectAdapterFactory.js');
   });
 
   afterEach(() => {
@@ -1376,6 +1377,26 @@ describe('tomSelect adapter factory', () => {
     assert.equal(defaultCalls.length, 1);
     assert.equal(typeof defaultCalls[0].TomSelectClass, 'function');
     assert.strictEqual(defaultCalls[0].docRef, documentMock);
+  });
+
+  test('shared resolver prefers global helper and keeps default factory fallback', () => {
+    runScript('templates/gallery/components/tomSelectAdapterFactory.js');
+
+    const sharedCalls = [];
+    window.galleryComponents.resolveTomSelectAdapterWithResolver = (config) => {
+      sharedCalls.push(config);
+      return { hasSupport: true, marker: 'shared' };
+    };
+
+    const adapter = window.galleryComponents.resolveSharedTomSelectAdapter({
+      TomSelect: function MockSelect() {},
+      documentRef: documentMock
+    });
+
+    assert.equal(adapter.marker, 'shared');
+    assert.equal(sharedCalls.length, 1);
+    assert.equal(typeof sharedCalls[0].createDefaultTomSelectAdapter, 'function');
+    assert.strictEqual(sharedCalls[0].documentRef, documentMock);
   });
 });
 
@@ -1473,6 +1494,7 @@ describe('tag search controller', () => {
     documentMock = createMockDocument();
     global.window = {};
     global.document = documentMock;
+    runScript('templates/gallery/components/tomSelectAdapterFactory.js');
   });
 
   afterEach(() => {
@@ -1846,6 +1868,7 @@ describe('gallery view', () => {
   beforeEach(() => {
     global.window = {};
     global.document = createDocumentStub();
+    runScript('templates/gallery/components/tomSelectAdapterFactory.js');
     runScript('templates/gallery/utils/data.js');
     runScript('templates/gallery/utils/filter.js');
     runScript('templates/gallery/render/itemEnhancers.js');

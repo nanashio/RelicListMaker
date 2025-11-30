@@ -67,6 +67,7 @@
   - スプリント 2: 計画 3 項目中 3 完了（100%）。
   - スプリント 3: 計画 4 項目中 4 完了（100%）。
   - スプリント 4: 計画 3 項目中 3 完了（100%）。
+  - 残作業: なし（TomSelect リゾルバの共通化まで完了）。
 
 - 日次ログのダイジェスト（テスト状況付き）
 
@@ -240,3 +241,8 @@
 - TomSelect 解決ロジックの共通化。
   - `tomSelectAdapterFactory` にカスタムリゾルバを受け取れる `resolveTomSelectAdapterWithResolver` を追加し、`tagInput`/`tagSearch`/`galleryView` が同一の解決経路とデフォルトアダプタを参照するように整理。設定共有をファクトリに寄せることで、各コンポーネントのフォールバック実装の重複を解消した。
   - テスト: `node --test tests/js/gallery_modules.test.mjs` を実行。
+
+## 進捗メモ（2025-04-10）
+- TomSelect 解決ロジックの共有リゾルバを適用。
+  - `tomSelectAdapterFactory` に `resolveSharedTomSelectAdapter` を追加し、タグ入力・タグ検索・ギャラリービューが同一の共有リゾルバ経由で TomSelect 依存を解決するようにした。コンポーネント側のフォールバック実装を整理し、テストの初期化順をファクトリ読込に合わせて依存解決を一元化。
+- テスト: `node --test tests/js/gallery_modules.test.mjs` を実行。
