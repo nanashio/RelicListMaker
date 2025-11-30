@@ -13,6 +13,41 @@
         }
     }
 
+    function resolveTagDebugResolver(config = {}) {
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const resolver =
+            namespace && typeof namespace.resolveTagDebugResolver === 'function'
+                ? namespace.resolveTagDebugResolver
+                : null;
+        const defaultResolver =
+            namespace && typeof namespace.defaultIsTagDebugEnabled === 'function'
+                ? namespace.defaultIsTagDebugEnabled
+                : defaultIsDebugEnabled;
+
+        if (resolver) {
+            try {
+                const resolved = resolver(config);
+                if (typeof resolved === 'function') {
+                    return resolved;
+                }
+            } catch (error) {
+                // fall through to the default resolver
+            }
+        }
+
+        const { isDebugEnabled } = config;
+        return () => {
+            if (typeof isDebugEnabled === 'function') {
+                try {
+                    return Boolean(isDebugEnabled());
+                } catch (error) {
+                    return defaultResolver();
+                }
+            }
+            return defaultResolver();
+        };
+    }
+
     function getLogger(level = 'info') {
         if (typeof console === 'undefined') {
             return () => {};
@@ -30,11 +65,12 @@
         const {
             TomSelect: TomSelectClass = typeof window !== 'undefined' && window ? window.TomSelect : null,
             documentRef = typeof document !== 'undefined' ? document : null,
-            isDebugEnabled = defaultIsDebugEnabled
+            isDebugEnabled: isDebugEnabledConfig
         } = config;
 
         const hasDom = Boolean(documentRef && typeof documentRef.createElement === 'function');
         const hasTomSelect = typeof TomSelectClass === 'function';
+        const isDebugEnabled = resolveTagDebugResolver({ isDebugEnabled: isDebugEnabledConfig });
 
         function createInstance(input, options = {}, hooks = {}) {
             if (!hasDom || !hasTomSelect || !input) {
