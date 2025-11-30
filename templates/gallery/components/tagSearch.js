@@ -18,19 +18,20 @@
 
     function resolveTagDebugResolver(config = {}) {
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        const resolver =
-            namespace && typeof namespace.resolveTagDebugResolver === 'function'
-                ? namespace.resolveTagDebugResolver
+        const resolverWithFallback =
+            namespace && typeof namespace.resolveTagDebugResolverWithFallback === 'function'
+                ? namespace.resolveTagDebugResolverWithFallback
                 : null;
         const defaultResolver =
             namespace && typeof namespace.defaultIsTagDebugEnabled === 'function'
                 ? namespace.defaultIsTagDebugEnabled
                 : () => false;
-        if (resolver) {
+
+        if (resolverWithFallback) {
             try {
-                return resolver(config);
+                return resolverWithFallback(config);
             } catch (error) {
-                // fall through to default
+                // fall through to default resolver
             }
         }
 
@@ -49,11 +50,14 @@
 
     function resolveTomSelectAdapterShared(config = {}) {
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        if (!namespace || typeof namespace.resolveSharedTomSelectAdapter !== 'function') {
-            return null;
+        const resolver =
+            namespace && typeof namespace.resolveSharedTomSelectAdapterWithDebug === 'function'
+                ? namespace.resolveSharedTomSelectAdapterWithDebug
+                : null;
+        if (resolver) {
+            return resolver(config);
         }
-        const isDebugEnabled = resolveTagDebugResolver({ isDebugEnabled: config.isDebugEnabled });
-        return namespace.resolveSharedTomSelectAdapter({ ...config, isDebugEnabled });
+        return null;
     }
 
     function createTagSearchController(config = {}) {
