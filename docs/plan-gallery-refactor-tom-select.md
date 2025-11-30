@@ -68,7 +68,7 @@
   - スプリント 3: 計画 4 項目中 4 完了（100%）。
   - スプリント 4: 計画 3 項目中 3 完了（100%）。
   - 残作業: なし（TomSelect リゾルバの共通化まで完了）。
-  - フォローアップ: デバッグフラグ解決を `tagDebug` モジュールに集約し、タグ入力/検索/ビューで共有。
+  - フォローアップ: デバッグフラグ解決を `tagDebug` モジュールに集約し、タグ入力/検索/ビューで共有済み。
 
 - 日次ログのダイジェスト（テスト状況付き）
 
@@ -253,3 +253,8 @@
   - `templates/gallery/components/tagDebug.js` を追加し、タグ入力・タグ検索・ギャラリービューが同一のデバッグフラグリゾルバを参照するように変更。`resolveSharedTomSelectAdapter` に渡す `isDebugEnabled` が統一されたため、TomSelect アダプタのロギング条件が一貫するようになった。
   - `gallery/assets.py`、`templates/gallery/index.js`、`tests/test_generate_gallery.py` にコピー対象と依存リストを追加し、ビルド生成物やフィクスチャで新モジュールが欠落しないようにした。Node テストも `tagDebug` を読み込むよう更新し、フォールバック経路とローカルストレージ判定の挙動を検証。
 - テスト: `node --test tests/js/gallery_modules.test.mjs`、`pytest` を実行。
+
+## 進捗メモ（2025-04-12）
+- デバッグリゾルバの共有ロジックを全面適用。
+  - `tagDebug` モジュールに `resolveTagDebugResolver` を追加し、タグ入力・タグ検索・ギャラリービューの各 IIFE が同一のデバッグリゾルバを参照するように整理。各コンポーネントのフォールバック処理はシンプルなデフォルト判定に限定し、共有モジュールのエラー処理を優先する形に統一した。
+- テスト: `npm run test:node` を実行。

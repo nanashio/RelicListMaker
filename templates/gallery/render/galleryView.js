@@ -1,32 +1,23 @@
 (() => {
     function resolveTagDebugResolver(config = {}) {
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        const createResolver =
-            namespace && typeof namespace.createTagDebugResolver === 'function'
-                ? namespace.createTagDebugResolver
+        const resolver =
+            namespace && typeof namespace.resolveTagDebugResolver === 'function'
+                ? namespace.resolveTagDebugResolver
                 : null;
-        if (createResolver) {
-            return createResolver(config);
-        }
-
         const defaultResolver =
             namespace && typeof namespace.defaultIsTagDebugEnabled === 'function'
                 ? namespace.defaultIsTagDebugEnabled
-                : () => {
-                      if (typeof window === 'undefined' || !window) {
-                          return false;
-                      }
-                      if (typeof window.galleryDebugTags !== 'undefined') {
-                          return Boolean(window.galleryDebugTags);
-                      }
-                      try {
-                          return window.localStorage && window.localStorage.getItem('galleryDebugTags') === 'true';
-                      } catch (error) {
-                          return false;
-                      }
-                  };
-        const { isDebugEnabled } = config;
+                : () => false;
+        if (resolver) {
+            try {
+                return resolver(config);
+            } catch (error) {
+                // fall through to default
+            }
+        }
 
+        const { isDebugEnabled } = config;
         return () => {
             if (typeof isDebugEnabled === 'function') {
                 try {
