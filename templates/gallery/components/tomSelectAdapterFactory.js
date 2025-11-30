@@ -152,9 +152,64 @@
         return null;
     }
 
+    function resolveTomSelectAdapterWithResolver(config = {}) {
+        const {
+            resolveTomSelectAdapter: customResolver,
+            createTomSelectAdapter,
+            createDefaultTomSelectAdapter,
+            TomSelect,
+            documentRef,
+            isDebugEnabled
+        } = config;
+
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const adapterFactory =
+            typeof createTomSelectAdapter === 'function'
+                ? createTomSelectAdapter
+                : namespace && typeof namespace.createTomSelectAdapter === 'function'
+                  ? namespace.createTomSelectAdapter
+                  : null;
+        const defaultFactory =
+            typeof createDefaultTomSelectAdapter === 'function'
+                ? createDefaultTomSelectAdapter
+                : namespace && typeof namespace.createDefaultTomSelectAdapter === 'function'
+                  ? namespace.createDefaultTomSelectAdapter
+                  : createDefaultTomSelectAdapter;
+
+        const resolverCandidates = [];
+        if (typeof customResolver === 'function') {
+            resolverCandidates.push(customResolver);
+        }
+        if (namespace && typeof namespace.resolveTomSelectAdapter === 'function') {
+            resolverCandidates.push(namespace.resolveTomSelectAdapter);
+        }
+
+        for (const resolver of resolverCandidates) {
+            const adapter = resolver({
+                createTomSelectAdapter: adapterFactory,
+                createDefaultTomSelectAdapter: defaultFactory,
+                TomSelect,
+                documentRef,
+                isDebugEnabled
+            });
+            if (adapter) {
+                return adapter;
+            }
+        }
+
+        return resolveTomSelectAdapter({
+            createTomSelectAdapter: adapterFactory,
+            createDefaultTomSelectAdapter: defaultFactory,
+            TomSelect,
+            documentRef,
+            isDebugEnabled
+        });
+    }
+
     if (!window.galleryComponents) {
         window.galleryComponents = {};
     }
     window.galleryComponents.createDefaultTomSelectAdapter = createDefaultTomSelectAdapter;
     window.galleryComponents.resolveTomSelectAdapter = resolveTomSelectAdapter;
+    window.galleryComponents.resolveTomSelectAdapterWithResolver = resolveTomSelectAdapterWithResolver;
 })();

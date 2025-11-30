@@ -13,28 +13,6 @@
         }
     }
 
-    function resolveAdapterResolver(resolverConfig) {
-        if (typeof resolverConfig === 'function') {
-            return resolverConfig;
-        }
-        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        if (namespace && typeof namespace.resolveTomSelectAdapter === 'function') {
-            return namespace.resolveTomSelectAdapter;
-        }
-        return null;
-    }
-
-    function resolveAdapterFactory(factoryConfig) {
-        if (typeof factoryConfig === 'function') {
-            return factoryConfig;
-        }
-        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        if (namespace && typeof namespace.createTomSelectAdapter === 'function') {
-            return namespace.createTomSelectAdapter;
-        }
-        return null;
-    }
-
     function createDefaultTomSelectAdapterFallback(TomSelectClass, documentRef) {
         const hasDom = Boolean(documentRef && typeof documentRef.createElement === 'function');
         const hasTomSelect = typeof TomSelectClass === 'function';
@@ -168,6 +146,58 @@
         return null;
     }
 
+    function resolveTomSelectAdapterWithSharedFactory(config = {}) {
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const createTomSelectAdapterFn =
+            typeof config.createTomSelectAdapter === 'function'
+                ? config.createTomSelectAdapter
+                : namespace && typeof namespace.createTomSelectAdapter === 'function'
+                  ? namespace.createTomSelectAdapter
+                  : null;
+        const defaultTomSelectAdapterFactory =
+            typeof config.createDefaultTomSelectAdapter === 'function'
+                ? config.createDefaultTomSelectAdapter
+                : resolveDefaultFactory(null, createDefaultTomSelectAdapterFallback);
+        const resolver =
+            namespace && typeof namespace.resolveTomSelectAdapterWithResolver === 'function'
+                ? namespace.resolveTomSelectAdapterWithResolver
+                : null;
+        const isDebugEnabled =
+            typeof config.isDebugEnabled === 'function' ? config.isDebugEnabled : isTagDebugEnabled;
+
+        if (resolver) {
+            const adapter = resolver({
+                resolveTomSelectAdapter: config.resolveTomSelectAdapter,
+                createTomSelectAdapter: createTomSelectAdapterFn,
+                createDefaultTomSelectAdapter: defaultTomSelectAdapterFactory,
+                TomSelect: config.TomSelect,
+                documentRef: config.documentRef,
+                isDebugEnabled
+            });
+            if (adapter) {
+                return adapter;
+            }
+        }
+
+        if (typeof config.resolveTomSelectAdapter === 'function') {
+            const adapter = config.resolveTomSelectAdapter({
+                createTomSelectAdapter: createTomSelectAdapterFn,
+                createDefaultTomSelectAdapter: defaultTomSelectAdapterFactory,
+                TomSelect: config.TomSelect,
+                documentRef: config.documentRef,
+                isDebugEnabled
+            });
+            if (adapter) {
+                return adapter;
+            }
+        }
+
+        if (typeof defaultTomSelectAdapterFactory === 'function') {
+            return defaultTomSelectAdapterFactory(config.TomSelect, config.documentRef);
+        }
+        return null;
+    }
+
     function createGalleryView(config = {}) {
         const {
             state,
@@ -265,66 +295,14 @@
         const colorOptions = Array.isArray(itemColorOptions) ? itemColorOptions.slice() : [];
         const hasDocument = typeof document !== 'undefined' && document;
         const componentsNamespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        const resolveTomSelectAdapterFn = resolveAdapterResolver(config.resolveTomSelectAdapter);
-        const createTomSelectAdapterFn = resolveAdapterFactory(config.createTomSelectAdapter);
-        const defaultTomSelectAdapterFactory = resolveDefaultFactory(
-            config.createDefaultTomSelectAdapter,
-            createDefaultTomSelectAdapterFallback
-        );
-        const tomSelectAdapter = resolveTomSelectAdapterFn
-            ? resolveTomSelectAdapterFn({
-                  createTomSelectAdapter: createTomSelectAdapterFn,
-                  createDefaultTomSelectAdapter: defaultTomSelectAdapterFactory,
-                  TomSelect: typeof window !== 'undefined' && window ? window.TomSelect : null,
-                  documentRef: hasDocument || null,
-                  isDebugEnabled: () => {
-                      if (typeof window === 'undefined' || !window) {
-                          return false;
-                      }
-                      if (typeof window.galleryDebugTags !== 'undefined') {
-                          return Boolean(window.galleryDebugTags);
-                      }
-                      try {
-                          return window.localStorage && window.localStorage.getItem('galleryDebugTags') === 'true';
-                      } catch (error) {
-                          return false;
-                      }
-                  }
-              })
-            : (() => {
-                  const factory = createTomSelectAdapterFn;
-                  if (typeof factory === 'function') {
-                      const adapter = factory({
-                          TomSelect: typeof window !== 'undefined' && window ? window.TomSelect : null,
-                          documentRef: hasDocument || null,
-                          isDebugEnabled: () => {
-                              if (typeof window === 'undefined' || !window) {
-                                  return false;
-                              }
-                              if (typeof window.galleryDebugTags !== 'undefined') {
-                                  return Boolean(window.galleryDebugTags);
-                              }
-                              try {
-                                  return (
-                                      window.localStorage && window.localStorage.getItem('galleryDebugTags') === 'true'
-                                  );
-                              } catch (error) {
-                                  return false;
-                              }
-                          }
-                      });
-                      if (adapter) {
-                          return adapter;
-                      }
-                  }
-                  if (typeof defaultTomSelectAdapterFactory === 'function') {
-                      return defaultTomSelectAdapterFactory(
-                          typeof window !== 'undefined' && window ? window.TomSelect : null,
-                          hasDocument || null
-                      );
-                  }
-                  return null;
-              })();
+        const tomSelectAdapter = resolveTomSelectAdapterWithSharedFactory({
+            resolveTomSelectAdapter: config.resolveTomSelectAdapter,
+            createTomSelectAdapter: config.createTomSelectAdapter,
+            createDefaultTomSelectAdapter: config.createDefaultTomSelectAdapter,
+            TomSelect: typeof window !== 'undefined' && window ? window.TomSelect : null,
+            documentRef: hasDocument || null,
+            isDebugEnabled: isTagDebugEnabled
+        });
         const createTagInputControllerFn =
             typeof config.createTagInputController === 'function'
                 ? config.createTagInputController
@@ -338,9 +316,9 @@
                       parseTagTokens,
                       formatTagTokens,
                       documentRef: hasDocument || null,
-                      createTomSelectAdapter: createTomSelectAdapterFn,
-                      resolveTomSelectAdapter: resolveTomSelectAdapterFn,
-                      createDefaultTomSelectAdapter: defaultTomSelectAdapterFactory
+                      createTomSelectAdapter: config.createTomSelectAdapter,
+                      resolveTomSelectAdapter: config.resolveTomSelectAdapter,
+                      createDefaultTomSelectAdapter: config.createDefaultTomSelectAdapter
                   })
                 : null;
         const createTagSearchControllerFn =
@@ -354,9 +332,9 @@
                 ? createTagSearchControllerFn({
                       input: dom.tagSearchInput,
                       parseTagTokens,
-                      resolveTomSelectAdapter: resolveTomSelectAdapterFn,
-                      createTomSelectAdapter: createTomSelectAdapterFn,
-                      createDefaultTomSelectAdapter: defaultTomSelectAdapterFactory,
+                      resolveTomSelectAdapter: config.resolveTomSelectAdapter,
+                      createTomSelectAdapter: config.createTomSelectAdapter,
+                      createDefaultTomSelectAdapter: config.createDefaultTomSelectAdapter,
                       TomSelect: typeof window !== 'undefined' && window ? window.TomSelect : null,
                       documentRef: hasDocument || null,
                       isDebugEnabled: isTagDebugEnabled

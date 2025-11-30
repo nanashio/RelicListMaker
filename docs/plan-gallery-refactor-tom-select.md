@@ -234,4 +234,9 @@
 ## 進捗メモ（2025-04-08）
 - スプリント 1/2 のタグ検索フォローアップ。
   - `galleryView` にタグデバッグフラグ解決用のローカルヘルパーを復元し、`tagSearchController` への `isDebugEnabled` 依存が初期化時に未定義で落ちる問題を解消。
-- テスト: `npm run test:browser -- tests/browser/viewer.spec.ts` を試行（Playwright ブラウザの取得権限がなく失敗）。
+  - テスト: `npm run test:browser -- tests/browser/viewer.spec.ts` を試行（Playwright ブラウザの取得権限がなく失敗）。
+
+## 進捗メモ（2025-04-09）
+- TomSelect 解決ロジックの共通化。
+  - `tomSelectAdapterFactory` にカスタムリゾルバを受け取れる `resolveTomSelectAdapterWithResolver` を追加し、`tagInput`/`tagSearch`/`galleryView` が同一の解決経路とデフォルトアダプタを参照するように整理。設定共有をファクトリに寄せることで、各コンポーネントのフォールバック実装の重複を解消した。
+  - テスト: `node --test tests/js/gallery_modules.test.mjs` を実行。

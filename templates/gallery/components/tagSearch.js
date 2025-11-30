@@ -16,54 +16,46 @@
             .filter((token) => token.length > 0);
     }
 
-    function resolveAdapter(config = {}) {
-        const {
-            resolveTomSelectAdapter,
-            createTomSelectAdapter,
-            createDefaultTomSelectAdapter,
-            TomSelect: TomSelectClass = (typeof window !== 'undefined' && window ? window.TomSelect : null),
-            documentRef = typeof document !== 'undefined' ? document : null,
-            isDebugEnabled
-        } = config;
-
+    function resolveTomSelectAdapterWithSharedFactory(config = {}) {
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        const resolver =
-            typeof resolveTomSelectAdapter === 'function'
-                ? resolveTomSelectAdapter
-                : namespace && typeof namespace.resolveTomSelectAdapter === 'function'
-                  ? namespace.resolveTomSelectAdapter
-                  : null;
-        const adapterFactory =
-            typeof createTomSelectAdapter === 'function'
-                ? createTomSelectAdapter
+        const createTomSelectAdapterFn =
+            typeof config.createTomSelectAdapter === 'function'
+                ? config.createTomSelectAdapter
                 : namespace && typeof namespace.createTomSelectAdapter === 'function'
                   ? namespace.createTomSelectAdapter
                   : null;
         const defaultAdapterFactory =
-            typeof createDefaultTomSelectAdapter === 'function'
-                ? createDefaultTomSelectAdapter
+            typeof config.createDefaultTomSelectAdapter === 'function'
+                ? config.createDefaultTomSelectAdapter
                 : namespace && typeof namespace.createDefaultTomSelectAdapter === 'function'
                   ? namespace.createDefaultTomSelectAdapter
                   : null;
+        const resolver =
+            namespace && typeof namespace.resolveTomSelectAdapterWithResolver === 'function'
+                ? namespace.resolveTomSelectAdapterWithResolver
+                : null;
 
         if (resolver) {
             const adapter = resolver({
-                createTomSelectAdapter: adapterFactory,
+                resolveTomSelectAdapter: config.resolveTomSelectAdapter,
+                createTomSelectAdapter: createTomSelectAdapterFn,
                 createDefaultTomSelectAdapter: defaultAdapterFactory,
-                TomSelect: TomSelectClass,
-                documentRef,
-                isDebugEnabled
+                TomSelect: config.TomSelect,
+                documentRef: config.documentRef,
+                isDebugEnabled: config.isDebugEnabled
             });
             if (adapter) {
                 return adapter;
             }
         }
 
-        if (typeof adapterFactory === 'function') {
-            const adapter = adapterFactory({
-                TomSelect: TomSelectClass,
-                documentRef,
-                isDebugEnabled
+        if (typeof config.resolveTomSelectAdapter === 'function') {
+            const adapter = config.resolveTomSelectAdapter({
+                createTomSelectAdapter: createTomSelectAdapterFn,
+                createDefaultTomSelectAdapter: defaultAdapterFactory,
+                TomSelect: config.TomSelect,
+                documentRef: config.documentRef,
+                isDebugEnabled: config.isDebugEnabled
             });
             if (adapter) {
                 return adapter;
@@ -71,7 +63,7 @@
         }
 
         if (typeof defaultAdapterFactory === 'function') {
-            return defaultAdapterFactory(TomSelectClass, documentRef);
+            return defaultAdapterFactory(config.TomSelect, config.documentRef);
         }
         return null;
     }
@@ -83,12 +75,12 @@
             resolveTomSelectAdapter,
             createTomSelectAdapter,
             createDefaultTomSelectAdapter,
-            TomSelect,
-            documentRef,
+            TomSelect = typeof window !== 'undefined' && window ? window.TomSelect : null,
+            documentRef = typeof document !== 'undefined' ? document : null,
             isDebugEnabled
         } = config;
 
-        const adapter = resolveAdapter({
+        const adapter = resolveTomSelectAdapterWithSharedFactory({
             resolveTomSelectAdapter,
             createTomSelectAdapter,
             createDefaultTomSelectAdapter,
