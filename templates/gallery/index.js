@@ -20,6 +20,7 @@ const MODULE_DEPENDENCIES = [
     './app/controller.js',
     './components/tomSelectAdapterFactory.js',
     './components/tomSelectAdapter.js',
+    './components/tagSearch.js',
     './components/tagInput.js',
     './render/effectViewModel.js',
     './render/effectFactory.js',
