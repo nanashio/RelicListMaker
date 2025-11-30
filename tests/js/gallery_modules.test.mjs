@@ -1380,6 +1380,92 @@ describe('tomSelect adapter factory', () => {
 });
 
 
+describe('tag search controller', () => {
+  let documentMock;
+
+  beforeEach(() => {
+    documentMock = createMockDocument();
+    global.window = {};
+    global.document = documentMock;
+    runScript('templates/gallery/components/tomSelectAdapterFactory.js');
+  });
+
+  afterEach(() => {
+    delete global.window;
+    delete global.document;
+  });
+
+  test('delegates to TomSelect adapter when available', () => {
+    const calls = { createInstance: [], syncOptions: [], onChange: [], clearSelection: [] };
+    const adapter = {
+      hasSupport: true,
+      createInstance: (input, options, hooks) => {
+        calls.createInstance.push({ input, options, hooks });
+        return { marker: 'instance' };
+      },
+      syncOptions: (inst, input, options, extra) => {
+        calls.syncOptions.push({ inst, input, options, extra });
+      },
+      getValues: () => ['alpha', 'beta'],
+      onChange: (inst, input, handler) => {
+        calls.onChange.push({ inst, input });
+        handler();
+      },
+      clearSelection: (inst, input) => {
+        calls.clearSelection.push({ inst, input });
+      }
+    };
+
+    runScript('templates/gallery/components/tagSearch.js');
+    const factory = window.galleryComponents.createTagSearchController;
+    const input = new MockElement('select');
+    const controller = factory({
+      input,
+      createTomSelectAdapter: () => adapter,
+      documentRef: documentMock,
+      TomSelect: function FakeTomSelect() {}
+    });
+
+    const handlerCalls = [];
+    controller.setOptions([{ value: 'x', text: 'X' }], { clearSelection: true });
+    controller.onChange(() => handlerCalls.push('changed'));
+    const values = controller.getValues();
+    controller.clearSelection();
+
+    assert.deepEqual(values, ['alpha', 'beta']);
+    assert.equal(handlerCalls.length, 1);
+    assert.equal(calls.createInstance.length, 1);
+    assert.equal(calls.syncOptions.length, 1);
+    assert.equal(calls.onChange.length, 1);
+    assert.equal(calls.clearSelection.length, 1);
+    assert.equal(calls.createInstance[0].options.plugins.includes('remove_button'), true);
+  });
+
+  test('falls back to native select when adapter is unavailable', () => {
+    runScript('templates/gallery/components/tagSearch.js');
+    const factory = window.galleryComponents.createTagSearchController;
+    const input = new MockElement('select');
+    const controller = factory({ input, documentRef: documentMock });
+
+    controller.setOptions(
+      [
+        { value: 'red', text: 'Red' },
+        { value: 'blue', text: 'Blue' }
+      ],
+      { clearSelection: true }
+    );
+    input.value = 'red blue';
+    const values = controller.getValues();
+    controller.clearSelection();
+
+    assert.deepEqual(values, ['red', 'blue']);
+    assert.equal(input.value, '');
+    assert.equal(input.selectedIndex, -1);
+    assert.equal(input.children.length, 2);
+  });
+});
+
+
     describe('tag input controller', () => {
   let documentMock;
 

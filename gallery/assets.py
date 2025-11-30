@@ -31,6 +31,7 @@ ADDITIONAL_GALLERY_SCRIPTS: tuple[str, ...] = (
     "gallery/app/controller.js",
     "gallery/components/tomSelectAdapterFactory.js",
     "gallery/components/tomSelectAdapter.js",
+    "gallery/components/tagSearch.js",
     "gallery/components/tagInput.js",
     "gallery/render/effectViewModel.js",
     "gallery/render/effectFactory.js",

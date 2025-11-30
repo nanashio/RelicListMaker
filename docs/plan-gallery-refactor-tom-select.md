@@ -86,11 +86,12 @@
   | 03-30 | Playwright フィクスチャのスタイル配信を修正 | S3 | npm run test:browser（依存取得失敗） |
   | 03-31 | レイアウトハンドル導入で DOM 依存を明示 | S3 | pytest / node --test |
   | 04-01 | サマリー計算のキャッシュ化と効果ステータスのデータ保存 | S3 | pytest / node --test |
-| 04-02 | TomSelect アダプタファクトリに集約し依存リストを更新 | S1/S3 | pytest / node --test |
-| 04-03 | フィルター評価関数を ESM 化しコピー対象とテストを更新 | S4 | pytest / node --test |
+  | 04-02 | TomSelect アダプタファクトリに集約し依存リストを更新 | S1/S3 | pytest / node --test |
+  | 04-03 | フィルター評価関数を ESM 化しコピー対象とテストを更新 | S4 | pytest / node --test |
   | 04-03 | ギャラリーテンプレートをパーシャル化しビルドの依存順を固定 | S3 | pytest / node --test |
   | 04-04 | タグトークン正規化を ES Module 化しグローバル登録・テスト追加 | S4 | pytest |
   | 04-05 | Playwright フィクスチャに ESM モジュール配信を追加し 404 を解消 | S4 | npm run test:browser |
+  | 04-07 | タグ検索コントローラーをコンポーネント化し TomSelect 設定を共有 | S1/S2 | node --test |
 
 ## 進捗メモ（2025-03-19）
 - スプリント 1 の着手済み。
@@ -223,3 +224,14 @@
 - スプリント 4 のフィルター純粋関数を拡充。
   - `filterPredicates.js` の正規化・評価処理に対する Node テストを追加し、タグ/効果/色の組み合わせや空入力時の挙動を網羅。
 - テスト: `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行。
+
+## 進捗メモ（2025-04-07）
+- スプリント 1/2 のタグ検索周りをフォロー。
+  - `tagSearchController` を `templates/gallery/components/tagSearch.js` としてコンポーネント化し、`resolveTomSelectAdapter`/`createDefaultTomSelectAdapter` を共有する構成に整理。`galleryView` 側は新コンポーネントを優先利用しつつ、従来の IIFE 内蔵実装をフォールバックとして保持。
+  - ギャラリー生成時のコピー対象と依存リストにタグ検索コンポーネントを追加し、Node テストで TomSelect あり/なし双方の挙動を検証。
+- テスト: `node --test tests/js/gallery_modules.test.mjs` を実行。
+
+## 進捗メモ（2025-04-08）
+- スプリント 1/2 のタグ検索フォローアップ。
+  - `galleryView` にタグデバッグフラグ解決用のローカルヘルパーを復元し、`tagSearchController` への `isDebugEnabled` 依存が初期化時に未定義で落ちる問題を解消。
+- テスト: `npm run test:browser -- tests/browser/viewer.spec.ts` を試行（Playwright ブラウザの取得権限がなく失敗）。
