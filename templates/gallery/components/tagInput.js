@@ -1,175 +1,4 @@
 (() => {
-    function createDefaultTomSelectAdapterFallback(TomSelectClass, documentRef) {
-        const hasDom = Boolean(documentRef && typeof documentRef.createElement === 'function');
-        const hasTomSelect = typeof TomSelectClass === 'function';
-
-        if (!hasDom || !hasTomSelect) {
-            return null;
-        }
-
-        function createInstance(input, options = {}) {
-            if (!input) {
-                return null;
-            }
-            return new TomSelectClass(input, options);
-        }
-
-        function syncOptions(instance, input, options = [], { clearSelection = false } = {}) {
-            const normalizedOptions = Array.isArray(options) ? options : [];
-            if (instance && typeof instance.clearOptions === 'function') {
-                if (clearSelection && typeof instance.clear === 'function') {
-                    instance.clear(true);
-                }
-                instance.clearOptions();
-                normalizedOptions.forEach((option) => instance.addOption(option));
-                if (typeof instance.refreshOptions === 'function') {
-                    instance.refreshOptions(false);
-                }
-                return;
-            }
-
-            if (!hasDom || !input) {
-                return;
-            }
-            while (input.firstChild) {
-                input.removeChild(input.firstChild);
-            }
-            normalizedOptions.forEach((option) => {
-                const value = option && option.value ? String(option.value).trim() : '';
-                if (!value) {
-                    return;
-                }
-                const node = documentRef.createElement('option');
-                node.value = value;
-                node.textContent = option.text || value;
-                input.appendChild(node);
-            });
-            if (clearSelection) {
-                input.selectedIndex = -1;
-            }
-        }
-
-        function clearSelection(instance, input) {
-            if (instance && typeof instance.clear === 'function') {
-                instance.clear(true);
-                return;
-            }
-            if (input) {
-                if (typeof input.selectedIndex === 'number') {
-                    input.selectedIndex = -1;
-                }
-                input.value = '';
-            }
-        }
-
-        function getValues(instance, input, parseTokens) {
-            if (instance && typeof instance.getValue === 'function') {
-                const value = instance.getValue();
-                if (Array.isArray(value)) {
-                    return value.slice();
-                }
-                if (typeof value === 'string') {
-                    return value ? [value] : [];
-                }
-            }
-
-            if (input && input.selectedOptions) {
-                return Array.from(input.selectedOptions)
-                    .map((option) => option.value)
-                    .filter((value) => value);
-            }
-            const text = input && input.value ? input.value : '';
-            if (typeof parseTokens === 'function') {
-                return parseTokens(text);
-            }
-            return text ? [text] : [];
-        }
-
-        function onChange(instance, input, handler) {
-            if (typeof handler !== 'function') {
-                return;
-            }
-            if (instance && typeof instance.on === 'function') {
-                instance.on('change', handler);
-                return;
-            }
-            if (input && typeof input.addEventListener === 'function') {
-                input.addEventListener('change', handler);
-            }
-        }
-
-        function setValue(instance, tokens) {
-            if (instance && typeof instance.setValue === 'function') {
-                instance.setValue(tokens, true);
-                return true;
-            }
-            return false;
-        }
-
-        return {
-            hasSupport: true,
-            createInstance,
-            syncOptions,
-            clearSelection,
-            getValues,
-            onChange,
-            setValue,
-            registerNativeLogging() {}
-        };
-    }
-
-    function resolveTomSelectAdapterWithSharedFactory(config = {}) {
-        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        const createTomSelectAdapterFn =
-            typeof config.createTomSelectAdapter === 'function'
-                ? config.createTomSelectAdapter
-                : namespace && typeof namespace.createTomSelectAdapter === 'function'
-                  ? namespace.createTomSelectAdapter
-                  : null;
-        const defaultTomSelectAdapterFactory =
-            typeof config.createDefaultTomSelectAdapter === 'function'
-                ? config.createDefaultTomSelectAdapter
-                : namespace && typeof namespace.createDefaultTomSelectAdapter === 'function'
-                  ? namespace.createDefaultTomSelectAdapter
-                  : createDefaultTomSelectAdapterFallback;
-        const resolver =
-            namespace && typeof namespace.resolveTomSelectAdapterWithResolver === 'function'
-                ? namespace.resolveTomSelectAdapterWithResolver
-                : null;
-
-        if (resolver) {
-            const adapter = resolver({
-                resolveTomSelectAdapter: config.resolveTomSelectAdapter,
-                createTomSelectAdapter: createTomSelectAdapterFn,
-                createDefaultTomSelectAdapter: defaultTomSelectAdapterFactory,
-                TomSelect: config.TomSelect,
-                documentRef: config.documentRef,
-                isDebugEnabled: isTagDebugEnabled
-            });
-            if (adapter) {
-                return adapter;
-            }
-        }
-
-        if (typeof config.resolveTomSelectAdapter === 'function') {
-            const adapter = config.resolveTomSelectAdapter({
-                createTomSelectAdapter: createTomSelectAdapterFn,
-                createDefaultTomSelectAdapter: defaultTomSelectAdapterFactory,
-                TomSelect: config.TomSelect,
-                documentRef: config.documentRef,
-                isDebugEnabled: isTagDebugEnabled
-            });
-            if (adapter) {
-                return adapter;
-            }
-        }
-
-        if (typeof defaultTomSelectAdapterFactory === 'function') {
-            return defaultTomSelectAdapterFactory(config.TomSelect, config.documentRef);
-        }
-        return null;
-    }
-
     function createFallbackFormatter(formatTagTokens, parseTagTokens) {
         return (value) => {
             if (Array.isArray(value)) {
@@ -191,6 +20,21 @@
         } catch (error) {
             return false;
         }
+    }
+
+    function resolveTomSelectAdapterShared(config = {}) {
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        if (!namespace || typeof namespace.resolveSharedTomSelectAdapter !== 'function') {
+            return null;
+        }
+        return namespace.resolveSharedTomSelectAdapter({
+            resolveTomSelectAdapter: config.resolveTomSelectAdapter,
+            createTomSelectAdapter: config.createTomSelectAdapter,
+            createDefaultTomSelectAdapter: config.createDefaultTomSelectAdapter,
+            TomSelect: config.TomSelect,
+            documentRef: config.documentRef,
+            isDebugEnabled: isTagDebugEnabled
+        });
     }
 
     function createTagInputController(config = {}) {
@@ -235,7 +79,7 @@
         const fallbackFormatter = createFallbackFormatter(formatTagTokens, parseTagTokens);
 
         const hasDom = Boolean(documentRef && typeof documentRef.createElement === 'function');
-        const tomSelectAdapter = resolveTomSelectAdapterWithSharedFactory({
+        const tomSelectAdapter = resolveTomSelectAdapterShared({
             resolveTomSelectAdapter: config.resolveTomSelectAdapter,
             createTomSelectAdapter: createTomSelectAdapterConfig,
             createDefaultTomSelectAdapter: config.createDefaultTomSelectAdapter,

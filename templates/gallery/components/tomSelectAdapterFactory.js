@@ -206,10 +206,34 @@
         });
     }
 
+    function resolveSharedTomSelectAdapter(config = {}) {
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const resolver =
+            namespace && typeof namespace.resolveTomSelectAdapterWithResolver === 'function'
+                ? namespace.resolveTomSelectAdapterWithResolver
+                : resolveTomSelectAdapterWithResolver;
+        const defaultFactory =
+            typeof config.createDefaultTomSelectAdapter === 'function'
+                ? config.createDefaultTomSelectAdapter
+                : namespace && typeof namespace.createDefaultTomSelectAdapter === 'function'
+                  ? namespace.createDefaultTomSelectAdapter
+                  : createDefaultTomSelectAdapter;
+
+        return resolver({
+            resolveTomSelectAdapter: config.resolveTomSelectAdapter,
+            createTomSelectAdapter: config.createTomSelectAdapter,
+            createDefaultTomSelectAdapter: defaultFactory,
+            TomSelect: config.TomSelect,
+            documentRef: config.documentRef,
+            isDebugEnabled: config.isDebugEnabled
+        });
+    }
+
     if (!window.galleryComponents) {
         window.galleryComponents = {};
     }
     window.galleryComponents.createDefaultTomSelectAdapter = createDefaultTomSelectAdapter;
     window.galleryComponents.resolveTomSelectAdapter = resolveTomSelectAdapter;
     window.galleryComponents.resolveTomSelectAdapterWithResolver = resolveTomSelectAdapterWithResolver;
+    window.galleryComponents.resolveSharedTomSelectAdapter = resolveSharedTomSelectAdapter;
 })();
