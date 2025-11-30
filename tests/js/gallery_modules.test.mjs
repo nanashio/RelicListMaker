@@ -1362,6 +1362,58 @@ describe('tag debug resolver', () => {
   });
 });
 
+describe('shared resolvers', () => {
+  beforeEach(() => {
+    global.window = {
+      localStorage: {
+        store: {},
+        getItem(key) {
+          return Object.prototype.hasOwnProperty.call(this.store, key) ? this.store[key] : null;
+        },
+        setItem(key, value) {
+          this.store[key] = String(value);
+        }
+      }
+    };
+    runScript('templates/gallery/components/tagDebug.js');
+    runScript('templates/gallery/components/sharedResolvers.js');
+  });
+
+  afterEach(() => {
+    delete global.window;
+  });
+
+  test('uses tagDebug resolver when available', () => {
+    const calls = [];
+    global.window.galleryComponents.resolveTagDebugResolver = ({ isDebugEnabled }) => () => {
+      calls.push(isDebugEnabled());
+      return true;
+    };
+
+    const resolver = global.window.galleryComponents.resolveTagDebugResolverWithFallback({
+      isDebugEnabled: () => 'custom'
+    });
+
+    assert.equal(resolver(), true);
+    assert.deepEqual(calls, ['custom']);
+  });
+
+  test('injects debug resolver when resolving shared TomSelect adapter', () => {
+    const calls = [];
+    global.window.galleryComponents.resolveSharedTomSelectAdapter = (config) => {
+      calls.push(config.isDebugEnabled());
+      return { marker: 'adapter' };
+    };
+
+    const adapter = global.window.galleryComponents.resolveSharedTomSelectAdapterWithDebug({
+      isDebugEnabled: () => true
+    });
+
+    assert.equal(adapter.marker, 'adapter');
+    assert.deepEqual(calls, [true]);
+  });
+});
+
 
 describe('tomSelect adapter factory', () => {
   let documentMock;
@@ -1371,6 +1423,7 @@ describe('tomSelect adapter factory', () => {
     global.window = {};
     global.document = documentMock;
     runScript('templates/gallery/components/tagDebug.js');
+    runScript('templates/gallery/components/sharedResolvers.js');
     runScript('templates/gallery/components/tomSelectAdapterFactory.js');
   });
 
@@ -1458,6 +1511,7 @@ describe('tag search controller', () => {
     global.window = {};
     global.document = documentMock;
     runScript('templates/gallery/components/tagDebug.js');
+    runScript('templates/gallery/components/sharedResolvers.js');
     runScript('templates/gallery/components/tomSelectAdapterFactory.js');
   });
 
@@ -1545,6 +1599,7 @@ describe('tag search controller', () => {
     global.window = {};
     global.document = documentMock;
     runScript('templates/gallery/components/tagDebug.js');
+    runScript('templates/gallery/components/sharedResolvers.js');
     runScript('templates/gallery/components/tomSelectAdapterFactory.js');
   });
 
@@ -1919,6 +1974,8 @@ describe('gallery view', () => {
   beforeEach(() => {
     global.window = {};
     global.document = createDocumentStub();
+    runScript('templates/gallery/components/tagDebug.js');
+    runScript('templates/gallery/components/sharedResolvers.js');
     runScript('templates/gallery/components/tomSelectAdapterFactory.js');
     runScript('templates/gallery/utils/data.js');
     runScript('templates/gallery/utils/filter.js');

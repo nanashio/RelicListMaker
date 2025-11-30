@@ -263,3 +263,9 @@
 - デバッグリゾルバの共有ロジックを全面適用。
   - `tagDebug` モジュールに `resolveTagDebugResolver` を追加し、タグ入力・タグ検索・ギャラリービューの各 IIFE が同一のデバッグリゾルバを参照するように整理。各コンポーネントのフォールバック処理はシンプルなデフォルト判定に限定し、共有モジュールのエラー処理を優先する形に統一した。
 - テスト: `npm run test:node` を実行。
+
+## 進捗メモ（2025-04-13 追記）
+- デバッグリゾルバと TomSelect 共有リゾルバの橋渡しを共通モジュール化。
+  - `components/sharedResolvers.js` を追加し、`resolveTagDebugResolverWithFallback` と `resolveSharedTomSelectAdapterWithDebug` を `window.galleryComponents` に公開。タグ入力・タグ検索・ギャラリービュー・TomSelect アダプタが同一のリゾルバ経路を使うよう整理し、フォールバック処理の重複を解消した。
+  - ギャラリー生成時のコピー対象と ES Module 依存リスト、Node テストに新モジュールを追加し、配信漏れやリゾルバ未注入を検出できるようにした。
+- テスト: `pytest`、`npm run test:node` を実行。

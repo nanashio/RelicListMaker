@@ -15,21 +15,18 @@
 
     function resolveTagDebugResolver(config = {}) {
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        const resolver =
-            namespace && typeof namespace.resolveTagDebugResolver === 'function'
-                ? namespace.resolveTagDebugResolver
+        const resolverWithFallback =
+            namespace && typeof namespace.resolveTagDebugResolverWithFallback === 'function'
+                ? namespace.resolveTagDebugResolverWithFallback
                 : null;
         const defaultResolver =
             namespace && typeof namespace.defaultIsTagDebugEnabled === 'function'
                 ? namespace.defaultIsTagDebugEnabled
                 : defaultIsDebugEnabled;
 
-        if (resolver) {
+        if (resolverWithFallback) {
             try {
-                const resolved = resolver(config);
-                if (typeof resolved === 'function') {
-                    return resolved;
-                }
+                return resolverWithFallback(config);
             } catch (error) {
                 // fall through to the default resolver
             }
