@@ -1315,6 +1315,54 @@ describe('gallery summary utils', () => {
   });
 
 
+describe('tag debug resolver', () => {
+  beforeEach(() => {
+    global.window = {
+      localStorage: {
+        store: {},
+        getItem(key) {
+          return Object.prototype.hasOwnProperty.call(this.store, key) ? this.store[key] : null;
+        },
+        setItem(key, value) {
+          this.store[key] = String(value);
+        }
+      }
+    };
+    runScript('templates/gallery/components/tagDebug.js');
+  });
+
+  afterEach(() => {
+    delete global.window;
+  });
+
+  test('prefers custom resolver result', () => {
+    const calls = [];
+    const resolver = global.window.galleryComponents.createTagDebugResolver({
+      isDebugEnabled: () => {
+        calls.push('custom-called');
+        return true;
+      }
+    });
+
+    assert.equal(resolver(), true);
+    assert.deepEqual(calls, ['custom-called']);
+  });
+
+  test('falls back to default flag when custom resolver throws', () => {
+    global.window.localStorage.setItem('galleryDebugTags', 'true');
+    const resolver = global.window.galleryComponents.createTagDebugResolver({
+      isDebugEnabled: () => {
+        throw new Error('resolver failed');
+      }
+    });
+
+    assert.equal(resolver(), true);
+    global.window.localStorage.setItem('galleryDebugTags', 'false');
+    assert.equal(resolver(), false);
+  });
+});
+
+
 describe('tomSelect adapter factory', () => {
   let documentMock;
 
@@ -1322,6 +1370,7 @@ describe('tomSelect adapter factory', () => {
     documentMock = createMockDocument();
     global.window = {};
     global.document = documentMock;
+    runScript('templates/gallery/components/tagDebug.js');
     runScript('templates/gallery/components/tomSelectAdapterFactory.js');
   });
 
@@ -1408,6 +1457,7 @@ describe('tag search controller', () => {
     documentMock = createMockDocument();
     global.window = {};
     global.document = documentMock;
+    runScript('templates/gallery/components/tagDebug.js');
     runScript('templates/gallery/components/tomSelectAdapterFactory.js');
   });
 
@@ -1494,6 +1544,7 @@ describe('tag search controller', () => {
     documentMock = createMockDocument();
     global.window = {};
     global.document = documentMock;
+    runScript('templates/gallery/components/tagDebug.js');
     runScript('templates/gallery/components/tomSelectAdapterFactory.js');
   });
 

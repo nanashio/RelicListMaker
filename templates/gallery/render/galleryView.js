@@ -1,16 +1,42 @@
 (() => {
-    function isTagDebugEnabled() {
-        if (typeof window === 'undefined' || !window) {
-            return false;
+    function resolveTagDebugResolver(config = {}) {
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const createResolver =
+            namespace && typeof namespace.createTagDebugResolver === 'function'
+                ? namespace.createTagDebugResolver
+                : null;
+        if (createResolver) {
+            return createResolver(config);
         }
-        if (typeof window.galleryDebugTags !== 'undefined') {
-            return Boolean(window.galleryDebugTags);
-        }
-        try {
-            return window.localStorage && window.localStorage.getItem('galleryDebugTags') === 'true';
-        } catch (error) {
-            return false;
-        }
+
+        const defaultResolver =
+            namespace && typeof namespace.defaultIsTagDebugEnabled === 'function'
+                ? namespace.defaultIsTagDebugEnabled
+                : () => {
+                      if (typeof window === 'undefined' || !window) {
+                          return false;
+                      }
+                      if (typeof window.galleryDebugTags !== 'undefined') {
+                          return Boolean(window.galleryDebugTags);
+                      }
+                      try {
+                          return window.localStorage && window.localStorage.getItem('galleryDebugTags') === 'true';
+                      } catch (error) {
+                          return false;
+                      }
+                  };
+        const { isDebugEnabled } = config;
+
+        return () => {
+            if (typeof isDebugEnabled === 'function') {
+                try {
+                    return Boolean(isDebugEnabled());
+                } catch (error) {
+                    return defaultResolver();
+                }
+            }
+            return defaultResolver();
+        };
     }
 
     function resolveTomSelectAdapterShared(config = {}) {
@@ -18,8 +44,7 @@
         if (!namespace || typeof namespace.resolveSharedTomSelectAdapter !== 'function') {
             return null;
         }
-        const isDebugEnabled =
-            typeof config.isDebugEnabled === 'function' ? config.isDebugEnabled : isTagDebugEnabled;
+        const isDebugEnabled = resolveTagDebugResolver({ isDebugEnabled: config.isDebugEnabled });
 
         return namespace.resolveSharedTomSelectAdapter({
             resolveTomSelectAdapter: config.resolveTomSelectAdapter,
@@ -80,6 +105,7 @@
             throw new Error('createGalleryView: isRecordFavorite helper is required');
         }
 
+        const isTagDebugEnabled = resolveTagDebugResolver({ isDebugEnabled: config.isDebugEnabled });
         const dataUtils = typeof window !== 'undefined' && window ? window.galleryDataUtils : null;
         const tagStoreApi = tagStore && typeof tagStore.normalizeTags === 'function' ? tagStore : null;
         const filterStoreApi = filterStore && typeof filterStore.getState === 'function' ? filterStore : null;
@@ -151,7 +177,8 @@
                       documentRef: hasDocument || null,
                       createTomSelectAdapter: config.createTomSelectAdapter,
                       resolveTomSelectAdapter: config.resolveTomSelectAdapter,
-                      createDefaultTomSelectAdapter: config.createDefaultTomSelectAdapter
+                      createDefaultTomSelectAdapter: config.createDefaultTomSelectAdapter,
+                      isDebugEnabled: isTagDebugEnabled
                   })
                 : null;
         const createTagSearchControllerFn =
