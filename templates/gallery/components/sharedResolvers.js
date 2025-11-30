@@ -48,23 +48,58 @@
         };
     }
 
+    function resolveSharedTagDebugResolver(config = {}) {
+        return resolveTagDebugResolverWithFallback(config);
+    }
+
     function resolveSharedTomSelectAdapterWithDebug(config = {}) {
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        const resolver =
+        const sharedResolver =
             namespace && typeof namespace.resolveSharedTomSelectAdapter === 'function'
                 ? namespace.resolveSharedTomSelectAdapter
                 : null;
+        const resolverWithResolver =
+            namespace && typeof namespace.resolveTomSelectAdapterWithResolver === 'function'
+                ? namespace.resolveTomSelectAdapterWithResolver
+                : null;
+        const resolverBasic =
+            namespace && typeof namespace.resolveTomSelectAdapter === 'function'
+                ? namespace.resolveTomSelectAdapter
+                : null;
+        const defaultFactory =
+            typeof config.createDefaultTomSelectAdapter === 'function'
+                ? config.createDefaultTomSelectAdapter
+                : namespace && typeof namespace.createDefaultTomSelectAdapter === 'function'
+                  ? namespace.createDefaultTomSelectAdapter
+                  : null;
         const isDebugEnabled = resolveTagDebugResolverWithFallback({ isDebugEnabled: config.isDebugEnabled });
 
-        if (resolver) {
-            return resolver({
-                resolveTomSelectAdapter: config.resolveTomSelectAdapter,
-                createTomSelectAdapter: config.createTomSelectAdapter,
-                createDefaultTomSelectAdapter: config.createDefaultTomSelectAdapter,
-                TomSelect: config.TomSelect,
-                documentRef: config.documentRef,
-                isDebugEnabled
-            });
+        const adapterConfig = {
+            resolveTomSelectAdapter: config.resolveTomSelectAdapter,
+            createTomSelectAdapter: config.createTomSelectAdapter,
+            createDefaultTomSelectAdapter: defaultFactory,
+            TomSelect: config.TomSelect,
+            documentRef: config.documentRef,
+            isDebugEnabled
+        };
+
+        const resolverCandidates = [sharedResolver, resolverWithResolver, resolverBasic].filter(
+            (resolver) => typeof resolver === 'function'
+        );
+
+        for (const resolver of resolverCandidates) {
+            try {
+                const adapter = resolver(adapterConfig);
+                if (adapter) {
+                    return adapter;
+                }
+            } catch (error) {
+                // try next resolver
+            }
+        }
+
+        if (typeof defaultFactory === 'function') {
+            return defaultFactory(config.TomSelect, config.documentRef);
         }
 
         return null;
@@ -75,5 +110,6 @@
     }
 
     window.galleryComponents.resolveTagDebugResolverWithFallback = resolveTagDebugResolverWithFallback;
+    window.galleryComponents.resolveSharedTagDebugResolver = resolveSharedTagDebugResolver;
     window.galleryComponents.resolveSharedTomSelectAdapterWithDebug = resolveSharedTomSelectAdapterWithDebug;
 })();
