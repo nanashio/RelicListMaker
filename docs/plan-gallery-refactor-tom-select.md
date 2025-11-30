@@ -56,7 +56,7 @@
   - タスク: JS ロジックを `templates/gallery/js/modules/` へ順次抽出し、IIFE からも参照できるようラッパを配置。`tests/test_gallery_js_modules.py` に単体テストを追加し、タグ正規化・フィルター条件適用の純粋関数を検証。
   - 成果物: 主要ロジックがモジュール化され、CI でテスト可能な形になっていること。
 
-## 進捗サマリー（2025-04-05 時点）
+## 進捗サマリー（2025-04-11 時点）
 - スプリント完了状況と残り
   - ✅ スプリント 1（TomSelect アダプタ）: 依存注入・デフォルトアダプタ・コピー漏れ検知まで完了。
   - ✅ スプリント 2（タグ同期・イベント束ね）: タグストアとイベント集約を導入し、既存 UI と同期済み。
@@ -68,6 +68,7 @@
   - スプリント 3: 計画 4 項目中 4 完了（100%）。
   - スプリント 4: 計画 3 項目中 3 完了（100%）。
   - 残作業: なし（TomSelect リゾルバの共通化まで完了）。
+  - フォローアップ: デバッグフラグ解決を `tagDebug` モジュールに集約し、タグ入力/検索/ビューで共有。
 
 - 日次ログのダイジェスト（テスト状況付き）
 
@@ -246,3 +247,9 @@
 - TomSelect 解決ロジックの共有リゾルバを適用。
   - `tomSelectAdapterFactory` に `resolveSharedTomSelectAdapter` を追加し、タグ入力・タグ検索・ギャラリービューが同一の共有リゾルバ経由で TomSelect 依存を解決するようにした。コンポーネント側のフォールバック実装を整理し、テストの初期化順をファクトリ読込に合わせて依存解決を一元化。
 - テスト: `node --test tests/js/gallery_modules.test.mjs` を実行。
+
+## 進捗メモ（2025-04-11）
+- デバッグフラグ解決を共有モジュール化。
+  - `templates/gallery/components/tagDebug.js` を追加し、タグ入力・タグ検索・ギャラリービューが同一のデバッグフラグリゾルバを参照するように変更。`resolveSharedTomSelectAdapter` に渡す `isDebugEnabled` が統一されたため、TomSelect アダプタのロギング条件が一貫するようになった。
+  - `gallery/assets.py`、`templates/gallery/index.js`、`tests/test_generate_gallery.py` にコピー対象と依存リストを追加し、ビルド生成物やフィクスチャで新モジュールが欠落しないようにした。Node テストも `tagDebug` を読み込むよう更新し、フォールバック経路とローカルストレージ判定の挙動を検証。
+- テスト: `node --test tests/js/gallery_modules.test.mjs`、`pytest` を実行。

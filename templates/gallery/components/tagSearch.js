@@ -16,12 +16,53 @@
             .filter((token) => token.length > 0);
     }
 
+    function resolveTagDebugResolver(config = {}) {
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const createResolver =
+            namespace && typeof namespace.createTagDebugResolver === 'function'
+                ? namespace.createTagDebugResolver
+                : null;
+        if (createResolver) {
+            return createResolver(config);
+        }
+
+        const defaultResolver =
+            namespace && typeof namespace.defaultIsTagDebugEnabled === 'function'
+                ? namespace.defaultIsTagDebugEnabled
+                : () => {
+                      if (typeof window === 'undefined' || !window) {
+                          return false;
+                      }
+                      if (typeof window.galleryDebugTags !== 'undefined') {
+                          return Boolean(window.galleryDebugTags);
+                      }
+                      try {
+                          return window.localStorage && window.localStorage.getItem('galleryDebugTags') === 'true';
+                      } catch (error) {
+                          return false;
+                      }
+                  };
+        const { isDebugEnabled } = config;
+
+        return () => {
+            if (typeof isDebugEnabled === 'function') {
+                try {
+                    return Boolean(isDebugEnabled());
+                } catch (error) {
+                    return defaultResolver();
+                }
+            }
+            return defaultResolver();
+        };
+    }
+
     function resolveTomSelectAdapterShared(config = {}) {
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
         if (!namespace || typeof namespace.resolveSharedTomSelectAdapter !== 'function') {
             return null;
         }
-        return namespace.resolveSharedTomSelectAdapter(config);
+        const isDebugEnabled = resolveTagDebugResolver({ isDebugEnabled: config.isDebugEnabled });
+        return namespace.resolveSharedTomSelectAdapter({ ...config, isDebugEnabled });
     }
 
     function createTagSearchController(config = {}) {

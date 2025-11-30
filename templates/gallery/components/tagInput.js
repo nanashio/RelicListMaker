@@ -8,18 +8,44 @@
         };
     }
 
-    function isTagDebugEnabled() {
-        if (typeof window === 'undefined' || !window) {
-            return false;
+    function resolveTagDebugResolver(config = {}) {
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const createResolver =
+            namespace && typeof namespace.createTagDebugResolver === 'function'
+                ? namespace.createTagDebugResolver
+                : null;
+        if (createResolver) {
+            return createResolver(config);
         }
-        if (typeof window.galleryDebugTags !== 'undefined') {
-            return Boolean(window.galleryDebugTags);
-        }
-        try {
-            return window.localStorage && window.localStorage.getItem('galleryDebugTags') === 'true';
-        } catch (error) {
-            return false;
-        }
+
+        const defaultResolver =
+            namespace && typeof namespace.defaultIsTagDebugEnabled === 'function'
+                ? namespace.defaultIsTagDebugEnabled
+                : () => {
+                      if (typeof window === 'undefined' || !window) {
+                          return false;
+                      }
+                      if (typeof window.galleryDebugTags !== 'undefined') {
+                          return Boolean(window.galleryDebugTags);
+                      }
+                      try {
+                          return window.localStorage && window.localStorage.getItem('galleryDebugTags') === 'true';
+                      } catch (error) {
+                          return false;
+                      }
+                  };
+        const { isDebugEnabled } = config;
+
+        return () => {
+            if (typeof isDebugEnabled === 'function') {
+                try {
+                    return Boolean(isDebugEnabled());
+                } catch (error) {
+                    return defaultResolver();
+                }
+            }
+            return defaultResolver();
+        };
     }
 
     function resolveTomSelectAdapterShared(config = {}) {
@@ -27,13 +53,14 @@
         if (!namespace || typeof namespace.resolveSharedTomSelectAdapter !== 'function') {
             return null;
         }
+        const isDebugEnabled = resolveTagDebugResolver({ isDebugEnabled: config.isDebugEnabled });
         return namespace.resolveSharedTomSelectAdapter({
             resolveTomSelectAdapter: config.resolveTomSelectAdapter,
             createTomSelectAdapter: config.createTomSelectAdapter,
             createDefaultTomSelectAdapter: config.createDefaultTomSelectAdapter,
             TomSelect: config.TomSelect,
             documentRef: config.documentRef,
-            isDebugEnabled: isTagDebugEnabled
+            isDebugEnabled
         });
     }
 
@@ -43,7 +70,8 @@
             createTomSelectAdapter: createTomSelectAdapterConfig,
             parseTagTokens: parseTokensConfig,
             formatTagTokens: formatTokensConfig,
-            documentRef = typeof document !== 'undefined' ? document : null
+            documentRef = typeof document !== 'undefined' ? document : null,
+            isDebugEnabled
         } = config;
 
         const tagTokenModule =
@@ -79,12 +107,14 @@
         const fallbackFormatter = createFallbackFormatter(formatTagTokens, parseTagTokens);
 
         const hasDom = Boolean(documentRef && typeof documentRef.createElement === 'function');
+        const isTagDebugEnabled = resolveTagDebugResolver({ isDebugEnabled });
         const tomSelectAdapter = resolveTomSelectAdapterShared({
             resolveTomSelectAdapter: config.resolveTomSelectAdapter,
             createTomSelectAdapter: createTomSelectAdapterConfig,
             createDefaultTomSelectAdapter: config.createDefaultTomSelectAdapter,
             TomSelect: TomSelectClass,
-            documentRef
+            documentRef,
+            isDebugEnabled
         });
 
         if (!hasDom || !tomSelectAdapter || !tomSelectAdapter.hasSupport) {

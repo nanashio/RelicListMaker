@@ -18,6 +18,7 @@ const MODULE_DEPENDENCIES = [
     './storage/utils.js',
     './storage/manager.js',
     './app/controller.js',
+    './components/tagDebug.js',
     './components/tomSelectAdapterFactory.js',
     './components/tomSelectAdapter.js',
     './components/tagSearch.js',
