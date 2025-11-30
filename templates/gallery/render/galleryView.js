@@ -1,4 +1,18 @@
 (() => {
+    function isTagDebugEnabled() {
+        if (typeof window === 'undefined' || !window) {
+            return false;
+        }
+        if (typeof window.galleryDebugTags !== 'undefined') {
+            return Boolean(window.galleryDebugTags);
+        }
+        try {
+            return window.localStorage && window.localStorage.getItem('galleryDebugTags') === 'true';
+        } catch (error) {
+            return false;
+        }
+    }
+
     function resolveAdapterResolver(resolverConfig) {
         if (typeof resolverConfig === 'function') {
             return resolverConfig;

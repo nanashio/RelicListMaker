@@ -230,3 +230,8 @@
   - `tagSearchController` を `templates/gallery/components/tagSearch.js` としてコンポーネント化し、`resolveTomSelectAdapter`/`createDefaultTomSelectAdapter` を共有する構成に整理。`galleryView` 側は新コンポーネントを優先利用しつつ、従来の IIFE 内蔵実装をフォールバックとして保持。
   - ギャラリー生成時のコピー対象と依存リストにタグ検索コンポーネントを追加し、Node テストで TomSelect あり/なし双方の挙動を検証。
 - テスト: `node --test tests/js/gallery_modules.test.mjs` を実行。
+
+## 進捗メモ（2025-04-08）
+- スプリント 1/2 のタグ検索フォローアップ。
+  - `galleryView` にタグデバッグフラグ解決用のローカルヘルパーを復元し、`tagSearchController` への `isDebugEnabled` 依存が初期化時に未定義で落ちる問題を解消。
+- テスト: `npm run test:browser -- tests/browser/viewer.spec.ts` を試行（Playwright ブラウザの取得権限がなく失敗）。
