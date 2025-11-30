@@ -754,6 +754,88 @@ describe('filter predicate modules', () => {
     assert.equal(typeof registered.filterItems, 'function');
   });
 
+  test('normalization helpers handle empty inputs and separators', async () => {
+    const module = await import('../../templates/gallery/js/modules/filterPredicates.js');
+    const {
+      normalizeToken,
+      normalizeStatus,
+      toNormalizedTokenList,
+      normalizeEffectSearchEntry,
+      normalizeEffectSearchTerms,
+      normalizeTagSearchTerms
+    } = module;
+
+    assert.equal(normalizeToken('  Alpha  '), 'alpha');
+    assert.equal(normalizeToken(null), '');
+    assert.equal(normalizeStatus(' Pass '), 'pass');
+    assert.equal(normalizeStatus(''), 'pending');
+    assert.deepEqual(toNormalizedTokenList([' One ', '', null]), ['one']);
+
+    assert.deepEqual(normalizeEffectSearchTerms(['炎', ' 雷 ']), ['炎', '雷']);
+    assert.deepEqual(normalizeEffectSearchEntry({ terms: '炎 雷', mode: 'or' }), {
+      terms: ['炎', '雷'],
+      mode: 'or'
+    });
+    assert.equal(normalizeEffectSearchEntry({ terms: '   ' }), null);
+
+    assert.deepEqual(normalizeTagSearchTerms('炎, 雷; 風'), ['炎', '雷', '風']);
+  });
+
+  test('matches and evaluateItemVisibility cover effect and tag combinations', async () => {
+    const { matchesEffectTerms, evaluateItemVisibility } = await import(
+      '../../templates/gallery/js/modules/filterPredicates.js'
+    );
+
+    const effectValues = ['炎攻撃力アップ', '雷耐性アップ'];
+    assert.equal(matchesEffectTerms(effectValues, ['炎'], 'and'), true);
+    assert.equal(matchesEffectTerms(effectValues, ['炎', '雷'], 'and'), true);
+    assert.equal(matchesEffectTerms(effectValues, ['炎', '氷'], 'and'), false);
+    assert.equal(matchesEffectTerms([], ['炎'], 'or'), false);
+
+    const baseItem = {
+      duplicate: false,
+      searchCache: ' relic ',
+      statusCache: '|pending|',
+      effectStates: 'pass,pending,pending',
+      favorite: false,
+      itemColor: '',
+      effectValues,
+      tagTokens: ['alpha', 'beta']
+    };
+
+    const effectTermFilters = {
+      term: '',
+      filter: 'all',
+      colorFilter: 'all',
+      includeDuplicates: true,
+      effectTerms: ['雷'],
+      effectMatchMode: 'or'
+    };
+    assert.equal(evaluateItemVisibility(baseItem, effectTermFilters), true);
+
+    const tagFallbackFilters = {
+      term: '',
+      filter: 'all',
+      colorFilter: 'none',
+      includeDuplicates: true,
+      tagTerm: 'Alpha Beta'
+    };
+    assert.equal(evaluateItemVisibility(baseItem, tagFallbackFilters), true);
+
+    const resolvedFilter = { term: '', filter: 'resolved', colorFilter: 'all', includeDuplicates: true };
+    assert.equal(evaluateItemVisibility(baseItem, resolvedFilter), false);
+
+    const pendingRequired = {
+      ...tagFallbackFilters,
+      filter: 'with-pending',
+      colorFilter: 'all'
+    };
+    assert.equal(
+      evaluateItemVisibility({ ...baseItem, statusCache: '|pass|' }, pendingRequired),
+      false
+    );
+  });
+
   test('evaluateItemVisibility mirrors duplicate and status handling', async () => {
     const { buildItemSearchCaches, evaluateItemVisibility, filterItems } = await import(
       '../../templates/gallery/js/modules/filterPredicates.js'
