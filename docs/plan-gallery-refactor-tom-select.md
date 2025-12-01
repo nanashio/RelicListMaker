@@ -276,3 +276,9 @@
   - 同モジュールに `resolveSharedTagDebugResolver` を公開し、タグ入力・タグ検索・ギャラリービュー・TomSelect アダプタのデバッグ判定を共通経路に統一。
   - Node テストにフォールバック確認のケースを追加し、デフォルトアダプタ・デバッグ判定の両面で漏れを自動検知可能にした。
 - テスト: `pytest` と `npm run test:node` を実行。
+
+## 進捗メモ（2025-04-15）
+- 共有リゾルバの適用範囲を統一。
+  - `sharedResolvers` にデバッグ判定と TomSelect 解決の共通ブリッジ（`resolveTagDebugResolverSharedOrDefault` と `resolveSharedTomSelectAdapterOrDefault`）を追加し、コンポーネント側のフォールバック実装を集約。
+  - `tagInput` / `tagSearch` / `galleryView` / `tomSelectAdapter` が新ブリッジ経由でデバッグ判定と TomSelect アダプタを取得するように変更し、リゾルバ重複とログ制御の不一致を解消。
+- テスト: `pytest` と `npm run test:node` を実行。
