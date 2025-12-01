@@ -1,50 +1,4 @@
 (() => {
-    function defaultIsDebugEnabled() {
-        if (typeof window === 'undefined' || !window) {
-            return false;
-        }
-        try {
-            if (typeof window.galleryDebugTags !== 'undefined') {
-                return Boolean(window.galleryDebugTags);
-            }
-            return window.localStorage && window.localStorage.getItem('galleryDebugTags') === 'true';
-        } catch (error) {
-            return false;
-        }
-    }
-
-    function resolveTagDebugResolver(config = {}) {
-        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        const resolverWithFallback =
-            namespace && typeof namespace.resolveSharedTagDebugResolver === 'function'
-                ? namespace.resolveSharedTagDebugResolver
-                : null;
-        const defaultResolver =
-            namespace && typeof namespace.defaultIsTagDebugEnabled === 'function'
-                ? namespace.defaultIsTagDebugEnabled
-                : defaultIsDebugEnabled;
-
-        if (resolverWithFallback) {
-            try {
-                return resolverWithFallback(config);
-            } catch (error) {
-                // fall through to the default resolver
-            }
-        }
-
-        const { isDebugEnabled } = config;
-        return () => {
-            if (typeof isDebugEnabled === 'function') {
-                try {
-                    return Boolean(isDebugEnabled());
-                } catch (error) {
-                    return defaultResolver();
-                }
-            }
-            return defaultResolver();
-        };
-    }
-
     function getLogger(level = 'info') {
         if (typeof console === 'undefined') {
             return () => {};
@@ -67,7 +21,14 @@
 
         const hasDom = Boolean(documentRef && typeof documentRef.createElement === 'function');
         const hasTomSelect = typeof TomSelectClass === 'function';
-        const isDebugEnabled = resolveTagDebugResolver({ isDebugEnabled: isDebugEnabledConfig });
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const resolveTagDebugResolver =
+            namespace && typeof namespace.resolveTagDebugResolverSharedOrDefault === 'function'
+                ? namespace.resolveTagDebugResolverSharedOrDefault
+                : null;
+        const isDebugEnabled = resolveTagDebugResolver
+            ? resolveTagDebugResolver({ isDebugEnabled: isDebugEnabledConfig })
+            : () => false;
 
         function createInstance(input, options = {}, hooks = {}) {
             if (!hasDom || !hasTomSelect || !input) {

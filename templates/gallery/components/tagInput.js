@@ -8,50 +8,6 @@
         };
     }
 
-    function resolveTagDebugResolver(config = {}) {
-        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        const resolverWithFallback =
-            namespace && typeof namespace.resolveSharedTagDebugResolver === 'function'
-                ? namespace.resolveSharedTagDebugResolver
-                : null;
-        const defaultResolver =
-            namespace && typeof namespace.defaultIsTagDebugEnabled === 'function'
-                ? namespace.defaultIsTagDebugEnabled
-                : () => false;
-
-        if (resolverWithFallback) {
-            try {
-                return resolverWithFallback(config);
-            } catch (error) {
-                // fall back to default resolver
-            }
-        }
-
-        const { isDebugEnabled } = config;
-        return () => {
-            if (typeof isDebugEnabled === 'function') {
-                try {
-                    return Boolean(isDebugEnabled());
-                } catch (error) {
-                    return defaultResolver();
-                }
-            }
-            return defaultResolver();
-        };
-    }
-
-    function resolveTomSelectAdapterShared(config = {}) {
-        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        const resolver =
-            namespace && typeof namespace.resolveSharedTomSelectAdapterWithDebug === 'function'
-                ? namespace.resolveSharedTomSelectAdapterWithDebug
-                : null;
-        if (resolver) {
-            return resolver(config);
-        }
-        return null;
-    }
-
     function createTagInputController(config = {}) {
         const {
             TomSelect: TomSelectClass = (typeof window !== 'undefined' && window ? window.TomSelect : null),
@@ -62,6 +18,15 @@
             isDebugEnabled
         } = config;
 
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const resolveTagDebugResolver =
+            namespace && typeof namespace.resolveTagDebugResolverSharedOrDefault === 'function'
+                ? namespace.resolveTagDebugResolverSharedOrDefault
+                : null;
+        const resolveTomSelectAdapter =
+            namespace && typeof namespace.resolveSharedTomSelectAdapterOrDefault === 'function'
+                ? namespace.resolveSharedTomSelectAdapterOrDefault
+                : null;
         const tagTokenModule =
             (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
             null;
@@ -95,15 +60,19 @@
         const fallbackFormatter = createFallbackFormatter(formatTagTokens, parseTagTokens);
 
         const hasDom = Boolean(documentRef && typeof documentRef.createElement === 'function');
-        const isTagDebugEnabled = resolveTagDebugResolver({ isDebugEnabled });
-        const tomSelectAdapter = resolveTomSelectAdapterShared({
-            resolveTomSelectAdapter: config.resolveTomSelectAdapter,
-            createTomSelectAdapter: createTomSelectAdapterConfig,
-            createDefaultTomSelectAdapter: config.createDefaultTomSelectAdapter,
-            TomSelect: TomSelectClass,
-            documentRef,
-            isDebugEnabled
-        });
+        const isTagDebugEnabled = resolveTagDebugResolver
+            ? resolveTagDebugResolver({ isDebugEnabled })
+            : () => false;
+        const tomSelectAdapter = resolveTomSelectAdapter
+            ? resolveTomSelectAdapter({
+                  resolveTomSelectAdapter: config.resolveTomSelectAdapter,
+                  createTomSelectAdapter: createTomSelectAdapterConfig,
+                  createDefaultTomSelectAdapter: config.createDefaultTomSelectAdapter,
+                  TomSelect: TomSelectClass,
+                  documentRef,
+                  isDebugEnabled
+              })
+            : null;
 
         if (!hasDom || !tomSelectAdapter || !tomSelectAdapter.hasSupport) {
             return {

@@ -105,6 +105,73 @@
         return null;
     }
 
+    function resolveTagDebugResolverSharedOrDefault(config = {}) {
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const resolverCandidates = [
+            namespace && namespace.resolveTagDebugResolverWithFallback,
+            namespace && namespace.resolveSharedTagDebugResolver,
+            resolveTagDebugResolverWithFallback
+        ].filter((resolver) => typeof resolver === 'function');
+        const defaultResolver =
+            (namespace && namespace.defaultIsTagDebugEnabled) || defaultIsTagDebugEnabled;
+
+        for (const resolver of resolverCandidates) {
+            try {
+                const resolved = resolver(config);
+                if (typeof resolved === 'function') {
+                    return resolved;
+                }
+            } catch (error) {
+                // try next resolver
+            }
+        }
+
+        return () => {
+            const { isDebugEnabled } = config;
+            if (typeof isDebugEnabled === 'function') {
+                try {
+                    return Boolean(isDebugEnabled());
+                } catch (error) {
+                    return defaultResolver();
+                }
+            }
+            if (typeof defaultResolver === 'function') {
+                return defaultResolver();
+            }
+            return false;
+        };
+    }
+
+    function resolveSharedTomSelectAdapterOrDefault(config = {}) {
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const resolver =
+            namespace && typeof namespace.resolveSharedTomSelectAdapterWithDebug === 'function'
+                ? namespace.resolveSharedTomSelectAdapterWithDebug
+                : resolveSharedTomSelectAdapterWithDebug;
+
+        try {
+            const adapter = resolver(config);
+            if (adapter) {
+                return adapter;
+            }
+        } catch (error) {
+            // fall through to the default factory
+        }
+
+        const defaultFactory =
+            typeof config.createDefaultTomSelectAdapter === 'function'
+                ? config.createDefaultTomSelectAdapter
+                : namespace && typeof namespace.createDefaultTomSelectAdapter === 'function'
+                  ? namespace.createDefaultTomSelectAdapter
+                  : null;
+
+        if (typeof defaultFactory === 'function') {
+            return defaultFactory(config.TomSelect, config.documentRef);
+        }
+
+        return null;
+    }
+
     if (!window.galleryComponents) {
         window.galleryComponents = {};
     }
@@ -112,4 +179,6 @@
     window.galleryComponents.resolveTagDebugResolverWithFallback = resolveTagDebugResolverWithFallback;
     window.galleryComponents.resolveSharedTagDebugResolver = resolveSharedTagDebugResolver;
     window.galleryComponents.resolveSharedTomSelectAdapterWithDebug = resolveSharedTomSelectAdapterWithDebug;
+    window.galleryComponents.resolveTagDebugResolverSharedOrDefault = resolveTagDebugResolverSharedOrDefault;
+    window.galleryComponents.resolveSharedTomSelectAdapterOrDefault = resolveSharedTomSelectAdapterOrDefault;
 })();

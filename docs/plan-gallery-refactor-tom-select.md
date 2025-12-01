@@ -70,6 +70,27 @@
   - 残作業: なし（TomSelect リゾルバの共通化まで完了）。
   - フォローアップ: デバッグフラグ解決を `tagDebug` モジュールに集約し、タグ入力/検索/ビューで共有済み。TomSelect 共有リゾルバのフォールバックを強化し、ロード順に依存せずデフォルトアダプタへ接続できるようにした。
 
+## バックログ/フォローアップ計画（2025-04-16 以降）
+- ### フォローアップ 1: ブラウザ E2E の再実行と証跡取得
+  - 背景: Playwright のブラウザ取得がネットワーク制約で失敗しており、TomSelect 共有リゾルバ適用後の E2E カバレッジが不足している。
+  - タスク: ネットワーク許可後に `npm run test:browser -- tests/browser/viewer.spec.ts` を再実行し、ログとスクリーンショットを計画書へ追記。タグ入力/検索/ビューの TomSelect 差し替え経路が UI 上でも統一されていることを確認する。
+  - 成果物: E2E 実行ログとスクリーンショット、計画書への記録、失敗時の原因と暫定対応メモ。
+
+- ### フォローアップ 2: CSS alias 期間終了に向けたクリーンアップ
+  - 背景: スプリント 3 で導入した名前空間付きクラスに合わせて旧クラスの alias を暫定的に残している。移行完了を明示しないとスタイル衝突リスクが残る。
+  - タスク: `templates/gallery/styles/` の alias クラスを棚卸しし、ビルド成果物と Playwright フィクスチャにおける参照箇所を確認。問題なければ alias を段階的に削除し、削除前後の互換性確認をテストケースに追加する。
+  - 成果物: alias 削除パッチと対応テスト、互換性確認結果の記録。
+
+- ### フォローアップ 3: 共有リゾルバのカバレッジ拡充
+  - 背景: `sharedResolvers` で TomSelect・デバッグ判定のブリッジを統一したが、ローカルストレージにデバッグフラグが未設定のケースや TomSelect 非読込環境でのパスを E2E では未検証。
+  - タスク: `tests/js/gallery_modules.test.mjs` にローカルストレージ未設定時のフォールバック、TomSelect なしでの graceful degradation のケースを追加し、`gallery/assets.py` のコピー対象チェックと連動させる。
+  - 成果物: 追加テストとテスト結果、フォールバック経路の通過確認ログ。
+
+- ### フォローアップ 4: ESM 化フェーズ 2 の準備
+  - 背景: 主要関数の ES Module 化は開始済みだが、IIFE ラッパーと併存しているため依存順序の監視が必要。
+  - タスク: `templates/gallery/js/modules/` のエントリポイントを整理し、IIFE からのエクスポートに対する互換レイヤーを `gallery/index.js` で管理する方針を整理。エントリ追加時のチェックリストを計画書に追記し、次回のモジュール抽出対象（例: filter state ブリッジ）を列挙する。
+  - 成果物: 整理した依存図・チェックリスト、次抽出候補の一覧と想定工数。
+
 ## 進捗メモ（2025-04-13）
 - TomSelect アダプタのデバッグ判定経路を共有モジュール化。
   - `tomSelectAdapter` が `tagDebug` のリゾルバを優先的に利用するように変更し、タグ入力・タグ検索・ビューと同一のデバッグトグルでロギング制御を統一。
@@ -275,4 +296,10 @@
   - `sharedResolvers` で `resolveSharedTomSelectAdapterWithDebug` が TomSelect リゾルバ不在時にデフォルトアダプタへフォールバックするようにし、ロード順の揺らぎで TomSelect が無効化されるリスクを解消。
   - 同モジュールに `resolveSharedTagDebugResolver` を公開し、タグ入力・タグ検索・ギャラリービュー・TomSelect アダプタのデバッグ判定を共通経路に統一。
   - Node テストにフォールバック確認のケースを追加し、デフォルトアダプタ・デバッグ判定の両面で漏れを自動検知可能にした。
+- テスト: `pytest` と `npm run test:node` を実行。
+
+## 進捗メモ（2025-04-15）
+- 共有リゾルバの適用範囲を統一。
+  - `sharedResolvers` にデバッグ判定と TomSelect 解決の共通ブリッジ（`resolveTagDebugResolverSharedOrDefault` と `resolveSharedTomSelectAdapterOrDefault`）を追加し、コンポーネント側のフォールバック実装を集約。
+  - `tagInput` / `tagSearch` / `galleryView` / `tomSelectAdapter` が新ブリッジ経由でデバッグ判定と TomSelect アダプタを取得するように変更し、リゾルバ重複とログ制御の不一致を解消。
 - テスト: `pytest` と `npm run test:node` を実行。
