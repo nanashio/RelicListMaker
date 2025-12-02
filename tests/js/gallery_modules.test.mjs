@@ -1406,6 +1406,26 @@ describe('shared resolvers', () => {
     assert.equal(resolver(), true);
   });
 
+  test('handles missing localStorage without throwing when resolving debug flag', () => {
+    delete global.window.localStorage;
+
+    const resolver = global.window.galleryComponents.resolveTagDebugResolverWithFallback();
+
+    assert.equal(resolver(), false);
+  });
+
+  test('ignores storage errors when resolving debug flag', () => {
+    global.window.localStorage = {
+      getItem() {
+        throw new Error('denied');
+      }
+    };
+
+    const resolver = global.window.galleryComponents.resolveTagDebugResolverWithFallback();
+
+    assert.equal(resolver(), false);
+  });
+
   test('injects debug resolver when resolving shared TomSelect adapter', () => {
     const calls = [];
     global.window.galleryComponents.resolveSharedTomSelectAdapter = (config) => {
@@ -1435,6 +1455,29 @@ describe('shared resolvers', () => {
     assert.equal(adapter.marker, 'default');
     assert.equal(typeof adapter.TomSelect, 'function');
     assert.equal(adapter.documentRef.marker, 'doc');
+  });
+
+  test('returns null when TomSelect is unavailable and no default factory is provided', () => {
+    delete global.window.galleryComponents.resolveSharedTomSelectAdapter;
+
+    const adapter = global.window.galleryComponents.resolveSharedTomSelectAdapterWithDebug({
+      TomSelect: undefined,
+      documentRef: undefined
+    });
+
+    assert.equal(adapter, null);
+  });
+
+  test('falls back to default adapter when shared resolver throws', () => {
+    global.window.galleryComponents.resolveSharedTomSelectAdapter = () => {
+      throw new Error('resolver failed');
+    };
+
+    const adapter = global.window.galleryComponents.resolveSharedTomSelectAdapterOrDefault({
+      createDefaultTomSelectAdapter: () => ({ marker: 'fallback' })
+    });
+
+    assert.deepEqual(adapter, { marker: 'fallback' });
   });
 
   test('resolves tag search controller via provided factory', () => {

@@ -1,16 +1,36 @@
 (() => {
+    function getDebugFlagFromStorage(storage) {
+        if (!storage || typeof storage.getItem !== 'function') {
+            return null;
+        }
+        try {
+            return storage.getItem('galleryDebugTags');
+        } catch (error) {
+            return null;
+        }
+    }
+
     function defaultIsTagDebugEnabled() {
         if (typeof window === 'undefined' || !window) {
             return false;
         }
-        try {
-            if (typeof window.galleryDebugTags !== 'undefined') {
-                return Boolean(window.galleryDebugTags);
-            }
-            return window.localStorage && window.localStorage.getItem('galleryDebugTags') === 'true';
-        } catch (error) {
-            return false;
+        if (typeof window.galleryDebugTags !== 'undefined') {
+            return Boolean(window.galleryDebugTags);
         }
+
+        const storedFlag = getDebugFlagFromStorage(window.localStorage);
+        return storedFlag === 'true';
+    }
+
+    function resolveDefaultDebugFlag(namespaceDefaultResolver = null) {
+        if (typeof namespaceDefaultResolver === 'function') {
+            try {
+                return Boolean(namespaceDefaultResolver());
+            } catch (error) {
+                return defaultIsTagDebugEnabled();
+            }
+        }
+        return defaultIsTagDebugEnabled();
     }
 
     function resolveSharedTagDebugResolver(config = {}) {
@@ -23,16 +43,22 @@
             namespace && typeof namespace.resolveTagDebugResolver === 'function'
                 ? namespace.resolveTagDebugResolver
                 : null;
-        const defaultResolver =
+        const namespaceDefaultResolver =
             namespace && typeof namespace.defaultIsTagDebugEnabled === 'function'
                 ? namespace.defaultIsTagDebugEnabled
-                : defaultIsTagDebugEnabled;
+                : null;
 
         if (resolver) {
             try {
                 const resolved = resolver(config);
                 if (typeof resolved === 'function') {
-                    return resolved;
+                    return () => {
+                        try {
+                            return Boolean(resolved());
+                        } catch (error) {
+                            return resolveDefaultDebugFlag(namespaceDefaultResolver);
+                        }
+                    };
                 }
             } catch (error) {
                 // fall through to the default resolver
@@ -45,10 +71,10 @@
                 try {
                     return Boolean(isDebugEnabled());
                 } catch (error) {
-                    return defaultResolver();
+                    return resolveDefaultDebugFlag(namespaceDefaultResolver);
                 }
             }
-            return defaultResolver();
+            return resolveDefaultDebugFlag(namespaceDefaultResolver);
         };
     }
 
@@ -112,14 +138,20 @@
             namespace && namespace.resolveSharedTagDebugResolver,
             resolveTagDebugResolverWithFallback
         ].filter((resolver) => typeof resolver === 'function');
-        const defaultResolver =
-            (namespace && namespace.defaultIsTagDebugEnabled) || defaultIsTagDebugEnabled;
+        const namespaceDefaultResolver =
+            typeof namespace?.defaultIsTagDebugEnabled === 'function' ? namespace.defaultIsTagDebugEnabled : null;
 
         for (const resolver of resolverCandidates) {
             try {
                 const resolved = resolver(config);
                 if (typeof resolved === 'function') {
-                    return resolved;
+                    return () => {
+                        try {
+                            return Boolean(resolved());
+                        } catch (error) {
+                            return resolveDefaultDebugFlag(namespaceDefaultResolver);
+                        }
+                    };
                 }
             } catch (error) {
                 // try next resolver
@@ -132,13 +164,10 @@
                 try {
                     return Boolean(isDebugEnabled());
                 } catch (error) {
-                    return defaultResolver();
+                    return resolveDefaultDebugFlag(namespaceDefaultResolver);
                 }
             }
-            if (typeof defaultResolver === 'function') {
-                return defaultResolver();
-            }
-            return false;
+            return resolveDefaultDebugFlag(namespaceDefaultResolver);
         };
     }
 
