@@ -1674,6 +1674,29 @@ describe('tag search controller', () => {
     assert.equal(input.selectedIndex, -1);
     assert.equal(input.children.length, 2);
   });
+
+  test('prefers tag token module parser when no parser is provided', () => {
+    global.window.galleryModules = {
+      tagTokens: {
+        parseTagTokens: (value) => {
+          if (!value) {
+            return [];
+          }
+          return [`parsed:${String(value).trim()}`];
+        }
+      }
+    };
+
+    runScript('templates/gallery/components/tagSearch.js');
+    const factory = window.galleryComponents.createTagSearchController;
+    const input = new MockElement('select');
+    const controller = factory({ input, documentRef: documentMock });
+
+    input.value = 'Alpha';
+    const values = controller.getValues();
+
+    assert.deepEqual(values, ['parsed:Alpha']);
+  });
 });
 
 
