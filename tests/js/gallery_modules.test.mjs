@@ -6171,3 +6171,90 @@ describe('tag token module', () => {
     assert.equal(namespace.parseTagTokens, parseTagTokens);
   });
 });
+
+describe('tag token resolvers component', () => {
+  test('resolves parsers with shared defaults and tag token module', async () => {
+    global.window = { galleryComponents: {}, galleryModules: {}, localStorage: { getItem: () => null } };
+    global.document = undefined;
+    globalThis.window = global.window;
+    globalThis.document = global.document;
+
+    const sharedResolverPath = path.join(
+      projectRoot,
+      'templates',
+      'gallery',
+      'components',
+      'sharedResolvers.js'
+    );
+    await import(sharedResolverPath);
+
+    const modulePath = path.join(
+      projectRoot,
+      'templates',
+      'gallery',
+      'components',
+      'tagTokenResolvers.js'
+    );
+    await import(modulePath);
+
+    const tagTokenModule = {
+      parseTagTokens: (value) => (value ? value.split('|').filter(Boolean) : []),
+      formatTagTokens: (tokens) => tokens.join('|')
+    };
+
+    const { resolveTagTokenParsers } = global.window.galleryComponents;
+
+    const { parseTagTokens, formatTagTokens, defaultParseTagTokens } = resolveTagTokenParsers({
+      tagTokenModule
+    });
+
+    assert.deepEqual(parseTagTokens('alpha||beta|'), ['alpha', 'beta']);
+    assert.equal(formatTagTokens(['x', 'y']), 'x|y');
+    assert.deepEqual(defaultParseTagTokens('one two'), ['one', 'two']);
+  });
+
+  test('falls back to provided parsers when shared resolver is unavailable', async () => {
+    if (!global.window) {
+      global.window = { galleryComponents: {}, galleryModules: {} };
+    }
+    if (!global.window.galleryComponents) {
+      global.window.galleryComponents = {};
+    }
+    if (!global.window.galleryModules) {
+      global.window.galleryModules = {};
+    }
+    if (!global.window.localStorage) {
+      global.window.localStorage = { getItem: () => null };
+    }
+    global.document = global.document || undefined;
+    globalThis.window = global.window;
+    globalThis.document = global.document;
+
+    const modulePath = path.join(
+      projectRoot,
+      'templates',
+      'gallery',
+      'components',
+      'tagTokenResolvers.js'
+    );
+    await import(modulePath);
+
+    const { resolveTagTokenParsers } = global.window.galleryComponents;
+
+    const customParse = (value) =>
+      value
+        .split(',')
+        .map((token) => token.trim())
+        .filter(Boolean);
+    const customFormat = (tokens) => tokens.join(',');
+    const { parseTagTokens, formatTagTokens, defaultParseTagTokens } = resolveTagTokenParsers({
+      parseTagTokens: customParse,
+      formatTagTokens: customFormat,
+      defaultParseTagTokens: (value) => customParse(value || '')
+    });
+
+    assert.deepEqual(parseTagTokens(' red , blue '), ['red', 'blue']);
+    assert.equal(formatTagTokens(['a', 'b']), 'a,b');
+    assert.deepEqual(defaultParseTagTokens(' solo '), ['solo']);
+  });
+});
