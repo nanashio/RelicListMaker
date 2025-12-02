@@ -8,6 +8,23 @@
         };
     }
 
+    function defaultParseTagTokens(value) {
+        if (Array.isArray(value)) {
+            return value.slice();
+        }
+        if (value == null) {
+            return [];
+        }
+        const text = String(value).trim();
+        if (!text) {
+            return [];
+        }
+        return text
+            .split(/[\s,;、，　；]+/)
+            .map((token) => token.trim())
+            .filter((token) => token.length > 0);
+    }
+
     function createTagInputController(config = {}) {
         const {
             TomSelect: TomSelectClass = (typeof window !== 'undefined' && window ? window.TomSelect : null),
@@ -27,36 +44,30 @@
             namespace && typeof namespace.resolveSharedTomSelectAdapterOrDefault === 'function'
                 ? namespace.resolveSharedTomSelectAdapterOrDefault
                 : null;
+        const resolveTagTokenParserWithFallback =
+            namespace && typeof namespace.resolveTagTokenParserWithFallback === 'function'
+                ? namespace.resolveTagTokenParserWithFallback
+                : null;
         const tagTokenModule =
             (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
             null;
-        const fallbackParseTagTokens =
-            tagTokenModule && typeof tagTokenModule.parseTagTokens === 'function'
-                ? tagTokenModule.parseTagTokens
-                : (value) => {
-                      if (Array.isArray(value)) {
-                          return value.slice();
-                      }
-                      if (value == null) {
-                          return [];
-                      }
-                      const text = String(value).trim();
-                      if (!text) {
-                          return [];
-                      }
-                      return text
-                          .split(/[\s,;、，　；]+/)
-                          .map((token) => token.trim())
-                          .filter((token) => token.length > 0);
-                  };
-        const parseTagTokens = typeof parseTokensConfig === 'function' ? parseTokensConfig : fallbackParseTagTokens;
+        const parseTagTokens = resolveTagTokenParserWithFallback
+            ? resolveTagTokenParserWithFallback({
+                  parseTagTokens: parseTokensConfig,
+                  tagTokenModule,
+                  defaultParseTagTokens
+              })
+            : typeof parseTokensConfig === 'function'
+              ? parseTokensConfig
+              : tagTokenModule && typeof tagTokenModule.parseTagTokens === 'function'
+                ? (value) => tagTokenModule.parseTagTokens(value)
+                : defaultParseTagTokens;
         const formatTagTokens =
             typeof formatTokensConfig === 'function'
                 ? formatTokensConfig
                 : tagTokenModule && typeof tagTokenModule.formatTagTokens === 'function'
                   ? tagTokenModule.formatTagTokens
-                  : (value) =>
-                        Array.isArray(value) ? value.join(' ') : fallbackParseTagTokens(value).join(' ');
+                  : (value) => (Array.isArray(value) ? value.join(' ') : parseTagTokens(value).join(' '));
         const fallbackFormatter = createFallbackFormatter(formatTagTokens, parseTagTokens);
 
         const hasDom = Boolean(documentRef && typeof documentRef.createElement === 'function');
