@@ -303,3 +303,9 @@
   - `sharedResolvers` にデバッグ判定と TomSelect 解決の共通ブリッジ（`resolveTagDebugResolverSharedOrDefault` と `resolveSharedTomSelectAdapterOrDefault`）を追加し、コンポーネント側のフォールバック実装を集約。
   - `tagInput` / `tagSearch` / `galleryView` / `tomSelectAdapter` が新ブリッジ経由でデバッグ判定と TomSelect アダプタを取得するように変更し、リゾルバ重複とログ制御の不一致を解消。
 - テスト: `pytest` と `npm run test:node` を実行。
+
+## 進捗メモ（2025-04-16）
+- タグ検索フォールバックを共有リゾルバに統合。
+  - `components/sharedResolvers.js` に `resolveTagSearchControllerWithFallback` を追加し、タグ検索コンポーネントが見つからない場合でも TomSelect アダプタ共有経由でインスタンス化できるようにした。ネイティブ select フォールバックも同リゾルバで統一し、依存順の揺らぎでタグ検索が無効化されるリスクを低減。
+  - `galleryView` で内蔵していたタグ検索フォールバック実装を削除し、新リゾルバ経由でコントローラーを取得するように変更。IIFE 側の責務を共有モジュールへ寄せ、タグ検索の生成・同期・デバッグフラグ解決を一元化した。
+- テスト: `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行。
