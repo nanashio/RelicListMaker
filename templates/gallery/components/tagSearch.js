@@ -19,7 +19,7 @@
     function createTagSearchController(config = {}) {
         const {
             input = null,
-            parseTagTokens = defaultParseTagTokens,
+            parseTagTokens: parseTokensConfig,
             resolveTomSelectAdapter,
             createTomSelectAdapter,
             createDefaultTomSelectAdapter,
@@ -29,6 +29,15 @@
         } = config;
 
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const tagTokenModule =
+            (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
+            null;
+        const parseTagTokens =
+            typeof parseTokensConfig === 'function'
+                ? parseTokensConfig
+                : tagTokenModule && typeof tagTokenModule.parseTagTokens === 'function'
+                  ? (value) => tagTokenModule.parseTagTokens(value)
+                  : defaultParseTagTokens;
         const resolveTagDebugResolver =
             namespace && typeof namespace.resolveTagDebugResolverSharedOrDefault === 'function'
                 ? namespace.resolveTagDebugResolverSharedOrDefault
