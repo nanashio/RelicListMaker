@@ -338,8 +338,10 @@
     function resolveTagSearchControllerWithFallback(config = {}) {
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
         const tagTokenModule =
-            (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
-            null;
+            config.tagTokenModule !== undefined
+                ? config.tagTokenModule
+                : (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
+                  null;
         const documentRef =
             config.documentRef !== undefined
                 ? config.documentRef

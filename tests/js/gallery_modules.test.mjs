@@ -1452,27 +1452,27 @@ describe('shared resolvers', () => {
     assert.equal(controller.marker, 'custom');
   });
 
-  test('falls back to native tag search controller when factory is missing', () => {
-    const documentRef = createMockDocument();
-    const targetInput = {
-      options: [],
-      selectedIndex: -1,
-      value: '',
-      get firstChild() {
-        return this.options[0] || null;
-      },
-      get selectedOptions() {
-        return this.options.filter((option) => option.selected);
-      },
-      appendChild(node) {
-        this.options.push(node);
-      },
-      removeChild(node) {
-        this.options = this.options.filter((option) => option !== node);
-      },
-      setAttribute() {},
-      addEventListener() {}
-    };
+    test('falls back to native tag search controller when factory is missing', () => {
+      const documentRef = createMockDocument();
+      const targetInput = {
+        options: [],
+        selectedIndex: -1,
+        value: '',
+        get firstChild() {
+          return this.options[0] || null;
+        },
+        get selectedOptions() {
+          return this.options.filter((option) => option.selected);
+        },
+        appendChild(node) {
+          this.options.push(node);
+        },
+        removeChild(node) {
+          this.options = this.options.filter((option) => option !== node);
+        },
+        setAttribute() {},
+        addEventListener() {}
+      };
 
     const controller = global.window.galleryComponents.resolveTagSearchControllerWithFallback({
       input: targetInput,
@@ -1497,6 +1497,27 @@ describe('shared resolvers', () => {
     controller.clearSelection();
     assert.equal(targetInput.value, '');
     assert.equal(targetInput.selectedIndex, -1);
+    });
+
+    test('uses provided tag token module when resolving tag search controller', () => {
+      const documentRef = createMockDocument();
+      const targetInput = new MockElement('select');
+
+      const parseCalls = [];
+    const controller = global.window.galleryComponents.resolveTagSearchControllerWithFallback({
+      input: targetInput,
+      tagTokenModule: {
+        parseTagTokens: (value) => {
+          parseCalls.push(value);
+          return ['from-module'];
+        }
+      },
+      documentRef
+    });
+
+    targetInput.value = 'Alpha Beta';
+    assert.deepEqual(controller.getValues(), ['from-module']);
+    assert.deepEqual(parseCalls, ['Alpha Beta']);
   });
 
   test('resolves tag token parser with provided callback', () => {
@@ -1731,10 +1752,34 @@ describe('tag search controller', () => {
 
     assert.deepEqual(values, ['parsed:Alpha']);
   });
+
+  test('allows injecting tag token module via config', () => {
+    runScript('templates/gallery/components/tagSearch.js');
+    const factory = window.galleryComponents.createTagSearchController;
+    const input = new MockElement('select');
+    const parseCalls = [];
+
+    const controller = factory({
+      input,
+      documentRef: documentMock,
+      tagTokenModule: {
+        parseTagTokens: (value) => {
+          parseCalls.push(value);
+          return [`from-config:${String(value).trim()}`];
+        }
+      }
+    });
+
+    input.value = 'Alpha';
+    const values = controller.getValues();
+
+    assert.deepEqual(values, ['from-config:Alpha']);
+    assert.deepEqual(parseCalls, ['Alpha']);
+  });
 });
 
 
-    describe('tag input controller', () => {
+describe('tag input controller', () => {
   let documentMock;
 
   beforeEach(() => {
@@ -1796,6 +1841,32 @@ describe('tag search controller', () => {
     assert.equal(controller.usesNativeInput, false);
     assert.equal(instances.length, 1);
     assert.deepEqual(instances[0].setValueCalls, [{ tokens: ['alpha'], silent: true }]);
+  });
+
+  test('uses provided tag token module for parsing and formatting', () => {
+    runScript('templates/gallery/components/tagInput.js');
+    const factory = global.window.galleryComponents.createTagInputController;
+    const parseCalls = [];
+    const formatCalls = [];
+    const controller = factory({
+      tagTokenModule: {
+        parseTagTokens: (value) => {
+          parseCalls.push(value);
+          return ['one', 'two'];
+        },
+        formatTagTokens: (tokens) => {
+          formatCalls.push(tokens);
+          return tokens.join('|');
+        }
+      }
+    });
+
+    const input = new MockElement('input', 'item-tags-input');
+    controller.syncValue(input, 'Alpha Beta');
+
+    assert.equal(input.value, 'one|two');
+    assert.deepEqual(parseCalls, ['Alpha Beta']);
+    assert.deepEqual(formatCalls, [['one', 'two']]);
   });
 });
 
