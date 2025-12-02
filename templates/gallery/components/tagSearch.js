@@ -16,6 +16,16 @@
             .filter((token) => token.length > 0);
     }
 
+    function resolveSharedDefaultParseTagTokens(namespace, fallbackParser) {
+        if (namespace && typeof namespace.defaultParseTagTokens === 'function') {
+            return namespace.defaultParseTagTokens;
+        }
+        if (typeof fallbackParser === 'function') {
+            return fallbackParser;
+        }
+        return defaultParseTagTokens;
+    }
+
     function createTagSearchController(config = {}) {
         const {
             input = null,
@@ -40,9 +50,10 @@
             namespace && typeof namespace.resolveTagTokenParserWithFallback === 'function'
                 ? namespace.resolveTagTokenParserWithFallback
                 : null;
+        const sharedDefaultParseTagTokens = resolveSharedDefaultParseTagTokens(namespace, config.defaultParseTagTokens);
         const defaultParseTokens = resolveDefaultParseTagTokens
-            ? resolveDefaultParseTagTokens({ defaultParseTagTokens })
-            : defaultParseTagTokens;
+            ? resolveDefaultParseTagTokens({ defaultParseTagTokens: sharedDefaultParseTagTokens })
+            : sharedDefaultParseTagTokens;
         const parseTagTokens = resolveTagTokenParserWithFallback
             ? resolveTagTokenParserWithFallback({
                   parseTagTokens: parseTokensConfig,
