@@ -63,8 +63,10 @@
                 ? namespace.resolveTagTokenParserWithFallback
                 : null;
         const tagTokenModule =
-            (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
-            null;
+            config.tagTokenModule !== undefined
+                ? config.tagTokenModule
+                : (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
+                  null;
         const sharedDefaultParseTagTokens = resolveSharedDefaultParseTagTokens(namespace, config.defaultParseTagTokens);
         const defaultParseTokens = resolveDefaultParseTagTokens
             ? resolveDefaultParseTagTokens({ defaultParseTagTokens: sharedDefaultParseTagTokens })

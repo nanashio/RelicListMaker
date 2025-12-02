@@ -40,8 +40,10 @@
 
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
         const tagTokenModule =
-            (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
-            null;
+            config.tagTokenModule !== undefined
+                ? config.tagTokenModule
+                : (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
+                  null;
         const resolveDefaultParseTagTokens =
             namespace && typeof namespace.resolveDefaultParseTagTokens === 'function'
                 ? namespace.resolveDefaultParseTagTokens
