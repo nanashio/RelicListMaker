@@ -1480,6 +1480,42 @@ describe('shared resolvers', () => {
     assert.deepEqual(adapter, { marker: 'fallback' });
   });
 
+  test('uses local fallbacks when namespace lacks tag search helpers', () => {
+    const documentRef = createMockDocument();
+    const targetInput = new MockElement('select');
+    const defaultFactoryCalls = [];
+
+    const adapter = {
+      hasSupport: true,
+      createInstance: () => ({}),
+      syncOptions() {},
+      getValues: () => ['from-adapter'],
+      onChange() {},
+      clearSelection() {},
+      setValue() {
+        return false;
+      }
+    };
+
+    delete global.window.galleryComponents.resolveSharedTomSelectAdapterOrDefault;
+    delete global.window.galleryComponents.resolveTagDebugResolverSharedOrDefault;
+
+    const controller = global.window.galleryComponents.resolveTagSearchControllerWithFallback({
+      input: targetInput,
+      createDefaultTomSelectAdapter: (TomSelectClass, docRef) => {
+        defaultFactoryCalls.push({ TomSelectClass, docRef });
+        return adapter;
+      },
+      TomSelect: function FakeTomSelect() {},
+      documentRef,
+      isDebugEnabled: () => true
+    });
+
+    controller.setOptions([{ value: 'Alpha', text: 'Alpha' }], { clearSelection: true });
+    assert.deepEqual(controller.getValues(), ['from-adapter']);
+    assert.equal(defaultFactoryCalls.length, 1);
+  });
+
   test('resolves tag search controller via provided factory', () => {
     const calls = [];
     const input = { marker: 'input' };
