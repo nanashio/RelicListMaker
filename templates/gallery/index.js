@@ -12,6 +12,7 @@ const MODULE_DEPENDENCIES = [
     './utils/summary.js',
     './state/store.js',
     './stores/tagStore.js',
+    './stores/tagStateBridge.js',
     './app/layout.js',
     './app/stateApi.js',
     './dataset/manager.js',

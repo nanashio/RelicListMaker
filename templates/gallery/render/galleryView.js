@@ -49,6 +49,7 @@
         }
 
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const storesNamespace = typeof window !== 'undefined' && window ? window.galleryStores : null;
         const resolveTagDebugResolver =
             namespace && typeof namespace.resolveTagDebugResolverSharedOrDefault === 'function'
                 ? namespace.resolveTagDebugResolverSharedOrDefault
@@ -95,6 +96,12 @@
                 : dataUtils && typeof dataUtils.formatTagTokens === 'function'
                   ? dataUtils.formatTagTokens
                   : null;
+        const createTagStateBridgeFn =
+            typeof config.createTagStateBridge === 'function'
+                ? config.createTagStateBridge
+                : storesNamespace && typeof storesNamespace.createTagStateBridge === 'function'
+                  ? storesNamespace.createTagStateBridge
+                  : null;
 
         if (typeof parseTagTokens !== 'function' || typeof formatTagTokens !== 'function') {
             throw new Error('createGalleryView: tag utilities are required');
@@ -129,6 +136,14 @@
                       resolveTomSelectAdapter: config.resolveTomSelectAdapter,
                       createDefaultTomSelectAdapter: config.createDefaultTomSelectAdapter,
                       isDebugEnabled: isTagDebugEnabled
+                  })
+                : null;
+        const tagStateBridge =
+            typeof createTagStateBridgeFn === 'function' && tagStoreApi
+                ? createTagStateBridgeFn({
+                      tagStore: tagStoreApi,
+                      tagInputController,
+                      documentRef: hasDocument || null
                   })
                 : null;
         const createTagSearchControllerFn =
@@ -874,8 +889,11 @@
                 return;
             }
             markItemStateCacheDirty();
+            if (tagStateBridge && typeof tagStateBridge.applyTags === 'function') {
+                tagStateBridge.applyTags(item, tagsValue);
+                return;
+            }
             const entry = buildTagEntry(tagsValue);
-            const normalized = entry.normalized;
             const tokens = Array.isArray(entry.tokens) ? entry.tokens : [];
             if (tokens.length) {
                 item.dataset.tags = tokens.join(' ');
@@ -896,8 +914,7 @@
                     const displayValue = tokens.join(' ');
                     const isEditing = Boolean(
                         (input.dataset && input.dataset.editingTags === 'true') ||
-                            (typeof document !== 'undefined' && document &&
-                                document.activeElement === input)
+                            (typeof document !== 'undefined' && document && document.activeElement === input)
                     );
                     if (!isEditing) {
                         if (controllerHasSync) {
