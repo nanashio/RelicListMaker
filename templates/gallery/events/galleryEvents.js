@@ -103,6 +103,106 @@
             throw new Error('createGalleryEvents: createRecordActionHandlers helper is required');
         }
 
+        function createTagInputEventsFallback({ galleryElement, resolveTagsInputTarget: resolveTarget, updateItemTags: updateTags, getItemContext: getContext, tagStore: store }) {
+            if (!galleryElement || typeof galleryElement.addEventListener !== 'function') {
+                return null;
+            }
+            const storeApi = store && typeof store.readRecordTags === 'function' ? store : null;
+
+            const syncFromStore = (input) => {
+                if (!storeApi || !input || typeof getContext !== 'function') {
+                    return;
+                }
+                const context = getContext(input);
+                if (!context || !context.item) {
+                    return;
+                }
+                const entry = storeApi.readRecordTags(context.recordIndex);
+                const tokens = Array.isArray(entry.tokens) ? entry.tokens : [];
+                const normalized = entry.normalized || '';
+                if (input.dataset && input.dataset.tagInputEnhanced === 'true') {
+                    return;
+                }
+                const display = tokens.length ? tokens.join(' ') : normalized;
+                if (typeof input.value === 'string' && input.value !== display) {
+                    input.value = display;
+                }
+            };
+
+            return {
+                bind() {
+                    galleryElement.addEventListener('input', (event) => {
+                        const target = resolveTarget(event.target);
+                        if (!target) {
+                            return;
+                        }
+                        if (target.dataset) {
+                            target.dataset.editingTags = 'true';
+                        }
+                        updateTags(target);
+                    });
+                    galleryElement.addEventListener('focusin', (event) => {
+                        const target = resolveTarget(event.target);
+                        if (target && target.dataset) {
+                            target.dataset.editingTags = 'true';
+                        }
+                    });
+                    galleryElement.addEventListener('focusout', (event) => {
+                        const target = resolveTarget(event.target);
+                        if (!target) {
+                            return;
+                        }
+                        if (target.dataset) {
+                            delete target.dataset.editingTags;
+                        }
+                        updateTags(target);
+                        syncFromStore(target);
+                    });
+                },
+                handleChange(event) {
+                    const target = resolveTarget(event.target);
+                    if (!target) {
+                        return false;
+                    }
+                    updateTags(target);
+                    return true;
+                }
+            };
+        }
+
+        function resolveTagInputEventsFactory() {
+            if (typeof createTagInputEventsFn === 'function') {
+                return createTagInputEventsFn;
+            }
+            const namespaceFactory =
+                eventsNamespace && typeof eventsNamespace.createTagInputEvents === 'function'
+                    ? eventsNamespace.createTagInputEvents
+                    : null;
+            if (namespaceFactory) {
+                return namespaceFactory;
+            }
+
+            if (typeof require === 'function') {
+                try {
+                    require('./tagInputEvents.js');
+                } catch (error) {
+                    // ignore and fall back to namespace resolution
+                }
+            }
+
+            const namespace = typeof window !== 'undefined' && window ? window.galleryEventsFactory : null;
+            if (namespace && typeof namespace.createTagInputEvents === 'function') {
+                return namespace.createTagInputEvents;
+            }
+
+            return createTagInputEventsFallback;
+        }
+
+        const tagInputEventsFactory = resolveTagInputEventsFactory();
+        if (typeof tagInputEventsFactory !== 'function') {
+            throw new Error('createGalleryEvents: createTagInputEvents helper is required');
+        }
+
         function openLightbox(img) {
             if (!img || !dom.lightbox || !dom.lightboxImg) {
                 return;
@@ -303,86 +403,13 @@
                 toggleReviewStatus
             } = recordActions;
 
-            const tagInputEventsFactory =
-                typeof createTagInputEventsFn === 'function'
-                    ? createTagInputEventsFn
-                    : ({ galleryElement, resolveTagsInputTarget: resolveTarget, updateItemTags: updateTags, getItemContext: getContext, tagStore: store }) => {
-                          if (!galleryElement || typeof galleryElement.addEventListener !== 'function') {
-                              return null;
-                          }
-                          const storeApi = store && typeof store.readRecordTags === 'function' ? store : null;
-
-                          const syncFromStore = (input) => {
-                              if (!storeApi || !input || typeof getContext !== 'function') {
-                                  return;
-                              }
-                              const context = getContext(input);
-                              if (!context || !context.item) {
-                                  return;
-                              }
-                              const entry = storeApi.readRecordTags(context.recordIndex);
-                              const tokens = Array.isArray(entry.tokens) ? entry.tokens : [];
-                              const normalized = entry.normalized || '';
-                              if (input.dataset && input.dataset.tagInputEnhanced === 'true') {
-                                  return;
-                              }
-                              const display = tokens.length ? tokens.join(' ') : normalized;
-                              if (typeof input.value === 'string' && input.value !== display) {
-                                  input.value = display;
-                              }
-                          };
-
-                          return {
-                              bind() {
-                                  galleryElement.addEventListener('input', (event) => {
-                                      const target = resolveTarget(event.target);
-                                      if (!target) {
-                                          return;
-                                      }
-                                      if (target.dataset) {
-                                          target.dataset.editingTags = 'true';
-                                      }
-                                      updateTags(target);
-                                  });
-                                  galleryElement.addEventListener('focusin', (event) => {
-                                      const target = resolveTarget(event.target);
-                                      if (target && target.dataset) {
-                                          target.dataset.editingTags = 'true';
-                                      }
-                                  });
-                                  galleryElement.addEventListener('focusout', (event) => {
-                                      const target = resolveTarget(event.target);
-                                      if (!target) {
-                                          return;
-                                      }
-                                      if (target.dataset) {
-                                          delete target.dataset.editingTags;
-                                      }
-                                      updateTags(target);
-                                      syncFromStore(target);
-                                  });
-                              },
-                              handleChange(event) {
-                                  const target = resolveTarget(event.target);
-                                  if (!target) {
-                                      return false;
-                                  }
-                                  updateTags(target);
-                                  return true;
-                              }
-                          };
-                      };
-
-            const tagInputEvents =
-                typeof tagInputEventsFactory === 'function'
-                    ? tagInputEventsFactory({
-                          galleryElement: dom.gallery,
-                          resolveTagsInputTarget,
-                          updateItemTags,
-                          getItemContext,
-                          tagStore
-                      })
-                    : null;
+            const tagInputEvents = tagInputEventsFactory({
+                galleryElement: dom.gallery,
+                resolveTagsInputTarget,
+                updateItemTags,
+                getItemContext,
+                tagStore
+            });
 
             if (tagInputEvents && typeof tagInputEvents.bind === 'function') {
                 tagInputEvents.bind();
