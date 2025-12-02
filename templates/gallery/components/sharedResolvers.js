@@ -189,6 +189,27 @@
             .filter((token) => token.length > 0);
     }
 
+    function resolveTagTokenParserWithFallback(config = {}) {
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const tagTokenModule =
+            config.tagTokenModule !== undefined
+                ? config.tagTokenModule
+                : (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
+                  null;
+        const defaultParser =
+            (namespace && namespace.defaultParseTagTokens) ||
+            (typeof config.defaultParseTagTokens === 'function' ? config.defaultParseTagTokens : defaultParseTagTokens);
+
+        if (typeof config.parseTagTokens === 'function') {
+            return config.parseTagTokens;
+        }
+        if (tagTokenModule && typeof tagTokenModule.parseTagTokens === 'function') {
+            return (value) => tagTokenModule.parseTagTokens(value);
+        }
+
+        return defaultParser;
+    }
+
     function createTagSearchControllerFallback(config = {}) {
         const {
             input = null,
@@ -315,12 +336,11 @@
                 : typeof document !== 'undefined'
                   ? document
                   : null;
-        const parseTokens =
-            typeof config.parseTagTokens === 'function'
-                ? config.parseTagTokens
-                : tagTokenModule && typeof tagTokenModule.parseTagTokens === 'function'
-                  ? tagTokenModule.parseTagTokens
-                  : defaultParseTagTokens;
+        const parseTokens = resolveTagTokenParserWithFallback({
+            parseTagTokens: config.parseTagTokens,
+            tagTokenModule,
+            defaultParseTagTokens
+        });
         const resolveTagDebugResolver =
             namespace && typeof namespace.resolveTagDebugResolverSharedOrDefault === 'function'
                 ? namespace.resolveTagDebugResolverSharedOrDefault
@@ -388,5 +408,7 @@
     window.galleryComponents.resolveSharedTomSelectAdapterWithDebug = resolveSharedTomSelectAdapterWithDebug;
     window.galleryComponents.resolveTagDebugResolverSharedOrDefault = resolveTagDebugResolverSharedOrDefault;
     window.galleryComponents.resolveSharedTomSelectAdapterOrDefault = resolveSharedTomSelectAdapterOrDefault;
+    window.galleryComponents.resolveTagTokenParserWithFallback = resolveTagTokenParserWithFallback;
     window.galleryComponents.resolveTagSearchControllerWithFallback = resolveTagSearchControllerWithFallback;
+    window.galleryComponents.defaultParseTagTokens = defaultParseTagTokens;
 })();
