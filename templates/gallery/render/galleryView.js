@@ -57,6 +57,10 @@
             namespace && typeof namespace.resolveSharedTomSelectAdapterOrDefault === 'function'
                 ? namespace.resolveSharedTomSelectAdapterOrDefault
                 : null;
+        const resolveTagSearchControllerWithFallback =
+            namespace && typeof namespace.resolveTagSearchControllerWithFallback === 'function'
+                ? namespace.resolveTagSearchControllerWithFallback
+                : null;
         const isTagDebugEnabled = resolveTagDebugResolver
             ? resolveTagDebugResolver({ isDebugEnabled: config.isDebugEnabled })
             : () => false;
@@ -108,16 +112,6 @@
         const colorOptions = Array.isArray(itemColorOptions) ? itemColorOptions.slice() : [];
         const hasDocument = typeof document !== 'undefined' && document;
         const componentsNamespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        const tomSelectAdapter = resolveTomSelectAdapter
-            ? resolveTomSelectAdapter({
-                  resolveTomSelectAdapter: config.resolveTomSelectAdapter,
-                  createTomSelectAdapter: config.createTomSelectAdapter,
-                  createDefaultTomSelectAdapter: config.createDefaultTomSelectAdapter,
-                  TomSelect: typeof window !== 'undefined' && window ? window.TomSelect : null,
-                  documentRef: hasDocument || null,
-                  isDebugEnabled: isTagDebugEnabled
-              })
-            : null;
         const createTagInputControllerFn =
             typeof config.createTagInputController === 'function'
                 ? config.createTagInputController
@@ -143,124 +137,30 @@
                 : componentsNamespace && typeof componentsNamespace.createTagSearchController === 'function'
                   ? componentsNamespace.createTagSearchController
                   : null;
-        const tagSearchController =
-            typeof createTagSearchControllerFn === 'function'
-                ? createTagSearchControllerFn({
-                      input: dom.tagSearchInput,
-                      parseTagTokens,
-                      resolveTomSelectAdapter: config.resolveTomSelectAdapter,
-                      createTomSelectAdapter: config.createTomSelectAdapter,
-                      createDefaultTomSelectAdapter: config.createDefaultTomSelectAdapter,
-                      TomSelect: typeof window !== 'undefined' && window ? window.TomSelect : null,
-                      documentRef: hasDocument || null,
-                      isDebugEnabled: isTagDebugEnabled
-                  })
-                : (() => {
-                      const changeHandlers = [];
-                      let instance = null;
-
-                      function ensureInstance() {
-                          if (!tomSelectAdapter || !tomSelectAdapter.hasSupport || !dom.tagSearchInput) {
-                              return null;
-                          }
-                          if (instance) {
-                              return instance;
-                          }
-                          if (dom.tagSearchInput && typeof dom.tagSearchInput.setAttribute === 'function') {
-                              dom.tagSearchInput.setAttribute('multiple', 'multiple');
-                          }
-                          instance = tomSelectAdapter.createInstance(
-                              dom.tagSearchInput,
-                              {
-                                  maxItems: null,
-                                  create: false,
-                                  persist: false,
-                                  valueField: 'value',
-                                  labelField: 'text',
-                                  searchField: ['text'],
-                                  closeAfterSelect: false,
-                                  plugins: ['remove_button']
-                              },
-                              { debugLabel: 'tag-search', logEvents: ['change'] }
-                          );
-                          changeHandlers.forEach((handler) =>
-                              tomSelectAdapter.onChange(instance, dom.tagSearchInput, handler)
-                          );
-                          return instance;
-                      }
-
-                      function setOptions(options = [], { clearSelection = false } = {}) {
-                          const normalizedOptions = Array.isArray(options) ? options : [];
-                          const inst = ensureInstance();
-                          if (tomSelectAdapter) {
-                              tomSelectAdapter.syncOptions(inst, dom.tagSearchInput, normalizedOptions, { clearSelection });
-                              return;
-                          }
-                          if (hasDocument && dom.tagSearchInput) {
-                              while (dom.tagSearchInput.firstChild) {
-                                  dom.tagSearchInput.removeChild(dom.tagSearchInput.firstChild);
-                              }
-                              normalizedOptions.forEach((option) => {
-                                  const value = option && option.value ? String(option.value).trim() : '';
-                                  if (!value) {
-                                      return;
-                                  }
-                                  const node = document.createElement('option');
-                                  node.value = value;
-                                  node.textContent = option.text || value;
-                                  dom.tagSearchInput.appendChild(node);
-                              });
-                              if (clearSelection) {
-                                  dom.tagSearchInput.selectedIndex = -1;
-                              }
-                          }
-                      }
-
-                      function getValues() {
-                          const inst = ensureInstance();
-                          if (tomSelectAdapter) {
-                              return tomSelectAdapter.getValues(inst, dom.tagSearchInput, parseTagTokens);
-                          }
-                          if (dom.tagSearchInput && dom.tagSearchInput.selectedOptions) {
-                              return Array.from(dom.tagSearchInput.selectedOptions)
-                                  .map((option) => option.value)
-                                  .filter((value) => value);
-                          }
-                          const text = dom.tagSearchInput && dom.tagSearchInput.value ? dom.tagSearchInput.value : '';
-                          return parseTagTokens(text);
-                      }
-
-                      function onChange(handler) {
-                          if (typeof handler !== 'function') {
-                              return;
-                          }
-                          changeHandlers.push(handler);
-                          const inst = ensureInstance();
-                          if (tomSelectAdapter) {
-                              tomSelectAdapter.onChange(inst, dom.tagSearchInput, handler);
-                              return;
-                          }
-                          if (dom.tagSearchInput && typeof dom.tagSearchInput.addEventListener === 'function') {
-                              dom.tagSearchInput.addEventListener('change', handler);
-                          }
-                      }
-
-                      function clearSelection() {
-                          const inst = ensureInstance();
-                          if (tomSelectAdapter) {
-                              tomSelectAdapter.clearSelection(inst, dom.tagSearchInput);
-                              return;
-                          }
-                          if (dom.tagSearchInput) {
-                              if (typeof dom.tagSearchInput.selectedIndex === 'number') {
-                                  dom.tagSearchInput.selectedIndex = -1;
-                              }
-                              dom.tagSearchInput.value = '';
-                          }
-                      }
-
-                      return { setOptions, getValues, onChange, clearSelection };
-                  })();
+        const tagSearchController = resolveTagSearchControllerWithFallback
+            ? resolveTagSearchControllerWithFallback({
+                  createTagSearchController: createTagSearchControllerFn,
+                  input: dom.tagSearchInput,
+                  parseTagTokens,
+                  resolveTomSelectAdapter: config.resolveTomSelectAdapter,
+                  createTomSelectAdapter: config.createTomSelectAdapter,
+                  createDefaultTomSelectAdapter: config.createDefaultTomSelectAdapter,
+                  TomSelect: typeof window !== 'undefined' && window ? window.TomSelect : null,
+                  documentRef: hasDocument || null,
+                  isDebugEnabled: isTagDebugEnabled
+              })
+            : typeof createTagSearchControllerFn === 'function'
+              ? createTagSearchControllerFn({
+                    input: dom.tagSearchInput,
+                    parseTagTokens,
+                    resolveTomSelectAdapter: config.resolveTomSelectAdapter,
+                    createTomSelectAdapter: config.createTomSelectAdapter,
+                    createDefaultTomSelectAdapter: config.createDefaultTomSelectAdapter,
+                    TomSelect: typeof window !== 'undefined' && window ? window.TomSelect : null,
+                    documentRef: hasDocument || null,
+                    isDebugEnabled: isTagDebugEnabled
+                })
+              : null;
         const filterNamespace = typeof window !== 'undefined' && window ? window.galleryFilterUtils : null;
         const renderUtilsNamespace =
             typeof window !== 'undefined' && window ? window.galleryRenderUtils : null;

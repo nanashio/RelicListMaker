@@ -1436,6 +1436,68 @@ describe('shared resolvers', () => {
     assert.equal(typeof adapter.TomSelect, 'function');
     assert.equal(adapter.documentRef.marker, 'doc');
   });
+
+  test('resolves tag search controller via provided factory', () => {
+    const calls = [];
+    const input = { marker: 'input' };
+    const controller = global.window.galleryComponents.resolveTagSearchControllerWithFallback({
+      createTagSearchController: (config) => {
+        calls.push(config.input);
+        return { marker: 'custom' };
+      },
+      input
+    });
+
+    assert.deepEqual(calls, [input]);
+    assert.equal(controller.marker, 'custom');
+  });
+
+  test('falls back to native tag search controller when factory is missing', () => {
+    const documentRef = createMockDocument();
+    const targetInput = {
+      options: [],
+      selectedIndex: -1,
+      value: '',
+      get firstChild() {
+        return this.options[0] || null;
+      },
+      get selectedOptions() {
+        return this.options.filter((option) => option.selected);
+      },
+      appendChild(node) {
+        this.options.push(node);
+      },
+      removeChild(node) {
+        this.options = this.options.filter((option) => option !== node);
+      },
+      setAttribute() {},
+      addEventListener() {}
+    };
+
+    const controller = global.window.galleryComponents.resolveTagSearchControllerWithFallback({
+      input: targetInput,
+      parseTagTokens: (value) => String(value || '').split(/\s+/).filter(Boolean),
+      documentRef
+    });
+
+    controller.setOptions(
+      [
+        { value: 'Alpha', text: 'Alpha' },
+        { value: 'Beta', text: 'Beta' }
+      ],
+      { clearSelection: true }
+    );
+
+    assert.equal(targetInput.options.length, 2);
+
+    targetInput.options[1].selected = true;
+    targetInput.value = 'Beta';
+    assert.deepEqual(controller.getValues(), ['Beta']);
+
+    controller.clearSelection();
+    assert.equal(targetInput.value, '');
+    assert.equal(targetInput.selectedIndex, -1);
+  });
 });
 
 
