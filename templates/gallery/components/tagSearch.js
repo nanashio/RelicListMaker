@@ -1,21 +1,4 @@
 (() => {
-    function defaultParseTagTokens(value) {
-        if (Array.isArray(value)) {
-            return value.slice();
-        }
-        if (value == null) {
-            return [];
-        }
-        const text = String(value).trim();
-        if (!text) {
-            return [];
-        }
-        return text
-            .split(/[\s,;、，　；]+/)
-            .map((token) => token.trim())
-            .filter((token) => token.length > 0);
-    }
-
     function createTagSearchController(config = {}) {
         const {
             input = null,
@@ -32,12 +15,37 @@
         const tagTokenModule =
             (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
             null;
-        const parseTagTokens =
-            typeof parseTokensConfig === 'function'
-                ? parseTokensConfig
-                : tagTokenModule && typeof tagTokenModule.parseTagTokens === 'function'
-                  ? (value) => tagTokenModule.parseTagTokens(value)
-                  : defaultParseTagTokens;
+        const resolveTagTokenParserWithFallback =
+            namespace && typeof namespace.resolveTagTokenParserWithFallback === 'function'
+                ? namespace.resolveTagTokenParserWithFallback
+                : null;
+        const defaultParseTokens = (namespace && namespace.defaultParseTagTokens) || ((value) => {
+            if (Array.isArray(value)) {
+                return value.slice();
+            }
+            if (value == null) {
+                return [];
+            }
+            const text = String(value).trim();
+            if (!text) {
+                return [];
+            }
+            return text
+                .split(/[\s,;、，　；]+/)
+                .map((token) => token.trim())
+                .filter((token) => token.length > 0);
+        });
+        const parseTagTokens = resolveTagTokenParserWithFallback
+            ? resolveTagTokenParserWithFallback({
+                  parseTagTokens: parseTokensConfig,
+                  tagTokenModule,
+                  defaultParseTagTokens: defaultParseTokens
+              })
+            : typeof parseTokensConfig === 'function'
+              ? parseTokensConfig
+              : tagTokenModule && typeof tagTokenModule.parseTagTokens === 'function'
+                ? (value) => tagTokenModule.parseTagTokens(value)
+                : defaultParseTokens;
         const resolveTagDebugResolver =
             namespace && typeof namespace.resolveTagDebugResolverSharedOrDefault === 'function'
                 ? namespace.resolveTagDebugResolverSharedOrDefault

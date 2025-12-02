@@ -1498,6 +1498,40 @@ describe('shared resolvers', () => {
     assert.equal(targetInput.value, '');
     assert.equal(targetInput.selectedIndex, -1);
   });
+
+  test('resolves tag token parser with provided callback', () => {
+    const parser = (value) => [String(value).toUpperCase()];
+
+    const resolved = global.window.galleryComponents.resolveTagTokenParserWithFallback({
+      parseTagTokens: parser
+    });
+
+    assert.equal(resolved, parser);
+    assert.deepEqual(resolved('alpha'), ['ALPHA']);
+  });
+
+  test('resolves tag token parser from galleryModules when available', () => {
+    const calls = [];
+    global.window.galleryModules = {
+      tagTokens: {
+        parseTagTokens(value) {
+          calls.push(value);
+          return ['from-module'];
+        }
+      }
+    };
+
+    const resolved = global.window.galleryComponents.resolveTagTokenParserWithFallback();
+
+    assert.deepEqual(resolved('hello'), ['from-module']);
+    assert.deepEqual(calls, ['hello']);
+  });
+
+  test('falls back to default tag token parser when no override exists', () => {
+    const resolved = global.window.galleryComponents.resolveTagTokenParserWithFallback();
+
+    assert.deepEqual(resolved('alpha, beta'), ['alpha', 'beta']);
+  });
 });
 
 
