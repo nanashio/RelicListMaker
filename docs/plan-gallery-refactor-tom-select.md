@@ -85,6 +85,11 @@
   - タスク: `templates/gallery/js/modules/` のエントリポイントを整理し、IIFE からのエクスポートに対する互換レイヤーを `gallery/index.js` で管理する方針を整理。エントリ追加時のチェックリストを計画書に追記し、次回のモジュール抽出対象（例: filter state ブリッジ）を列挙する。
   - 成果物: 整理した依存図・チェックリスト、次抽出候補の一覧と想定工数。
 
+- ### フォローアップ 5: タグトークン共有リゾルバのモジュール化と依存明示
+  - 背景: `tagTokenResolvers` は IIFE で `window.galleryComponents` へ直接書き込む構成のままで、ESM 化フェーズで依存順序が隠蔽されがち。
+  - タスク: `templates/gallery/js/modules/tagTokenResolvers.js`（仮）として ESM 版を追加し、IIFE 側は互換ラッパー経由で公開する構成に整理する。`gallery/assets.py` と `tests/js/gallery_modules.test.mjs` のコピー/監視対象へ ESM 版を追加し、`templates/gallery/index.js` の依存順序を明示してグローバル未初期化時のフォールバック経路を継続する。
+  - 成果物: ESM 版タグトークンリゾルバ、互換ラッパー、コピー対象チェックとテスト拡充、依存順序メモ（計画書追記）。
+
 ## リスクと緩和策
 - 依存順序の変更で既存バンドルと競合するリスク → IIFE での後方互換エクスポートを残し、段階的に import パスを差し替える。
 - スタイルの名前空間化でクラス名が変わるリスク → 既存クラスを一定期間 alias として残し、差分を CSS 変数とコメントで明示する。
