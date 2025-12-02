@@ -385,11 +385,11 @@
         const resolveTagDebugResolver =
             namespace && typeof namespace.resolveTagDebugResolverSharedOrDefault === 'function'
                 ? namespace.resolveTagDebugResolverSharedOrDefault
-                : null;
+                : resolveTagDebugResolverSharedOrDefault;
         const resolveTomSelectAdapter =
             namespace && typeof namespace.resolveSharedTomSelectAdapterOrDefault === 'function'
                 ? namespace.resolveSharedTomSelectAdapterOrDefault
-                : null;
+                : resolveSharedTomSelectAdapterOrDefault;
 
         const controllerFactory =
             typeof config.createTagSearchController === 'function'
