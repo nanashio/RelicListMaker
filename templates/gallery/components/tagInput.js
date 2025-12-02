@@ -44,6 +44,10 @@
             namespace && typeof namespace.resolveSharedTomSelectAdapterOrDefault === 'function'
                 ? namespace.resolveSharedTomSelectAdapterOrDefault
                 : null;
+        const resolveDefaultParseTagTokens =
+            namespace && typeof namespace.resolveDefaultParseTagTokens === 'function'
+                ? namespace.resolveDefaultParseTagTokens
+                : null;
         const resolveTagTokenParserWithFallback =
             namespace && typeof namespace.resolveTagTokenParserWithFallback === 'function'
                 ? namespace.resolveTagTokenParserWithFallback
@@ -51,17 +55,20 @@
         const tagTokenModule =
             (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
             null;
+        const defaultParseTokens = resolveDefaultParseTagTokens
+            ? resolveDefaultParseTagTokens({ defaultParseTagTokens })
+            : defaultParseTagTokens;
         const parseTagTokens = resolveTagTokenParserWithFallback
             ? resolveTagTokenParserWithFallback({
                   parseTagTokens: parseTokensConfig,
                   tagTokenModule,
-                  defaultParseTagTokens
+                  defaultParseTagTokens: defaultParseTokens
               })
             : typeof parseTokensConfig === 'function'
               ? parseTokensConfig
               : tagTokenModule && typeof tagTokenModule.parseTagTokens === 'function'
                 ? (value) => tagTokenModule.parseTagTokens(value)
-                : defaultParseTagTokens;
+                : defaultParseTokens;
         const formatTagTokens =
             typeof formatTokensConfig === 'function'
                 ? formatTokensConfig

@@ -13,6 +13,10 @@
         }
     }
 
+    function resolveSharedTagDebugResolver(config = {}) {
+        return resolveTagDebugResolverWithFallback(config);
+    }
+
     function resolveTagDebugResolverWithFallback(config = {}) {
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
         const resolver =
@@ -46,10 +50,6 @@
             }
             return defaultResolver();
         };
-    }
-
-    function resolveSharedTagDebugResolver(config = {}) {
-        return resolveTagDebugResolverWithFallback(config);
     }
 
     function resolveSharedTomSelectAdapterWithDebug(config = {}) {
@@ -189,6 +189,18 @@
             .filter((token) => token.length > 0);
     }
 
+    function resolveDefaultParseTagTokens(config = {}) {
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const fallbackParser =
+            typeof config.defaultParseTagTokens === 'function' ? config.defaultParseTagTokens : defaultParseTagTokens;
+        const sharedDefault =
+            namespace && typeof namespace.defaultParseTagTokens === 'function'
+                ? namespace.defaultParseTagTokens
+                : null;
+
+        return typeof sharedDefault === 'function' ? sharedDefault : fallbackParser;
+    }
+
     function resolveTagTokenParserWithFallback(config = {}) {
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
         const tagTokenModule =
@@ -196,9 +208,7 @@
                 ? config.tagTokenModule
                 : (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
                   null;
-        const defaultParser =
-            (namespace && namespace.defaultParseTagTokens) ||
-            (typeof config.defaultParseTagTokens === 'function' ? config.defaultParseTagTokens : defaultParseTagTokens);
+        const defaultParser = resolveDefaultParseTagTokens({ defaultParseTagTokens: config.defaultParseTagTokens });
 
         if (typeof config.parseTagTokens === 'function') {
             return config.parseTagTokens;
@@ -408,6 +418,7 @@
     window.galleryComponents.resolveSharedTomSelectAdapterWithDebug = resolveSharedTomSelectAdapterWithDebug;
     window.galleryComponents.resolveTagDebugResolverSharedOrDefault = resolveTagDebugResolverSharedOrDefault;
     window.galleryComponents.resolveSharedTomSelectAdapterOrDefault = resolveSharedTomSelectAdapterOrDefault;
+    window.galleryComponents.resolveDefaultParseTagTokens = resolveDefaultParseTagTokens;
     window.galleryComponents.resolveTagTokenParserWithFallback = resolveTagTokenParserWithFallback;
     window.galleryComponents.resolveTagSearchControllerWithFallback = resolveTagSearchControllerWithFallback;
     window.galleryComponents.defaultParseTagTokens = defaultParseTagTokens;

@@ -53,6 +53,7 @@
 - 最新ハイライト:
   - タグ入力/検索/ビューのタグトークン解決を `resolveTagTokenParserWithFallback` に統一し、`galleryModules.tagTokens` 優先とデフォルトフォールバックを共通経路で維持。
   - TomSelect 共有リゾルバとデバッグ判定を `sharedResolvers` と `tagDebug` に集約し、ロード順の揺らぎでもデフォルトアダプタにフォールバックできるよう整備。
+  - タグトークンデフォルトパーサーの解決を `resolveDefaultParseTagTokens` へ集約し、タグ入力/検索が共有のフォールバックパーサーを必ず採用するように整理。
 - 残作業: なし（フォローアップは次節参照）。
 
 ## バックログ/フォローアップ計画（2025-04-16 以降）
@@ -311,3 +312,8 @@
 - タグ入力のタグトークン解決を共有リゾルバに統合。
   - `tagInput` が `resolveTagTokenParserWithFallback` を利用してタグトークンパーサーを取得するように変更し、タグ入力/検索/ビュー間で正規化経路を一本化。`galleryModules.tagTokens` が存在する場合は自動採用し、指定パーサーやデフォルトパーサーへのフォールバックも共有リゾルバ経由に統一した。
 - テスト: `pytest`、`node --test tests/js/gallery_modules.test.mjs` を実行。
+
+## 進捗メモ（2025-04-20）
+- タグトークンデフォルトパーサーの解決を共有モジュールに一本化。
+  - `sharedResolvers` に `resolveDefaultParseTagTokens` を追加し、`resolveTagTokenParserWithFallback` が共通のデフォルト解決を使用するように変更。タグ入力/タグ検索コンポーネントは新リゾルバ経由でデフォルトパーサーを取得し、フォールバック時も同じ正規化処理を通るようになった。
+- テスト: `node --test tests/js/gallery_modules.test.mjs` を実行。
