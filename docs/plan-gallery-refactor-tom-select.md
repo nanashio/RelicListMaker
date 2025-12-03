@@ -51,12 +51,14 @@
 | S3: テンプレート分離とスタイル整理 | データ整形関数・フィルター状態ストア・HTML パーシャル・名前空間 CSS を導入し役割を分離 | `renderData`/`filterStore` 追加、フィルター同期ブリッジ、パーシャル化と名前空間 CSS の整理 | 完了（4/4） |
 | S4: テスト整備と ESM 土台 | JS ロジックを ES Modules へ抽出し、コピー対象とテストでモジュール配信を固定化。フィルター評価・タグトークンの純粋関数をテストで担保 | ESM 抽出と互換ラッパー追加、コピー監視更新、フィルター/タグトークン純粋関数のテスト拡充 | 完了（3/3） |
 
-## 進捗サマリー（2025-12-13 時点）
+## 進捗サマリー（2025-12-14 時点）
 - スプリント達成度: S1 3/3、S2 3/3、S3 4/4、S4 3/3（全て完了）。
 - 最新ハイライト:
   - TomSelect デフォルトアダプタのネイティブログ登録を idempotent にし、デバッグ有効時も重複リスナーを追加しないようガードを追加。
 `registerNativeLogging` が複数回呼ばれても 1 回だけ input/change を購読し、指定のロガーでネイティブ入力を記録することを Node テストで検証
 した。【F:templates/gallery/components/tomSelectAdapterFactory.js†L52-L82】【F:tests/js/gallery_modules.test.mjs†L188-L243】
+  - TomSelect 互換アダプタ（`createTomSelectAdapter`）にも共有デバッグ判定とネイティブログガードを適用し、フォールバック経路でも重複購読を防止。
+    Node テストでデバッグ無効時の無動作と、同一入力への idempotent なリスナー登録・ログ出力を確認した。【F:templates/gallery/components/tomSelectAdapter.js†L15-L112】【F:tests/js/gallery_modules.test.mjs†L2055-L2106】
   - TomSelect デフォルトアダプタのネイティブログ登録が自己再帰になっていた不具合を解消し、フォールバック経路でもデバッグログが確実に動作するようにした。`registerNativeLogging` 呼び出しが内部ヘルパーを経由するため、TomSelect 未提供時のネイティブ入力監視も安全に有効化される。
   - TomSelect デフォルトアダプタに共有デバッグ判定とロギングを組み込み、フォールバック経路でもイベント監視とネイティブ入力ログが一貫するようにした。共有リゾルバ経由でデバッグフラグを受け取り、インスタンス/ネイティブ双方のハンドラ登録をデフォルト化。【F:templates/gallery/components/tomSelectAdapterFactory.js†L2-L215】【F:templates/gallery/components/sharedResolvers.js†L81-L204】
   - ギャラリービューのタグトークン解決を `resolveTagTokenParsersWithDefaults` ベースに変更し、`galleryComponents` 配下の共有リゾルバとデフォルトパーサーを優先採用。タグストア未初期化やデフォルトパーサー未指定でも共通のフォールバック経路で正規化・整形が行われるようにした。
@@ -156,6 +158,7 @@
 | 12-11 | ギャラリービューのタグトークン解決を共有リゾルバ経由に統一 | S1/S2 | pytest / node --test tests/js/gallery_modules.test.mjs |
 | 12-12 | TomSelect デフォルトアダプタのネイティブログ登録が自己再帰していた問題を修正し、フォールバック経路のログを安定化 | S1 | pytest / npm run test:node |
 | 12-13 | デフォルトアダプタのネイティブログ登録に重複防止ガードを追加し、指定ロガーでの記録を Node テストで確認 | S1 | pytest / npm run test:node |
+| 12-14 | 互換アダプタのネイティブログ登録に共有デバッグ判定と重複防止ガードを適用し、Node テストを追加 | S1 | pytest / node --test |
 
 ## 付録 B: 詳細進捗メモ
 ## 進捗メモ（2025-03-19）
@@ -417,3 +420,8 @@
   - デフォルトアダプタが共有デバッグ判定を受け取り、TomSelect インスタンスおよびネイティブ入力のイベントロギングを行うように変更。フォールバック経路でもイベント監視がデフォルト化され、デバッグフラグの有無で挙動を揃えた。【F:templates/gallery/components/tomSelectAdapterFactory.js†L2-L215】
   - 共有リゾルバのフォールバックがデフォルトアダプタへデバッグフラグを渡すようにし、TomSelect 未提供時もログ出力の可否が一貫するように整備。【F:templates/gallery/components/sharedResolvers.js†L81-L204】
 - テスト: `npm run test:node` を実行。
+
+## 進捗メモ（2025-12-14）
+- 互換アダプタのログガードを共通仕様に合わせて整備。
+  - `createTomSelectAdapter` が共有のデバッグ判定を経由するようにし、`registerNativeLogging` に重複防止マーカーと例外に強いデバッグ判定を追加。TomSelect 未提供のフォールバック経路でもリスナー重複を防ぎ、IIFE/ESM どちらのローディング順でも安定してデバッグログを記録できるようにした。【F:templates/gallery/components/tomSelectAdapter.js†L15-L112】
+- テスト: `pytest` / `node --test tests/js/gallery_modules.test.mjs` を実行。

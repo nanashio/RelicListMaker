@@ -1931,6 +1931,69 @@ describe('tomSelect adapter factory', () => {
 });
 
 
+describe('tomSelect adapter (compat)', () => {
+  let documentMock;
+
+  beforeEach(() => {
+    documentMock = createMockDocument();
+    global.window = {};
+    global.document = documentMock;
+    runScript('templates/gallery/components/tagDebug.js');
+    runScript('templates/gallery/components/sharedResolvers.js');
+  });
+
+  afterEach(() => {
+    delete global.window;
+    delete global.document;
+  });
+
+  test('skips native logging when debug is disabled', () => {
+    runScript('templates/gallery/components/tomSelectAdapter.js');
+    const { createTomSelectAdapter } = window.galleryComponents;
+    const adapter = createTomSelectAdapter({ documentRef: documentMock, isDebugEnabled: () => false });
+
+    const input = new MockElement('input');
+    adapter.registerNativeLogging(input, { debugLabel: 'skip-compat' });
+
+    assert.deepEqual(input.eventListeners, {});
+  });
+
+  test('registerNativeLogging is idempotent and logs via provided hooks', () => {
+    runScript('templates/gallery/components/tomSelectAdapter.js');
+    const { createTomSelectAdapter } = window.galleryComponents;
+    const adapter = createTomSelectAdapter({ documentRef: documentMock, isDebugEnabled: () => true });
+
+    const input = new MockElement('input');
+    const infoLogs = [];
+    const debugLogs = [];
+
+    const hooks = {
+      debugLabel: 'compat-native',
+      loggers: {
+        logInfo: (...args) => infoLogs.push(args),
+        logDebug: (...args) => debugLogs.push(args)
+      }
+    };
+
+    adapter.registerNativeLogging(input, hooks);
+    adapter.registerNativeLogging(input, hooks);
+
+    assert.equal(Object.keys(input.eventListeners).length, 2);
+    assert.equal(input.eventListeners.input.length, 1);
+    assert.equal(input.eventListeners.change.length, 1);
+
+    input.value = 'alpha';
+    input.dispatchEvent('input', { target: input, type: 'input' });
+    input.dispatchEvent('change', { target: input, type: 'change' });
+
+    assert.equal(debugLogs.length, 1);
+    assert.equal(infoLogs.length, 1);
+    assert.ok(debugLogs[0][0].includes('compat-native'));
+    assert.ok(infoLogs[0][0].includes('compat-native'));
+  });
+});
+
+
 describe('tag search controller', () => {
   let documentMock;
 
