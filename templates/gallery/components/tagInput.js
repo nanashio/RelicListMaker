@@ -27,96 +27,47 @@
             namespace && typeof namespace.resolveSharedTomSelectAdapterOrDefault === 'function'
                 ? namespace.resolveSharedTomSelectAdapterOrDefault
                 : null;
-        const resolveDefaultParseTagTokens =
-            namespace && typeof namespace.resolveDefaultParseTagTokens === 'function'
-                ? namespace.resolveDefaultParseTagTokens
-                : null;
-        const resolveTagTokenParserWithFallback =
-            namespace && typeof namespace.resolveTagTokenParserWithFallback === 'function'
-                ? namespace.resolveTagTokenParserWithFallback
+        const resolveTagTokenParsersWithDefaults =
+            namespace && typeof namespace.resolveTagTokenParsersWithDefaults === 'function'
+                ? namespace.resolveTagTokenParsersWithDefaults
                 : null;
 
-        const defaultParseTagTokens = resolveDefaultParseTagTokens
-            ? resolveDefaultParseTagTokens({ defaultParseTagTokens: config.defaultParseTagTokens })
-            : typeof namespace?.defaultParseTagTokens === 'function'
-              ? namespace.defaultParseTagTokens
-              : typeof config.defaultParseTagTokens === 'function'
-                ? config.defaultParseTagTokens
-                : (value) => {
-                    if (Array.isArray(value)) {
-                        return value.slice();
-                    }
-                    if (value == null) {
-                        return [];
-                    }
-                    const text = String(value).trim();
-                    if (!text) {
-                        return [];
-                    }
-                    return text
-                        .split(/[\s,;、，　；]+/)
-                        .map((token) => token.trim())
-                        .filter((token) => token.length > 0);
-                };
-
-        function resolveTagTokenParsersBridge() {
-            const tagTokenModule =
-                config.tagTokenModule !== undefined
-                    ? config.tagTokenModule
-                    : (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
-                      null;
-
-            const resolverCandidates = [
-                namespace && namespace.resolveTagTokenParsersOrFallback,
-                namespace && namespace.resolveTagTokenParsersSharedOrDefault,
-                namespace && namespace.resolveTagTokenParsers
-            ].filter((resolver) => typeof resolver === 'function');
-
-            for (const resolver of resolverCandidates) {
-                try {
-                    const resolved = resolver({
-                        parseTagTokens: parseTokensConfig,
-                        formatTagTokens: formatTokensConfig,
-                        defaultParseTagTokens: defaultParseTagTokens,
-                        tagTokenModule: config.tagTokenModule
-                    });
-                    if (resolved && typeof resolved.parseTagTokens === 'function') {
-                        return {
-                            ...resolved,
-                            tagTokenModule: resolved.tagTokenModule !== undefined ? resolved.tagTokenModule : tagTokenModule,
-                            defaultParseTagTokens:
-                                resolved.defaultParseTagTokens !== undefined
-                                    ? resolved.defaultParseTagTokens
-                                    : defaultParseTagTokens
-                        };
-                    }
-                } catch (error) {
-                    // fall through to the next resolver
-                }
-            }
-
-            const parseTagTokens = resolveTagTokenParserWithFallback
-                ? resolveTagTokenParserWithFallback({
-                      parseTagTokens: parseTokensConfig,
-                      tagTokenModule,
-                      defaultParseTagTokens
-                  })
-                : typeof parseTokensConfig === 'function'
-                  ? parseTokensConfig
-                  : tagTokenModule && typeof tagTokenModule.parseTagTokens === 'function'
-                    ? (value) => tagTokenModule.parseTagTokens(value)
-                    : defaultParseTagTokens;
+        const fallbackTagTokenResolver = ({ defaultParseTagTokens: defaultParser }) => {
+            const parseTagTokens = typeof parseTokensConfig === 'function' ? parseTokensConfig : defaultParser;
             const formatTagTokens =
                 typeof formatTokensConfig === 'function'
                     ? formatTokensConfig
-                    : tagTokenModule && typeof tagTokenModule.formatTagTokens === 'function'
-                      ? tagTokenModule.formatTagTokens
-                      : (value) => (Array.isArray(value) ? value.join(' ') : parseTagTokens(value).join(' '));
+                    : (value) => (Array.isArray(value) ? value.join(' ') : parseTagTokens(value).join(' '));
+            return { parseTagTokens, formatTagTokens, defaultParseTagTokens: defaultParser };
+        };
 
-            return { parseTagTokens, formatTagTokens, defaultParseTagTokens, tagTokenModule };
-        }
-
-        const { parseTagTokens, formatTagTokens, defaultParseTagTokens: defaultParseTokens } = resolveTagTokenParsersBridge();
+        const { parseTagTokens, formatTagTokens, defaultParseTagTokens: defaultParseTokens } =
+            resolveTagTokenParsersWithDefaults
+                ? resolveTagTokenParsersWithDefaults({
+                      parseTagTokens: parseTokensConfig,
+                      formatTagTokens: formatTokensConfig,
+                      defaultParseTagTokens: config.defaultParseTagTokens,
+                      tagTokenModule: config.tagTokenModule
+                  })
+                : fallbackTagTokenResolver({
+                      defaultParseTagTokens:
+                          (namespace && namespace.defaultParseTagTokens) || config.defaultParseTagTokens || ((value) => {
+                              if (Array.isArray(value)) {
+                                  return value.slice();
+                              }
+                              if (value == null) {
+                                  return [];
+                              }
+                              const text = String(value).trim();
+                              if (!text) {
+                                  return [];
+                              }
+                              return text
+                                  .split(/[\s,;、，　；]+/)
+                                  .map((token) => token.trim())
+                                  .filter((token) => token.length > 0);
+                          })
+                  });
         const fallbackFormatter = createFallbackFormatter(formatTagTokens, parseTagTokens);
 
         const hasDom = Boolean(documentRef && typeof documentRef.createElement === 'function');
