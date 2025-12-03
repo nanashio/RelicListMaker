@@ -69,10 +69,19 @@
         });
     }
 
+    const nativeLoggingMarker = Symbol('gallery-native-logging');
+
     function registerNativeLoggingInternal(input, hooks = {}, isDebugEnabled = () => false) {
-        if (!isDebugEnabled() || !input || typeof input.addEventListener !== 'function') {
+        if (!input || typeof input.addEventListener !== 'function') {
             return;
         }
+        if (!isDebugEnabled()) {
+            return;
+        }
+        if (input[nativeLoggingMarker]) {
+            return;
+        }
+        input[nativeLoggingMarker] = true;
         const { debugLabel = 'tom-select', loggers = {} } = hooks;
         const logInfo = loggers.logInfo || getLogger('info');
         const logDebug = loggers.logDebug || getLogger('debug');

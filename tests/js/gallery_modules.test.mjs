@@ -1850,6 +1850,65 @@ describe('tomSelect adapter factory', () => {
     assert.strictEqual(defaultCalls[0].docRef, documentMock);
   });
 
+  test('registerNativeLogging skips when debug is disabled', () => {
+    runScript('templates/gallery/components/tomSelectAdapterFactory.js');
+    const factory = window.galleryComponents.createDefaultTomSelectAdapter;
+
+    const adapter = factory(
+      function MockTomSelect() {},
+      documentMock,
+      {
+        isDebugEnabled: () => false
+      }
+    );
+
+    const input = new MockElement('input');
+    adapter.registerNativeLogging(input, { debugLabel: 'skip-debug' });
+
+    assert.deepEqual(input.eventListeners, {});
+  });
+
+  test('registerNativeLogging attaches listeners only once and logs via provided loggers', () => {
+    runScript('templates/gallery/components/tomSelectAdapterFactory.js');
+    const factory = window.galleryComponents.createDefaultTomSelectAdapter;
+
+    const adapter = factory(
+      function MockTomSelect() {},
+      documentMock,
+      {
+        isDebugEnabled: () => true
+      }
+    );
+
+    const input = new MockElement('input');
+    const infoLogs = [];
+    const debugLogs = [];
+
+    const hooks = {
+      debugLabel: 'native-test',
+      loggers: {
+        logInfo: (...args) => infoLogs.push(args),
+        logDebug: (...args) => debugLogs.push(args)
+      }
+    };
+
+    adapter.registerNativeLogging(input, hooks);
+    adapter.registerNativeLogging(input, hooks);
+
+    assert.equal(Object.keys(input.eventListeners).length, 2);
+    assert.equal(input.eventListeners.input.length, 1);
+    assert.equal(input.eventListeners.change.length, 1);
+
+    input.value = 'alpha';
+    input.dispatchEvent('input', { target: input, type: 'input' });
+    input.dispatchEvent('change', { target: input, type: 'change' });
+
+    assert.equal(debugLogs.length, 1);
+    assert.equal(infoLogs.length, 1);
+    assert.ok(debugLogs[0][0].includes('native-test'));
+    assert.ok(infoLogs[0][0].includes('native-test'));
+  });
+
   test('shared resolver prefers global helper and keeps default factory fallback', () => {
     runScript('templates/gallery/components/tomSelectAdapterFactory.js');
 

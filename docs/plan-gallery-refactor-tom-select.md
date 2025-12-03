@@ -51,9 +51,12 @@
 | S3: テンプレート分離とスタイル整理 | データ整形関数・フィルター状態ストア・HTML パーシャル・名前空間 CSS を導入し役割を分離 | `renderData`/`filterStore` 追加、フィルター同期ブリッジ、パーシャル化と名前空間 CSS の整理 | 完了（4/4） |
 | S4: テスト整備と ESM 土台 | JS ロジックを ES Modules へ抽出し、コピー対象とテストでモジュール配信を固定化。フィルター評価・タグトークンの純粋関数をテストで担保 | ESM 抽出と互換ラッパー追加、コピー監視更新、フィルター/タグトークン純粋関数のテスト拡充 | 完了（3/3） |
 
-## 進捗サマリー（2025-12-11 時点）
+## 進捗サマリー（2025-12-13 時点）
 - スプリント達成度: S1 3/3、S2 3/3、S3 4/4、S4 3/3（全て完了）。
 - 最新ハイライト:
+  - TomSelect デフォルトアダプタのネイティブログ登録を idempotent にし、デバッグ有効時も重複リスナーを追加しないようガードを追加。
+`registerNativeLogging` が複数回呼ばれても 1 回だけ input/change を購読し、指定のロガーでネイティブ入力を記録することを Node テストで検証
+した。【F:templates/gallery/components/tomSelectAdapterFactory.js†L52-L82】【F:tests/js/gallery_modules.test.mjs†L188-L243】
   - TomSelect デフォルトアダプタのネイティブログ登録が自己再帰になっていた不具合を解消し、フォールバック経路でもデバッグログが確実に動作するようにした。`registerNativeLogging` 呼び出しが内部ヘルパーを経由するため、TomSelect 未提供時のネイティブ入力監視も安全に有効化される。
   - TomSelect デフォルトアダプタに共有デバッグ判定とロギングを組み込み、フォールバック経路でもイベント監視とネイティブ入力ログが一貫するようにした。共有リゾルバ経由でデバッグフラグを受け取り、インスタンス/ネイティブ双方のハンドラ登録をデフォルト化。【F:templates/gallery/components/tomSelectAdapterFactory.js†L2-L215】【F:templates/gallery/components/sharedResolvers.js†L81-L204】
   - ギャラリービューのタグトークン解決を `resolveTagTokenParsersWithDefaults` ベースに変更し、`galleryComponents` 配下の共有リゾルバとデフォルトパーサーを優先採用。タグストア未初期化やデフォルトパーサー未指定でも共通のフォールバック経路で正規化・整形が行われるようにした。
@@ -90,7 +93,7 @@
 | --- | --- | --- | --- | --- | --- |
 | 1 | ブラウザ E2E の再実行と証跡取得 | 100%（ローカル Playwright 環境で完了。Codex Web 環境では常時スキップ） | Playwright のブラウザ取得が Codex Web 環境では不可能なため、Chromium 取得済みの開発者ローカル環境で再実行し、E2E カバレッジを確保 | `npm run test:browser -- tests/browser/viewer.spec.ts` をローカルで実行し、TomSelect 差し替え経路とタグトークンフォールバックを UI 上で確認。ローカル実行で得たログとスクリーンショットを計画書へ追記 | E2E 実行ログとスクリーンショット、計画書への記録、環境差分の明記 |
 | 2 | CSS alias 期間終了に向けたクリーンアップ | 0%（未着手） | 名前空間付きクラス導入後も旧クラス alias が暫定残存し、スタイル衝突リスクがある | `templates/gallery/styles/` の alias 棚卸しと参照確認。問題なければ alias を段階的削除し、互換性テストを追加 | alias 削除パッチと対応テスト、互換性確認結果の記録 |
-| 3 | 共有リゾルバのカバレッジ拡充 | 80%（Node で例外経路確認済み、E2E はブラウザ取得待ち） | `sharedResolvers` のローカルストレージ未設定/TomSelect 非読込の経路が E2E 未検証だったが、ブラウザ実行でフォールバック動作を確認するには Chromium 取得が必要 | `tests/js/gallery_modules.test.mjs` にフォールバックケースを追加し、`gallery/assets.py` のコピー対象チェックと連動。`npm run test:browser -- tests/browser/viewer.spec.ts` で UI 上のフォールバック経路を確認 | 追加テストとテスト結果、フォールバック経路の通過確認ログ |
+| 3 | 共有リゾルバのカバレッジ拡充 | 90%（Node で例外経路とネイティブロギングのフォールバックを追加検証、E2E はブラウザ取得待ち） | `sharedResolvers` のローカルストレージ未設定/TomSelect 非読込の経路が E2E 未検証だったが、ブラウザ実行でフォールバック動作を確認するには Chromium 取得が必要 | `tests/js/gallery_modules.test.mjs` にフォールバックケースを追加し、`gallery/assets.py` のコピー対象チェックと連動。`npm run test:browser -- tests/browser/viewer.spec.ts` で UI 上のフォールバック経路を確認 | 追加テストとテスト結果、フォールバック経路の通過確認ログ |
 | 4 | ESM 化フェーズ 2 の準備 | 0%（未着手） | ESM 抽出が進む一方で IIFE 互換を併存させており、依存順序の監視が必要 | `templates/gallery/js/modules/` のエントリ整理、`gallery/index.js` で互換レイヤーを管理する方針整理、次抽出対象の列挙とチェックリスト化 | 整理した依存図・チェックリスト、次抽出候補の一覧と想定工数 |
 | 5 | タグトークン共有リゾルバのモジュール化と依存明示 | 100%（完了） | `tagTokenResolvers` が IIFE でグローバル書き込みのままで、ESM 化で依存順序が隠れやすい | `templates/gallery/js/modules/tagTokenResolvers.js` を追加し、IIFE はモジュール登録を利用する互換ラッパーに更新。`gallery/assets.py`/`tests/js/gallery_modules.test.mjs` のコピー監視と `templates/gallery/index.js` の依存順序を追記 | ESM 版リゾルバと互換ラッパー、コピー監視とテスト拡充、依存順序メモ（計画書追記） |
 
@@ -152,6 +155,7 @@
 | 12-10 | 開発者ローカル環境で Playwright ブラウザテストを実行し完了。Codex Web 環境はブラウザ非取得のため常時スキップ方針に変更 | S1/S3 | npm run test:browser -- tests/browser/viewer.spec.ts（ローカルで実行済み、Codex ではスキップ） |
 | 12-11 | ギャラリービューのタグトークン解決を共有リゾルバ経由に統一 | S1/S2 | pytest / node --test tests/js/gallery_modules.test.mjs |
 | 12-12 | TomSelect デフォルトアダプタのネイティブログ登録が自己再帰していた問題を修正し、フォールバック経路のログを安定化 | S1 | pytest / npm run test:node |
+| 12-13 | デフォルトアダプタのネイティブログ登録に重複防止ガードを追加し、指定ロガーでの記録を Node テストで確認 | S1 | pytest / npm run test:node |
 
 ## 付録 B: 詳細進捗メモ
 ## 進捗メモ（2025-03-19）
