@@ -109,12 +109,15 @@
 - Playwright/E2E テストが必要な場合はブラウザ取得済みの開発者ローカル環境で実行し、Codex Web 環境では常時スキップする。スキップ理由と再実行依頼を進捗メモに明記する。
 
 ## 成果確認チェックリスト
-- TomSelect の生成・破棄・設定が 1 ファイルに集約され、`tagInputController` と `tagSearchController` は依存注入で動く。
-- タグ更新の純粋関数がストアに存在し、UI から DOM 直接操作せずに更新できる。
-- フィルター評価の純粋関数を `js/modules/filterPredicates.js` に抽出し、IIFE 側からも再利用できる。
-- フィルター/ソート条件が単一ストアに集約され、UI は購読/通知のみで同期する。
-- HTML/CSS/JS の役割が分離され、名前空間付きクラスとパーシャルで構造が明示されている。
-- テストが `tests/test_gallery_js_modules.py` で追加され、タグ正規化とフィルター適用のケースが網羅されている。
+
+| チェック項目 | 判定 | 根拠/メモ |
+| --- | --- | --- |
+| TomSelect の生成・破棄・設定が 1 ファイルに集約され、`tagInputController` と `tagSearchController` は依存注入で動く | ✅ | `tomSelectAdapterFactory` で生成/同期/ネイティブログを共通化し、タグ入力・タグ検索両コントローラーが共有リゾルバ経由でアダプタを注入する形に統一済み。 |
+| タグ更新の純粋関数がストアに存在し、UI から DOM 直接操作せずに更新できる | ✅ | `createTagStore` がタグ正規化・更新を純粋関数として提供し、UI はストア経由で正規化済みの値を書き戻す。 |
+| フィルター評価の純粋関数を `js/modules/filterPredicates.js` に抽出し、IIFE 側からも再利用できる | ✅ | `filterPredicates` モジュールが正規化/可視判定/配列フィルターを一括エクスポートし、`registerFilterPredicatesModule` でグローバルにも登録。 |
+| フィルター/ソート条件が単一ストアに集約され、UI は購読/通知のみで同期する | ✅ | `filterStore` に検索語・色・重複を集約し、`gallery.js` で DOM 同期とフィルター適用を購読/通知ベースで行う。 |
+| HTML/CSS/JS の役割が分離され、名前空間付きクラスとパーシャルで構造が明示されている | ✅ | TomSelect の上書きスタイルを専用の `styles/tom-select.css` に分離し、`.gallery-page` 配下の名前空間付きクラスで限定適用する構成を `gallery.css` からインポート。 |
+| テストが `tests/test_gallery_js_modules.py` で追加され、タグ正規化とフィルター適用のケースが網羅されている | ✅ | Node テストでタグ正規化とフィルター可視判定の組み合わせを検証し、Pytest エントリで `tests/js/gallery_modules.test.mjs` を起動する形でカバレッジを担保。 |
 
 
 ## 付録 A: 日次ログ（テスト状況付き）
