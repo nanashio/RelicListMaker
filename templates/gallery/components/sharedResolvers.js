@@ -304,6 +304,63 @@
         return defaultParser;
     }
 
+    function resolveTagTokenParsersOrFallback(config = {}) {
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const resolverCandidates = [
+            namespace && namespace.resolveTagTokenParsersSharedOrDefault,
+            namespace && namespace.resolveTagTokenParsers,
+            resolveTagTokenParsersSharedOrDefault
+        ].filter((resolver) => typeof resolver === 'function');
+
+        const tagTokenModule =
+            config.tagTokenModule !== undefined
+                ? config.tagTokenModule
+                : (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
+                  null;
+
+        const defaultParseTokens = resolveDefaultParseTagTokens({
+            defaultParseTagTokens: config.defaultParseTagTokens
+        });
+
+        for (const resolver of resolverCandidates) {
+            try {
+                const resolved = resolver({
+                    ...config,
+                    tagTokenModule,
+                    defaultParseTagTokens: defaultParseTokens
+                });
+                if (resolved && typeof resolved.parseTagTokens === 'function') {
+                    return {
+                        ...resolved,
+                        tagTokenModule:
+                            resolved.tagTokenModule !== undefined ? resolved.tagTokenModule : tagTokenModule,
+                        defaultParseTagTokens:
+                            resolved.defaultParseTagTokens !== undefined
+                                ? resolved.defaultParseTagTokens
+                                : defaultParseTokens
+                    };
+                }
+            } catch (error) {
+                // try next resolver
+            }
+        }
+
+        const parseTagTokens = resolveTagTokenParserWithFallback({
+            parseTagTokens: config.parseTagTokens,
+            tagTokenModule,
+            defaultParseTagTokens: defaultParseTokens
+        });
+
+        const formatTagTokens =
+            typeof config.formatTagTokens === 'function'
+                ? config.formatTagTokens
+                : tagTokenModule && typeof tagTokenModule.formatTagTokens === 'function'
+                  ? tagTokenModule.formatTagTokens
+                  : (value) => (Array.isArray(value) ? value.join(' ') : parseTagTokens(value).join(' '));
+
+        return { parseTagTokens, formatTagTokens, defaultParseTagTokens: defaultParseTokens, tagTokenModule };
+    }
+
     function createTagSearchControllerFallback(config = {}) {
         const {
             input = null,
@@ -421,22 +478,31 @@
 
     function resolveTagSearchControllerWithFallback(config = {}) {
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        const tagTokenModule =
-            config.tagTokenModule !== undefined
-                ? config.tagTokenModule
-                : (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
-                  null;
+        const resolveTagTokenParsersOrFallbackFn =
+            namespace && typeof namespace.resolveTagTokenParsersOrFallback === 'function'
+                ? namespace.resolveTagTokenParsersOrFallback
+                : resolveTagTokenParsersOrFallback;
         const documentRef =
             config.documentRef !== undefined
                 ? config.documentRef
                 : typeof document !== 'undefined'
                   ? document
                   : null;
-        const parseTokens = resolveTagTokenParserWithFallback({
-            parseTagTokens: config.parseTagTokens,
-            tagTokenModule,
-            defaultParseTagTokens
-        });
+        const tagTokenParsers = resolveTagTokenParsersOrFallbackFn
+            ? resolveTagTokenParsersOrFallbackFn({
+                  parseTagTokens: config.parseTagTokens,
+                  defaultParseTagTokens: config.defaultParseTagTokens || defaultParseTagTokens,
+                  tagTokenModule: config.tagTokenModule
+              })
+            : null;
+        const parseTokens =
+            tagTokenParsers && typeof tagTokenParsers.parseTagTokens === 'function'
+                ? tagTokenParsers.parseTagTokens
+                : resolveTagTokenParserWithFallback({
+                      parseTagTokens: config.parseTagTokens,
+                      tagTokenModule: config.tagTokenModule,
+                      defaultParseTagTokens: config.defaultParseTagTokens
+                  });
         const resolveTagDebugResolver =
             namespace && typeof namespace.resolveTagDebugResolverSharedOrDefault === 'function'
                 ? namespace.resolveTagDebugResolverSharedOrDefault
@@ -506,6 +572,7 @@
     window.galleryComponents.resolveSharedTomSelectAdapterOrDefault = resolveSharedTomSelectAdapterOrDefault;
     window.galleryComponents.resolveDefaultParseTagTokens = resolveDefaultParseTagTokens;
     window.galleryComponents.resolveTagTokenParsersSharedOrDefault = resolveTagTokenParsersSharedOrDefault;
+    window.galleryComponents.resolveTagTokenParsersOrFallback = resolveTagTokenParsersOrFallback;
     window.galleryComponents.resolveTagTokenParserWithFallback = resolveTagTokenParserWithFallback;
     window.galleryComponents.resolveTagSearchControllerWithFallback = resolveTagSearchControllerWithFallback;
     window.galleryComponents.defaultParseTagTokens = defaultParseTagTokens;
