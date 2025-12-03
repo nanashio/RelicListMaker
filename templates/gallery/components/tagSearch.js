@@ -12,98 +12,90 @@
         } = config;
 
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const resolveDefaultParseTagTokens =
+            namespace && typeof namespace.resolveDefaultParseTagTokens === 'function'
+                ? namespace.resolveDefaultParseTagTokens
+                : null;
         const resolveTagTokenParserWithFallback =
             namespace && typeof namespace.resolveTagTokenParserWithFallback === 'function'
                 ? namespace.resolveTagTokenParserWithFallback
                 : null;
-        const resolveTagTokenParsersOrFallback =
-            namespace && typeof namespace.resolveTagTokenParsersOrFallback === 'function'
-                ? namespace.resolveTagTokenParsersOrFallback
-                : null;
-        const resolveTagTokenParsersSharedOrDefault =
-            namespace && typeof namespace.resolveTagTokenParsersSharedOrDefault === 'function'
-                ? namespace.resolveTagTokenParsersSharedOrDefault
-                : null;
-        const resolveTagTokenParsers =
-            namespace && typeof namespace.resolveTagTokenParsers === 'function'
-                ? namespace.resolveTagTokenParsers
-                : null;
-        const resolveDefaultParseTagTokensLocal = () => {
-            if (typeof namespace?.resolveDefaultParseTagTokens === 'function') {
-                return namespace.resolveDefaultParseTagTokens({
-                    defaultParseTagTokens: config.defaultParseTagTokens
-                });
-            }
-            if (typeof namespace?.defaultParseTagTokens === 'function') {
-                return namespace.defaultParseTagTokens;
-            }
-            if (typeof config.defaultParseTagTokens === 'function') {
-                return config.defaultParseTagTokens;
-            }
-            return (value) => {
-                if (Array.isArray(value)) {
-                    return value.slice();
-                }
-                if (value == null) {
-                    return [];
-                }
-                const text = String(value).trim();
-                if (!text) {
-                    return [];
-                }
-                return text
-                    .split(/[\s,;、，　；]+/)
-                    .map((token) => token.trim())
-                    .filter((token) => token.length > 0);
-            };
-        };
 
-        const resolveTagTokenParsersFallback = () => {
+        const defaultParseTagTokens = resolveDefaultParseTagTokens
+            ? resolveDefaultParseTagTokens({ defaultParseTagTokens: config.defaultParseTagTokens })
+            : typeof namespace?.defaultParseTagTokens === 'function'
+              ? namespace.defaultParseTagTokens
+              : typeof config.defaultParseTagTokens === 'function'
+                ? config.defaultParseTagTokens
+                : (value) => {
+                    if (Array.isArray(value)) {
+                        return value.slice();
+                    }
+                    if (value == null) {
+                        return [];
+                    }
+                    const text = String(value).trim();
+                    if (!text) {
+                        return [];
+                    }
+                    return text
+                        .split(/[\s,;、，　；]+/)
+                        .map((token) => token.trim())
+                        .filter((token) => token.length > 0);
+                };
+
+        function resolveTagTokenParsersBridge() {
             const tagTokenModule =
                 config.tagTokenModule !== undefined
                     ? config.tagTokenModule
                     : (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
                       null;
-            const defaultParser = resolveDefaultParseTagTokensLocal();
-            const parseTagTokensFallback = resolveTagTokenParserWithFallback
+
+            const resolverCandidates = [
+                namespace && namespace.resolveTagTokenParsersOrFallback,
+                namespace && namespace.resolveTagTokenParsersSharedOrDefault,
+                namespace && namespace.resolveTagTokenParsers
+            ].filter((resolver) => typeof resolver === 'function');
+
+            for (const resolver of resolverCandidates) {
+                try {
+                    const resolved = resolver({
+                        parseTagTokens: parseTokensConfig,
+                        formatTagTokens: null,
+                        defaultParseTagTokens,
+                        tagTokenModule: config.tagTokenModule
+                    });
+                    if (resolved && typeof resolved.parseTagTokens === 'function') {
+                        return {
+                            ...resolved,
+                            tagTokenModule: resolved.tagTokenModule !== undefined ? resolved.tagTokenModule : tagTokenModule,
+                            defaultParseTagTokens:
+                                resolved.defaultParseTagTokens !== undefined
+                                    ? resolved.defaultParseTagTokens
+                                    : defaultParseTagTokens
+                        };
+                    }
+                } catch (error) {
+                    // continue to next resolver
+                }
+            }
+
+            const parseTagTokens = resolveTagTokenParserWithFallback
                 ? resolveTagTokenParserWithFallback({
                       parseTagTokens: parseTokensConfig,
                       tagTokenModule,
-                      defaultParseTagTokens: defaultParser
+                      defaultParseTagTokens
                   })
                 : typeof parseTokensConfig === 'function'
                   ? parseTokensConfig
                   : tagTokenModule && typeof tagTokenModule.parseTagTokens === 'function'
                     ? (value) => tagTokenModule.parseTagTokens(value)
-                    : defaultParser;
+                    : defaultParseTagTokens;
 
-            return { parseTagTokens: parseTagTokensFallback, defaultParseTagTokens: defaultParser };
-        };
+            return { parseTagTokens, defaultParseTagTokens, tagTokenModule };
+        }
 
-        const tagTokenParsers =
-            resolveTagTokenParsersOrFallback
-                ? resolveTagTokenParsersOrFallback({
-                      parseTagTokens: parseTokensConfig,
-                      formatTagTokens: null,
-                      defaultParseTagTokens: resolveDefaultParseTagTokensLocal(),
-                      tagTokenModule: config.tagTokenModule
-                  })
-                : resolveTagTokenParsersSharedOrDefault
-                  ? resolveTagTokenParsersSharedOrDefault({
-                        parseTagTokens: parseTokensConfig,
-                        formatTagTokens: null,
-                        defaultParseTagTokens: resolveDefaultParseTagTokensLocal(),
-                        tagTokenModule: config.tagTokenModule
-                    })
-                  : resolveTagTokenParsers
-                    ? resolveTagTokenParsers({
-                          parseTagTokens: parseTokensConfig,
-                          formatTagTokens: null,
-                          defaultParseTagTokens: resolveDefaultParseTagTokensLocal(),
-                          tagTokenModule: config.tagTokenModule
-                      })
-                    : resolveTagTokenParsersFallback();
-        const { parseTagTokens } = tagTokenParsers;
+        const { parseTagTokens } = resolveTagTokenParsersBridge();
         const resolveTagDebugResolver =
             namespace && typeof namespace.resolveTagDebugResolverSharedOrDefault === 'function'
                 ? namespace.resolveTagDebugResolverSharedOrDefault
