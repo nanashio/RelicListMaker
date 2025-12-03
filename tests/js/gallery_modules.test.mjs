@@ -1634,6 +1634,57 @@ describe('shared resolvers', () => {
   });
 });
 
+describe('tag token parsers bridge', () => {
+  beforeEach(() => {
+    global.window = {};
+    runScript('templates/gallery/components/sharedResolvers.js');
+    runScript('templates/gallery/components/tagTokenParsersBridge.js');
+  });
+
+  afterEach(() => {
+    delete global.window;
+  });
+
+  test('prefers shared resolver output and preserves defaults', () => {
+    const parseCalls = [];
+    const defaultParser = (value) => [String(value || '').trim()].filter(Boolean);
+    const tagTokenModule = { marker: 'module' };
+
+    global.window.galleryComponents.resolveTagTokenParsersOrFallback = (options) => {
+      return {
+        parseTagTokens: (value) => {
+          parseCalls.push(value);
+          return ['from-resolver'];
+        },
+        formatTagTokens: (tokens) => tokens.join(','),
+        defaultParseTagTokens: options.defaultParseTagTokens,
+        tagTokenModule: options.tagTokenModule
+      };
+    };
+
+    const { parseTagTokens, formatTagTokens, defaultParseTagTokens, tagTokenModule: resolvedModule } =
+      global.window.galleryComponents.resolveTagTokenParsersWithDefaults({
+        defaultParseTagTokens: defaultParser,
+        tagTokenModule
+      });
+
+    assert.deepEqual(parseTagTokens('alpha'), ['from-resolver']);
+    assert.deepEqual(parseCalls, ['alpha']);
+    assert.equal(formatTagTokens(['a', 'b']), 'a,b');
+    assert.equal(defaultParseTagTokens, global.window.galleryComponents.defaultParseTagTokens);
+    assert.equal(resolvedModule, tagTokenModule);
+  });
+
+  test('falls back to default parser and formatter when resolvers are unavailable', () => {
+    const { parseTagTokens, formatTagTokens, defaultParseTagTokens } =
+      global.window.galleryComponents.resolveTagTokenParsersWithDefaults();
+
+    assert.deepEqual(parseTagTokens('alpha, beta'), ['alpha', 'beta']);
+    assert.equal(formatTagTokens(['x', 'y']), 'x y');
+    assert.equal(defaultParseTagTokens, global.window.galleryComponents.defaultParseTagTokens);
+  });
+});
+
 
 describe('tomSelect adapter factory', () => {
   let documentMock;
@@ -1644,6 +1695,7 @@ describe('tomSelect adapter factory', () => {
     global.document = documentMock;
     runScript('templates/gallery/components/tagDebug.js');
     runScript('templates/gallery/components/sharedResolvers.js');
+    runScript('templates/gallery/components/tagTokenParsersBridge.js');
     runScript('templates/gallery/components/tomSelectAdapterFactory.js');
   });
 
@@ -1732,6 +1784,7 @@ describe('tag search controller', () => {
     global.document = documentMock;
     runScript('templates/gallery/components/tagDebug.js');
     runScript('templates/gallery/components/sharedResolvers.js');
+    runScript('templates/gallery/components/tagTokenParsersBridge.js');
     runScript('templates/gallery/components/tomSelectAdapterFactory.js');
   });
 
@@ -1867,6 +1920,7 @@ describe('tag input controller', () => {
     global.document = documentMock;
     runScript('templates/gallery/components/tagDebug.js');
     runScript('templates/gallery/components/sharedResolvers.js');
+    runScript('templates/gallery/components/tagTokenParsersBridge.js');
     runScript('templates/gallery/components/tomSelectAdapterFactory.js');
   });
 

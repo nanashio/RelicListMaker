@@ -38,6 +38,7 @@ def test_copy_gallery_modules_copies_required_viewer_scripts(tmp_path):
         Path("stores/tagStateBridge.js"),
         Path("app/layout.js"),
         Path("components/sharedResolvers.js"),
+        Path("components/tagTokenParsersBridge.js"),
         Path("components/tagTokenResolvers.js"),
         Path("components/tagDebug.js"),
         Path("components/tomSelectAdapterFactory.js"),
