@@ -2210,6 +2210,23 @@ describe('tag input controller', () => {
     assert.equal(resolverCalls.length, 1);
   });
 
+  test('falls back to default formatter when resolver omits formatter', () => {
+    delete global.window.galleryComponents.resolveTagTokenParsersWithDefaults;
+    global.window.galleryComponents.resolveTagTokenParsersOrFallback = () => ({
+      parseTagTokens: (value) => [`resolved:${String(value).trim()}`],
+      defaultParseTagTokens: () => ['default']
+    });
+
+    runScript('templates/gallery/components/tagInput.js');
+    const factory = global.window.galleryComponents.createTagInputController;
+    const input = new MockElement('input', 'item-tags-input');
+
+    const controller = factory({});
+    controller.syncValue(input, 'Alpha Beta');
+
+    assert.equal(input.value, 'resolved:Alpha Beta');
+  });
+
   test('syncValue delegates to TomSelect instance silently', () => {
     runScript('templates/gallery/components/tagInput.js');
     const factory = global.window.galleryComponents.createTagInputController;

@@ -63,6 +63,7 @@
   - TomSelect デフォルトアダプタに共有デバッグ判定とロギングを組み込み、フォールバック経路でもイベント監視とネイティブ入力ログが一貫するようにした。共有リゾルバ経由でデバッグフラグを受け取り、インスタンス/ネイティブ双方のハンドラ登録をデフォルト化。【F:templates/gallery/components/tomSelectAdapterFactory.js†L2-L215】【F:templates/gallery/components/sharedResolvers.js†L81-L204】
   - ギャラリービューのタグトークン解決を `resolveTagTokenParsersWithDefaults` ベースに変更し、`galleryComponents` 配下の共有リゾルバとデフォルトパーサーを優先採用。タグストア未初期化やデフォルトパーサー未指定でも共通のフォールバック経路で正規化・整形が行われるようにした。
   - タグ入力/タグ検索のタグトークン解決を `tagTokenParsersBridge` に集約し、共有リゾルバ未注入時も共通のデフォルトパーサーとフォーマッタを利用するよう統一。フォールバック経路を 1 箇所に集約することで、解決順の揺らぎを抑制。
+  - タグ入力のタグトークンリゾルバがフォーマッタを返さない場合もデフォルトフォーマッタで同期するように統一し、共有フォールバック経路での例外を防止。Node テストでフォーマッタ省略時の同期結果を確認。【F:templates/gallery/components/tagInput.js†L17-L90】【F:tests/js/gallery_modules.test.mjs†L2114-L2130】
   - タグ入力/検索のデフォルトタグパーサー解決を `resolveDefaultParseTagTokens` ベースに一本化し、フォールバックの重複や分岐のばらつきを解消。共有リゾルバ未読込でも `galleryComponents` 既定値とローカルフォールバックが同一経路で適用されるように整理。
   - タグトークン解決のフォールバック順序を `resolveTagTokenParsersOrFallback` に集約し、タグ入力・タグ検索・共有リゾルバが同一の注入順序と
     デフォルトパーサーを参照するように統一。モジュール未読込やフォールバック利用時も解析順序がぶれないようにした。
@@ -163,6 +164,7 @@
 | 12-13 | デフォルトアダプタのネイティブログ登録に重複防止ガードを追加し、指定ロガーでの記録を Node テストで確認 | S1 | pytest / npm run test:node |
 | 12-14 | 互換アダプタのネイティブログ登録に共有デバッグ判定と重複防止ガードを適用し、Node テストを追加 | S1 | pytest / node --test |
 | 12-15 | タグ入力/検索が共有リゾルバ経由でフォールバックするように整理し、ブリッジ欠落時の挙動を Node/pytest で確認 | S1/S2 | pytest / node --test tests/js/gallery_modules.test.mjs |
+| 12-16 | タグトークンリゾルバがフォーマッタを返さない場合にデフォルトフォーマッタへフォールバックするよう統一し、Node テストを追加 | S1/S2 | pytest / node --test tests/js/gallery_modules.test.mjs |
 
 ## 付録 B: 詳細進捗メモ
 ## 進捗メモ（2025-03-19）

@@ -40,6 +40,31 @@
               ? config.defaultParseTagTokens
               : sharedFallback;
 
+        function normalizeResolverResult(resolvedConfig = {}) {
+            const parseTagTokens =
+                typeof resolvedConfig.parseTagTokens === 'function'
+                    ? resolvedConfig.parseTagTokens
+                    : typeof config.parseTagTokens === 'function'
+                      ? config.parseTagTokens
+                      : defaultParseTokens;
+            const formatTagTokens =
+                typeof resolvedConfig.formatTagTokens === 'function'
+                    ? resolvedConfig.formatTagTokens
+                    : typeof config.formatTagTokens === 'function'
+                      ? config.formatTagTokens
+                      : (value) => (Array.isArray(value) ? value.join(' ') : parseTagTokens(value).join(' '));
+
+            return {
+                ...resolvedConfig,
+                parseTagTokens,
+                formatTagTokens,
+                defaultParseTagTokens:
+                    resolvedConfig.defaultParseTagTokens !== undefined
+                        ? resolvedConfig.defaultParseTagTokens
+                        : defaultParseTokens
+            };
+        }
+
         const resolverConfig = {
             ...config,
             defaultParseTagTokens: defaultParseTokens
@@ -49,13 +74,7 @@
             try {
                 const resolved = resolveTagTokenParsersWithDefaultsFn(resolverConfig);
                 if (resolved && typeof resolved.parseTagTokens === 'function') {
-                    return {
-                        ...resolved,
-                        defaultParseTagTokens:
-                            resolved.defaultParseTagTokens !== undefined
-                                ? resolved.defaultParseTagTokens
-                                : defaultParseTokens
-                    };
+                    return normalizeResolverResult(resolved);
                 }
             } catch (error) {
                 // fall through to other resolvers
@@ -66,25 +85,14 @@
             try {
                 const resolved = resolveTagTokenParsersOrFallbackFn(resolverConfig);
                 if (resolved && typeof resolved.parseTagTokens === 'function') {
-                    return {
-                        ...resolved,
-                        defaultParseTagTokens:
-                            resolved.defaultParseTagTokens !== undefined
-                                ? resolved.defaultParseTagTokens
-                                : defaultParseTokens
-                    };
+                    return normalizeResolverResult(resolved);
                 }
             } catch (error) {
                 // fall through to local fallback
             }
         }
 
-        const parseTagTokens = typeof config.parseTagTokens === 'function' ? config.parseTagTokens : defaultParseTokens;
-        const formatTagTokens =
-            typeof config.formatTagTokens === 'function'
-                ? config.formatTagTokens
-                : (value) => (Array.isArray(value) ? value.join(' ') : parseTagTokens(value).join(' '));
-        return { parseTagTokens, formatTagTokens, defaultParseTagTokens: defaultParseTokens };
+        return normalizeResolverResult({});
     }
 
     function createFallbackFormatter(formatTagTokens, parseTagTokens) {
