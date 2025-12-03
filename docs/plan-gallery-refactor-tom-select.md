@@ -54,6 +54,7 @@
 ## 進捗サマリー（2025-12-11 時点）
 - スプリント達成度: S1 3/3、S2 3/3、S3 4/4、S4 3/3（全て完了）。
 - 最新ハイライト:
+  - TomSelect デフォルトアダプタに共有デバッグ判定とロギングを組み込み、フォールバック経路でもイベント監視とネイティブ入力ログが一貫するようにした。共有リゾルバ経由でデバッグフラグを受け取り、インスタンス/ネイティブ双方のハンドラ登録をデフォルト化。【F:templates/gallery/components/tomSelectAdapterFactory.js†L2-L215】【F:templates/gallery/components/sharedResolvers.js†L81-L204】
   - ギャラリービューのタグトークン解決を `resolveTagTokenParsersWithDefaults` ベースに変更し、`galleryComponents` 配下の共有リゾルバとデフォルトパーサーを優先採用。タグストア未初期化やデフォルトパーサー未指定でも共通のフォールバック経路で正規化・整形が行われるようにした。
   - タグ入力/タグ検索のタグトークン解決を `tagTokenParsersBridge` に集約し、共有リゾルバ未注入時も共通のデフォルトパーサーとフォーマッタを利用するよう統一。フォールバック経路を 1 箇所に集約することで、解決順の揺らぎを抑制。
   - タグ入力/検索のデフォルトタグパーサー解決を `resolveDefaultParseTagTokens` ベースに一本化し、フォールバックの重複や分岐のばらつきを解消。共有リゾルバ未読込でも `galleryComponents` 既定値とローカルフォールバックが同一経路で適用されるように整理。
@@ -403,4 +404,10 @@
   - `components/tagTokenParsersBridge.js` を追加し、タグ入力/タグ検索コンポーネントが共通のブリッジ経由でパーサー・フォーマッタ・デフォルト関数を解決するよう整理。共有リゾルバ未読込時も同一のフォールバックを参照するようにした。
   - `tagInput.js` と `tagSearch.js` が新ブリッジを利用してタグトークン解決を取得するよう変更し、重複していたデフォルトパーサー解決ロジックを削減。
   - ギャラリー生成時のコピー対象（`gallery/assets.py`、`templates/gallery/index.js`）と Node/pytest コピー監視（`tests/test_generate_gallery.py`）を更新し、新モジュールの配信漏れを防止。Node テストにブリッジのフォールバックと共有リゾルバ経由の解決を検証するケースを追加。
+- テスト: `npm run test:node` を実行。
+
+## 進捗メモ（2025-12-06）
+- TomSelect フォールバックのデバッグ統合を強化。
+  - デフォルトアダプタが共有デバッグ判定を受け取り、TomSelect インスタンスおよびネイティブ入力のイベントロギングを行うように変更。フォールバック経路でもイベント監視がデフォルト化され、デバッグフラグの有無で挙動を揃えた。【F:templates/gallery/components/tomSelectAdapterFactory.js†L2-L215】
+  - 共有リゾルバのフォールバックがデフォルトアダプタへデバッグフラグを渡すようにし、TomSelect 未提供時もログ出力の可否が一貫するように整備。【F:templates/gallery/components/sharedResolvers.js†L81-L204】
 - テスト: `npm run test:node` を実行。
