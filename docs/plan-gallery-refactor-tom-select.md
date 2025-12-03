@@ -51,7 +51,7 @@
 | S3: テンプレート分離とスタイル整理 | データ整形関数・フィルター状態ストア・HTML パーシャル・名前空間 CSS を導入し役割を分離 | `renderData`/`filterStore` 追加、フィルター同期ブリッジ、パーシャル化と名前空間 CSS の整理 | 完了（4/4） |
 | S4: テスト整備と ESM 土台 | JS ロジックを ES Modules へ抽出し、コピー対象とテストでモジュール配信を固定化。フィルター評価・タグトークンの純粋関数をテストで担保 | ESM 抽出と互換ラッパー追加、コピー監視更新、フィルター/タグトークン純粋関数のテスト拡充 | 完了（3/3） |
 
-## 進捗サマリー（2025-12-14 時点）
+## 進捗サマリー（2025-12-15 時点）
 - スプリント達成度: S1 3/3、S2 3/3、S3 4/4、S4 3/3（全て完了）。
 - 最新ハイライト:
   - TomSelect デフォルトアダプタのネイティブログ登録を idempotent にし、デバッグ有効時も重複リスナーを追加しないようガードを追加。
@@ -66,6 +66,9 @@
   - タグ入力/検索のデフォルトタグパーサー解決を `resolveDefaultParseTagTokens` ベースに一本化し、フォールバックの重複や分岐のばらつきを解消。共有リゾルバ未読込でも `galleryComponents` 既定値とローカルフォールバックが同一経路で適用されるように整理。
   - タグトークン解決のフォールバック順序を `resolveTagTokenParsersOrFallback` に集約し、タグ入力・タグ検索・共有リゾルバが同一の注入順序と
     デフォルトパーサーを参照するように統一。モジュール未読込やフォールバック利用時も解析順序がぶれないようにした。
+  - タグ入力/タグ検索が `resolveTagTokenParsersWithDefaults` 未読込でも `resolveTagTokenParsersOrFallback` を介して共有のデフォルトパーサー
+    ・フォーマッタを取得するよう統一し、IIFE 単独読み込み時のフォールバック経路を強化。Node テストでリゾルバ呼び出しとフォーマット結果
+    を確認した。【F:templates/gallery/components/tagInput.js†L9-L116】【F:templates/gallery/components/tagSearch.js†L9-L107】
   - タグ正規化とデータセット更新を `createTagStateBridge` に集約し、タグ入力の UI 同期をストア API 越しの単一路線に整理。ビュー側はタグの正規化/同期を委譲するだけで済むようになり、DOM 依存とタグストアの責務境界が明確に。
   - タグ入力/検索/ビューのタグトークン解決を `resolveTagTokenParserWithFallback` に統一し、`galleryModules.tagTokens` 優先とデフォルトフォールバックを共通経路で維持。
   - TomSelect 共有リゾルバとデバッグ判定を `sharedResolvers` と `tagDebug` に集約し、ロード順の揺らぎでもデフォルトアダプタにフォールバックできるよう整備。
@@ -159,6 +162,7 @@
 | 12-12 | TomSelect デフォルトアダプタのネイティブログ登録が自己再帰していた問題を修正し、フォールバック経路のログを安定化 | S1 | pytest / npm run test:node |
 | 12-13 | デフォルトアダプタのネイティブログ登録に重複防止ガードを追加し、指定ロガーでの記録を Node テストで確認 | S1 | pytest / npm run test:node |
 | 12-14 | 互換アダプタのネイティブログ登録に共有デバッグ判定と重複防止ガードを適用し、Node テストを追加 | S1 | pytest / node --test |
+| 12-15 | タグ入力/検索が共有リゾルバ経由でフォールバックするように整理し、ブリッジ欠落時の挙動を Node/pytest で確認 | S1/S2 | pytest / node --test tests/js/gallery_modules.test.mjs |
 
 ## 付録 B: 詳細進捗メモ
 ## 進捗メモ（2025-03-19）

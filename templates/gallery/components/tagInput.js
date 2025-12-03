@@ -1,4 +1,92 @@
 (() => {
+    function fallbackParseTagTokens(value) {
+        if (Array.isArray(value)) {
+            return value.slice();
+        }
+        if (value == null) {
+            return [];
+        }
+        const text = String(value).trim();
+        if (!text) {
+            return [];
+        }
+        return text
+            .split(/[\s,;、，　；]+/)
+            .map((token) => token.trim())
+            .filter((token) => token.length > 0);
+    }
+
+    function resolveTagTokenParsers(namespace, config = {}) {
+        const resolveTagTokenParsersWithDefaultsFn =
+            namespace && typeof namespace.resolveTagTokenParsersWithDefaults === 'function'
+                ? namespace.resolveTagTokenParsersWithDefaults
+                : null;
+        const resolveTagTokenParsersOrFallbackFn =
+            namespace && typeof namespace.resolveTagTokenParsersOrFallback === 'function'
+                ? namespace.resolveTagTokenParsersOrFallback
+                : null;
+        const resolveDefaultParseTagTokens =
+            namespace && typeof namespace.resolveDefaultParseTagTokensBridge === 'function'
+                ? namespace.resolveDefaultParseTagTokensBridge
+                : null;
+
+        const sharedFallback =
+            (namespace && typeof namespace.defaultParseTagTokens === 'function' && namespace.defaultParseTagTokens) ||
+            fallbackParseTagTokens;
+
+        const defaultParseTokens = resolveDefaultParseTagTokens
+            ? resolveDefaultParseTagTokens({ defaultParseTagTokens: config.defaultParseTagTokens })
+            : typeof config.defaultParseTagTokens === 'function'
+              ? config.defaultParseTagTokens
+              : sharedFallback;
+
+        const resolverConfig = {
+            ...config,
+            defaultParseTagTokens: defaultParseTokens
+        };
+
+        if (resolveTagTokenParsersWithDefaultsFn) {
+            try {
+                const resolved = resolveTagTokenParsersWithDefaultsFn(resolverConfig);
+                if (resolved && typeof resolved.parseTagTokens === 'function') {
+                    return {
+                        ...resolved,
+                        defaultParseTagTokens:
+                            resolved.defaultParseTagTokens !== undefined
+                                ? resolved.defaultParseTagTokens
+                                : defaultParseTokens
+                    };
+                }
+            } catch (error) {
+                // fall through to other resolvers
+            }
+        }
+
+        if (resolveTagTokenParsersOrFallbackFn) {
+            try {
+                const resolved = resolveTagTokenParsersOrFallbackFn(resolverConfig);
+                if (resolved && typeof resolved.parseTagTokens === 'function') {
+                    return {
+                        ...resolved,
+                        defaultParseTagTokens:
+                            resolved.defaultParseTagTokens !== undefined
+                                ? resolved.defaultParseTagTokens
+                                : defaultParseTokens
+                    };
+                }
+            } catch (error) {
+                // fall through to local fallback
+            }
+        }
+
+        const parseTagTokens = typeof config.parseTagTokens === 'function' ? config.parseTagTokens : defaultParseTokens;
+        const formatTagTokens =
+            typeof config.formatTagTokens === 'function'
+                ? config.formatTagTokens
+                : (value) => (Array.isArray(value) ? value.join(' ') : parseTagTokens(value).join(' '));
+        return { parseTagTokens, formatTagTokens, defaultParseTagTokens: defaultParseTokens };
+    }
+
     function createFallbackFormatter(formatTagTokens, parseTagTokens) {
         return (value) => {
             if (Array.isArray(value)) {
@@ -27,57 +115,18 @@
             namespace && typeof namespace.resolveSharedTomSelectAdapterOrDefault === 'function'
                 ? namespace.resolveSharedTomSelectAdapterOrDefault
                 : null;
-        const resolveTagTokenParsersWithDefaults =
-            namespace && typeof namespace.resolveTagTokenParsersWithDefaults === 'function'
-                ? namespace.resolveTagTokenParsersWithDefaults
-                : null;
-        const resolveDefaultParseTagTokens =
-            namespace && typeof namespace.resolveDefaultParseTagTokensBridge === 'function'
-                ? namespace.resolveDefaultParseTagTokensBridge
-                : null;
-        const fallbackParseTagTokens =
-            (namespace && namespace.defaultParseTagTokens) || ((value) => {
-                if (Array.isArray(value)) {
-                    return value.slice();
-                }
-                if (value == null) {
-                    return [];
-                }
-                const text = String(value).trim();
-                if (!text) {
-                    return [];
-                }
-                return text
-                    .split(/[\s,;、，　；]+/)
-                    .map((token) => token.trim())
-                    .filter((token) => token.length > 0);
-            });
-        const baseDefaultParseTokens = resolveDefaultParseTagTokens
-            ? resolveDefaultParseTagTokens({ defaultParseTagTokens: config.defaultParseTagTokens })
-            : typeof config.defaultParseTagTokens === 'function'
-              ? config.defaultParseTagTokens
-              : fallbackParseTagTokens;
 
-        const fallbackTagTokenResolver = () => {
-            const parseTagTokens = typeof parseTokensConfig === 'function' ? parseTokensConfig : baseDefaultParseTokens;
-            const formatTagTokens =
-                typeof formatTokensConfig === 'function'
-                    ? formatTokensConfig
-                    : (value) => (Array.isArray(value) ? value.join(' ') : parseTagTokens(value).join(' '));
-            return { parseTagTokens, formatTagTokens, defaultParseTagTokens: baseDefaultParseTokens };
-        };
+        const { parseTagTokens, formatTagTokens, defaultParseTagTokens: resolvedDefaultParseTokens } = resolveTagTokenParsers(
+            namespace,
+            {
+                parseTagTokens: parseTokensConfig,
+                formatTagTokens: formatTokensConfig,
+                defaultParseTagTokens: config.defaultParseTagTokens,
+                tagTokenModule: config.tagTokenModule
+            }
+        );
 
-        const { parseTagTokens, formatTagTokens, defaultParseTagTokens: resolvedDefaultParseTokens } =
-            resolveTagTokenParsersWithDefaults
-                ? resolveTagTokenParsersWithDefaults({
-                      parseTagTokens: parseTokensConfig,
-                      formatTagTokens: formatTokensConfig,
-                      defaultParseTagTokens: baseDefaultParseTokens,
-                      tagTokenModule: config.tagTokenModule
-                  })
-                : fallbackTagTokenResolver();
-
-        const defaultParseTokens = resolvedDefaultParseTokens || baseDefaultParseTokens;
+        const defaultParseTokens = resolvedDefaultParseTokens || fallbackParseTagTokens;
         const fallbackFormatter = createFallbackFormatter(formatTagTokens, parseTagTokens);
 
         const hasDom = Boolean(documentRef && typeof documentRef.createElement === 'function');
