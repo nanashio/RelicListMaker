@@ -65,8 +65,17 @@
         const isTagDebugEnabled = resolveTagDebugResolver
             ? resolveTagDebugResolver({ isDebugEnabled: config.isDebugEnabled })
             : () => false;
+        const componentsNamespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
         const dataUtils = typeof window !== 'undefined' && window ? window.galleryDataUtils : null;
         const tagStoreApi = tagStore && typeof tagStore.normalizeTags === 'function' ? tagStore : null;
+        const resolveTagTokenParsersWithDefaults =
+            componentsNamespace && typeof componentsNamespace.resolveTagTokenParsersWithDefaults === 'function'
+                ? componentsNamespace.resolveTagTokenParsersWithDefaults
+                : null;
+        const resolveDefaultParseTagTokens =
+            componentsNamespace && typeof componentsNamespace.resolveDefaultParseTagTokensBridge === 'function'
+                ? componentsNamespace.resolveDefaultParseTagTokensBridge
+                : null;
         const filterStoreApi = filterStore && typeof filterStore.getState === 'function' ? filterStore : null;
         const filterStateNamespace = typeof window !== 'undefined' && window ? window.galleryFilterState : null;
         const summaryUtilsNamespace = typeof window !== 'undefined' && window ? window.gallerySummaryUtils : null;
@@ -84,18 +93,63 @@
                 : summaryUtilsNamespace && typeof summaryUtilsNamespace.createSummaryCalculator === 'function'
                   ? summaryUtilsNamespace.createSummaryCalculator
                   : null;
-        const parseTagTokens =
-            tagStoreApi && typeof tagStoreApi.normalizeTokens === 'function'
-                ? (value) => tagStoreApi.normalizeTokens(value)
-                : dataUtils && typeof dataUtils.parseTagTokens === 'function'
-                  ? dataUtils.parseTagTokens
-                  : null;
-        const formatTagTokens =
-            tagStoreApi && typeof tagStoreApi.formatTokens === 'function'
-                ? (value) => tagStoreApi.formatTokens(value)
-                : dataUtils && typeof dataUtils.formatTagTokens === 'function'
-                  ? dataUtils.formatTagTokens
-                  : null;
+        const fallbackParseTagTokens =
+            (componentsNamespace && componentsNamespace.defaultParseTagTokens) || ((value) => {
+                if (Array.isArray(value)) {
+                    return value.slice();
+                }
+                if (value == null) {
+                    return [];
+                }
+                const text = String(value).trim();
+                if (!text) {
+                    return [];
+                }
+                return text
+                    .split(/[\s,;、，　；]+/)
+                    .map((token) => token.trim())
+                    .filter((token) => token.length > 0);
+            });
+        const defaultParseTokens = resolveDefaultParseTagTokens
+            ? resolveDefaultParseTagTokens({ defaultParseTagTokens: config.defaultParseTagTokens })
+            : typeof config.defaultParseTagTokens === 'function'
+              ? config.defaultParseTagTokens
+              : fallbackParseTagTokens;
+        const preferredParseTagTokens =
+            typeof config.parseTagTokens === 'function'
+                ? config.parseTagTokens
+                : tagStoreApi && typeof tagStoreApi.normalizeTokens === 'function'
+                  ? (value) => tagStoreApi.normalizeTokens(value)
+                  : dataUtils && typeof dataUtils.parseTagTokens === 'function'
+                    ? dataUtils.parseTagTokens
+                    : null;
+        const preferredFormatTagTokens =
+            typeof config.formatTagTokens === 'function'
+                ? config.formatTagTokens
+                : tagStoreApi && typeof tagStoreApi.formatTokens === 'function'
+                  ? (value) => tagStoreApi.formatTokens(value)
+                  : dataUtils && typeof dataUtils.formatTagTokens === 'function'
+                    ? dataUtils.formatTagTokens
+                    : null;
+        const fallbackTagTokenResolver = () => {
+            const parseTagTokens = typeof preferredParseTagTokens === 'function' ? preferredParseTagTokens : defaultParseTokens;
+            const formatTagTokens =
+                typeof preferredFormatTagTokens === 'function'
+                    ? preferredFormatTagTokens
+                    : (value) => (Array.isArray(value) ? value.join(' ') : parseTagTokens(value).join(' '));
+            return { parseTagTokens, formatTagTokens, defaultParseTagTokens: defaultParseTokens };
+        };
+
+        const resolvedTagTokenParsers = resolveTagTokenParsersWithDefaults
+            ?
+                resolveTagTokenParsersWithDefaults({
+                    parseTagTokens: preferredParseTagTokens,
+                    formatTagTokens: preferredFormatTagTokens,
+                    defaultParseTagTokens: defaultParseTokens,
+                    tagTokenModule: config.tagTokenModule
+                }) || fallbackTagTokenResolver()
+            : fallbackTagTokenResolver();
+        const { parseTagTokens, formatTagTokens } = resolvedTagTokenParsers;
         const createTagStateBridgeFn =
             typeof config.createTagStateBridge === 'function'
                 ? config.createTagStateBridge
@@ -118,7 +172,6 @@
 
         const colorOptions = Array.isArray(itemColorOptions) ? itemColorOptions.slice() : [];
         const hasDocument = typeof document !== 'undefined' && document;
-        const componentsNamespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
         const createTagInputControllerFn =
             typeof config.createTagInputController === 'function'
                 ? config.createTagInputController
