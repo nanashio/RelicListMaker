@@ -5,7 +5,7 @@
 - 改善テーマ: TomSelect まわりとテンプレート全般の優先整理ポイント。
 - 実行計画と進捗: 4 スプリントのロードマップと最新ステータス。
 - フォローアップとテスト運用: 今後の確認事項と実行ルール。
-- 付録: 日次ログと詳細メモ（必要に応じて参照）。
+- 付録: 進捗サマリー・日次ログ・詳細メモ（必要に応じて参照）。
 
 ## 背景とゴール
 - ギャラリー画面に tom-select を組み込んだことで、タグ入力・検索まわりのコードがコンポーネント内に肥大化しています。タグのフォーマット処理、DOM 操作、デバッグログ、TomSelect のイベント購読が一箇所に集中しており、挙動を追うのに時間がかかります。【F:templates/gallery/components/tagInput.js†L25-L177】【F:templates/gallery/render/galleryView.js†L65-L146】【F:templates/gallery/render/galleryView.js†L781-L820】【F:templates/gallery/events/galleryEvents.js†L317-L352】
@@ -56,7 +56,29 @@
 | F4 | フォローアップ | ESM 抽出と IIFE 互換の併存に伴う依存順序の監視を強化 | `templates/gallery/js/modules/` のエントリ整理、`gallery/index.js` で互換レイヤー管理方針を整理、次抽出候補を列挙 | 0%（未着手） | 依存図とチェックリスト、次抽出候補一覧 |
 | F5 | フォローアップ | `tagTokenResolvers` をモジュール化し依存順序を明示 | `templates/gallery/js/modules/tagTokenResolvers.js` 追加、IIFE はモジュール登録を再利用、コピー監視とテスト拡充 | 100%（完了） | 互換ラッパーとテスト拡充、依存順序メモを計画書へ記録 |
 
-## 進捗サマリー（2025-12-15 時点）
+## リスクと緩和策
+- 依存順序の変更で既存バンドルと競合するリスク → IIFE での後方互換エクスポートを残し、段階的に import パスを差し替える。
+- スタイルの名前空間化でクラス名が変わるリスク → 既存クラスを一定期間 alias として残し、差分を CSS 変数とコメントで明示する。
+- テスト対象の純粋関数切り出しに伴うイベント漏れ → `galleryEvents` から移動する関数に対し一時的にラッパを設置し、警告ログで確認する。
+
+## テスト運用ルール
+- 変更を加えたら毎回 `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行し、Playwright など環境依存テストが Codex Web 環境で走らない場合でも回帰確認の代替として必ず記録する。
+- テスト結果は本計画書の進捗メモに追記し、失敗時は原因と暫定対応（例: ブラウザ未取得で Playwright スキップ）を明示する。
+- Playwright/E2E テストが必要な場合はブラウザ取得済みの開発者ローカル環境で実行し、Codex Web 環境では常時スキップする。スキップ理由と再実行依頼を進捗メモに明記する。
+
+## 成果確認チェックリスト
+
+| チェック項目 | 判定 | 根拠/メモ |
+| --- | --- | --- |
+| TomSelect の生成・破棄・設定が 1 ファイルに集約され、`tagInputController` と `tagSearchController` は依存注入で動く | ✅ | `tomSelectAdapterFactory` で生成/同期/ネイティブログを共通化し、タグ入力・タグ検索両コントローラーが共有リゾルバ経由でアダプタを注入する形に統一済み。 |
+| タグ更新の純粋関数がストアに存在し、UI から DOM 直接操作せずに更新できる | ✅ | `createTagStore` がタグ正規化・更新を純粋関数として提供し、UI はストア経由で正規化済みの値を書き戻す。 |
+| フィルター評価の純粋関数を `js/modules/filterPredicates.js` に抽出し、IIFE 側からも再利用できる | ✅ | `filterPredicates` モジュールが正規化/可視判定/配列フィルターを一括エクスポートし、`registerFilterPredicatesModule` でグローバルにも登録。 |
+| フィルター/ソート条件が単一ストアに集約され、UI は購読/通知のみで同期する | ✅ | `filterStore` に検索語・色・重複を集約し、`gallery.js` で DOM 同期とフィルター適用を購読/通知ベースで行う。 |
+| HTML/CSS/JS の役割が分離され、名前空間付きクラスとパーシャルで構造が明示されている | ✅ | TomSelect の上書きスタイルを専用の `styles/tom-select.css` に分離し、`.gallery-page` 配下の名前空間付きクラスで限定適用する構成を `gallery.css` からインポート。 |
+| テストが `tests/test_gallery_js_modules.py` で追加され、タグ正規化とフィルター適用のケースが網羅されている | ✅ | Node テストでタグ正規化とフィルター可視判定の組み合わせを検証し、Pytest エントリで `tests/js/gallery_modules.test.mjs` を起動する形でカバレッジを担保。 |
+
+
+## 付録 A: 進捗サマリー（2025-12-15 時点）
 - スプリント達成度: S1 3/3、S2 3/3、S3 4/4、S4 3/3（全て完了）。
 - 最新ハイライト:
   - TomSelect デフォルトアダプタのネイティブログ登録を idempotent にし、デバッグ有効時も重複リスナーを追加しないようガードを追加。
@@ -98,29 +120,7 @@
   - Playwright ブラウザテストは開発者ローカル環境で Chromium 取得済みの構成で実行し完了（Codex Web 環境はブラウザ取得不可のためスキップ）。
     E2E 回帰確認が必要な場合はローカル環境での実行を前提とし、必要に応じて依頼を行う運用に切り替え。
 
-## リスクと緩和策
-- 依存順序の変更で既存バンドルと競合するリスク → IIFE での後方互換エクスポートを残し、段階的に import パスを差し替える。
-- スタイルの名前空間化でクラス名が変わるリスク → 既存クラスを一定期間 alias として残し、差分を CSS 変数とコメントで明示する。
-- テスト対象の純粋関数切り出しに伴うイベント漏れ → `galleryEvents` から移動する関数に対し一時的にラッパを設置し、警告ログで確認する。
-
-## テスト運用ルール
-- 変更を加えたら毎回 `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行し、Playwright など環境依存テストが Codex Web 環境で走らない場合でも回帰確認の代替として必ず記録する。
-- テスト結果は本計画書の進捗メモに追記し、失敗時は原因と暫定対応（例: ブラウザ未取得で Playwright スキップ）を明示する。
-- Playwright/E2E テストが必要な場合はブラウザ取得済みの開発者ローカル環境で実行し、Codex Web 環境では常時スキップする。スキップ理由と再実行依頼を進捗メモに明記する。
-
-## 成果確認チェックリスト
-
-| チェック項目 | 判定 | 根拠/メモ |
-| --- | --- | --- |
-| TomSelect の生成・破棄・設定が 1 ファイルに集約され、`tagInputController` と `tagSearchController` は依存注入で動く | ✅ | `tomSelectAdapterFactory` で生成/同期/ネイティブログを共通化し、タグ入力・タグ検索両コントローラーが共有リゾルバ経由でアダプタを注入する形に統一済み。 |
-| タグ更新の純粋関数がストアに存在し、UI から DOM 直接操作せずに更新できる | ✅ | `createTagStore` がタグ正規化・更新を純粋関数として提供し、UI はストア経由で正規化済みの値を書き戻す。 |
-| フィルター評価の純粋関数を `js/modules/filterPredicates.js` に抽出し、IIFE 側からも再利用できる | ✅ | `filterPredicates` モジュールが正規化/可視判定/配列フィルターを一括エクスポートし、`registerFilterPredicatesModule` でグローバルにも登録。 |
-| フィルター/ソート条件が単一ストアに集約され、UI は購読/通知のみで同期する | ✅ | `filterStore` に検索語・色・重複を集約し、`gallery.js` で DOM 同期とフィルター適用を購読/通知ベースで行う。 |
-| HTML/CSS/JS の役割が分離され、名前空間付きクラスとパーシャルで構造が明示されている | ✅ | TomSelect の上書きスタイルを専用の `styles/tom-select.css` に分離し、`.gallery-page` 配下の名前空間付きクラスで限定適用する構成を `gallery.css` からインポート。 |
-| テストが `tests/test_gallery_js_modules.py` で追加され、タグ正規化とフィルター適用のケースが網羅されている | ✅ | Node テストでタグ正規化とフィルター可視判定の組み合わせを検証し、Pytest エントリで `tests/js/gallery_modules.test.mjs` を起動する形でカバレッジを担保。 |
-
-
-## 付録 A: 日次ログ（テスト状況付き）
+## 付録 B: 日次ログ（テスト状況付き）
 最新の実行履歴。必要に応じて参照。
 
 | 日付 | 主な進捗 | 関連スプリント | テスト実行 |
@@ -164,7 +164,7 @@
 | 12-15 | タグ入力/検索が共有リゾルバ経由でフォールバックするように整理し、ブリッジ欠落時の挙動を Node/pytest で確認 | S1/S2 | pytest / node --test tests/js/gallery_modules.test.mjs |
 | 12-16 | タグトークンリゾルバがフォーマッタを返さない場合にデフォルトフォーマッタへフォールバックするよう統一し、Node テストを追加 | S1/S2 | pytest / node --test tests/js/gallery_modules.test.mjs |
 
-## 付録 B: 詳細進捗メモ
+## 付録 C: 詳細進捗メモ
 ## 進捗メモ（2025-03-19）
 - スプリント 1 の着手済み。
   - `templates/gallery/components/tomSelectAdapter.js` を追加し、TomSelect 生成・ロギング・ネイティブフォールバックを一元化。
