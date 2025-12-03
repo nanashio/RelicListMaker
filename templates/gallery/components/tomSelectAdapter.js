@@ -22,13 +22,45 @@
         const hasDom = Boolean(documentRef && typeof documentRef.createElement === 'function');
         const hasTomSelect = typeof TomSelectClass === 'function';
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const nativeLoggingMarker =
+            typeof Symbol === 'function' ? Symbol('gallery-native-logging') : '__gallery_native_logging__';
         const resolveTagDebugResolver =
             namespace && typeof namespace.resolveTagDebugResolverSharedOrDefault === 'function'
                 ? namespace.resolveTagDebugResolverSharedOrDefault
                 : null;
-        const isDebugEnabled = resolveTagDebugResolver
-            ? resolveTagDebugResolver({ isDebugEnabled: isDebugEnabledConfig })
-            : () => false;
+
+        function resolveIsTagDebugEnabled() {
+            if (resolveTagDebugResolver) {
+                try {
+                    const resolved = resolveTagDebugResolver({ isDebugEnabled: isDebugEnabledConfig });
+                    if (typeof resolved === 'function') {
+                        return () => {
+                            try {
+                                return Boolean(resolved());
+                            } catch (error) {
+                                return false;
+                            }
+                        };
+                    }
+                } catch (error) {
+                    // fall through to the raw flag resolution
+                }
+            }
+
+            if (typeof isDebugEnabledConfig === 'function') {
+                return () => {
+                    try {
+                        return Boolean(isDebugEnabledConfig());
+                    } catch (error) {
+                        return false;
+                    }
+                };
+            }
+
+            return () => Boolean(isDebugEnabledConfig);
+        }
+
+        const isDebugEnabled = resolveIsTagDebugEnabled();
 
         function createInstance(input, options = {}, hooks = {}) {
             if (!hasDom || !hasTomSelect || !input) {
@@ -43,7 +75,13 @@
             const { debugLabel = 'tom-select', logEvents = [], loggers = {} } = hooks;
             const logInfo = loggers.logInfo || getLogger('info');
             const logDebug = loggers.logDebug || getLogger('debug');
-            if (!instance || !isDebugEnabled()) {
+            let debugEnabled = false;
+            try {
+                debugEnabled = isDebugEnabled();
+            } catch (error) {
+                debugEnabled = false;
+            }
+            if (!instance || !debugEnabled) {
                 return;
             }
             const eventsToLog = Array.isArray(logEvents) && logEvents.length > 0 ? logEvents : ['change'];
@@ -58,9 +96,19 @@
         }
 
         function registerNativeLogging(input, hooks = {}) {
-            if (!isDebugEnabled() || !input || typeof input.addEventListener !== 'function') {
+            let debugEnabled = false;
+            try {
+                debugEnabled = isDebugEnabled();
+            } catch (error) {
+                debugEnabled = false;
+            }
+            if (!debugEnabled || !input || typeof input.addEventListener !== 'function') {
                 return;
             }
+            if (input[nativeLoggingMarker]) {
+                return;
+            }
+            input[nativeLoggingMarker] = true;
             const { debugLabel = 'tom-select', loggers = {} } = hooks;
             const logInfo = loggers.logInfo || getLogger('info');
             const logDebug = loggers.logDebug || getLogger('debug');
