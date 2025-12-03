@@ -125,7 +125,7 @@
         }
 
         if (typeof defaultFactory === 'function') {
-            return defaultFactory(config.TomSelect, config.documentRef);
+            return defaultFactory(config.TomSelect, config.documentRef, { isDebugEnabled });
         }
 
         return null;
@@ -195,7 +195,9 @@
                   : null;
 
         if (typeof defaultFactory === 'function') {
-            return defaultFactory(config.TomSelect, config.documentRef);
+            return defaultFactory(config.TomSelect, config.documentRef, {
+                isDebugEnabled: config.isDebugEnabled
+            });
         }
 
         return null;

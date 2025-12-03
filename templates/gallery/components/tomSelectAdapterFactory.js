@@ -1,5 +1,105 @@
 (() => {
-    function createDefaultTomSelectAdapter(TomSelectClass, documentRef) {
+    function getLogger(level = 'info') {
+        if (typeof console === 'undefined') {
+            return () => {};
+        }
+        if (level === 'debug' && typeof console.debug === 'function') {
+            return console.debug.bind(console);
+        }
+        if (typeof console.info === 'function') {
+            return console.info.bind(console);
+        }
+        return () => {};
+    }
+
+    function resolveIsTagDebugEnabled(isDebugEnabled) {
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const resolver =
+            namespace && typeof namespace.resolveTagDebugResolverSharedOrDefault === 'function'
+                ? namespace.resolveTagDebugResolverSharedOrDefault
+                : null;
+
+        if (resolver) {
+            try {
+                const resolved = resolver({ isDebugEnabled });
+                if (typeof resolved === 'function') {
+                    return () => {
+                        try {
+                            return Boolean(resolved());
+                        } catch (error) {
+                            return false;
+                        }
+                    };
+                }
+            } catch (error) {
+                // fall through to the raw flag resolution
+            }
+        }
+
+        if (typeof isDebugEnabled === 'function') {
+            return () => {
+                try {
+                    return Boolean(isDebugEnabled());
+                } catch (error) {
+                    return false;
+                }
+            };
+        }
+
+        return () => Boolean(isDebugEnabled);
+    }
+
+    function attachLogging(instance, hooks = {}, isDebugEnabled = () => false) {
+        const { debugLabel = 'tom-select', logEvents = [], loggers = {} } = hooks;
+        const logInfo = loggers.logInfo || getLogger('info');
+        const logDebug = loggers.logDebug || getLogger('debug');
+
+        if (!instance || !isDebugEnabled()) {
+            return;
+        }
+
+        const eventsToLog = Array.isArray(logEvents) && logEvents.length > 0 ? logEvents : ['change'];
+        eventsToLog.forEach((eventName) => {
+            if (typeof instance.on === 'function') {
+                instance.on(eventName, (payload) => {
+                    const logger = eventName === 'change' ? logInfo : logDebug;
+                    logger(`[gallery][tags][${debugLabel}] tom-select ${eventName}`, payload);
+                });
+            }
+        });
+    }
+
+    const nativeLoggingMarker = Symbol('gallery-native-logging');
+
+    function registerNativeLoggingInternal(input, hooks = {}, isDebugEnabled = () => false) {
+        if (!input || typeof input.addEventListener !== 'function') {
+            return;
+        }
+        if (!isDebugEnabled()) {
+            return;
+        }
+        if (input[nativeLoggingMarker]) {
+            return;
+        }
+        input[nativeLoggingMarker] = true;
+        const { debugLabel = 'tom-select', loggers = {} } = hooks;
+        const logInfo = loggers.logInfo || getLogger('info');
+        const logDebug = loggers.logDebug || getLogger('debug');
+        input.addEventListener('input', (event) => {
+            logDebug(`[gallery][tags][${debugLabel}] native input`, {
+                value: event.target && event.target.value,
+                type: event.type
+            });
+        });
+        input.addEventListener('change', (event) => {
+            logInfo(`[gallery][tags][${debugLabel}] native change`, {
+                value: event.target && event.target.value,
+                type: event.type
+            });
+        });
+    }
+
+    function createDefaultTomSelectAdapter(TomSelectClass, documentRef, config = {}) {
         const hasDom = Boolean(documentRef && typeof documentRef.createElement === 'function');
         const hasTomSelect = typeof TomSelectClass === 'function';
 
@@ -7,11 +107,15 @@
             return null;
         }
 
-        function createInstance(input, options = {}) {
+        const isDebugEnabled = resolveIsTagDebugEnabled(config.isDebugEnabled);
+
+        function createInstance(input, options = {}, hooks = {}) {
             if (!input) {
                 return null;
             }
-            return new TomSelectClass(input, options);
+            const instance = new TomSelectClass(input, options);
+            attachLogging(instance, hooks, isDebugEnabled);
+            return instance;
         }
 
         function syncOptions(instance, input, options = [], { clearSelection = false } = {}) {
@@ -107,14 +211,16 @@
         }
 
         return {
-            hasSupport: true,
+            hasSupport: hasDom && hasTomSelect,
             createInstance,
             syncOptions,
             clearSelection,
             getValues,
             onChange,
             setValue,
-            registerNativeLogging() {}
+            registerNativeLogging(input, hooks = {}) {
+                registerNativeLoggingInternal(input, hooks, isDebugEnabled);
+            }
         };
     }
 
@@ -147,7 +253,7 @@
         }
 
         if (typeof defaultFactory === 'function') {
-            return defaultFactory(TomSelectClass, documentRef);
+            return defaultFactory(TomSelectClass, documentRef, { isDebugEnabled });
         }
         return null;
     }
