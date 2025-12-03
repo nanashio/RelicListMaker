@@ -1675,6 +1675,21 @@ describe('tag token default resolver bridge', () => {
 
     assert.deepEqual(parseTokens('alpha, beta'), ['alpha', 'beta']);
   });
+
+  test('uses namespace default when shared resolver throws', () => {
+    const namespaceDefault = (value) => [String(value || '').toUpperCase()];
+
+    window.galleryComponents.defaultParseTagTokens = namespaceDefault;
+    window.galleryComponents.resolveDefaultParseTagTokens = () => {
+      throw new Error('resolver failure');
+    };
+
+    const resolver = window.galleryComponents.resolveDefaultParseTagTokensBridge;
+    const parseTokens = resolver();
+
+    assert.equal(parseTokens, namespaceDefault);
+    assert.deepEqual(parseTokens(' alpha '), [' ALPHA ']);
+  });
 });
 
 describe('tag token parsers bridge', () => {
@@ -1741,6 +1756,28 @@ describe('tag token parsers bridge', () => {
     assert.deepEqual(parseTagTokens('alpha, beta'), ['alpha', 'beta']);
     assert.equal(formatTagTokens(['x', 'y']), 'x y');
     assert.equal(defaultParseTagTokens, global.window.galleryComponents.defaultParseTagTokens);
+  });
+
+  test('falls back when resolver chain throws and parser helper is absent', () => {
+    const resolverError = new Error('resolver failed');
+
+    global.window.galleryComponents.resolveTagTokenParsersOrFallback = () => {
+      throw resolverError;
+    };
+    global.window.galleryComponents.resolveTagTokenParsersSharedOrDefault = () => {
+      throw resolverError;
+    };
+
+    const { parseTagTokens, defaultParseTagTokens, formatTagTokens } =
+      global.window.galleryComponents.resolveTagTokenParsersWithDefaults({
+        tagTokenModule: null,
+        parseTagTokens: undefined,
+        formatTagTokens: undefined
+      });
+
+    assert.deepEqual(parseTagTokens('alpha beta'), ['alpha', 'beta']);
+    assert.equal(defaultParseTagTokens, global.window.galleryComponents.defaultParseTagTokens);
+    assert.equal(formatTagTokens(['a', 'b']), 'a b');
   });
 });
 
