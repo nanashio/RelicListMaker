@@ -68,8 +68,9 @@
   - タグ検索リゾルバがグローバル名前空間のヘルパー欠落時でもローカルフォールバックで TomSelect アダプタとデバッグリゾルバを解決できるようにし、Node テストでリグレッションを防止。
   - タグ入力/検索のタグトークン解決を `tagTokenResolvers` コンポーネントに一本化し、フォールバックパーサーと `galleryModules.tagTokens` の解決順を共有化。デフォルトパーサー重複を排除し、TomSelect 未使用時も一貫したタグ処理を担保。
   - タグ入力・タグ検索双方で利用するタグトークンパーサー解決を `resolveTagTokenParsersSharedOrDefault` に集約し、共有リゾルバ経由でフォールバック順序と `tagTokenModule` 注入を統一。`npm run test:node` で共有リゾルバとコンポーネント双方のフォールバックを確認。
-  - タグ入力/検索コンポーネントで共有リゾルバのブリッジを明示し、デフォルトパーサー解決とタグトークンモジュール注入を共通化。ローカルフォールバックでも同じデフォルト関数を再利用するよう統一し、分岐重複を削減。
-  - 残作業: なし（フォローアップは次節参照）。
+    - タグ入力/検索コンポーネントで共有リゾルバのブリッジを明示し、デフォルトパーサー解決とタグトークンモジュール注入を共通化。ローカルフォールバックでも同じデフォルト関数を再利用するよう統一し、分岐重複を削減。
+    - `tagTokenResolvers` を ESM 化し、IIFE ラッパーがモジュール登録を再利用する形に移行。コピー監視と Node テストを更新し、`galleryModules`/`galleryComponents` 間でのデフォルト解決と依存順序を明示。
+    - 残作業: なし（フォローアップは次節参照）。
 
 ## バックログ/フォローアップ計画（2025-04-16 以降）
 
@@ -79,7 +80,7 @@
 | 2 | CSS alias 期間終了に向けたクリーンアップ | 0%（未着手） | 名前空間付きクラス導入後も旧クラス alias が暫定残存し、スタイル衝突リスクがある | `templates/gallery/styles/` の alias 棚卸しと参照確認。問題なければ alias を段階的削除し、互換性テストを追加 | alias 削除パッチと対応テスト、互換性確認結果の記録 |
 | 3 | 共有リゾルバのカバレッジ拡充 | 60%（Node フォールバックテスト追加済み、E2E 待ち） | `sharedResolvers` のローカルストレージ未設定/TomSelect 非読込の経路が E2E 未検証 | `tests/js/gallery_modules.test.mjs` にフォールバックケースを追加し、`gallery/assets.py` のコピー対象チェックと連動 | 追加テストとテスト結果、フォールバック経路の通過確認ログ |
 | 4 | ESM 化フェーズ 2 の準備 | 0%（未着手） | ESM 抽出が進む一方で IIFE 互換を併存させており、依存順序の監視が必要 | `templates/gallery/js/modules/` のエントリ整理、`gallery/index.js` で互換レイヤーを管理する方針整理、次抽出対象の列挙とチェックリスト化 | 整理した依存図・チェックリスト、次抽出候補の一覧と想定工数 |
-| 5 | タグトークン共有リゾルバのモジュール化と依存明示 | 0%（未着手） | `tagTokenResolvers` が IIFE でグローバル書き込みのままで、ESM 化で依存順序が隠れやすい | `templates/gallery/js/modules/tagTokenResolvers.js` を追加し、IIFE は互換ラッパー化。`gallery/assets.py`/`tests/js/gallery_modules.test.mjs` のコピー監視を更新し、`templates/gallery/index.js` の依存順序を明示 | ESM 版リゾルバと互換ラッパー、コピー監視とテスト拡充、依存順序メモ（計画書追記） |
+| 5 | タグトークン共有リゾルバのモジュール化と依存明示 | 100%（完了） | `tagTokenResolvers` が IIFE でグローバル書き込みのままで、ESM 化で依存順序が隠れやすい | `templates/gallery/js/modules/tagTokenResolvers.js` を追加し、IIFE はモジュール登録を利用する互換ラッパーに更新。`gallery/assets.py`/`tests/js/gallery_modules.test.mjs` のコピー監視と `templates/gallery/index.js` の依存順序を追記 | ESM 版リゾルバと互換ラッパー、コピー監視とテスト拡充、依存順序メモ（計画書追記） |
 
 ## リスクと緩和策
 - 依存順序の変更で既存バンドルと競合するリスク → IIFE での後方互換エクスポートを残し、段階的に import パスを差し替える。
@@ -130,6 +131,7 @@
 | 05-12 | タグ同期処理を `createTagStateBridge` に移譲し、ビューのタグ反映をストア越しに統一 | S1/S2 | pytest / node --test |
 | 05-23 | タグトークン解決を `tagTokenResolvers` に集約し、タグ入力/検索でフォールバック順序を統一 | S1/S2 | npm run test:node |
 | 05-24 | 共有リゾルバのブリッジをタグ入力/検索に明示し、デフォルトパーサー再利用とフォールバック統一を整理 | S1/S2 | npm run test:node |
+| 12-04 | `tagTokenResolvers` を ESM 化し、IIFE ラッパーとコピー監視・テストを更新 | S1/S4 | pytest / node --test |
 
 ## 付録 B: 詳細進捗メモ
 ## 進捗メモ（2025-03-19）
@@ -363,3 +365,8 @@
   - `sharedResolvers` に `resolveTagTokenParsersOrFallback` を追加し、タグ入力・タグ検索・共有リゾルバが同一の解決順と `tagTokenModule` 注入経路を利用するように整理。モジュール未読込時も共通のデフォルトパーサーで解決されるため、依存順の揺らぎによる差分を防止。
   - `tagInput` と `tagSearch` が新リゾルバを優先採用するように変更し、従来の個別フォールバックはバックアップ用途に限定。
 - テスト: `npm run test:node` を実行。
+
+## 進捗メモ（2025-12-04）
+- `tagTokenResolvers` を ES Module として切り出し、`registerTagTokenResolversModule` で `galleryModules`/`galleryComponents` の両方にデフォルト解決を登録するよう統一。IIFE 側はモジュール登録を再利用する互換ラッパーに変更し、依存順の揺らぎを抑制。
+- `templates/gallery/index.js` と `gallery/assets.py` に新モジュールを追加し、コピー監視と配信リストを更新。Node テストにモジュール登録とデフォルトパーサー挙動を確認するケースを追加。
+- テスト: `pytest`、`node --test tests/js/gallery_modules.test.mjs` を実行。
