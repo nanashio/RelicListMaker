@@ -1719,6 +1719,21 @@ describe('tag token parsers bridge', () => {
     assert.equal(resolvedModule, tagTokenModule);
   });
 
+  test('resolves default parser through bridge when provided', () => {
+    const providedDefault = (value) => String(value || '').split(/\s+/).filter(Boolean);
+
+    global.window.galleryComponents.resolveDefaultParseTagTokensBridge = ({ defaultParseTagTokens }) => {
+      assert.equal(defaultParseTagTokens, providedDefault);
+      return (value) => defaultParseTagTokens(value).map((token) => token.toUpperCase());
+    };
+
+    const { defaultParseTagTokens } = global.window.galleryComponents.resolveTagTokenParsersWithDefaults({
+      defaultParseTagTokens: providedDefault
+    });
+
+    assert.deepEqual(defaultParseTagTokens('alpha beta'), ['ALPHA', 'BETA']);
+  });
+
   test('falls back to default parser and formatter when resolvers are unavailable', () => {
     const { parseTagTokens, formatTagTokens, defaultParseTagTokens } =
       global.window.galleryComponents.resolveTagTokenParsersWithDefaults();
