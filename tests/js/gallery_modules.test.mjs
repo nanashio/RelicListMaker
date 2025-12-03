@@ -6257,4 +6257,32 @@ describe('tag token resolvers component', () => {
     assert.equal(formatTagTokens(['a', 'b']), 'a,b');
     assert.deepEqual(defaultParseTagTokens(' solo '), ['solo']);
   });
+
+  test('registers tagTokenResolvers module and exposes defaults to globals', async () => {
+    global.window = { galleryComponents: {}, galleryModules: {} };
+    globalThis.window = global.window;
+    globalThis.document = global.document || undefined;
+
+    const modulePath = path.join(
+      projectRoot,
+      'templates',
+      'gallery',
+      'js',
+      'modules',
+      'tagTokenResolvers.js'
+    );
+
+    const module = await import(modulePath);
+
+    assert.ok(global.window.galleryModules.tagTokenResolvers, 'module should register to galleryModules');
+    assert.strictEqual(
+      global.window.galleryComponents.resolveTagTokenParsers,
+      module.resolveTagTokenParsers,
+      'components should reuse module resolver'
+    );
+
+    const { parseTagTokens, defaultParseTagTokens } = module.resolveTagTokenParsers({ tagTokenModule: null });
+    assert.deepEqual(defaultParseTagTokens('alpha beta'), ['alpha', 'beta']);
+    assert.deepEqual(parseTagTokens('alpha;alpha'), ['alpha', 'alpha']);
+  });
 });
