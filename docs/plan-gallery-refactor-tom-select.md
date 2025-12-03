@@ -75,9 +75,9 @@
 
 | ID | フォローアップ | 進捗 | 背景/目的 | 主なタスク | 成果物 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | ブラウザ E2E の再実行と証跡取得 | 0%（ネットワーク許可待ち） | Playwright のブラウザ取得がネットワーク制約で失敗し、TomSelect 共有リゾルバ適用後の E2E カバレッジが不足 | `npm run test:browser -- tests/browser/viewer.spec.ts` を再実行し、TomSelect 差し替え経路を UI 上で確認。ログとスクリーンショットを計画書へ追記 | E2E 実行ログとスクリーンショット、計画書への記録、失敗時の原因と暫定対応メモ |
+| 1 | ブラウザ E2E の再実行と証跡取得 | 100%（ローカル再実行済み・結果記録済み） | Playwright のブラウザ取得がネットワーク制約で失敗し、TomSelect 共有リゾルバ適用後の E2E カバレッジが不足 | `npm run test:browser -- tests/browser/viewer.spec.ts` を再実行し、TomSelect 差し替え経路を UI 上で確認。ログとスクリーンショットを計画書へ追記 | E2E 実行ログとスクリーンショット、計画書への記録、失敗時の原因と暫定対応メモ |
 | 2 | CSS alias 期間終了に向けたクリーンアップ | 0%（未着手） | 名前空間付きクラス導入後も旧クラス alias が暫定残存し、スタイル衝突リスクがある | `templates/gallery/styles/` の alias 棚卸しと参照確認。問題なければ alias を段階的削除し、互換性テストを追加 | alias 削除パッチと対応テスト、互換性確認結果の記録 |
-| 3 | 共有リゾルバのカバレッジ拡充 | 0%（未着手） | `sharedResolvers` のローカルストレージ未設定/TomSelect 非読込の経路が E2E 未検証 | `tests/js/gallery_modules.test.mjs` にフォールバックケースを追加し、`gallery/assets.py` のコピー対象チェックと連動 | 追加テストとテスト結果、フォールバック経路の通過確認ログ |
+| 3 | 共有リゾルバのカバレッジ拡充 | 60%（Node フォールバックテスト追加済み、E2E 待ち） | `sharedResolvers` のローカルストレージ未設定/TomSelect 非読込の経路が E2E 未検証 | `tests/js/gallery_modules.test.mjs` にフォールバックケースを追加し、`gallery/assets.py` のコピー対象チェックと連動 | 追加テストとテスト結果、フォールバック経路の通過確認ログ |
 | 4 | ESM 化フェーズ 2 の準備 | 0%（未着手） | ESM 抽出が進む一方で IIFE 互換を併存させており、依存順序の監視が必要 | `templates/gallery/js/modules/` のエントリ整理、`gallery/index.js` で互換レイヤーを管理する方針整理、次抽出対象の列挙とチェックリスト化 | 整理した依存図・チェックリスト、次抽出候補の一覧と想定工数 |
 | 5 | タグトークン共有リゾルバのモジュール化と依存明示 | 0%（未着手） | `tagTokenResolvers` が IIFE でグローバル書き込みのままで、ESM 化で依存順序が隠れやすい | `templates/gallery/js/modules/tagTokenResolvers.js` を追加し、IIFE は互換ラッパー化。`gallery/assets.py`/`tests/js/gallery_modules.test.mjs` のコピー監視を更新し、`templates/gallery/index.js` の依存順序を明示 | ESM 版リゾルバと互換ラッパー、コピー監視とテスト拡充、依存順序メモ（計画書追記） |
 
