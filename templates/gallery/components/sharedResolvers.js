@@ -230,6 +230,61 @@
         return typeof sharedDefault === 'function' ? sharedDefault : fallbackParser;
     }
 
+    function resolveTagTokenParsersSharedOrDefault(config = {}) {
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const resolver =
+            namespace && typeof namespace.resolveTagTokenParsers === 'function'
+                ? namespace.resolveTagTokenParsers
+                : null;
+        const parseResolver =
+            namespace && typeof namespace.resolveTagTokenParserWithFallback === 'function'
+                ? namespace.resolveTagTokenParserWithFallback
+                : resolveTagTokenParserWithFallback;
+        const tagTokenModule =
+            config.tagTokenModule !== undefined
+                ? config.tagTokenModule
+                : (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
+                  null;
+
+        const defaultParseTokens = resolveDefaultParseTagTokens({ defaultParseTagTokens: config.defaultParseTagTokens });
+
+        if (resolver) {
+            try {
+                const resolved = resolver({
+                    ...config,
+                    defaultParseTagTokens: defaultParseTokens,
+                    tagTokenModule
+                });
+                if (resolved && typeof resolved.parseTagTokens === 'function') {
+                    return resolved;
+                }
+            } catch (error) {
+                // fall through to fallback resolver
+            }
+        }
+
+        const parseTagTokens = parseResolver
+            ? parseResolver({
+                  parseTagTokens: config.parseTagTokens,
+                  tagTokenModule,
+                  defaultParseTagTokens: defaultParseTokens
+              })
+            : typeof config.parseTagTokens === 'function'
+              ? config.parseTagTokens
+              : tagTokenModule && typeof tagTokenModule.parseTagTokens === 'function'
+                ? (value) => tagTokenModule.parseTagTokens(value)
+                : defaultParseTokens;
+
+        const formatTagTokens =
+            typeof config.formatTagTokens === 'function'
+                ? config.formatTagTokens
+                : tagTokenModule && typeof tagTokenModule.formatTagTokens === 'function'
+                  ? tagTokenModule.formatTagTokens
+                  : (value) => (Array.isArray(value) ? value.join(' ') : parseTagTokens(value).join(' '));
+
+        return { parseTagTokens, formatTagTokens, defaultParseTagTokens: defaultParseTokens, tagTokenModule };
+    }
+
     function resolveTagTokenParserWithFallback(config = {}) {
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
         const tagTokenModule =
@@ -450,6 +505,7 @@
     window.galleryComponents.resolveTagDebugResolverSharedOrDefault = resolveTagDebugResolverSharedOrDefault;
     window.galleryComponents.resolveSharedTomSelectAdapterOrDefault = resolveSharedTomSelectAdapterOrDefault;
     window.galleryComponents.resolveDefaultParseTagTokens = resolveDefaultParseTagTokens;
+    window.galleryComponents.resolveTagTokenParsersSharedOrDefault = resolveTagTokenParsersSharedOrDefault;
     window.galleryComponents.resolveTagTokenParserWithFallback = resolveTagTokenParserWithFallback;
     window.galleryComponents.resolveTagSearchControllerWithFallback = resolveTagSearchControllerWithFallback;
     window.galleryComponents.defaultParseTagTokens = defaultParseTagTokens;

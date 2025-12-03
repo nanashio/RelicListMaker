@@ -33,45 +33,57 @@
             namespace && typeof namespace.resolveTagTokenParserWithFallback === 'function'
                 ? namespace.resolveTagTokenParserWithFallback
                 : null;
+        const resolveTagTokenParsersSharedOrDefault =
+            namespace && typeof namespace.resolveTagTokenParsersSharedOrDefault === 'function'
+                ? namespace.resolveTagTokenParsersSharedOrDefault
+                : null;
         const resolveTagTokenParsers =
             namespace && typeof namespace.resolveTagTokenParsers === 'function'
                 ? namespace.resolveTagTokenParsers
                 : null;
-        const tagTokenParsers = resolveTagTokenParsers
-            ? resolveTagTokenParsers({
-                  parseTagTokens: parseTokensConfig,
-                  formatTagTokens: null,
-                  defaultParseTagTokens: config.defaultParseTagTokens,
-                  tagTokenModule: config.tagTokenModule
-              })
-            : (function resolveParsersFallback() {
-                  const tagTokenModule =
-                      config.tagTokenModule !== undefined
-                          ? config.tagTokenModule
-                          : (typeof window !== 'undefined' &&
-                                window &&
-                                window.galleryModules &&
-                                window.galleryModules.tagTokens) ||
-                            null;
-                  const defaultParser =
-                      (namespace && typeof namespace.defaultParseTagTokens === 'function'
-                          ? namespace.defaultParseTagTokens
-                          : null) ||
-                      config.defaultParseTagTokens ||
-                      defaultParseTagTokens;
-                  const parseTagTokensFallback = resolveTagTokenParserWithFallback
-                      ? resolveTagTokenParserWithFallback({
-                            parseTagTokens: parseTokensConfig,
-                            tagTokenModule,
-                            defaultParseTagTokens: defaultParser
-                        })
-                      : typeof parseTokensConfig === 'function'
-                        ? parseTokensConfig
-                        : tagTokenModule && typeof tagTokenModule.parseTagTokens === 'function'
-                          ? (value) => tagTokenModule.parseTagTokens(value)
-                          : defaultParser;
-                  return { parseTagTokens: parseTagTokensFallback, defaultParseTagTokens: defaultParser };
-              })();
+        const tagTokenParsers =
+            resolveTagTokenParsersSharedOrDefault
+                ? resolveTagTokenParsersSharedOrDefault({
+                      parseTagTokens: parseTokensConfig,
+                      formatTagTokens: null,
+                      defaultParseTagTokens: config.defaultParseTagTokens,
+                      tagTokenModule: config.tagTokenModule
+                  })
+                : resolveTagTokenParsers
+                  ? resolveTagTokenParsers({
+                        parseTagTokens: parseTokensConfig,
+                        formatTagTokens: null,
+                        defaultParseTagTokens: config.defaultParseTagTokens,
+                        tagTokenModule: config.tagTokenModule
+                    })
+                  : (function resolveParsersFallback() {
+                        const tagTokenModule =
+                            config.tagTokenModule !== undefined
+                                ? config.tagTokenModule
+                                : (typeof window !== 'undefined' &&
+                                      window &&
+                                      window.galleryModules &&
+                                      window.galleryModules.tagTokens) ||
+                                  null;
+                        const defaultParser =
+                            (namespace && typeof namespace.defaultParseTagTokens === 'function'
+                                ? namespace.defaultParseTagTokens
+                                : null) ||
+                            config.defaultParseTagTokens ||
+                            defaultParseTagTokens;
+                        const parseTagTokensFallback = resolveTagTokenParserWithFallback
+                            ? resolveTagTokenParserWithFallback({
+                                  parseTagTokens: parseTokensConfig,
+                                  tagTokenModule,
+                                  defaultParseTagTokens: defaultParser
+                              })
+                            : typeof parseTokensConfig === 'function'
+                              ? parseTokensConfig
+                              : tagTokenModule && typeof tagTokenModule.parseTagTokens === 'function'
+                                ? (value) => tagTokenModule.parseTagTokens(value)
+                                : defaultParser;
+                        return { parseTagTokens: parseTagTokensFallback, defaultParseTagTokens: defaultParser };
+                    })();
         const { parseTagTokens } = tagTokenParsers;
         const resolveTagDebugResolver =
             namespace && typeof namespace.resolveTagDebugResolverSharedOrDefault === 'function'
