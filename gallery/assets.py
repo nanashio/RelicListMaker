@@ -31,6 +31,7 @@ ADDITIONAL_GALLERY_SCRIPTS: tuple[str, ...] = (
     "gallery/storage/manager.js",
     "gallery/app/controller.js",
     "gallery/components/sharedResolvers.js",
+    "gallery/components/tagTokenResolvers.js",
     "gallery/components/tagDebug.js",
     "gallery/components/tomSelectAdapterFactory.js",
     "gallery/components/tomSelectAdapter.js",
