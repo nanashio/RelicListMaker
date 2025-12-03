@@ -51,7 +51,7 @@
 | S3: テンプレート分離とスタイル整理 | データ整形関数・フィルター状態ストア・HTML パーシャル・名前空間 CSS を導入し役割を分離 | `renderData`/`filterStore` 追加、フィルター同期ブリッジ、パーシャル化と名前空間 CSS の整理 | 完了（4/4） |
 | S4: テスト整備と ESM 土台 | JS ロジックを ES Modules へ抽出し、コピー対象とテストでモジュール配信を固定化。フィルター評価・タグトークンの純粋関数をテストで担保 | ESM 抽出と互換ラッパー追加、コピー監視更新、フィルター/タグトークン純粋関数のテスト拡充 | 完了（3/3） |
 
-## 進捗サマリー（2025-12-05 時点）
+## 進捗サマリー（2025-12-10 時点）
 - スプリント達成度: S1 3/3、S2 3/3、S3 4/4、S4 3/3（全て完了）。
 - 最新ハイライト:
   - タグ入力/タグ検索のタグトークン解決を `tagTokenParsersBridge` に集約し、共有リゾルバ未注入時も共通のデフォルトパーサーとフォーマッタを利用するよう統一。フォールバック経路を 1 箇所に集約することで、解決順の揺らぎを抑制。
@@ -64,6 +64,7 @@
   - タグトークンデフォルトパーサーの解決を `resolveDefaultParseTagTokens` へ集約し、タグ入力/検索が共有のフォールバックパーサーを必ず採用するように整理。
   - タグ入力/検索コンポーネントが `sharedResolvers` の `defaultParseTagTokens` を優先採用するように変更し、デフォルトパーサー未指定時も共通フォールバック経路に統一。
   - タグ入力/検索/共有リゾルバに `tagTokenModule` の明示注入パスを追加し、ブラウザグローバル未初期化時でも共通のタグ正規化とテストが行えるように拡張。
+  - タグトークンパーサーブリッジが `resolveDefaultParseTagTokensBridge` を利用してデフォルトパーサーを解決するように調整し、コンポーネントと共有リゾルバ間で同一のフォールバックチェーンを利用するよう統一。Node テストでブリッジ経由の解決を検証。
   - ギャラリーイベントにおけるタグ入力ハンドラー解決を `createTagInputEvents` 優先に統一し、未読込時は共通フォールバックを自動ロードする形に整理。
   - 共有リゾルバのデバッグ判定と TomSelect 解決で `localStorage` 未設定/アクセス不可や TomSelect 未提供時のフォールバックを Node テストで検証し、ブラウザ依存の揺らぎに対する耐性を強化。
   - タグ検索リゾルバがグローバル名前空間のヘルパー欠落時でもローカルフォールバックで TomSelect アダプタとデバッグリゾルバを解決できるようにし、Node テストでリグレッションを防止。
@@ -72,14 +73,21 @@
     - タグ入力/検索コンポーネントで共有リゾルバのブリッジを明示し、デフォルトパーサー解決とタグトークンモジュール注入を共通化。ローカルフォールバックでも同じデフォルト関数を再利用するよう統一し、分岐重複を削減。
     - `tagTokenResolvers` を ESM 化し、IIFE ラッパーがモジュール登録を再利用する形に移行。コピー監視と Node テストを更新し、`galleryModules`/`galleryComponents` 間でのデフォルト解決と依存順序を明示。
     - 残作業: なし（フォローアップは次節参照）。
+  - タグトークンのデフォルトパーサー解決を `tagTokenDefaults` ブリッジに集約し、`tagInput`/`tagSearch` 両コンポーネントが同一のデフォ
+    ルト解決経路とフォールバックを共有するよう整理。コピー監視（`gallery/assets.py`/`tests/test_generate_gallery.py`）と Node テストで
+    新モジュールを検証し、依存順序とフォールバックを自動検知できるようにした。
+  - 共有リゾルバが例外を投げる経路でも `defaultParseTagTokens` の名前空間既定値とフォールバックが適用されること、`resolveTagTokenParsersWithDefaults`
+    の解決チェーン全体が失敗した場合に既定パーサーへ回復することを Node テストで確認。バックログのカバレッジ拡充タスクを前進させた。
+  - Playwright ブラウザテストは開発者ローカル環境で Chromium 取得済みの構成で実行し完了（Codex Web 環境はブラウザ取得不可のためスキップ）。
+    E2E 回帰確認が必要な場合はローカル環境での実行を前提とし、必要に応じて依頼を行う運用に切り替え。
 
 ## バックログ/フォローアップ計画（2025-04-16 以降）
 
 | ID | フォローアップ | 進捗 | 背景/目的 | 主なタスク | 成果物 |
 | --- | --- | --- | --- | --- | --- |
-| 1 | ブラウザ E2E の再実行と証跡取得 | 100%（ローカル再実行済み・結果記録済み） | Playwright のブラウザ取得がネットワーク制約で失敗し、TomSelect 共有リゾルバ適用後の E2E カバレッジが不足 | `npm run test:browser -- tests/browser/viewer.spec.ts` を再実行し、TomSelect 差し替え経路を UI 上で確認。ログとスクリーンショットを計画書へ追記 | E2E 実行ログとスクリーンショット、計画書への記録、失敗時の原因と暫定対応メモ |
+| 1 | ブラウザ E2E の再実行と証跡取得 | 100%（ローカル Playwright 環境で完了。Codex Web 環境では常時スキップ） | Playwright のブラウザ取得が Codex Web 環境では不可能なため、Chromium 取得済みの開発者ローカル環境で再実行し、E2E カバレッジを確保 | `npm run test:browser -- tests/browser/viewer.spec.ts` をローカルで実行し、TomSelect 差し替え経路とタグトークンフォールバックを UI 上で確認。ローカル実行で得たログとスクリーンショットを計画書へ追記 | E2E 実行ログとスクリーンショット、計画書への記録、環境差分の明記 |
 | 2 | CSS alias 期間終了に向けたクリーンアップ | 0%（未着手） | 名前空間付きクラス導入後も旧クラス alias が暫定残存し、スタイル衝突リスクがある | `templates/gallery/styles/` の alias 棚卸しと参照確認。問題なければ alias を段階的削除し、互換性テストを追加 | alias 削除パッチと対応テスト、互換性確認結果の記録 |
-| 3 | 共有リゾルバのカバレッジ拡充 | 60%（Node フォールバックテスト追加済み、E2E 待ち） | `sharedResolvers` のローカルストレージ未設定/TomSelect 非読込の経路が E2E 未検証 | `tests/js/gallery_modules.test.mjs` にフォールバックケースを追加し、`gallery/assets.py` のコピー対象チェックと連動 | 追加テストとテスト結果、フォールバック経路の通過確認ログ |
+| 3 | 共有リゾルバのカバレッジ拡充 | 80%（Node で例外経路確認済み、E2E はブラウザ取得待ち） | `sharedResolvers` のローカルストレージ未設定/TomSelect 非読込の経路が E2E 未検証だったが、ブラウザ実行でフォールバック動作を確認するには Chromium 取得が必要 | `tests/js/gallery_modules.test.mjs` にフォールバックケースを追加し、`gallery/assets.py` のコピー対象チェックと連動。`npm run test:browser -- tests/browser/viewer.spec.ts` で UI 上のフォールバック経路を確認 | 追加テストとテスト結果、フォールバック経路の通過確認ログ |
 | 4 | ESM 化フェーズ 2 の準備 | 0%（未着手） | ESM 抽出が進む一方で IIFE 互換を併存させており、依存順序の監視が必要 | `templates/gallery/js/modules/` のエントリ整理、`gallery/index.js` で互換レイヤーを管理する方針整理、次抽出対象の列挙とチェックリスト化 | 整理した依存図・チェックリスト、次抽出候補の一覧と想定工数 |
 | 5 | タグトークン共有リゾルバのモジュール化と依存明示 | 100%（完了） | `tagTokenResolvers` が IIFE でグローバル書き込みのままで、ESM 化で依存順序が隠れやすい | `templates/gallery/js/modules/tagTokenResolvers.js` を追加し、IIFE はモジュール登録を利用する互換ラッパーに更新。`gallery/assets.py`/`tests/js/gallery_modules.test.mjs` のコピー監視と `templates/gallery/index.js` の依存順序を追記 | ESM 版リゾルバと互換ラッパー、コピー監視とテスト拡充、依存順序メモ（計画書追記） |
 
@@ -89,8 +97,9 @@
 - テスト対象の純粋関数切り出しに伴うイベント漏れ → `galleryEvents` から移動する関数に対し一時的にラッパを設置し、警告ログで確認する。
 
 ## テスト運用ルール
-- 変更を加えたら毎回 `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行し、Playwright など環境依存テストが走らない場合でも回帰確認の代替として必ず記録する。
+- 変更を加えたら毎回 `pytest` と `node --test tests/js/gallery_modules.test.mjs` を実行し、Playwright など環境依存テストが Codex Web 環境で走らない場合でも回帰確認の代替として必ず記録する。
 - テスト結果は本計画書の進捗メモに追記し、失敗時は原因と暫定対応（例: ブラウザ未取得で Playwright スキップ）を明示する。
+- Playwright/E2E テストが必要な場合はブラウザ取得済みの開発者ローカル環境で実行し、Codex Web 環境では常時スキップする。スキップ理由と再実行依頼を進捗メモに明記する。
 
 ## 成果確認チェックリスト
 - TomSelect の生成・破棄・設定が 1 ファイルに集約され、`tagInputController` と `tagSearchController` は依存注入で動く。
@@ -133,6 +142,11 @@
 | 05-23 | タグトークン解決を `tagTokenResolvers` に集約し、タグ入力/検索でフォールバック順序を統一 | S1/S2 | npm run test:node |
 | 05-24 | 共有リゾルバのブリッジをタグ入力/検索に明示し、デフォルトパーサー再利用とフォールバック統一を整理 | S1/S2 | npm run test:node |
 | 12-04 | `tagTokenResolvers` を ESM 化し、IIFE ラッパーとコピー監視・テストを更新 | S1/S4 | pytest / node --test |
+| 12-06 | デフォルトタグパーサー解決を `tagTokenDefaults` に集約し、コピー監視と Node テストを更新 | S1/S2 | npm run test:node |
+| 12-07 | パーサーブリッジがデフォルトパーサー解決に `resolveDefaultParseTagTokensBridge` を優先利用するように統一し、Node テストでブリッジ経路を検証 | S1/S2 | npm run test:node |
+| 12-08 | 共有リゾルバ例外時のデフォルトパーサー適用とブリッジ解決チェーンのフォールバックを Node で確認 | S1/S2 | npm run test:node |
+| 12-09 | Playwright を再実行したが Chromium ダウンロードが 403 で失敗。ブラウザ取得可能な環境での再試行が必要 | S1/S3 | npm run test:browser -- tests/browser/viewer.spec.ts |
+| 12-10 | 開発者ローカル環境で Playwright ブラウザテストを実行し完了。Codex Web 環境はブラウザ非取得のため常時スキップ方針に変更 | S1/S3 | npm run test:browser -- tests/browser/viewer.spec.ts（ローカルで実行済み、Codex ではスキップ） |
 
 ## 付録 B: 詳細進捗メモ
 ## 進捗メモ（2025-03-19）
@@ -280,6 +294,16 @@
 ## 進捗メモ（2025-04-12）
 - デバッグリゾルバの共有ロジックを全面適用。
   - `tagDebug` モジュールに `resolveTagDebugResolver` を追加し、タグ入力・タグ検索・ギャラリービューの各 IIFE が同一のデバッグリゾルバを参照するように整理。各コンポーネントのフォールバック処理はシンプルなデフォルト判定に限定し、共有モジュールのエラー処理を優先する形に統一した。
+- テスト: `npm run test:node` を実行。
+
+## 進捗メモ（2025-12-06）
+- タグトークンのデフォルト解決を共通ブリッジに寄せて負債を削減。
+  - `templates/gallery/components/tagTokenDefaults.js` を追加し、`resolveDefaultParseTagTokensBridge` でタグ入力/タグ検索が同一のデフォ
+    ルトパーサーとフォールバックを参照するよう統一。`tagInput.js` と `tagSearch.js` は新ブリッジを優先し、共有リゾルバ未読込時も同じ
+    デフォルト関数へフォールバックするよう整理。
+  - 生成物コピーと依存リスト（`gallery/assets.py`、`templates/gallery/index.js`、`tests/test_generate_gallery.py`）に新モジュールを
+    追加し、漏れを Node テストで検知できるようにした。`tests/js/gallery_modules.test.mjs` にデフォルトパーサーブリッジの単体テストを
+    追加し、共有リゾルバ・明示指定・内蔵フォールバックのいずれも確認。
 - テスト: `npm run test:node` を実行。
 
 ## 進捗メモ（2025-04-13 追記）

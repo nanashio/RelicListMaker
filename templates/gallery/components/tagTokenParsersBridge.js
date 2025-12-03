@@ -17,26 +17,47 @@
     }
 
     function resolveDefaultParseTagTokens(namespace, defaultParseTagTokens) {
+        const sharedFallback = (namespace && namespace.defaultParseTagTokens) || fallbackParseTagTokens;
         const resolver =
+            namespace && typeof namespace.resolveDefaultParseTagTokensBridge === 'function'
+                ? namespace.resolveDefaultParseTagTokensBridge
+                : null;
+        const sharedResolver =
             namespace && typeof namespace.resolveDefaultParseTagTokens === 'function'
                 ? namespace.resolveDefaultParseTagTokens
                 : null;
 
-        if (resolver) {
+        const resolveWithFallback = (candidate) => {
             try {
-                return resolver({ defaultParseTagTokens: defaultParseTagTokens || fallbackParseTagTokens });
+                return candidate({ defaultParseTagTokens: defaultParseTagTokens || sharedFallback });
             } catch (error) {
-                // ignore and fall back
+                return null;
+            }
+        };
+
+        const applyResolved = (resolved) => {
+            if (resolved && namespace && typeof resolved === 'function') {
+                namespace.defaultParseTagTokens = resolved;
+            }
+            return resolved;
+        };
+
+        if (resolver) {
+            const resolved = applyResolved(resolveWithFallback(resolver));
+            if (resolved) {
+                return resolved;
+            }
+        }
+        if (sharedResolver) {
+            const resolved = applyResolved(resolveWithFallback(sharedResolver));
+            if (resolved) {
+                return resolved;
             }
         }
 
-        if (typeof defaultParseTagTokens === 'function') {
-            return defaultParseTagTokens;
-        }
-        if (namespace && typeof namespace.defaultParseTagTokens === 'function') {
-            return namespace.defaultParseTagTokens;
-        }
-        return fallbackParseTagTokens;
+        const finalDefault = typeof defaultParseTagTokens === 'function' ? defaultParseTagTokens : sharedFallback;
+        applyResolved(finalDefault);
+        return finalDefault;
     }
 
     function resolveTagTokenParsersWithDefaults(config = {}) {

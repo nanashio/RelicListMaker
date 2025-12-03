@@ -21,6 +21,7 @@ const MODULE_DEPENDENCIES = [
     './storage/manager.js',
     './app/controller.js',
     './components/sharedResolvers.js',
+    './components/tagTokenDefaults.js',
     './components/tagTokenParsersBridge.js',
     './components/tagTokenResolvers.js',
     './components/tagDebug.js',
