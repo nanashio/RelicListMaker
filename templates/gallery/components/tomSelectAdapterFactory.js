@@ -69,7 +69,7 @@
         });
     }
 
-    function registerNativeLogging(input, hooks = {}, isDebugEnabled = () => false) {
+    function registerNativeLoggingInternal(input, hooks = {}, isDebugEnabled = () => false) {
         if (!isDebugEnabled() || !input || typeof input.addEventListener !== 'function') {
             return;
         }
@@ -210,7 +210,7 @@
             onChange,
             setValue,
             registerNativeLogging(input, hooks = {}) {
-                registerNativeLogging(input, hooks, isDebugEnabled);
+                registerNativeLoggingInternal(input, hooks, isDebugEnabled);
             }
         };
     }

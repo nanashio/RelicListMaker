@@ -54,6 +54,7 @@
 ## 進捗サマリー（2025-12-11 時点）
 - スプリント達成度: S1 3/3、S2 3/3、S3 4/4、S4 3/3（全て完了）。
 - 最新ハイライト:
+  - TomSelect デフォルトアダプタのネイティブログ登録が自己再帰になっていた不具合を解消し、フォールバック経路でもデバッグログが確実に動作するようにした。`registerNativeLogging` 呼び出しが内部ヘルパーを経由するため、TomSelect 未提供時のネイティブ入力監視も安全に有効化される。
   - TomSelect デフォルトアダプタに共有デバッグ判定とロギングを組み込み、フォールバック経路でもイベント監視とネイティブ入力ログが一貫するようにした。共有リゾルバ経由でデバッグフラグを受け取り、インスタンス/ネイティブ双方のハンドラ登録をデフォルト化。【F:templates/gallery/components/tomSelectAdapterFactory.js†L2-L215】【F:templates/gallery/components/sharedResolvers.js†L81-L204】
   - ギャラリービューのタグトークン解決を `resolveTagTokenParsersWithDefaults` ベースに変更し、`galleryComponents` 配下の共有リゾルバとデフォルトパーサーを優先採用。タグストア未初期化やデフォルトパーサー未指定でも共通のフォールバック経路で正規化・整形が行われるようにした。
   - タグ入力/タグ検索のタグトークン解決を `tagTokenParsersBridge` に集約し、共有リゾルバ未注入時も共通のデフォルトパーサーとフォーマッタを利用するよう統一。フォールバック経路を 1 箇所に集約することで、解決順の揺らぎを抑制。
@@ -150,6 +151,7 @@
 | 12-09 | Playwright を再実行したが Chromium ダウンロードが 403 で失敗。ブラウザ取得可能な環境での再試行が必要 | S1/S3 | npm run test:browser -- tests/browser/viewer.spec.ts |
 | 12-10 | 開発者ローカル環境で Playwright ブラウザテストを実行し完了。Codex Web 環境はブラウザ非取得のため常時スキップ方針に変更 | S1/S3 | npm run test:browser -- tests/browser/viewer.spec.ts（ローカルで実行済み、Codex ではスキップ） |
 | 12-11 | ギャラリービューのタグトークン解決を共有リゾルバ経由に統一 | S1/S2 | pytest / node --test tests/js/gallery_modules.test.mjs |
+| 12-12 | TomSelect デフォルトアダプタのネイティブログ登録が自己再帰していた問題を修正し、フォールバック経路のログを安定化 | S1 | pytest / npm run test:node |
 
 ## 付録 B: 詳細進捗メモ
 ## 進捗メモ（2025-03-19）
