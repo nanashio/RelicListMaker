@@ -16,38 +16,46 @@
             namespace && typeof namespace.resolveTagTokenParsersWithDefaults === 'function'
                 ? namespace.resolveTagTokenParsersWithDefaults
                 : null;
+        const resolveDefaultParseTagTokens =
+            namespace && typeof namespace.resolveDefaultParseTagTokensBridge === 'function'
+                ? namespace.resolveDefaultParseTagTokensBridge
+                : null;
+        const fallbackParseTagTokens =
+            (namespace && namespace.defaultParseTagTokens) || ((value) => {
+                if (Array.isArray(value)) {
+                    return value.slice();
+                }
+                if (value == null) {
+                    return [];
+                }
+                const text = String(value).trim();
+                if (!text) {
+                    return [];
+                }
+                return text
+                    .split(/[\s,;、，　；]+/)
+                    .map((token) => token.trim())
+                    .filter((token) => token.length > 0);
+            });
+        const defaultParseTokens = resolveDefaultParseTagTokens
+            ? resolveDefaultParseTagTokens({ defaultParseTagTokens: config.defaultParseTagTokens })
+            : typeof config.defaultParseTagTokens === 'function'
+              ? config.defaultParseTagTokens
+              : fallbackParseTagTokens;
 
-        const fallbackTagTokenResolver = ({ defaultParseTagTokens: defaultParser }) => {
-            const parseTagTokens = typeof parseTokensConfig === 'function' ? parseTokensConfig : defaultParser;
-            return { parseTagTokens, defaultParseTagTokens: defaultParser };
+        const fallbackTagTokenResolver = () => {
+            const parseTagTokens = typeof parseTokensConfig === 'function' ? parseTokensConfig : defaultParseTokens;
+            return { parseTagTokens, defaultParseTagTokens: defaultParseTokens };
         };
 
         const { parseTagTokens } =
             resolveTagTokenParsersWithDefaults
                 ? resolveTagTokenParsersWithDefaults({
                       parseTagTokens: parseTokensConfig,
-                      defaultParseTagTokens: config.defaultParseTagTokens,
+                      defaultParseTagTokens: defaultParseTokens,
                       tagTokenModule: config.tagTokenModule
                   })
-                : fallbackTagTokenResolver({
-                      defaultParseTagTokens:
-                          (namespace && namespace.defaultParseTagTokens) || config.defaultParseTagTokens || ((value) => {
-                              if (Array.isArray(value)) {
-                                  return value.slice();
-                              }
-                              if (value == null) {
-                                  return [];
-                              }
-                              const text = String(value).trim();
-                              if (!text) {
-                                  return [];
-                              }
-                              return text
-                                  .split(/[\s,;、，　；]+/)
-                                  .map((token) => token.trim())
-                                  .filter((token) => token.length > 0);
-                          })
-                  });
+                : fallbackTagTokenResolver();
         const resolveTagDebugResolver =
             namespace && typeof namespace.resolveTagDebugResolverSharedOrDefault === 'function'
                 ? namespace.resolveTagDebugResolverSharedOrDefault

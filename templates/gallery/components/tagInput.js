@@ -31,43 +31,53 @@
             namespace && typeof namespace.resolveTagTokenParsersWithDefaults === 'function'
                 ? namespace.resolveTagTokenParsersWithDefaults
                 : null;
+        const resolveDefaultParseTagTokens =
+            namespace && typeof namespace.resolveDefaultParseTagTokensBridge === 'function'
+                ? namespace.resolveDefaultParseTagTokensBridge
+                : null;
+        const fallbackParseTagTokens =
+            (namespace && namespace.defaultParseTagTokens) || ((value) => {
+                if (Array.isArray(value)) {
+                    return value.slice();
+                }
+                if (value == null) {
+                    return [];
+                }
+                const text = String(value).trim();
+                if (!text) {
+                    return [];
+                }
+                return text
+                    .split(/[\s,;、，　；]+/)
+                    .map((token) => token.trim())
+                    .filter((token) => token.length > 0);
+            });
+        const baseDefaultParseTokens = resolveDefaultParseTagTokens
+            ? resolveDefaultParseTagTokens({ defaultParseTagTokens: config.defaultParseTagTokens })
+            : typeof config.defaultParseTagTokens === 'function'
+              ? config.defaultParseTagTokens
+              : fallbackParseTagTokens;
 
-        const fallbackTagTokenResolver = ({ defaultParseTagTokens: defaultParser }) => {
-            const parseTagTokens = typeof parseTokensConfig === 'function' ? parseTokensConfig : defaultParser;
+        const fallbackTagTokenResolver = () => {
+            const parseTagTokens = typeof parseTokensConfig === 'function' ? parseTokensConfig : baseDefaultParseTokens;
             const formatTagTokens =
                 typeof formatTokensConfig === 'function'
                     ? formatTokensConfig
                     : (value) => (Array.isArray(value) ? value.join(' ') : parseTagTokens(value).join(' '));
-            return { parseTagTokens, formatTagTokens, defaultParseTagTokens: defaultParser };
+            return { parseTagTokens, formatTagTokens, defaultParseTagTokens: baseDefaultParseTokens };
         };
 
-        const { parseTagTokens, formatTagTokens, defaultParseTagTokens: defaultParseTokens } =
+        const { parseTagTokens, formatTagTokens, defaultParseTagTokens: resolvedDefaultParseTokens } =
             resolveTagTokenParsersWithDefaults
                 ? resolveTagTokenParsersWithDefaults({
                       parseTagTokens: parseTokensConfig,
                       formatTagTokens: formatTokensConfig,
-                      defaultParseTagTokens: config.defaultParseTagTokens,
+                      defaultParseTagTokens: baseDefaultParseTokens,
                       tagTokenModule: config.tagTokenModule
                   })
-                : fallbackTagTokenResolver({
-                      defaultParseTagTokens:
-                          (namespace && namespace.defaultParseTagTokens) || config.defaultParseTagTokens || ((value) => {
-                              if (Array.isArray(value)) {
-                                  return value.slice();
-                              }
-                              if (value == null) {
-                                  return [];
-                              }
-                              const text = String(value).trim();
-                              if (!text) {
-                                  return [];
-                              }
-                              return text
-                                  .split(/[\s,;、，　；]+/)
-                                  .map((token) => token.trim())
-                                  .filter((token) => token.length > 0);
-                          })
-                  });
+                : fallbackTagTokenResolver();
+
+        const defaultParseTokens = resolvedDefaultParseTokens || baseDefaultParseTokens;
         const fallbackFormatter = createFallbackFormatter(formatTagTokens, parseTagTokens);
 
         const hasDom = Boolean(documentRef && typeof documentRef.createElement === 'function');

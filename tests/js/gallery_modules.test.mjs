@@ -1377,6 +1377,7 @@ describe('shared resolvers', () => {
     };
     runScript('templates/gallery/components/tagDebug.js');
     runScript('templates/gallery/components/sharedResolvers.js');
+    runScript('templates/gallery/components/tagTokenDefaults.js');
   });
 
   afterEach(() => {
@@ -1634,10 +1635,53 @@ describe('shared resolvers', () => {
   });
 });
 
+describe('tag token default resolver bridge', () => {
+  beforeEach(() => {
+    global.window = {};
+    runScript('templates/gallery/components/tagTokenDefaults.js');
+  });
+
+  afterEach(() => {
+    delete global.window;
+  });
+
+  test('prefers shared resolver when provided', () => {
+    const providedDefault = (value) => [String(value || '')];
+    const resolver = window.galleryComponents.resolveDefaultParseTagTokensBridge;
+
+    window.galleryComponents.resolveDefaultParseTagTokens = ({ defaultParseTagTokens }) => {
+      assert.equal(defaultParseTagTokens, providedDefault);
+      return (value) => [String(value || '').toUpperCase()];
+    };
+
+    const parseTokens = resolver({ defaultParseTagTokens: providedDefault });
+
+    assert.deepEqual(parseTokens('alpha'), ['ALPHA']);
+  });
+
+  test('uses provided default parser when no resolver is available', () => {
+    const providedDefault = (value) => [String(value || '').trim()].filter(Boolean);
+    const resolver = window.galleryComponents.resolveDefaultParseTagTokensBridge;
+
+    const parseTokens = resolver({ defaultParseTagTokens: providedDefault });
+
+    assert.equal(parseTokens, providedDefault);
+    assert.deepEqual(parseTokens(' beta '), ['beta']);
+  });
+
+  test('falls back to built-in parser when nothing is provided', () => {
+    const resolver = window.galleryComponents.resolveDefaultParseTagTokensBridge;
+    const parseTokens = resolver();
+
+    assert.deepEqual(parseTokens('alpha, beta'), ['alpha', 'beta']);
+  });
+});
+
 describe('tag token parsers bridge', () => {
   beforeEach(() => {
     global.window = {};
     runScript('templates/gallery/components/sharedResolvers.js');
+    runScript('templates/gallery/components/tagTokenDefaults.js');
     runScript('templates/gallery/components/tagTokenParsersBridge.js');
   });
 
@@ -1695,6 +1739,7 @@ describe('tomSelect adapter factory', () => {
     global.document = documentMock;
     runScript('templates/gallery/components/tagDebug.js');
     runScript('templates/gallery/components/sharedResolvers.js');
+    runScript('templates/gallery/components/tagTokenDefaults.js');
     runScript('templates/gallery/components/tagTokenParsersBridge.js');
     runScript('templates/gallery/components/tomSelectAdapterFactory.js');
   });
@@ -1784,6 +1829,7 @@ describe('tag search controller', () => {
     global.document = documentMock;
     runScript('templates/gallery/components/tagDebug.js');
     runScript('templates/gallery/components/sharedResolvers.js');
+    runScript('templates/gallery/components/tagTokenDefaults.js');
     runScript('templates/gallery/components/tagTokenParsersBridge.js');
     runScript('templates/gallery/components/tomSelectAdapterFactory.js');
   });
