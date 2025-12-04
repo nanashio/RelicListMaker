@@ -6627,4 +6627,30 @@ describe('tag token resolvers component', () => {
     assert.deepEqual(defaultParseTagTokens('alpha beta'), ['alpha', 'beta']);
     assert.deepEqual(parseTagTokens('alpha;alpha'), ['alpha', 'alpha']);
   });
+
+  test('scopes tom-select styles to the gallery page namespace', () => {
+    const cssPath = path.join(
+      projectRoot,
+      'templates',
+      'gallery',
+      'vendor',
+      'tom-select',
+      'tom-select.css'
+    );
+    const css = readFileSync(cssPath, 'utf8');
+
+    const expectedSelectors = [
+      '.gallery-page .ts-wrapper {',
+      '.gallery-page .ts-wrapper .ts-control {',
+      '.gallery-page .ts-wrapper.ts-wrapper--focus .ts-control {',
+      '.gallery-page .ts-chip {',
+      '.gallery-page .ts-chip-remove {'
+    ];
+
+    expectedSelectors.forEach((selector) => {
+      assert.ok(css.includes(selector), `expected selector ${selector} to be namespaced`);
+    });
+
+    assert.ok(!/\n\.ts-wrapper\s*\{/.test(css), 'legacy unscoped .ts-wrapper selector should be removed');
+  });
 });

@@ -53,7 +53,7 @@
 | S3 | スプリント | データ整形関数・フィルター状態ストア・HTML パーシャル・名前空間 CSS を導入し役割を分離 | `renderData`/`filterStore` 追加、フィルター同期ブリッジ、パーシャル化と名前空間 CSS の整理 | 完了（4/4） | ビュー分離とフィルター/スタイル整理 |
 | S4 | スプリント | JS ロジックを ES Modules へ抽出し、コピー対象とテストでモジュール配信を固定化。フィルター評価・タグトークンの純粋関数をテストで担保 | ESM 抽出と互換ラッパー追加、コピー監視更新、フィルター/タグトークン純粋関数のテスト拡充 | 完了（3/3） | ESM 抽出とテスト拡充による配信固定化 |
 | F1 | フォローアップ | Playwright ブラウザ取得不可な環境に配慮しつつ、E2E カバレッジを確保 | `npm run test:browser -- tests/browser/viewer.spec.ts` をローカルで実行し、TomSelect 差し替えとタグトークンフォールバックを UI 上で確認 | 100%（ローカル実行で完了、Codex Web 環境は常時スキップ運用） | ローカルの実行ログとスクリーンショットを記録し、環境差分と再実行手順を明記 |
-| F2 | フォローアップ | 名前空間付きクラス導入後も旧クラス alias が残っており衝突リスクがある | `templates/gallery/styles/` の alias 棚卸しと参照確認、問題なければ段階的削除と互換テスト追加 | 0%（未着手） | alias 削除パッチと互換性テスト、結果記録 |
+| F2 | フォローアップ | 名前空間付きクラス導入後も旧クラス alias が残っており衝突リスクがある | `templates/gallery/styles/` の alias 棚卸しと参照確認、問題なければ段階的削除と互換テスト追加 | 100%（完了） | TomSelect 基本スタイルを `.gallery-page` 名前空間に限定し、JS テストで非スコープなセレクタが混入しないことを確認 | |
 | F3 | フォローアップ | `sharedResolvers` のフォールバック経路を E2E でも確認しカバレッジを埋める | `tests/js/gallery_modules.test.mjs` でフォールバックケース追加、`npm run test:browser` で UI 上の経路を確認 | 100%（Node/Playwright とも通過、Codex 環境はブラウザスキップ） | Node と Playwright 双方のログを記録し、ブラウザ取得不可環境ではスキップ運用を明示 |
 | F4 | フォローアップ | ESM 抽出と IIFE 互換の併存に伴う依存順序の監視を強化 | `templates/gallery/js/modules/` のエントリ整理、`gallery/index.js` で互換レイヤー管理方針を整理、次抽出候補を列挙 | 0%（未着手） | 依存図とチェックリスト、次抽出候補一覧 |
 | F5 | フォローアップ | `tagTokenResolvers` をモジュール化し依存順序を明示 | `templates/gallery/js/modules/tagTokenResolvers.js` 追加、IIFE はモジュール登録を再利用、コピー監視とテスト拡充 | 100%（完了） | 互換ラッパーとテスト拡充、依存順序メモを計画書へ記録 |
@@ -166,6 +166,7 @@
 | 12-15 | タグ入力/検索が共有リゾルバ経由でフォールバックするように整理し、ブリッジ欠落時の挙動を Node/pytest で確認 | S1/S2 | pytest / node --test tests/js/gallery_modules.test.mjs |
 | 12-16 | タグトークンリゾルバがフォーマッタを返さない場合にデフォルトフォーマッタへフォールバックするよう統一し、Node テストを追加 | S1/S2 | pytest / node --test tests/js/gallery_modules.test.mjs |
 | 12-17 | 共有リゾルバ未読込時でもタグトークンモジュールのパーサー/フォーマッタをローカルフォールバックで利用できるようにし、ネイティブ入出力との整合を確保 | S1/S2 | pytest / npm run test:node |
+| 12-18 | TomSelect ベース CSS を `.gallery-page` へスコープし、旧 `.ts-wrapper` グローバルエイリアスを排除するテストを追加 | F2 | node --test tests/js/gallery_modules.test.mjs |
 
 ## 付録 C: 詳細進捗メモ
 ## 進捗メモ（2025-03-19）
