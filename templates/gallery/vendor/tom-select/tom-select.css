@@ -1,11 +1,11 @@
-.ts-wrapper {
+.gallery-page .ts-wrapper {
     position: relative;
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-.ts-wrapper .ts-control {
+.gallery-page .ts-wrapper .ts-control {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
@@ -17,19 +17,19 @@
     cursor: text;
 }
 
-.ts-wrapper.ts-wrapper--focus .ts-control {
+.gallery-page .ts-wrapper.ts-wrapper--focus .ts-control {
     border-color: var(--color-focus-outline, #3b82f6);
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
-.ts-wrapper .ts-values {
+.gallery-page .ts-wrapper .ts-values {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
     align-items: center;
 }
 
-.ts-wrapper .ts-input {
+.gallery-page .ts-wrapper .ts-input {
     flex: 1 1 80px;
     min-width: 80px;
     border: none;
@@ -41,11 +41,11 @@
     color: inherit;
 }
 
-.ts-wrapper .ts-input::placeholder {
+.gallery-page .ts-wrapper .ts-input::placeholder {
     color: var(--color-text-tertiary, #8a8ea5);
 }
 
-.ts-chip {
+.gallery-page .ts-chip {
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -58,7 +58,7 @@
     color: var(--color-text-secondary, #4b4f63);
 }
 
-.ts-chip-remove {
+.gallery-page .ts-chip-remove {
     border: none;
     background: none;
     color: inherit;
@@ -71,12 +71,12 @@
     justify-content: center;
 }
 
-.ts-chip-remove:focus-visible {
+.gallery-page .ts-chip-remove:focus-visible {
     outline: 2px solid var(--color-focus-outline, #3b82f6);
     border-radius: 4px;
 }
 
-.ts-hidden-input {
+.gallery-page .ts-hidden-input {
     position: absolute;
     width: 1px;
     height: 1px;
