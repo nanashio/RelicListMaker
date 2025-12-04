@@ -6514,6 +6514,53 @@ describe('tag token module', () => {
   });
 });
 
+describe('module entry manifest', () => {
+  const moduleEntriesPath = path.join(
+    projectRoot,
+    'templates',
+    'gallery',
+    'js',
+    'modules',
+    'moduleEntries.js'
+  );
+
+  test('lists module dependencies with ESM foundations first', async () => {
+    const { MODULE_ENTRY_GROUPS, listModuleDependencies } = await import(moduleEntriesPath);
+    const dependencies = listModuleDependencies();
+
+    const esmGroup = MODULE_ENTRY_GROUPS.find((group) => group.id === 'esm-foundation');
+    assert.ok(esmGroup, 'esm-foundation group should exist');
+    assert.deepEqual(
+      dependencies.slice(0, esmGroup.entries.length),
+      esmGroup.entries.map((entry) => entry.specifier)
+    );
+
+    const legacyGroup = MODULE_ENTRY_GROUPS.find((group) => group.id === 'legacy-compat-layer');
+    assert.ok(legacyGroup, 'legacy compatibility group should exist');
+    assert.deepEqual(
+      dependencies.slice(esmGroup.entries.length),
+      legacyGroup.entries.map((entry) => entry.specifier)
+    );
+  });
+
+  test('registers manifest to galleryModules for compatibility inspection', async () => {
+    global.window = { galleryModules: {} };
+    globalThis.window = global.window;
+    const { listModuleDependencies, registerModuleEntryManifest } = await import(moduleEntriesPath);
+
+    const manifest = registerModuleEntryManifest(global.window);
+    assert.ok(manifest, 'manifest should be returned');
+    assert.deepEqual(
+      global.window.galleryModules.moduleEntryManifest.dependencies,
+      listModuleDependencies()
+    );
+    assert.equal(
+      global.window.galleryModules.moduleEntryManifest.groups[0].id,
+      'esm-foundation'
+    );
+  });
+});
+
 describe('tag token resolvers component', () => {
   test('resolves parsers with shared defaults and tag token module', async () => {
     global.window = { galleryComponents: {}, galleryModules: {}, localStorage: { getItem: () => null } };

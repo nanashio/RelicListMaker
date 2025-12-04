@@ -55,8 +55,13 @@
 | F1 | フォローアップ | Playwright ブラウザ取得不可な環境に配慮しつつ、E2E カバレッジを確保 | `npm run test:browser -- tests/browser/viewer.spec.ts` をローカルで実行し、TomSelect 差し替えとタグトークンフォールバックを UI 上で確認 | 100%（ローカル実行で完了、Codex Web 環境は常時スキップ運用） | ローカルの実行ログとスクリーンショットを記録し、環境差分と再実行手順を明記 |
 | F2 | フォローアップ | 名前空間付きクラス導入後も旧クラス alias が残っており衝突リスクがある | `templates/gallery/styles/` の alias 棚卸しと参照確認、問題なければ段階的削除と互換テスト追加 | 100%（完了） | TomSelect 基本スタイルを `.gallery-page` 名前空間に限定し、JS テストで非スコープなセレクタが混入しないことを確認 | |
 | F3 | フォローアップ | `sharedResolvers` のフォールバック経路を E2E でも確認しカバレッジを埋める | `tests/js/gallery_modules.test.mjs` でフォールバックケース追加、`npm run test:browser` で UI 上の経路を確認 | 100%（Node/Playwright とも通過、Codex 環境はブラウザスキップ） | Node と Playwright 双方のログを記録し、ブラウザ取得不可環境ではスキップ運用を明示 |
-| F4 | フォローアップ | ESM 抽出と IIFE 互換の併存に伴う依存順序の監視を強化 | `templates/gallery/js/modules/` のエントリ整理、`gallery/index.js` で互換レイヤー管理方針を整理、次抽出候補を列挙 | 0%（未着手） | 依存図とチェックリスト、次抽出候補一覧 |
+| F4 | フォローアップ | ESM 抽出と IIFE 互換の併存に伴う依存順序の監視を強化 | `templates/gallery/js/modules/` のエントリ整理、`gallery/index.js` で互換レイヤー管理方針を整理、次抽出候補を列挙 | 100%（完了） | モジュールエントリ manifest 追加と index.js の互換レイヤー整理、次抽出候補を明記 |
 | F5 | フォローアップ | `tagTokenResolvers` をモジュール化し依存順序を明示 | `templates/gallery/js/modules/tagTokenResolvers.js` 追加、IIFE はモジュール登録を再利用、コピー監視とテスト拡充 | 100%（完了） | 互換ラッパーとテスト拡充、依存順序メモを計画書へ記録 |
+
+### F4 実施結果と次の抽出候補
+- `templates/gallery/js/modules/moduleEntries.js` にモジュールエントリ manifest を追加し、ESM 基盤 (`esm-foundation`) と互換レイヤー (`legacy-compat-layer`) を明示的に分離。`gallery/index.js` は manifest から依存配列を取得する形に変更し、ESM 先行ロードと互換 IIFE の順序を固定化した。
+- 互換レイヤーの依存監視を強化するため、Node テストに manifest 検証を追加し、ESM 先行/レガシー後続の順序を継続的に確認できるようにした。
+- 次の抽出候補: `templates/gallery/utils/dom.js`（DOM ハンドラの ESM 化）、`templates/gallery/components/sharedResolvers.js`（共有リゾルバの ES module 化）、`templates/gallery/render/galleryView.js` の描画ユーティリティ部（IIFE 内の純粋関数切り出し）。
 
 ## リスクと緩和策
 - 依存順序の変更で既存バンドルと競合するリスク → IIFE での後方互換エクスポートを残し、段階的に import パスを差し替える。
@@ -167,6 +172,7 @@
 | 12-16 | タグトークンリゾルバがフォーマッタを返さない場合にデフォルトフォーマッタへフォールバックするよう統一し、Node テストを追加 | S1/S2 | pytest / node --test tests/js/gallery_modules.test.mjs |
 | 12-17 | 共有リゾルバ未読込時でもタグトークンモジュールのパーサー/フォーマッタをローカルフォールバックで利用できるようにし、ネイティブ入出力との整合を確保 | S1/S2 | pytest / npm run test:node |
 | 12-18 | TomSelect ベース CSS を `.gallery-page` へスコープし、旧 `.ts-wrapper` グローバルエイリアスを排除するテストを追加 | F2 | node --test tests/js/gallery_modules.test.mjs |
+| 12-19 | モジュールエントリ manifest 追加と index.js 依存順序整理で F4 を完了 | F4 | pytest / node --test tests/js/gallery_modules.test.mjs |
 
 ## 付録 C: 詳細進捗メモ
 ## 進捗メモ（2025-03-19）

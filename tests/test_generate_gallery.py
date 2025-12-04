@@ -30,6 +30,7 @@ def test_copy_gallery_modules_copies_required_viewer_scripts(tmp_path):
     gallery_assets.copy_gallery_modules(str(output_dir))
 
     expected_files = [
+        Path("js/modules/moduleEntries.js"),
         Path("js/modules/tagTokens.js"),
         Path("js/modules/tagTokenResolvers.js"),
         Path("js/modules/filterPredicates.js"),
