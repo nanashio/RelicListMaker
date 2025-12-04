@@ -165,6 +165,7 @@
 | 12-14 | 互換アダプタのネイティブログ登録に共有デバッグ判定と重複防止ガードを適用し、Node テストを追加 | S1 | pytest / node --test |
 | 12-15 | タグ入力/検索が共有リゾルバ経由でフォールバックするように整理し、ブリッジ欠落時の挙動を Node/pytest で確認 | S1/S2 | pytest / node --test tests/js/gallery_modules.test.mjs |
 | 12-16 | タグトークンリゾルバがフォーマッタを返さない場合にデフォルトフォーマッタへフォールバックするよう統一し、Node テストを追加 | S1/S2 | pytest / node --test tests/js/gallery_modules.test.mjs |
+| 12-17 | 共有リゾルバ未読込時でもタグトークンモジュールのパーサー/フォーマッタをローカルフォールバックで利用できるようにし、ネイティブ入出力との整合を確保 | S1/S2 | pytest / npm run test:node |
 
 ## 付録 C: 詳細進捗メモ
 ## 進捗メモ（2025-03-19）
@@ -430,4 +431,9 @@
 ## 進捗メモ（2025-12-14）
 - 互換アダプタのログガードを共通仕様に合わせて整備。
   - `createTomSelectAdapter` が共有のデバッグ判定を経由するようにし、`registerNativeLogging` に重複防止マーカーと例外に強いデバッグ判定を追加。TomSelect 未提供のフォールバック経路でもリスナー重複を防ぎ、IIFE/ESM どちらのローディング順でも安定してデバッグログを記録できるようにした。【F:templates/gallery/components/tomSelectAdapter.js†L15-L112】
-- テスト: `pytest` / `node --test tests/js/gallery_modules.test.mjs` を実行。
+  - テスト: `pytest` / `node --test tests/js/gallery_modules.test.mjs` を実行。
+
+## 進捗メモ（2025-12-20）
+- タグトークンパーサー解決の重複をブリッジに集約。
+  - `resolveTagTokenParsersBridgeOrFallback` を追加し、`tagInput` / `tagSearch` の両コンポーネントが同一のブリッジ経由でパーサーとフォーマッタを取得するよう統一。従来ファイル内に重複していたフォールバック解決ロジックを削除し、共有ブリッジが利用できない場合のみローカルフォールバックを参照する形に整理。【F:templates/gallery/components/tagTokenParsersBridge.js†L60-L115】【F:templates/gallery/components/tagInput.js†L3-L79】【F:templates/gallery/components/tagSearch.js†L3-L40】
+  - テスト: `pytest` と `npm run test:node` を実行。

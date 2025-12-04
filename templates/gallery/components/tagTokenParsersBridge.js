@@ -120,6 +120,68 @@
         return { parseTagTokens, formatTagTokens, defaultParseTagTokens: defaultParseTokens, tagTokenModule };
     }
 
+    function resolveTagTokenParsersBridgeOrFallback(config = {}) {
+        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
+        const tagTokenModule =
+            config.tagTokenModule !== undefined
+                ? config.tagTokenModule
+                : (typeof window !== 'undefined' && window && window.galleryModules && window.galleryModules.tagTokens) ||
+                  null;
+        const defaultParseTagTokens = resolveDefaultParseTagTokens(namespace, config.defaultParseTagTokens);
+        const resolver =
+            namespace && typeof namespace.resolveTagTokenParsersWithDefaults === 'function'
+                ? namespace.resolveTagTokenParsersWithDefaults
+                : resolveTagTokenParsersWithDefaults;
+
+        function normalizeResolved(resolved = {}) {
+            const parseTagTokens =
+                typeof resolved.parseTagTokens === 'function'
+                    ? resolved.parseTagTokens
+                    : typeof config.parseTagTokens === 'function'
+                      ? config.parseTagTokens
+                      : tagTokenModule && typeof tagTokenModule.parseTagTokens === 'function'
+                        ? (value) => tagTokenModule.parseTagTokens(value)
+                        : defaultParseTagTokens;
+            const formatTagTokens =
+                typeof resolved.formatTagTokens === 'function'
+                    ? resolved.formatTagTokens
+                    : typeof config.formatTagTokens === 'function'
+                      ? config.formatTagTokens
+                      : tagTokenModule && typeof tagTokenModule.formatTagTokens === 'function'
+                        ? tagTokenModule.formatTagTokens
+                        : (value) => (Array.isArray(value) ? value.join(' ') : parseTagTokens(value).join(' '));
+
+            const resolvedTagTokenModule =
+                resolved.tagTokenModule !== undefined
+                    ? resolved.tagTokenModule
+                    : config.tagTokenModule !== undefined
+                      ? config.tagTokenModule
+                      : tagTokenModule;
+
+            return {
+                ...resolved,
+                parseTagTokens,
+                formatTagTokens,
+                tagTokenModule: resolvedTagTokenModule,
+                defaultParseTagTokens:
+                    resolved.defaultParseTagTokens !== undefined
+                        ? resolved.defaultParseTagTokens
+                        : defaultParseTagTokens
+            };
+        }
+
+        try {
+            const resolved = resolver({ ...config, defaultParseTagTokens, tagTokenModule });
+            if (resolved && typeof resolved.parseTagTokens === 'function') {
+                return normalizeResolved(resolved);
+            }
+        } catch (error) {
+            // fall through to the fallback normalization
+        }
+
+        return normalizeResolved();
+    }
+
     if (!window.galleryComponents) {
         window.galleryComponents = {};
     }
@@ -127,4 +189,5 @@
         window.galleryComponents.defaultParseTagTokens = fallbackParseTagTokens;
     }
     window.galleryComponents.resolveTagTokenParsersWithDefaults = resolveTagTokenParsersWithDefaults;
+    window.galleryComponents.resolveTagTokenParsersBridgeOrFallback = resolveTagTokenParsersBridgeOrFallback;
 })();
