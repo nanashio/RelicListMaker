@@ -16,83 +16,37 @@
             .filter((token) => token.length > 0);
     }
 
-    function resolveTagTokenParsers(namespace, config = {}) {
-        const resolveTagTokenParsersWithDefaultsFn =
-            namespace && typeof namespace.resolveTagTokenParsersWithDefaults === 'function'
-                ? namespace.resolveTagTokenParsersWithDefaults
-                : null;
-        const resolveTagTokenParsersOrFallbackFn =
-            namespace && typeof namespace.resolveTagTokenParsersOrFallback === 'function'
-                ? namespace.resolveTagTokenParsersOrFallback
-                : null;
-        const resolveDefaultParseTagTokens =
-            namespace && typeof namespace.resolveDefaultParseTagTokensBridge === 'function'
-                ? namespace.resolveDefaultParseTagTokensBridge
-                : null;
-
+    function resolveLocalTagTokenParsers(namespace, config = {}) {
         const sharedFallback =
             (namespace && typeof namespace.defaultParseTagTokens === 'function' && namespace.defaultParseTagTokens) ||
             fallbackParseTagTokens;
+        const moduleParseTokens =
+            config.tagTokenModule && typeof config.tagTokenModule.parseTagTokens === 'function'
+                ? (value) => config.tagTokenModule.parseTagTokens(value)
+                : null;
+        const moduleFormatTokens =
+            config.tagTokenModule && typeof config.tagTokenModule.formatTagTokens === 'function'
+                ? config.tagTokenModule.formatTagTokens
+                : null;
 
-        const defaultParseTokens = resolveDefaultParseTagTokens
-            ? resolveDefaultParseTagTokens({ defaultParseTagTokens: config.defaultParseTagTokens })
-            : typeof config.defaultParseTagTokens === 'function'
-              ? config.defaultParseTagTokens
-              : sharedFallback;
+        const defaultParseTokens =
+            typeof config.defaultParseTagTokens === 'function'
+                ? config.defaultParseTagTokens
+                : moduleParseTokens || sharedFallback;
 
-        function normalizeResolverResult(resolvedConfig = {}) {
-            const parseTagTokens =
-                typeof resolvedConfig.parseTagTokens === 'function'
-                    ? resolvedConfig.parseTagTokens
-                    : typeof config.parseTagTokens === 'function'
-                      ? config.parseTagTokens
-                      : defaultParseTokens;
-            const formatTagTokens =
-                typeof resolvedConfig.formatTagTokens === 'function'
-                    ? resolvedConfig.formatTagTokens
-                    : typeof config.formatTagTokens === 'function'
-                      ? config.formatTagTokens
-                      : (value) => (Array.isArray(value) ? value.join(' ') : parseTagTokens(value).join(' '));
+        const parseTagTokens =
+            typeof config.parseTagTokens === 'function' ? config.parseTagTokens : moduleParseTokens || defaultParseTokens;
+        const formatTagTokens =
+            typeof config.formatTagTokens === 'function'
+                ? config.formatTagTokens
+                : moduleFormatTokens || ((value) => (Array.isArray(value) ? value.join(' ') : parseTagTokens(value).join(' ')));
 
-            return {
-                ...resolvedConfig,
-                parseTagTokens,
-                formatTagTokens,
-                defaultParseTagTokens:
-                    resolvedConfig.defaultParseTagTokens !== undefined
-                        ? resolvedConfig.defaultParseTagTokens
-                        : defaultParseTokens
-            };
-        }
-
-        const resolverConfig = {
-            ...config,
-            defaultParseTagTokens: defaultParseTokens
+        return {
+            parseTagTokens,
+            formatTagTokens,
+            defaultParseTagTokens: defaultParseTokens,
+            tagTokenModule: config.tagTokenModule || null
         };
-
-        if (resolveTagTokenParsersWithDefaultsFn) {
-            try {
-                const resolved = resolveTagTokenParsersWithDefaultsFn(resolverConfig);
-                if (resolved && typeof resolved.parseTagTokens === 'function') {
-                    return normalizeResolverResult(resolved);
-                }
-            } catch (error) {
-                // fall through to other resolvers
-            }
-        }
-
-        if (resolveTagTokenParsersOrFallbackFn) {
-            try {
-                const resolved = resolveTagTokenParsersOrFallbackFn(resolverConfig);
-                if (resolved && typeof resolved.parseTagTokens === 'function') {
-                    return normalizeResolverResult(resolved);
-                }
-            } catch (error) {
-                // fall through to local fallback
-            }
-        }
-
-        return normalizeResolverResult({});
     }
 
     function createFallbackFormatter(formatTagTokens, parseTagTokens) {
@@ -123,16 +77,25 @@
             namespace && typeof namespace.resolveSharedTomSelectAdapterOrDefault === 'function'
                 ? namespace.resolveSharedTomSelectAdapterOrDefault
                 : null;
+        const resolveTagTokenParsersBridge =
+            namespace && typeof namespace.resolveTagTokenParsersBridgeOrFallback === 'function'
+                ? namespace.resolveTagTokenParsersBridgeOrFallback
+                : null;
 
-        const { parseTagTokens, formatTagTokens, defaultParseTagTokens: resolvedDefaultParseTokens } = resolveTagTokenParsers(
-            namespace,
-            {
-                parseTagTokens: parseTokensConfig,
-                formatTagTokens: formatTokensConfig,
-                defaultParseTagTokens: config.defaultParseTagTokens,
-                tagTokenModule: config.tagTokenModule
-            }
-        );
+        const { parseTagTokens, formatTagTokens, defaultParseTagTokens: resolvedDefaultParseTokens } =
+            resolveTagTokenParsersBridge
+                ? resolveTagTokenParsersBridge({
+                      parseTagTokens: parseTokensConfig,
+                      formatTagTokens: formatTokensConfig,
+                      defaultParseTagTokens: config.defaultParseTagTokens,
+                      tagTokenModule: config.tagTokenModule
+                  })
+                : resolveLocalTagTokenParsers(namespace, {
+                      parseTagTokens: parseTokensConfig,
+                      formatTagTokens: formatTokensConfig,
+                      defaultParseTagTokens: config.defaultParseTagTokens,
+                      tagTokenModule: config.tagTokenModule
+                  });
 
         const defaultParseTokens = resolvedDefaultParseTokens || fallbackParseTagTokens;
         const fallbackFormatter = createFallbackFormatter(formatTagTokens, parseTagTokens);
