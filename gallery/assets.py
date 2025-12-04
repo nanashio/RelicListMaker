@@ -10,6 +10,7 @@ from typing import Optional, Sequence
 from resource_paths import project_root, templates_path
 
 ADDITIONAL_GALLERY_SCRIPTS: tuple[str, ...] = (
+    "gallery/js/modules/moduleEntries.js",
     "gallery/js/modules/tagTokens.js",
     "gallery/js/modules/tagTokenResolvers.js",
     "gallery/js/modules/filterPredicates.js",
