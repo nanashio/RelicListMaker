@@ -2082,6 +2082,34 @@ describe('tag search controller', () => {
     assert.equal(input.children.length, 2);
   });
 
+  test('uses shared resolver when tag token bridge is missing', () => {
+    delete global.window.galleryComponents.resolveTagTokenParsersWithDefaults;
+    const resolverCalls = [];
+    global.window.galleryComponents.resolveTagTokenParsersOrFallback = (config) => {
+      resolverCalls.push(config);
+      return {
+        parseTagTokens: (value) => {
+          if (!value) {
+            return [];
+          }
+          return [`resolved:${String(value).trim()}`];
+        },
+        defaultParseTagTokens: () => ['default']
+      };
+    };
+
+    runScript('templates/gallery/components/tagSearch.js');
+    const factory = window.galleryComponents.createTagSearchController;
+    const input = new MockElement('select');
+    const controller = factory({ input, documentRef: documentMock });
+
+    input.value = 'Alpha';
+    const values = controller.getValues();
+
+    assert.deepEqual(values, ['resolved:Alpha']);
+    assert.equal(resolverCalls.length, 1);
+  });
+
   test('prefers tag token module parser when no parser is provided', () => {
     global.window.galleryModules = {
       tagTokens: {
@@ -2157,6 +2185,46 @@ describe('tag input controller', () => {
     controller.syncValue(input, ['alpha', 'beta']);
     assert.equal(input.value, 'alpha beta');
     assert.equal(controller.usesNativeInput, true);
+  });
+
+  test('uses shared fallback resolver when tag token bridge is missing', () => {
+    delete global.window.galleryComponents.resolveTagTokenParsersWithDefaults;
+    const resolverCalls = [];
+    global.window.galleryComponents.resolveTagTokenParsersOrFallback = (config) => {
+      resolverCalls.push(config);
+      return {
+        parseTagTokens: (value) => [`resolved:${String(value).trim()}`],
+        formatTagTokens: (tokens) => tokens.join('|'),
+        defaultParseTagTokens: () => ['default']
+      };
+    };
+
+    runScript('templates/gallery/components/tagInput.js');
+    const factory = global.window.galleryComponents.createTagInputController;
+    const input = new MockElement('input', 'item-tags-input');
+
+    const controller = factory({});
+    controller.syncValue(input, 'Alpha Beta');
+
+    assert.equal(input.value, 'resolved:Alpha Beta');
+    assert.equal(resolverCalls.length, 1);
+  });
+
+  test('falls back to default formatter when resolver omits formatter', () => {
+    delete global.window.galleryComponents.resolveTagTokenParsersWithDefaults;
+    global.window.galleryComponents.resolveTagTokenParsersOrFallback = () => ({
+      parseTagTokens: (value) => [`resolved:${String(value).trim()}`],
+      defaultParseTagTokens: () => ['default']
+    });
+
+    runScript('templates/gallery/components/tagInput.js');
+    const factory = global.window.galleryComponents.createTagInputController;
+    const input = new MockElement('input', 'item-tags-input');
+
+    const controller = factory({});
+    controller.syncValue(input, 'Alpha Beta');
+
+    assert.equal(input.value, 'resolved:Alpha Beta');
   });
 
   test('syncValue delegates to TomSelect instance silently', () => {
