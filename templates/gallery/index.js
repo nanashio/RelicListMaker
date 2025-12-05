@@ -33,34 +33,67 @@ function createDependencyLoadTracer() {
     const records = [];
     const now = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
 
+    const snapshot = () =>
+        records.map((record) => ({
+            ...record,
+            entries: record.entries.map((entry) => ({ ...entry }))
+        }));
+
     return {
         start(group) {
             const startedAt = now();
             return {
                 finish(results) {
                     const durationMs = now() - startedAt;
-                    const failures = results.filter((result) => result.status === 'rejected').length;
+                    const entries = results.map((result) => ({
+                        id: result.entry.id,
+                        specifier: result.entry.specifier,
+                        status: result.status,
+                        reason: result.reason
+                    }));
+                    const failures = entries.filter((entry) => entry.status === 'rejected').length;
                     records.push({
                         id: group.id,
                         mode: group.mode,
                         durationMs,
                         failures,
-                        count: group.entries.length
+                        count: group.entries.length,
+                        entries
                     });
                 }
             };
         },
-        report() {
-            records.forEach((record) => {
+        report(logger = console) {
+            snapshot().forEach((record) => {
                 const message = `依存グループ[${record.id}] (${record.mode}) ${record.durationMs.toFixed(1)}ms`;
                 if (record.failures > 0) {
-                    console.warn(`${message} / 失敗: ${record.failures}`);
+                    logger.warn(`${message} / 失敗: ${record.failures}`);
+                    record.entries
+                        .filter((entry) => entry.status === 'rejected')
+                        .forEach((entry) => logger.warn(` - ${entry.id || entry.specifier}: ${entry.reason}`));
                 } else {
-                    console.info(message);
+                    logger.info(message);
                 }
             });
-        }
+        },
+        snapshot
     };
+}
+
+function publishDependencyLoadReport(tracer) {
+    try {
+        const target = typeof globalThis !== 'undefined' ? globalThis : window;
+        if (!target) {
+            return;
+        }
+        const namespace = target.galleryModules || (target.galleryModules = {});
+        namespace.dependencyLoadReport = {
+            recordedAt: Date.now(),
+            groups: tracer.snapshot()
+        };
+    } catch (error) {
+        console.warn('依存ロードレポートの公開に失敗しました。', error);
+    }
 }
 
 async function loadDependencyEntry(entry, baseUrl) {
@@ -107,6 +140,7 @@ async function loadDependencies() {
         const failed = results.filter((result) => result.status === 'rejected');
         if (failed.length) {
             tracer.report();
+            publishDependencyLoadReport(tracer);
             const errorDetails = failed
                 .map((result) => `${result.entry.id || result.entry.specifier}: ${result.reason}`)
                 .join('; ');
@@ -115,6 +149,7 @@ async function loadDependencies() {
     }
 
     tracer.report();
+    publishDependencyLoadReport(tracer);
 }
 
 function applyGeneratorMeta(appVersion) {
