@@ -1,4 +1,15 @@
 (() => {
+    function resolveFromPriority(name, candidates, { allowNull = true, logger = console } = {}) {
+        const resolved = candidates.find(({ value }) => typeof value === 'function');
+        if (resolved) {
+            return { fn: resolved.value, source: resolved.source };
+        }
+        if (!allowNull && logger && typeof logger.warn === 'function') {
+            logger.warn(`${name} の解決に失敗しました。`);
+        }
+        return { fn: null, source: null };
+    }
+
     function createGalleryView(config = {}) {
         const {
             state,
@@ -49,50 +60,110 @@
         }
 
         const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        const storesNamespace = typeof window !== 'undefined' && window ? window.galleryStores : null;
-        const resolveTagDebugResolver =
-            namespace && typeof namespace.resolveTagDebugResolverSharedOrDefault === 'function'
-                ? namespace.resolveTagDebugResolverSharedOrDefault
-                : null;
-        const resolveTomSelectAdapter =
-            namespace && typeof namespace.resolveSharedTomSelectAdapterOrDefault === 'function'
-                ? namespace.resolveSharedTomSelectAdapterOrDefault
-                : null;
-        const resolveTagSearchControllerWithFallback =
-            namespace && typeof namespace.resolveTagSearchControllerWithFallback === 'function'
-                ? namespace.resolveTagSearchControllerWithFallback
-                : null;
-        const isTagDebugEnabled = resolveTagDebugResolver
-            ? resolveTagDebugResolver({ isDebugEnabled: config.isDebugEnabled })
-            : () => false;
         const componentsNamespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        const dataUtils = typeof window !== 'undefined' && window ? window.galleryDataUtils : null;
-        const tagStoreApi = tagStore && typeof tagStore.normalizeTags === 'function' ? tagStore : null;
-        const resolveTagTokenParsersWithDefaults =
-            componentsNamespace && typeof componentsNamespace.resolveTagTokenParsersWithDefaults === 'function'
-                ? componentsNamespace.resolveTagTokenParsersWithDefaults
-                : null;
-        const resolveDefaultParseTagTokens =
-            componentsNamespace && typeof componentsNamespace.resolveDefaultParseTagTokensBridge === 'function'
-                ? componentsNamespace.resolveDefaultParseTagTokensBridge
-                : null;
+        const storesNamespace = typeof window !== 'undefined' && window ? window.galleryStores : null;
         const filterStoreApi = filterStore && typeof filterStore.getState === 'function' ? filterStore : null;
         const filterStateNamespace = typeof window !== 'undefined' && window ? window.galleryFilterState : null;
         const summaryUtilsNamespace = typeof window !== 'undefined' && window ? window.gallerySummaryUtils : null;
         const filterStateResolver =
             filterStateBridge && typeof filterStateBridge.getState === 'function' ? filterStateBridge : null;
-        const createFilterOptionsResolverFn =
-            typeof config.createFilterOptionsResolver === 'function'
-                ? config.createFilterOptionsResolver
-                : filterStateNamespace && typeof filterStateNamespace.createFilterOptionsResolver === 'function'
-                  ? filterStateNamespace.createFilterOptionsResolver
-                  : null;
-        const createSummaryCalculatorFn =
-            typeof config.createSummaryCalculator === 'function'
-                ? config.createSummaryCalculator
-                : summaryUtilsNamespace && typeof summaryUtilsNamespace.createSummaryCalculator === 'function'
-                  ? summaryUtilsNamespace.createSummaryCalculator
-                  : null;
+        const dataUtils = typeof window !== 'undefined' && window ? window.galleryDataUtils : null;
+        const tagStoreApi = tagStore && typeof tagStore.normalizeTags === 'function' ? tagStore : null;
+
+        const resolverLog = [];
+        const logResolverSelection = (name, source) => {
+            if (!source) {
+                return;
+            }
+            resolverLog.push({ name, source });
+        };
+
+        const { fn: resolveTagDebugResolver, source: tagDebugResolverSource } = resolveFromPriority(
+            'resolveTagDebugResolver',
+            [
+                {
+                    source: 'namespace.resolveTagDebugResolverSharedOrDefault',
+                    value: namespace && namespace.resolveTagDebugResolverSharedOrDefault
+                }
+            ]
+        );
+        logResolverSelection('resolveTagDebugResolver', tagDebugResolverSource);
+
+        const { fn: resolveTomSelectAdapter, source: tomSelectAdapterSource } = resolveFromPriority(
+            'resolveTomSelectAdapter',
+            [
+                {
+                    source: 'namespace.resolveSharedTomSelectAdapterOrDefault',
+                    value: namespace && namespace.resolveSharedTomSelectAdapterOrDefault
+                }
+            ]
+        );
+        logResolverSelection('resolveTomSelectAdapter', tomSelectAdapterSource);
+
+        const {
+            fn: resolveTagSearchControllerWithFallback,
+            source: tagSearchControllerFallbackSource
+        } = resolveFromPriority('resolveTagSearchControllerWithFallback', [
+            {
+                source: 'namespace.resolveTagSearchControllerWithFallback',
+                value: namespace && namespace.resolveTagSearchControllerWithFallback
+            }
+        ]);
+        logResolverSelection('resolveTagSearchControllerWithFallback', tagSearchControllerFallbackSource);
+
+        const {
+            fn: resolveTagTokenParsersWithDefaults,
+            source: tagTokenParsersResolverSource
+        } = resolveFromPriority('resolveTagTokenParsersWithDefaults', [
+            {
+                source: 'config.resolveTagTokenParsersWithDefaults',
+                value: config.resolveTagTokenParsersWithDefaults
+            },
+            {
+                source: 'components.resolveTagTokenParsersWithDefaults',
+                value: componentsNamespace && componentsNamespace.resolveTagTokenParsersWithDefaults
+            }
+        ]);
+        logResolverSelection('resolveTagTokenParsersWithDefaults', tagTokenParsersResolverSource);
+
+        const { fn: resolveDefaultParseTagTokens, source: defaultParseTokensSource } = resolveFromPriority(
+            'resolveDefaultParseTagTokens',
+            [
+                {
+                    source: 'components.resolveDefaultParseTagTokensBridge',
+                    value: componentsNamespace && componentsNamespace.resolveDefaultParseTagTokensBridge
+                }
+            ]
+        );
+        logResolverSelection('resolveDefaultParseTagTokens', defaultParseTokensSource);
+
+        const { fn: createFilterOptionsResolverFn, source: filterOptionsResolverSource } = resolveFromPriority(
+            'createFilterOptionsResolver',
+            [
+                { source: 'config.createFilterOptionsResolver', value: config.createFilterOptionsResolver },
+                {
+                    source: 'filterState.createFilterOptionsResolver',
+                    value: filterStateNamespace && filterStateNamespace.createFilterOptionsResolver
+                }
+            ]
+        );
+        logResolverSelection('createFilterOptionsResolver', filterOptionsResolverSource);
+
+        const { fn: createSummaryCalculatorFn, source: summaryCalculatorSource } = resolveFromPriority(
+            'createSummaryCalculator',
+            [
+                { source: 'config.createSummaryCalculator', value: config.createSummaryCalculator },
+                {
+                    source: 'summaryUtils.createSummaryCalculator',
+                    value: summaryUtilsNamespace && summaryUtilsNamespace.createSummaryCalculator
+                }
+            ]
+        );
+        logResolverSelection('createSummaryCalculator', summaryCalculatorSource);
+
+        const isTagDebugEnabled = resolveTagDebugResolver
+            ? resolveTagDebugResolver({ isDebugEnabled: config.isDebugEnabled })
+            : () => false;
         const fallbackParseTagTokens =
             (componentsNamespace && componentsNamespace.defaultParseTagTokens) || ((value) => {
                 if (Array.isArray(value)) {
@@ -140,6 +211,7 @@
             return { parseTagTokens, formatTagTokens, defaultParseTagTokens: defaultParseTokens };
         };
 
+        const tagTokenResolverSource = resolveTagTokenParsersWithDefaults ? 'sharedResolver' : 'fallback';
         const resolvedTagTokenParsers = resolveTagTokenParsersWithDefaults
             ?
                 resolveTagTokenParsersWithDefaults({
@@ -149,13 +221,19 @@
                     tagTokenModule: config.tagTokenModule
                 }) || fallbackTagTokenResolver()
             : fallbackTagTokenResolver();
+        logResolverSelection('tagTokenParsers', tagTokenResolverSource);
         const { parseTagTokens, formatTagTokens } = resolvedTagTokenParsers;
-        const createTagStateBridgeFn =
-            typeof config.createTagStateBridge === 'function'
-                ? config.createTagStateBridge
-                : storesNamespace && typeof storesNamespace.createTagStateBridge === 'function'
-                  ? storesNamespace.createTagStateBridge
-                  : null;
+        const { fn: createTagStateBridgeFn, source: tagStateBridgeSource } = resolveFromPriority(
+            'createTagStateBridge',
+            [
+                { source: 'config.createTagStateBridge', value: config.createTagStateBridge },
+                {
+                    source: 'stores.createTagStateBridge',
+                    value: storesNamespace && storesNamespace.createTagStateBridge
+                }
+            ]
+        );
+        logResolverSelection('createTagStateBridge', tagStateBridgeSource);
 
         if (typeof parseTagTokens !== 'function' || typeof formatTagTokens !== 'function') {
             throw new Error('createGalleryView: tag utilities are required');
@@ -172,12 +250,17 @@
 
         const colorOptions = Array.isArray(itemColorOptions) ? itemColorOptions.slice() : [];
         const hasDocument = typeof document !== 'undefined' && document;
-        const createTagInputControllerFn =
-            typeof config.createTagInputController === 'function'
-                ? config.createTagInputController
-                : componentsNamespace && typeof componentsNamespace.createTagInputController === 'function'
-                  ? componentsNamespace.createTagInputController
-                  : null;
+        const { fn: createTagInputControllerFn, source: tagInputControllerSource } = resolveFromPriority(
+            'createTagInputController',
+            [
+                { source: 'config.createTagInputController', value: config.createTagInputController },
+                {
+                    source: 'components.createTagInputController',
+                    value: componentsNamespace && componentsNamespace.createTagInputController
+                }
+            ]
+        );
+        logResolverSelection('createTagInputController', tagInputControllerSource);
         const tagInputController =
             typeof createTagInputControllerFn === 'function'
                 ? createTagInputControllerFn({
@@ -199,12 +282,17 @@
                       documentRef: hasDocument || null
                   })
                 : null;
-        const createTagSearchControllerFn =
-            typeof config.createTagSearchController === 'function'
-                ? config.createTagSearchController
-                : componentsNamespace && typeof componentsNamespace.createTagSearchController === 'function'
-                  ? componentsNamespace.createTagSearchController
-                  : null;
+        const { fn: createTagSearchControllerFn, source: tagSearchControllerSource } = resolveFromPriority(
+            'createTagSearchController',
+            [
+                { source: 'config.createTagSearchController', value: config.createTagSearchController },
+                {
+                    source: 'components.createTagSearchController',
+                    value: componentsNamespace && componentsNamespace.createTagSearchController
+                }
+            ]
+        );
+        logResolverSelection('createTagSearchController', tagSearchControllerSource);
         const tagSearchController = resolveTagSearchControllerWithFallback
             ? resolveTagSearchControllerWithFallback({
                   createTagSearchController: createTagSearchControllerFn,
@@ -250,33 +338,46 @@
             }
         };
 
-        const buildItemSearchCaches =
-            typeof config.buildItemSearchCaches === 'function'
-                ? config.buildItemSearchCaches
-                : filterNamespace && typeof filterNamespace.buildItemSearchCaches === 'function'
-                  ? filterNamespace.buildItemSearchCaches
-                  : null;
+        const { fn: buildItemSearchCaches, source: buildItemSearchCachesSource } = resolveFromPriority(
+            'buildItemSearchCaches',
+            [
+                { source: 'config.buildItemSearchCaches', value: config.buildItemSearchCaches },
+                {
+                    source: 'filter.buildItemSearchCaches',
+                    value: filterNamespace && filterNamespace.buildItemSearchCaches
+                }
+            ]
+        );
+        logResolverSelection('buildItemSearchCaches', buildItemSearchCachesSource);
 
         if (typeof buildItemSearchCaches !== 'function') {
             throw new Error('createGalleryView: buildItemSearchCaches helper is required');
         }
 
-        const filterItemsFn =
-            typeof config.filterItems === 'function'
-                ? config.filterItems
-                : filterNamespace && typeof filterNamespace.filterItems === 'function'
-                  ? filterNamespace.filterItems
-                  : null;
+        const { fn: filterItemsFn, source: filterItemsSource } = resolveFromPriority('filterItems', [
+            { source: 'config.filterItems', value: config.filterItems },
+            { source: 'filter.filterItems', value: filterNamespace && filterNamespace.filterItems }
+        ]);
+        logResolverSelection('filterItems', filterItemsSource);
 
-        const evaluateItemVisibilityFn =
-            typeof config.evaluateItemVisibility === 'function'
-                ? config.evaluateItemVisibility
-                : filterNamespace && typeof filterNamespace.evaluateItemVisibility === 'function'
-                  ? filterNamespace.evaluateItemVisibility
-                  : null;
+        const { fn: evaluateItemVisibilityFn, source: evaluateItemVisibilitySource } = resolveFromPriority(
+            'evaluateItemVisibility',
+            [
+                { source: 'config.evaluateItemVisibility', value: config.evaluateItemVisibility },
+                {
+                    source: 'filter.evaluateItemVisibility',
+                    value: filterNamespace && filterNamespace.evaluateItemVisibility
+                }
+            ]
+        );
+        logResolverSelection('evaluateItemVisibility', evaluateItemVisibilitySource);
 
         if (typeof filterItemsFn !== 'function' && typeof evaluateItemVisibilityFn !== 'function') {
             throw new Error('createGalleryView: filter helpers are not available');
+        }
+
+        if (config.isDebugEnabled && resolverLog.length && console && typeof console.info === 'function') {
+            console.info('[galleryView] resolver selections', resolverLog);
         }
 
         const fallbackMapItemElementsToState = (items, helpers = {}) => {
@@ -332,19 +433,30 @@
             });
         };
 
-        const mapItemElementsToStateFn =
-            typeof config.mapItemElementsToState === 'function'
-                ? config.mapItemElementsToState
-                : renderUtilsNamespace && typeof renderUtilsNamespace.mapItemElementsToState === 'function'
-                  ? renderUtilsNamespace.mapItemElementsToState
-                  : fallbackMapItemElementsToState;
+        const { fn: mapItemElementsToStateResolver, source: mapItemElementsToStateSource } = resolveFromPriority(
+            'mapItemElementsToState',
+            [
+                { source: 'config.mapItemElementsToState', value: config.mapItemElementsToState },
+                {
+                    source: 'renderUtils.mapItemElementsToState',
+                    value: renderUtilsNamespace && renderUtilsNamespace.mapItemElementsToState
+                }
+            ]
+        );
+        logResolverSelection('mapItemElementsToState', mapItemElementsToStateSource);
+        const mapItemElementsToStateFn = mapItemElementsToStateResolver || fallbackMapItemElementsToState;
 
-        const createItemStateResolverFn =
-            typeof config.createItemStateResolver === 'function'
-                ? config.createItemStateResolver
-                : renderUtilsNamespace && typeof renderUtilsNamespace.createItemStateResolver === 'function'
-                  ? renderUtilsNamespace.createItemStateResolver
-                  : null;
+        const { fn: createItemStateResolverFn, source: itemStateResolverSource } = resolveFromPriority(
+            'createItemStateResolver',
+            [
+                { source: 'config.createItemStateResolver', value: config.createItemStateResolver },
+                {
+                    source: 'renderUtils.createItemStateResolver',
+                    value: renderUtilsNamespace && renderUtilsNamespace.createItemStateResolver
+                }
+            ]
+        );
+        logResolverSelection('createItemStateResolver', itemStateResolverSource);
 
         let itemStateResolver = null;
         let itemStateCache = [];
@@ -461,18 +573,28 @@
                   };
 
         const renderNamespace = typeof window !== 'undefined' && window ? window.galleryRenderFactory : null;
-        const createItemFactoryFn =
-            typeof config.createItemFactory === 'function'
-                ? config.createItemFactory
-                : renderNamespace && typeof renderNamespace.createItemFactory === 'function'
-                  ? renderNamespace.createItemFactory
-                  : null;
-        const createItemEnhancersFn =
-            typeof config.createItemEnhancers === 'function'
-                ? config.createItemEnhancers
-                : renderNamespace && typeof renderNamespace.createItemEnhancers === 'function'
-                  ? renderNamespace.createItemEnhancers
-                  : null;
+        const { fn: createItemFactoryFn, source: itemFactorySource } = resolveFromPriority(
+            'createItemFactory',
+            [
+                { source: 'config.createItemFactory', value: config.createItemFactory },
+                {
+                    source: 'render.createItemFactory',
+                    value: renderNamespace && renderNamespace.createItemFactory
+                }
+            ]
+        );
+        logResolverSelection('createItemFactory', itemFactorySource);
+        const { fn: createItemEnhancersFn, source: itemEnhancersSource } = resolveFromPriority(
+            'createItemEnhancers',
+            [
+                { source: 'config.createItemEnhancers', value: config.createItemEnhancers },
+                {
+                    source: 'render.createItemEnhancers',
+                    value: renderNamespace && renderNamespace.createItemEnhancers
+                }
+            ]
+        );
+        logResolverSelection('createItemEnhancers', itemEnhancersSource);
 
         if (typeof createItemFactoryFn !== 'function') {
             throw new Error('createGalleryView: createItemFactory helper is required');
@@ -807,30 +929,40 @@
             });
         }
 
-        function buildGallery() {
-            const includeDuplicates = includeDuplicatesNow();
+        function prepareRenderState() {
             clearGalleryElement();
-
+            const includeDuplicates = includeDuplicatesNow();
             const entries = deriveRenderEntries(includeDuplicates);
             const { fragment, items } = renderEntriesToFragment(entries);
+            return { includeDuplicates, entries, fragment, items };
+        }
 
-            stateControls.setItems(items);
+        function renderGalleryView(renderState) {
+            stateControls.setItems(renderState.items);
             markItemStateCacheDirty();
             refreshItemStateCache({ force: true });
 
-            if (fragmentHasContent(fragment) && dom.gallery) {
-                dom.gallery.appendChild(fragment);
+            if (fragmentHasContent(renderState.fragment) && dom.gallery) {
+                dom.gallery.appendChild(renderState.fragment);
             }
 
             updateSummary();
             setOcrVisibility(ocrToggleState());
+        }
 
+        function finalizeGalleryRender() {
             if (!state.items.length) {
                 showStatus('表示できる結果がありません。', false);
                 return;
             }
             clearStatus();
             applyFilters();
+        }
+
+        function buildGallery() {
+            const renderState = prepareRenderState();
+            renderGalleryView(renderState);
+            finalizeGalleryRender();
         }
 
         function clearGalleryElement() {
