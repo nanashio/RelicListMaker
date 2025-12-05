@@ -129,7 +129,6 @@
         const { fn: resolveDefaultParseTagTokens, source: defaultParseTokensSource } = resolveFromPriority(
             'resolveDefaultParseTagTokens',
             [
-                { source: 'config.defaultParseTagTokens', value: config.defaultParseTagTokens },
                 {
                     source: 'components.resolveDefaultParseTagTokensBridge',
                     value: componentsNamespace && componentsNamespace.resolveDefaultParseTagTokensBridge
