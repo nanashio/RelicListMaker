@@ -6559,6 +6559,54 @@ describe('module entry manifest', () => {
       'esm-foundation'
     );
   });
+
+  test('exposes load mode metadata for dependency groups', async () => {
+    const { resolveModuleLoadGroups } = await import(moduleEntriesPath);
+    const groups = resolveModuleLoadGroups({ includeLegacyCompat: true });
+
+    const esmGroup = groups.find((group) => group.id === 'esm-foundation');
+    assert.equal(esmGroup.mode, 'parallel');
+    assert.ok(esmGroup.entries.every((entry) => entry.mode === 'parallel'));
+
+    const legacyGroup = groups.find((group) => group.id === 'legacy-compat-layer');
+    assert.equal(legacyGroup.mode, 'sequential');
+    assert.ok(legacyGroup.entries.every((entry) => entry.mode === 'sequential'));
+  });
+});
+
+describe('bootstrap config validation', () => {
+  const bootstrapConfigPath = path.join(
+    projectRoot,
+    'templates',
+    'gallery',
+    'js',
+    'modules',
+    'bootstrapConfig.js'
+  );
+
+  test('applies defaults and warnings for missing required fields', async () => {
+    const { DEFAULT_BOOTSTRAP_SCHEMA, validateBootstrapConfig } = await import(bootstrapConfigPath);
+    const { config, warnings } = validateBootstrapConfig(DEFAULT_BOOTSTRAP_SCHEMA, { imgDir: './images' });
+
+    assert.equal(config.imgDir, './images');
+    assert.equal(config.resultsCsv, '');
+    assert.ok(warnings.some((message) => message.includes('resultsCsv')));
+    assert.ok(warnings.some((message) => message.includes('coreScript')));
+  });
+
+  test('parses array/object fields from JSON strings', async () => {
+    const { DEFAULT_BOOTSTRAP_SCHEMA, validateBootstrapConfig } = await import(bootstrapConfigPath);
+    const { config, warnings } = validateBootstrapConfig(DEFAULT_BOOTSTRAP_SCHEMA, {
+      labelSymbols: '["A", "B"]',
+      masterOptionsMap: '{"k":"v"}',
+      coreScript: './gallery.js',
+      resultsCsv: './results.csv'
+    });
+
+    assert.deepEqual(config.labelSymbols, ['A', 'B']);
+    assert.deepEqual(config.masterOptionsMap, { k: 'v' });
+    assert.equal(warnings.length, 0);
+  });
 });
 
 describe('tag token resolvers component', () => {

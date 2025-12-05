@@ -1,5 +1,6 @@
 const ESM_ENTRY_GROUP = {
     id: 'esm-foundation',
+    load: 'parallel',
     description:
         'ES Modules that expose shared resolvers and pure functions consumed by legacy components.',
     entries: [
@@ -23,6 +24,7 @@ const ESM_ENTRY_GROUP = {
 
 const LEGACY_COMPAT_GROUP = {
     id: 'legacy-compat-layer',
+    load: 'sequential',
     description:
         'IIFE components and stores that still rely on globals but must load after ESM foundations.',
     entries: [
@@ -67,19 +69,32 @@ const LEGACY_COMPAT_GROUP = {
 export const MODULE_ENTRY_GROUPS = [ESM_ENTRY_GROUP, LEGACY_COMPAT_GROUP];
 
 export function listModuleDependencies(options = {}) {
-    const includeLegacyCompat =
-        options.includeLegacyCompat !== undefined ? options.includeLegacyCompat : true;
-
+    const groups = resolveModuleLoadGroups(options);
     const dependencies = [];
-    MODULE_ENTRY_GROUPS.forEach((group) => {
-        if (!includeLegacyCompat && group.id === LEGACY_COMPAT_GROUP.id) {
-            return;
-        }
+    groups.forEach((group) => {
         group.entries.forEach((entry) => {
             dependencies.push(entry.specifier);
         });
     });
     return dependencies;
+}
+
+export function resolveModuleLoadGroups(options = {}) {
+    const includeLegacyCompat =
+        options.includeLegacyCompat !== undefined ? options.includeLegacyCompat : true;
+    const normalizeMode = (mode) => (mode === 'parallel' ? 'parallel' : 'sequential');
+
+    return MODULE_ENTRY_GROUPS.filter((group) => includeLegacyCompat || group.id !== LEGACY_COMPAT_GROUP.id).map(
+        (group) => ({
+            id: group.id,
+            description: group.description,
+            mode: normalizeMode(group.load),
+            entries: group.entries.map((entry) => ({
+                ...entry,
+                mode: normalizeMode(entry.load || group.load)
+            }))
+        })
+    );
 }
 
 export function registerModuleEntryManifest(target = typeof globalThis !== 'undefined' ? globalThis : undefined) {
@@ -94,6 +109,7 @@ export function registerModuleEntryManifest(target = typeof globalThis !== 'unde
 
     const manifest = {
         groups: MODULE_ENTRY_GROUPS,
+        loadGroups: resolveModuleLoadGroups({ includeLegacyCompat: true }),
         dependencies: listModuleDependencies({ includeLegacyCompat: true })
     };
     const namespace = resolvedTarget.galleryModules || (resolvedTarget.galleryModules = {});
