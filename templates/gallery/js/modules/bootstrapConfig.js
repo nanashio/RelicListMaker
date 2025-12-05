@@ -96,6 +96,22 @@ export const DEFAULT_BOOTSTRAP_SCHEMA = [
     { key: 'appVersion', type: 'string', defaultValue: '' }
 ];
 
+export function buildBootstrapDatasetMappings(schema, mappingSpecs = []) {
+    if (!Array.isArray(schema) || !Array.isArray(mappingSpecs)) {
+        return [];
+    }
+
+    const defaults = new Map();
+    schema.forEach((field) => {
+        defaults.set(field.key, cloneValue(field.defaultValue, field.type));
+    });
+
+    return mappingSpecs.map((mapping) => {
+        const defaultValue = defaults.has(mapping.key) ? defaults.get(mapping.key) : '';
+        return { defaultValue, ...mapping };
+    });
+}
+
 export function validateBootstrapConfig(schema, rawData = {}) {
     const warnings = [];
     if (!Array.isArray(schema)) {
@@ -132,7 +148,8 @@ export function registerBootstrapConfigModule(target = typeof globalThis !== 'un
     const namespace = target.galleryModules || (target.galleryModules = {});
     const module = {
         DEFAULT_BOOTSTRAP_SCHEMA,
-        validateBootstrapConfig
+        validateBootstrapConfig,
+        buildBootstrapDatasetMappings
     };
     namespace.bootstrapConfig = module;
     return module;
