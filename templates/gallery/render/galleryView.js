@@ -10,6 +10,37 @@
         return { fn: null, source: null };
     }
 
+    function createResolverContext(config = {}, { logger = console } = {}) {
+        const hasWindow = typeof window !== 'undefined' && window;
+        const namespaces = {
+            components: hasWindow ? window.galleryComponents : null,
+            stores: hasWindow ? window.galleryStores : null,
+            filter: hasWindow ? window.galleryFilterUtils : null,
+            render: hasWindow ? window.galleryRenderFactory : null,
+            filterState: hasWindow ? window.galleryFilterState : null,
+            summaryUtils: hasWindow ? window.gallerySummaryUtils : null,
+            dataUtils: hasWindow ? window.galleryDataUtils : null
+        };
+
+        const resolverLog = [];
+        const resolve = (name, candidates, options = {}) => {
+            const result = resolveFromPriority(name, candidates, { logger, ...options });
+            if (result.source) {
+                resolverLog.push({ name, source: result.source });
+            }
+            return result;
+        };
+
+        const publishResolverLog = (isDebugEnabled) => {
+            if (!isDebugEnabled || !resolverLog.length || !logger || typeof logger.info !== 'function') {
+                return;
+            }
+            logger.info('[galleryView] resolver selections', resolverLog);
+        };
+
+        return { namespaces, resolve, resolverLog, publishResolverLog };
+    }
+
     function createGalleryView(config = {}) {
         const {
             state,
@@ -59,62 +90,47 @@
             throw new Error('createGalleryView: isRecordFavorite helper is required');
         }
 
-        const namespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        const componentsNamespace = typeof window !== 'undefined' && window ? window.galleryComponents : null;
-        const storesNamespace = typeof window !== 'undefined' && window ? window.galleryStores : null;
+        const resolverContext = createResolverContext(config);
+        const { namespaces, resolve, publishResolverLog } = resolverContext;
+        const {
+            components: componentsNamespace,
+            stores: storesNamespace,
+            filter: filterNamespace,
+            render: renderNamespace,
+            filterState: filterStateNamespace,
+            summaryUtils: summaryUtilsNamespace,
+            dataUtils
+        } = namespaces;
         const filterStoreApi = filterStore && typeof filterStore.getState === 'function' ? filterStore : null;
-        const filterStateNamespace = typeof window !== 'undefined' && window ? window.galleryFilterState : null;
-        const summaryUtilsNamespace = typeof window !== 'undefined' && window ? window.gallerySummaryUtils : null;
         const filterStateResolver =
             filterStateBridge && typeof filterStateBridge.getState === 'function' ? filterStateBridge : null;
-        const dataUtils = typeof window !== 'undefined' && window ? window.galleryDataUtils : null;
         const tagStoreApi = tagStore && typeof tagStore.normalizeTags === 'function' ? tagStore : null;
 
-        const resolverLog = [];
-        const logResolverSelection = (name, source) => {
-            if (!source) {
-                return;
-            }
-            resolverLog.push({ name, source });
-        };
-
-        const { fn: resolveTagDebugResolver, source: tagDebugResolverSource } = resolveFromPriority(
-            'resolveTagDebugResolver',
-            [
-                {
-                    source: 'namespace.resolveTagDebugResolverSharedOrDefault',
-                    value: namespace && namespace.resolveTagDebugResolverSharedOrDefault
-                }
-            ]
-        );
-        logResolverSelection('resolveTagDebugResolver', tagDebugResolverSource);
-
-        const { fn: resolveTomSelectAdapter, source: tomSelectAdapterSource } = resolveFromPriority(
-            'resolveTomSelectAdapter',
-            [
-                {
-                    source: 'namespace.resolveSharedTomSelectAdapterOrDefault',
-                    value: namespace && namespace.resolveSharedTomSelectAdapterOrDefault
-                }
-            ]
-        );
-        logResolverSelection('resolveTomSelectAdapter', tomSelectAdapterSource);
-
-        const {
-            fn: resolveTagSearchControllerWithFallback,
-            source: tagSearchControllerFallbackSource
-        } = resolveFromPriority('resolveTagSearchControllerWithFallback', [
+        const { fn: resolveTagDebugResolver } = resolve('resolveTagDebugResolver', [
             {
-                source: 'namespace.resolveTagSearchControllerWithFallback',
-                value: namespace && namespace.resolveTagSearchControllerWithFallback
+                source: 'namespace.resolveTagDebugResolverSharedOrDefault',
+                value: componentsNamespace && componentsNamespace.resolveTagDebugResolverSharedOrDefault
             }
         ]);
-        logResolverSelection('resolveTagSearchControllerWithFallback', tagSearchControllerFallbackSource);
 
-        const {
-            fn: resolveTagTokenParsersWithDefaults,
-            source: tagTokenParsersResolverSource
-        } = resolveFromPriority('resolveTagTokenParsersWithDefaults', [
+        const { fn: resolveTomSelectAdapter } = resolve('resolveTomSelectAdapter', [
+            {
+                source: 'namespace.resolveSharedTomSelectAdapterOrDefault',
+                value: componentsNamespace && componentsNamespace.resolveSharedTomSelectAdapterOrDefault
+            }
+        ]);
+
+        const { fn: resolveTagSearchControllerWithFallback } = resolve(
+            'resolveTagSearchControllerWithFallback',
+            [
+                {
+                    source: 'namespace.resolveTagSearchControllerWithFallback',
+                    value: componentsNamespace && componentsNamespace.resolveTagSearchControllerWithFallback
+                }
+            ]
+        );
+
+        const { fn: resolveTagTokenParsersWithDefaults } = resolve('resolveTagTokenParsersWithDefaults', [
             {
                 source: 'config.resolveTagTokenParsersWithDefaults',
                 value: config.resolveTagTokenParsersWithDefaults
@@ -124,42 +140,35 @@
                 value: componentsNamespace && componentsNamespace.resolveTagTokenParsersWithDefaults
             }
         ]);
-        logResolverSelection('resolveTagTokenParsersWithDefaults', tagTokenParsersResolverSource);
 
-        const { fn: resolveDefaultParseTagTokens, source: defaultParseTokensSource } = resolveFromPriority(
-            'resolveDefaultParseTagTokens',
-            [
-                {
-                    source: 'components.resolveDefaultParseTagTokensBridge',
-                    value: componentsNamespace && componentsNamespace.resolveDefaultParseTagTokensBridge
-                }
-            ]
-        );
-        logResolverSelection('resolveDefaultParseTagTokens', defaultParseTokensSource);
+        const { fn: resolveDefaultParseTagTokens } = resolve('resolveDefaultParseTagTokens', [
+            { source: 'config.defaultParseTagTokens', value: config.defaultParseTagTokens },
+            {
+                source: 'components.resolveDefaultParseTagTokensBridge',
+                value: componentsNamespace && componentsNamespace.resolveDefaultParseTagTokensBridge
+            },
+            {
+                source: 'components.defaultParseTagTokens',
+                value: componentsNamespace && componentsNamespace.defaultParseTagTokens
+            },
+            { source: 'dataUtils.defaultParseTagTokens', value: dataUtils && dataUtils.defaultParseTagTokens }
+        ]);
 
-        const { fn: createFilterOptionsResolverFn, source: filterOptionsResolverSource } = resolveFromPriority(
-            'createFilterOptionsResolver',
-            [
-                { source: 'config.createFilterOptionsResolver', value: config.createFilterOptionsResolver },
-                {
-                    source: 'filterState.createFilterOptionsResolver',
-                    value: filterStateNamespace && filterStateNamespace.createFilterOptionsResolver
-                }
-            ]
-        );
-        logResolverSelection('createFilterOptionsResolver', filterOptionsResolverSource);
+        const { fn: createFilterOptionsResolverFn } = resolve('createFilterOptionsResolver', [
+            { source: 'config.createFilterOptionsResolver', value: config.createFilterOptionsResolver },
+            {
+                source: 'filterState.createFilterOptionsResolver',
+                value: filterStateNamespace && filterStateNamespace.createFilterOptionsResolver
+            }
+        ]);
 
-        const { fn: createSummaryCalculatorFn, source: summaryCalculatorSource } = resolveFromPriority(
-            'createSummaryCalculator',
-            [
-                { source: 'config.createSummaryCalculator', value: config.createSummaryCalculator },
-                {
-                    source: 'summaryUtils.createSummaryCalculator',
-                    value: summaryUtilsNamespace && summaryUtilsNamespace.createSummaryCalculator
-                }
-            ]
-        );
-        logResolverSelection('createSummaryCalculator', summaryCalculatorSource);
+        const { fn: createSummaryCalculatorFn } = resolve('createSummaryCalculator', [
+            { source: 'config.createSummaryCalculator', value: config.createSummaryCalculator },
+            {
+                source: 'summaryUtils.createSummaryCalculator',
+                value: summaryUtilsNamespace && summaryUtilsNamespace.createSummaryCalculator
+            }
+        ]);
 
         const isTagDebugEnabled = resolveTagDebugResolver
             ? resolveTagDebugResolver({ isDebugEnabled: config.isDebugEnabled })
@@ -211,7 +220,6 @@
             return { parseTagTokens, formatTagTokens, defaultParseTagTokens: defaultParseTokens };
         };
 
-        const tagTokenResolverSource = resolveTagTokenParsersWithDefaults ? 'sharedResolver' : 'fallback';
         const resolvedTagTokenParsers = resolveTagTokenParsersWithDefaults
             ?
                 resolveTagTokenParsersWithDefaults({
@@ -221,19 +229,14 @@
                     tagTokenModule: config.tagTokenModule
                 }) || fallbackTagTokenResolver()
             : fallbackTagTokenResolver();
-        logResolverSelection('tagTokenParsers', tagTokenResolverSource);
         const { parseTagTokens, formatTagTokens } = resolvedTagTokenParsers;
-        const { fn: createTagStateBridgeFn, source: tagStateBridgeSource } = resolveFromPriority(
-            'createTagStateBridge',
-            [
-                { source: 'config.createTagStateBridge', value: config.createTagStateBridge },
-                {
-                    source: 'stores.createTagStateBridge',
-                    value: storesNamespace && storesNamespace.createTagStateBridge
-                }
-            ]
-        );
-        logResolverSelection('createTagStateBridge', tagStateBridgeSource);
+        const { fn: createTagStateBridgeFn } = resolve('createTagStateBridge', [
+            { source: 'config.createTagStateBridge', value: config.createTagStateBridge },
+            {
+                source: 'stores.createTagStateBridge',
+                value: storesNamespace && storesNamespace.createTagStateBridge
+            }
+        ]);
 
         if (typeof parseTagTokens !== 'function' || typeof formatTagTokens !== 'function') {
             throw new Error('createGalleryView: tag utilities are required');
@@ -250,17 +253,13 @@
 
         const colorOptions = Array.isArray(itemColorOptions) ? itemColorOptions.slice() : [];
         const hasDocument = typeof document !== 'undefined' && document;
-        const { fn: createTagInputControllerFn, source: tagInputControllerSource } = resolveFromPriority(
-            'createTagInputController',
-            [
-                { source: 'config.createTagInputController', value: config.createTagInputController },
-                {
-                    source: 'components.createTagInputController',
-                    value: componentsNamespace && componentsNamespace.createTagInputController
-                }
-            ]
-        );
-        logResolverSelection('createTagInputController', tagInputControllerSource);
+        const { fn: createTagInputControllerFn } = resolve('createTagInputController', [
+            { source: 'config.createTagInputController', value: config.createTagInputController },
+            {
+                source: 'components.createTagInputController',
+                value: componentsNamespace && componentsNamespace.createTagInputController
+            }
+        ]);
         const tagInputController =
             typeof createTagInputControllerFn === 'function'
                 ? createTagInputControllerFn({
@@ -282,17 +281,13 @@
                       documentRef: hasDocument || null
                   })
                 : null;
-        const { fn: createTagSearchControllerFn, source: tagSearchControllerSource } = resolveFromPriority(
-            'createTagSearchController',
-            [
-                { source: 'config.createTagSearchController', value: config.createTagSearchController },
-                {
-                    source: 'components.createTagSearchController',
-                    value: componentsNamespace && componentsNamespace.createTagSearchController
-                }
-            ]
-        );
-        logResolverSelection('createTagSearchController', tagSearchControllerSource);
+        const { fn: createTagSearchControllerFn } = resolve('createTagSearchController', [
+            { source: 'config.createTagSearchController', value: config.createTagSearchController },
+            {
+                source: 'components.createTagSearchController',
+                value: componentsNamespace && componentsNamespace.createTagSearchController
+            }
+        ]);
         const tagSearchController = resolveTagSearchControllerWithFallback
             ? resolveTagSearchControllerWithFallback({
                   createTagSearchController: createTagSearchControllerFn,
@@ -338,47 +333,36 @@
             }
         };
 
-        const { fn: buildItemSearchCaches, source: buildItemSearchCachesSource } = resolveFromPriority(
-            'buildItemSearchCaches',
-            [
-                { source: 'config.buildItemSearchCaches', value: config.buildItemSearchCaches },
-                {
-                    source: 'filter.buildItemSearchCaches',
-                    value: filterNamespace && filterNamespace.buildItemSearchCaches
-                }
-            ]
-        );
-        logResolverSelection('buildItemSearchCaches', buildItemSearchCachesSource);
+        const { fn: buildItemSearchCaches } = resolve('buildItemSearchCaches', [
+            { source: 'config.buildItemSearchCaches', value: config.buildItemSearchCaches },
+            {
+                source: 'filter.buildItemSearchCaches',
+                value: filterNamespace && filterNamespace.buildItemSearchCaches
+            }
+        ]);
 
         if (typeof buildItemSearchCaches !== 'function') {
             throw new Error('createGalleryView: buildItemSearchCaches helper is required');
         }
 
-        const { fn: filterItemsFn, source: filterItemsSource } = resolveFromPriority('filterItems', [
+        const { fn: filterItemsFn } = resolve('filterItems', [
             { source: 'config.filterItems', value: config.filterItems },
             { source: 'filter.filterItems', value: filterNamespace && filterNamespace.filterItems }
         ]);
-        logResolverSelection('filterItems', filterItemsSource);
 
-        const { fn: evaluateItemVisibilityFn, source: evaluateItemVisibilitySource } = resolveFromPriority(
-            'evaluateItemVisibility',
-            [
-                { source: 'config.evaluateItemVisibility', value: config.evaluateItemVisibility },
-                {
-                    source: 'filter.evaluateItemVisibility',
-                    value: filterNamespace && filterNamespace.evaluateItemVisibility
-                }
-            ]
-        );
-        logResolverSelection('evaluateItemVisibility', evaluateItemVisibilitySource);
+        const { fn: evaluateItemVisibilityFn } = resolve('evaluateItemVisibility', [
+            { source: 'config.evaluateItemVisibility', value: config.evaluateItemVisibility },
+            {
+                source: 'filter.evaluateItemVisibility',
+                value: filterNamespace && filterNamespace.evaluateItemVisibility
+            }
+        ]);
 
         if (typeof filterItemsFn !== 'function' && typeof evaluateItemVisibilityFn !== 'function') {
             throw new Error('createGalleryView: filter helpers are not available');
         }
 
-        if (config.isDebugEnabled && resolverLog.length && console && typeof console.info === 'function') {
-            console.info('[galleryView] resolver selections', resolverLog);
-        }
+        publishResolverLog(config.isDebugEnabled);
 
         const fallbackMapItemElementsToState = (items, helpers = {}) => {
             const normalizeItemColorHelper =
@@ -433,30 +417,22 @@
             });
         };
 
-        const { fn: mapItemElementsToStateResolver, source: mapItemElementsToStateSource } = resolveFromPriority(
-            'mapItemElementsToState',
-            [
-                { source: 'config.mapItemElementsToState', value: config.mapItemElementsToState },
-                {
-                    source: 'renderUtils.mapItemElementsToState',
-                    value: renderUtilsNamespace && renderUtilsNamespace.mapItemElementsToState
-                }
-            ]
-        );
-        logResolverSelection('mapItemElementsToState', mapItemElementsToStateSource);
+        const { fn: mapItemElementsToStateResolver } = resolve('mapItemElementsToState', [
+            { source: 'config.mapItemElementsToState', value: config.mapItemElementsToState },
+            {
+                source: 'renderUtils.mapItemElementsToState',
+                value: renderUtilsNamespace && renderUtilsNamespace.mapItemElementsToState
+            }
+        ]);
         const mapItemElementsToStateFn = mapItemElementsToStateResolver || fallbackMapItemElementsToState;
 
-        const { fn: createItemStateResolverFn, source: itemStateResolverSource } = resolveFromPriority(
-            'createItemStateResolver',
-            [
-                { source: 'config.createItemStateResolver', value: config.createItemStateResolver },
-                {
-                    source: 'renderUtils.createItemStateResolver',
-                    value: renderUtilsNamespace && renderUtilsNamespace.createItemStateResolver
-                }
-            ]
-        );
-        logResolverSelection('createItemStateResolver', itemStateResolverSource);
+        const { fn: createItemStateResolverFn } = resolve('createItemStateResolver', [
+            { source: 'config.createItemStateResolver', value: config.createItemStateResolver },
+            {
+                source: 'renderUtils.createItemStateResolver',
+                value: renderUtilsNamespace && renderUtilsNamespace.createItemStateResolver
+            }
+        ]);
 
         let itemStateResolver = null;
         let itemStateCache = [];
@@ -573,28 +549,20 @@
                   };
 
         const renderNamespace = typeof window !== 'undefined' && window ? window.galleryRenderFactory : null;
-        const { fn: createItemFactoryFn, source: itemFactorySource } = resolveFromPriority(
-            'createItemFactory',
-            [
-                { source: 'config.createItemFactory', value: config.createItemFactory },
-                {
-                    source: 'render.createItemFactory',
-                    value: renderNamespace && renderNamespace.createItemFactory
-                }
-            ]
-        );
-        logResolverSelection('createItemFactory', itemFactorySource);
-        const { fn: createItemEnhancersFn, source: itemEnhancersSource } = resolveFromPriority(
-            'createItemEnhancers',
-            [
-                { source: 'config.createItemEnhancers', value: config.createItemEnhancers },
-                {
-                    source: 'render.createItemEnhancers',
-                    value: renderNamespace && renderNamespace.createItemEnhancers
-                }
-            ]
-        );
-        logResolverSelection('createItemEnhancers', itemEnhancersSource);
+        const { fn: createItemFactoryFn } = resolve('createItemFactory', [
+            { source: 'config.createItemFactory', value: config.createItemFactory },
+            {
+                source: 'render.createItemFactory',
+                value: renderNamespace && renderNamespace.createItemFactory
+            }
+        ]);
+        const { fn: createItemEnhancersFn } = resolve('createItemEnhancers', [
+            { source: 'config.createItemEnhancers', value: config.createItemEnhancers },
+            {
+                source: 'render.createItemEnhancers',
+                value: renderNamespace && renderNamespace.createItemEnhancers
+            }
+        ]);
 
         if (typeof createItemFactoryFn !== 'function') {
             throw new Error('createGalleryView: createItemFactory helper is required');
