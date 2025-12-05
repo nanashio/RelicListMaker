@@ -14,7 +14,7 @@
 
 ## 1. 作業前の準備
 - 変更計画を記録するドキュメント（例: `docs/plan-<project>-refactor.md`）を用意し、ステップごとに進捗を追記する。
-- 進捗ログはコミット番号で残し、どのコミットで各ステップを通過したかを追跡できるようにする（詳細テンプレートは `docs/guide-refactoring-progress-log.md` を参照）。
+- 進捗ログはコミット番号で残し、どのコミットで各ステップを通過したかを追跡できるようにする（進捗テーブルや記入例は `docs/guide-refactoring-progress-log.md` のテンプレートを参照する）。
 - メイン開発環境と成果物を取り込む環境が分かれている場合は、同期スクリプト（例: `docs/build_windows.ps1`）で差分を取り込んだ上でビルド確認する。
 - 動作確認に必要なサーバ／ブラウザ／テストツールを起動できるよう整えておく。
 
@@ -59,6 +59,7 @@
 | ステップ4: ビューワーとブラウザ確認 | `viewer_server` パッケージや Playwright フィクスチャの検証、ブラウザ挙動の確認。 | `pytest tests/test_viewer_server.py`<br>`npm run test:browser` (CI 不可の場合は `npm run test:browser:headed` や `pytest -k browser` など代替手順を検討) |
 
 > **補足:** 各ステップ完了時には `git status` で差分を確認し、必要に応じて対象テストのみを `pytest <path>` で再実行する。
+> 進捗ログの記録やステップ完了チェックリストを追記する際は、`docs/guide-refactoring-progress-log.md` のテンプレートと記入例に沿って整えること。
 
 ## 6. 追加テストのアイデア
 - 詳細なテスト運用手順は [docs/guide-testing.md](./guide-testing.md) を参照。
@@ -88,7 +89,7 @@
 ## 8. 動作確認のテンプレート
 1. 同期スクリプトを実行し、差分が正しくコピーされるか確認。
 2. ブラウザやサーバ上で対象機能が想定通り動作するかをチェック。
-3. 変更計画ドキュメントに進捗・注意点を追記。
+3. 変更計画ドキュメントに進捗・注意点を追記（コミット番号を `docs/guide-refactoring-progress-log.md` の進捗ログテンプレートに従って記録する）。
 4. `npm run test:all` を実行し、Python・Node・Playwright の一括テストで回帰が無いことを確認。
 5. `git status`・`git diff` で変更内容を確認し、問題が無ければコミット。
 
